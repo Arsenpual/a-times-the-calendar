@@ -1,0 +1,163 @@
+const { initializeApp, getApps, applicationDefault, cert } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+
+/**
+ * Init Firebase Admin SDK ครั้งเดียวตอน backend เริ่มทำงาน (module นี้ถูก
+ * require ครั้งแรกจากที่ไหนก็ได้ แต่ initializeApp() ต้องเรียกแค่ครั้งเดียว
+ * ตลอดอายุ process — เช็ค getApps().length กันเรียกซ้ำเวลา require หลายจุด)
+ *
+ * ใช้ GOOGLE_APPLICATION_CREDENTIALS (env var มาตรฐานของ Google Cloud client
+ * libraries ทุกตัว ไม่ใช่แค่ Firebase) ชี้ไปยังไฟล์ service account JSON —
+ * applicationDefault() จะไปหาไฟล์จาก env var ตัวนี้ให้เอง โดยไม่ต้อง
+ * require(...) ไฟล์ JSON ตรงๆ ในโค้ด (ปลอดภัยกว่า เพราะไม่มี path ไฟล์
+ * secret ฝังอยู่ใน source code)
+ *
+ * หมายเหตุเวอร์ชัน: firebase-admin v12+ เปลี่ยนจาก monolithic `admin`
+ * namespace (require("firebase-admin") แล้วเรียก admin.initializeApp(),
+ * admin.firestore() ตรงๆ) เป็น "modular API" แบบเดียวกับ client SDK v9+ —
+ * ต้อง import ฟังก์ชันแยกจาก submodule ("firebase-admin/app",
+ * "firebase-admin/firestore", "firebase-admin/auth") แทน ไม่มี admin.apps /
+ * admin.firestore / admin.auth / admin.credential ให้เรียกจาก object เดียว
+ * อีกต่อไป — เพิ่ม "firebase-admin/auth" เข้ามาใน Phase 2 (Firebase
+ * Authentication) สำหรับ verifyIdToken() ในทุก route ที่ต้องการ userId
+ */
+let app;
+if (getApps().length === 0) {
+  if (!process.env.FIREBASE_PROJECT_ID) {
+    throw new Error("ไม่พบ FIREBASE_PROJECT_ID ใน .env");
+  }
+
+  // สอง credential source รองรับ 2 สภาพแวดล้อมที่ต่างกัน:
+  //
+  //   1. Local dev: GOOGLE_APPLICATION_CREDENTIALS ชี้เป็น "path" ไปยัง
+  //      ไฟล์ service account JSON บนดิสก์ (เดิมที่ใช้อยู่แล้ว) —
+  //      applicationDefault() อ่านจาก path นี้ให้เอง
+  //
+  //   2. Deploy จริง (เช่น Render.com): ไม่มี persistent disk ให้เก็บไฟล์
+  //      secret แบบปลอดภัย (filesystem เป็น ephemeral รีเซ็ตทุกครั้งที่
+  //      redeploy) จึงรับ service account เป็น "เนื้อหา JSON ทั้งก้อน" ผ่าน
+  //      env var GOOGLE_APPLICATION_CREDENTIALS_JSON แทน (วาง JSON ทั้งไฟล์
+  //      เป็นค่าเดียวใน environment variable ของ hosting) แล้ว parse +
+  //      ส่งให้ cert() ตรงๆ ไม่ต้องเขียนลงดิสก์เลย
+  //
+  // เช็ค _JSON ก่อนเสมอ เพราะเป็น production path ที่ตั้งใจให้ priority สูงกว่า
+  // — ถ้ามีทั้งคู่ (ไม่ควรเกิด แต่เผื่อไว้) ใช้ตัวที่ปลอดภัยกว่าสำหรับ deploy
+  let credential;
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    let parsed;
+    try {
+      parsed = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+    } catch (err) {
+      throw new Error(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ " +
+          "service account ทั้งก้อนมาวางแบบไม่มีการตัด/ครอบ quote ผิดพลาด"
+      );
+    }
+    credential = cert(parsed);
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    credential = applicationDefault();
+  } else {
+    throw new Error(
+      "ไม่พบทั้ง GOOGLE_APPLICATION_CREDENTIALS (path ไฟล์ — ใช้ตอน dev ในเครื่อง) และ " +
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON (เนื้อหา JSON ทั้งก้อน — ใช้ตอน deploy จริงบน " +
+        "hosting ที่ไม่มี persistent disk เช่น Render.com) ต้องตั้งค่าตัวใดตัวหนึ่ง"
+    );
+  }
+
+  app = initializeApp({
+    credential,
+    projectId: process.env.FIREBASE_PROJECT_ID
+  });
+} else {
+  app = getApps()[0];
+}
+
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ---- Collection references (Phase 2: per-user, nested under users/{userId}) ----
+// เดิม (Phase 0-1) เป็น collection กลางระดับ root: categories/{categoryId},
+// activityCategories/{activityId}, lockedActivities/{activityId} — ทุกคนที่
+// เรียก backend เห็นข้อมูลชุดเดียวกันหมด (ใช้ได้แค่ single-user)
+//
+// Phase 2 (Firebase Auth) ย้ายมาเป็น subcollection ใต้ users/{userId} แทน —
+// เลือก nested path นี้แทนการเก็บ userId เป็น field ในเอกสารเดิม เพราะ:
+//   1. Security Rules (ระยะ 3 ในแผน) เขียนกฎเดียวครอบคลุมทั้ง subtree ได้
+//      (match /users/{userId}/{document=**}) แทนที่จะต้องเช็ค field ใน
+//      ทุก collection แยกกัน — ปลอดภัยกว่าและพลาดยากกว่า
+//   2. ไม่มีทางลืม filter query แล้วข้อมูล user อื่นรั่ว เพราะ path เองก็
+//      บังคับ scope อยู่แล้ว ไม่ต้องพึ่ง .where("userId", "==", uid) ทุกจุด
+//
+// ทุกฟังก์ชันด้านล่างรับ userId แล้ว return collection ref ใต้ user นั้น —
+// เรียกใหม่ทุกครั้งที่ต้องใช้ (ไม่ cache เป็น const เหมือนเดิม) เพราะตอนนี้
+// ไม่มี "collection เดียว" ให้ผูกไว้ล่วงหน้าอีกต่อไป
+function userDoc(userId) {
+  return db.collection("users").doc(userId);
+}
+
+function categoriesCol(userId) {
+  return userDoc(userId).collection("categories");
+}
+
+function activityCategoriesCol(userId) {
+  return userDoc(userId).collection("activityCategories");
+}
+
+// Tags แบบ free-text ต่อกิจกรรม — เก็บ { tags: string[] } ต่อ document เดียวกับ
+// รูปแบบ activityCategoriesCol (key = normalized activity id) แต่ค่าเป็น
+// array แทนค่าเดียว เพราะกิจกรรมหนึ่งติดได้หลาย tag พร้อมกัน (many-to-many)
+// ต่างจาก category ที่ผูกได้ทีละหมวดหมู่เท่านั้น (one-to-one)
+function activityTagsCol(userId) {
+  return userDoc(userId).collection("activityTags");
+}
+
+function lockedActivitiesCol(userId) {
+  return userDoc(userId).collection("lockedActivities");
+}
+
+// 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
+// db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
+// start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
+const DEFAULT_CATEGORIES = [
+  { id: "work", name: "งาน", color: "#1557B0" },
+  { id: "personal", name: "ส่วนตัว", color: "#B71C1C" },
+  { id: "health", name: "สุขภาพ", color: "#F29900" },
+  { id: "family", name: "ครอบครัว", color: "#0B6B33" }
+];
+
+/**
+ * เรียกจาก requireAuth middleware (ดู middleware/require-auth.js) ทุกครั้งที่
+ * มี request เข้ามาจาก userId ที่ยังไม่เคยเห็นมาก่อน (เช็คว่า categories
+ * subcollection ของ user นั้นว่างเปล่าหรือไม่) — ถ้าว่าง แปลว่าเป็น user
+ * ใหม่ที่เพิ่ง login ครั้งแรก ใส่ 4 หมวดเริ่มต้นให้อัตโนมัติ เหมือน
+ * พฤติกรรมเดิมของ ensureDefaultCategories() ใน Phase 0-1 (ตอนนั้น seed
+ * ระดับ collection กลางครั้งเดียวตอน server start) แต่ตอนนี้ต้อง seed
+ * "ต่อ user" แทน เพราะแต่ละ user มี categories subcollection เป็นของตัวเอง
+ *
+ * ไม่ทำอะไรถ้า user นั้นมีข้อมูลอยู่แล้ว (ไม่ทับของเดิม) — ปลอดภัยเรียกซ้ำได้
+ * ทุก request โดยไม่มีผลข้างเคียงถ้า user เคยถูก seed ไปแล้ว
+ */
+async function ensureDefaultCategoriesForUser(userId) {
+  const col = categoriesCol(userId);
+  const snapshot = await col.limit(1).get();
+  if (!snapshot.empty) return;
+
+  const batch = db.batch();
+  for (const cat of DEFAULT_CATEGORIES) {
+    const { id, ...rest } = cat;
+    batch.set(col.doc(id), rest);
+  }
+  await batch.commit();
+  console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
+}
+
+module.exports = {
+  db,
+  auth,
+  categoriesCol,
+  activityCategoriesCol,
+  activityTagsCol,
+  lockedActivitiesCol,
+  ensureDefaultCategoriesForUser
+};
