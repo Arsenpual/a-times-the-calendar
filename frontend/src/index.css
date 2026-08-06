@@ -24,6 +24,47 @@ body {
   color: var(--text-primary);
 }
 
+html.screen-reader-mode body {
+  background: #f8f8f4;
+  color: #111111;
+  font-size: 1.12rem;
+  line-height: 1.7;
+}
+
+html.screen-reader-mode .app,
+html.screen-reader-mode .dashboard,
+html.screen-reader-mode .agenda-view,
+html.screen-reader-mode .tag-search-wrap,
+html.screen-reader-mode .activity-popup,
+html.screen-reader-mode .modal-content {
+  letter-spacing: 0.02em;
+}
+
+html.screen-reader-mode button,
+html.screen-reader-mode input,
+html.screen-reader-mode select,
+html.screen-reader-mode textarea {
+  min-height: 42px;
+  font-size: 1rem;
+}
+
+html.screen-reader-mode .btn-icon {
+  width: 38px;
+  height: 38px;
+}
+
+html.screen-reader-mode .app-header {
+  gap: 12px;
+}
+
+html.screen-reader-mode .tag-search-wrap {
+  gap: 8px;
+}
+
+html.screen-reader-mode .tag-search-input {
+  min-width: 120px;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -228,6 +269,13 @@ body {
 
 .btn-outline:hover {
   background: var(--hover);
+}
+
+.btn-outline.active,
+.btn-outline[aria-pressed="true"] {
+  background: var(--blue-tint);
+  color: var(--blue-dark);
+  border-color: var(--blue);
 }
 
 .btn-primary {
