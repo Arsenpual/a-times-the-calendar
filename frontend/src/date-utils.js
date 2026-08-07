@@ -116,11 +116,22 @@ export function formatWeekRange(date) {
     "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
   ];
-  const beYear = end.getFullYear() + 543;
-  if (start.getMonth() === end.getMonth()) {
-    return `${start.getDate()} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${beYear}`;
+  // เดิมใช้ end.getFullYear() ตัวเดียวสำหรับทั้งช่วง — พอสัปดาห์คาบเกี่ยว
+  // ข้ามปี (เช่น เริ่ม 28 ธ.ค. 2568 จบ 3 ม.ค. 2569) จะโชว์ปี พ.ศ. ของ "end"
+  // (2569) ทับวันที่ของ "start" ที่จริงๆ อยู่คนละปี (2568) ไปด้วย ทำให้ขึ้น
+  // "28 ธ.ค. - 3 ม.ค. 2569" ซึ่งวันที่ 28 ธ.ค. ผิดปีไปเงียบๆ — ต้องคำนวณปี
+  // พ.ศ. ของแต่ละฝั่งแยกกันเผื่อกรณีนี้โดยเฉพาะ
+  const startBeYear = start.getFullYear() + 543;
+  const endBeYear = end.getFullYear() + 543;
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `${start.getDate()} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
   }
-  return `${start.getDate()} ${shortMonths[start.getMonth()]} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${beYear}`;
+  if (start.getFullYear() !== end.getFullYear()) {
+    // สัปดาห์คาบเกี่ยวข้ามปี — โชว่ปี พ.ศ. กำกับทั้งสองฝั่งให้ชัดเจน ไม่งั้น
+    // จะดูเหมือนวันที่ผิดปีไปเงียบๆ (เช่น 28 ธ.ค. ที่จริงเป็นปีก่อนหน้า)
+    return `${start.getDate()} ${shortMonths[start.getMonth()]} ${startBeYear} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
+  }
+  return `${start.getDate()} ${shortMonths[start.getMonth()]} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
 }
 
 /**
