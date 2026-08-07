@@ -57,13 +57,6 @@ export default function App() {
   // firebase-migration-plan.md ระยะ 4 ก่อน) แยก state ออกมาต่างหากจาก
   // firebaseUser/calendarAccessToken เพราะสลับโหมดได้ไม่ว่าจะ login อยู่หรือไม่
   const [mode, setMode] = useState("dashboard");
-  const [screenReaderMode, setScreenReaderMode] = useState(() => {
-    try {
-      return window.localStorage.getItem("screenReaderMode") === "true";
-    } catch {
-      return false;
-    }
-  });
   // Guards signInWithGoogle()/reauthenticateWithGooglePopup() against being
   // called twice concurrently — a ref (not state) because it must be
   // readable/settable synchronously without waiting for a re-render.
@@ -311,15 +304,6 @@ export default function App() {
   useEffect(() => {
     setExpandedDate(null);
   }, [cursorDate]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("screenReaderMode", screenReaderMode ? "true" : "false");
-    } catch {
-      // Ignore storage failures on restricted browsers.
-    }
-    document.documentElement.classList.toggle("screen-reader-mode", screenReaderMode);
-  }, [screenReaderMode]);
 
   const openDay = (date) => setExpandedDate(date);
 
@@ -913,15 +897,6 @@ export default function App() {
         </div>
 
         <div className="app-header-right">
-          <button
-            type="button"
-            className={`btn btn-outline${screenReaderMode ? " active" : ""}`}
-            onClick={() => setScreenReaderMode((prev) => !prev)}
-            aria-pressed={screenReaderMode}
-            aria-label="สลับโหมดผู้อ่านหน้าจอ"
-          >
-            {screenReaderMode ? "โหมดผู้อ่านหน้าจอ: เปิด" : "เปิดโหมดผู้อ่านหน้าจอ"}
-          </button>
           {mode === "dashboard" && firebaseUser ? (
             <>
               <div className="tag-search-wrap">
