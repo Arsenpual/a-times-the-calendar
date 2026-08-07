@@ -717,6 +717,91 @@ html.screen-reader-mode .tag-search-input {
   white-space: nowrap;
 }
 
+/* Mini timeline (list + dot-track layout): the actual layout
+   MiniTimelinePanel renders — a vertical list of activities, each row
+   with a time label, a dot-and-line "track" column, and an event chip.
+   This is a different layout from .mini-timeline-grid above (that one is
+   unused dead CSS from an earlier absolute-positioned hour-grid version —
+   left in place in case that layout comes back, but not currently
+   rendered by any component). */
+
+.mini-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-timeline-item {
+  display: grid;
+  grid-template-columns: 44px 16px 1fr;
+  align-items: stretch;
+  column-gap: 8px;
+}
+
+.mini-timeline-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mini-timeline-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mini-timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+.mini-timeline-line {
+  flex: 1;
+  width: 2px;
+  background: var(--border);
+  margin-top: 2px;
+}
+
+.mini-timeline-item:last-child .mini-timeline-line {
+  display: none;
+}
+
+.mini-timeline-event {
+  flex: 1;
+  min-width: 0;
+  border-left: 3px solid;
+  border-radius: 0 6px 6px 0;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mini-timeline-event-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-timeline-event-range {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Timeline editor mode: a draggable hour grid for adjusting one day's event
    times, plus a small list below for category/edit access. Entered via the
    ⚙ button in the mini timeline header, exited with "ยกเลิก" or "บันทึก". */
