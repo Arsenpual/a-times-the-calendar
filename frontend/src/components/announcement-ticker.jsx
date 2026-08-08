@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-import React from "react";
-
-export default function AnnouncementTicker({ message }) {
-  // ถ้าไม่มีข้อความหรือข้อความว่าง ไม่ต้องแสดงอะไร
-  if (!message) return null;
-
-  return (
-    <div className="announcement-ticker">
-      <div className="ticker-content">
-        {message}
-=======
 import React, { useLayoutEffect, useEffect, useRef, useState } from "react";
 
 const SCROLL_SPEED_PX_PER_SEC = 60; // constant scroll speed regardless of message length
@@ -132,7 +120,6 @@ export default function AnnouncementTicker({ message }) {
               into. */}
           <span ref={textRef}>{message}</span>
         </span>
->>>>>>> 3aa757f (เพิ่มไฟล์ใหม่: announcement-ticker.jsx ใช้ประกาศ, สิ่อสารกับผู้ใช้โดยตรง announcement-ticker.jsx, app.jsx index.css เพิ่มไฟล์ใหม่: auto-shrink-text.jsx เพื่อวัด และลดขนาดตัวอักษรของ announcement-ticker.jsx, mini-timeline-panel.jsx, index.css)
       </div>
     </div>
   );
