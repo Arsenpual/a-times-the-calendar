@@ -103,6 +103,43 @@ html.screen-reader-mode .tag-search-input {
   color: var(--text-primary);
 }
 
+/* Mode switch (Dashboard / Reminder tabs, header left side) — a pill-
+   shaped segmented control. Both tabs share a fixed min-width so they
+   read as equal-size buttons regardless of label length ("Dashboard" vs
+   "⏱ Reminder"), rather than each hugging its own text. */
+.mode-switch {
+  display: flex;
+  background: var(--bg);
+  border-radius: 20px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.mode-switch button {
+  appearance: none;
+  border: none;
+  background: none;
+  min-width: 104px;
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-switch button:hover:not(.active) {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.mode-switch button.active {
+  background: var(--bg-muted);
+  color: var(--blue-dark);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.25);
+}
+
 /* Tag search (header, right side) */
 .tag-search-wrap {
   display: flex;
@@ -308,6 +345,66 @@ html.screen-reader-mode .tag-search-input {
   flex: 1;
   overflow: auto;
   padding: 16px;
+}
+
+/* Scrolling announcement strip below the header in calendar mode — see
+   AnnouncementTicker. Deliberately quiet/small: thin strip, small text,
+   muted colors, so it reads as ambient info rather than an alert. Scrolls
+   through exactly one pass per visible period (animation-duration is set
+   inline per-instance, from the message's measured width), then the
+   component hides itself entirely for a cooldown before the next pass —
+   see the JS side for that show/hide cycle; this CSS only handles a
+   single left-to-right-to-gone pass. */
+.announcement-ticker {
+  overflow: hidden;
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 3px 0;
+}
+
+.announcement-ticker-track {
+  display: flex;
+  width: 100%;
+  animation-name: announcement-ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.announcement-ticker-item {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  /* Starts fully off-screen to the right (see the keyframes' `from`,
+     which positions by translateX(100%) relative to this element's own
+     width) so the very first frame shows nothing, not the message
+     already sitting mid-strip. */
+  padding-left: 100%;
+}
+
+@keyframes announcement-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* -100% of the item's own box width (which includes the
+       padding-left: 100% above) moves it left by exactly one container
+       width plus the text's own width — enough to carry the text from
+       its start position (just off the right edge, via the padding) to
+       fully past the left edge. Percentages in translateX resolve
+       against the transformed element's own box, not the container's. */
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-ticker-track {
+    animation: none;
+  }
+  .announcement-ticker-item {
+    padding-left: 0;
+  }
 }
 
 .empty-state {
@@ -792,6 +889,8 @@ html.screen-reader-mode .tag-search-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
 }
 
 .mini-timeline-event-range {
@@ -800,6 +899,37 @@ html.screen-reader-mode .tag-search-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Dimmed entry at the top of the mini timeline representing an activity
+   that started the day before and bleeds into this one (e.g. 20:00-02:00)
+   — click opens ActivityModal like any other activity, but it's excluded
+   from this day's own activity list/count (see MiniTimelinePanel's
+   incomingSpillover, computed separately from timedActivities). Rendered
+   as a <button> (unlike the plain <div> used for normal entries) since
+   it's the only mini-timeline entry that's actually interactive here. */
+.mini-timeline-event-spillover {
+  appearance: none;
+  background: none;
+  border-left-style: dashed;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.5;
+  width: 100%;
+}
+
+.mini-timeline-event-spillover:hover {
+  opacity: 0.75;
+}
+
+.mini-timeline-spillover-list {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
 }
 
 /* Timeline editor mode: a draggable hour grid for adjusting one day's event
@@ -856,7 +986,6 @@ html.screen-reader-mode .tag-search-input {
 }
 
 .day-timeline-scroll-edit {
-  max-height: 620px;
   border: 1px solid var(--border);
   border-radius: 8px;
   touch-action: none;
@@ -931,8 +1060,81 @@ html.screen-reader-mode .tag-search-input {
   filter: grayscale(0.15);
 }
 
+/* Dimmed block at the top of the grid representing an activity that
+   started the day before and bleeds into this day (e.g. 20:00-02:00) —
+   click-to-open only, not draggable/resizable, and deliberately not part
+   of the day's own activity count/color breakdown (see agenda-view.jsx's
+   activitiesByDay, which still keys off the activity's real start date). */
+.day-timeline-spillover {
+  cursor: pointer;
+  opacity: 0.45;
+  z-index: 0;
+  border-style: dashed;
+  border-left-width: 3px;
+}
+
+.day-timeline-spillover:hover {
+  opacity: 0.65;
+}
+
+/* Dimmed tail appended below an activity block that runs past midnight —
+   drawn inside the same element, immediately after its normal (opaque)
+   portion, so the two read as one continuous bar rather than a separate
+   shape. Purely visual; the activity's real end time is unaffected and
+   dragging/resizing this block still only ever affects the parent
+   activity's own times, never the tail specifically. */
+.day-timeline-spillover-tail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  background: inherit;
+  opacity: 0.45;
+  border-left: 3px solid;
+  border-color: inherit;
+  border-radius: 0 0 6px 6px;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 8px;
+}
+
+.day-timeline-spillover-tail-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .day-timeline-lock-icon {
   margin-right: 3px;
+}
+
+.day-timeline-event-title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.day-timeline-event-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.day-timeline-event-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .day-timeline-resize-handle {

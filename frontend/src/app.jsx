@@ -5,6 +5,7 @@ import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
 import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
 import ActivityModal from "./components/activity-modal.jsx";
 import ReminderModeMockup from "./components/reminder-mode-mockup.jsx";
+import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import {
   auth,
   signInWithGoogle,
@@ -30,8 +31,15 @@ import {
   fetchLockedActivities,
   setActivityLocked
 } from "./api.js";
-import { getWeekRange, formatWeekLabel, activityDate } from "./date-utils.js";
+import { getWeekRange, formatWeekLabel, activityDate, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
+
+// Hardcoded broadcast message shown in the scrolling ticker below the
+// header, calendar (dashboard) mode only — see AnnouncementTicker. Not
+// dismissible and not fetched from a backend, so updating it means editing
+// this string and redeploying. Set to "" (or null) to hide the ticker
+// entirely without removing the component from the tree.
+const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
 
 export default function App() {
   // Phase 2 (Firebase Auth): two separate pieces of auth state now instead
@@ -145,7 +153,16 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const [rangeStart, rangeEnd] = getWeekRange(cursorDate);
+      const [weekStart, rangeEnd] = getWeekRange(cursorDate);
+      // Fetch from one day before the visible week starts — not because
+      // that extra day is shown anywhere, but so an activity that began
+      // the night before the week (e.g. Saturday 23:00 → Sunday 02:00)
+      // is available to render as a dimmed "spillover from last night"
+      // indicator on the week's first day. activitiesByDay still filters
+      // strictly by each activity's own start date, so this extra day of
+      // fetched data never gets counted as belonging to any visible day.
+      const rangeStart = new Date(weekStart);
+      rangeStart.setDate(rangeStart.getDate() - 1);
       const items = await fetchActivities(calendarAccessToken, rangeStart, rangeEnd);
       setActivities(items);
     } catch (e) {
@@ -723,16 +740,52 @@ export default function App() {
   };
 
   /**
-   * Clones an activity onto the same day: same title, time range, and
-   * colorId (Google Calendar's own field), plus the same life-area
-   * category assignment in our backend. Locked state is deliberately NOT
-   * copied — a duplicate starts out unlocked so it can be adjusted right
-   * away.
+   * Builds the summary text for a duplicate: appends "(copy)" the first
+   * time, then "(copy 2)", "(copy 3)", etc. if copies of the same base
+   * name already exist — so a person duplicating the same activity
+   * several times gets distinctly numbered copies instead of a pile of
+   * identically named "(copy)" activities. Only ever strips/re-adds its
+   * own "(copy...)" suffix, so duplicating a duplicate copies the
+   * *original* base name forward rather than stacking suffixes into
+   * "(copy) (copy)".
+   *
+   * Counts existing copies only from `activities` (the currently loaded
+   * week) — an original or earlier copy sitting in a different week won't
+   * be seen, so the numbering is a best-effort count within the visible
+   * week rather than a guaranteed-unique count across the whole calendar.
+   * The name is always editable afterward regardless, so a rare wrong
+   * number here isn't destructive.
+   * @param {string} originalSummary
+   */
+  const nextCopySummary = (originalSummary) => {
+    const base = (originalSummary || "(ไม่มีชื่อ)").replace(/\s*\(copy(?:\s+\d+)?\)\s*$/, "");
+    const copyPattern = new RegExp(
+      `^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(copy(?:\\s+(\\d+))?\\)$`
+    );
+    let highestExisting = 0; // 0 means no copy exists yet
+    for (const existing of activities) {
+      const match = (existing.summary || "").match(copyPattern);
+      if (!match) continue;
+      const n = match[1] ? parseInt(match[1], 10) : 1; // "(copy)" alone counts as copy #1
+      if (n > highestExisting) highestExisting = n;
+    }
+    const nextN = highestExisting + 1;
+    return nextN === 1 ? `${base} (copy)` : `${base} (copy ${nextN})`;
+  };
+
+  /**
+   * Clones an activity onto the same day: same title (with a "(copy)" /
+   * "(copy 2)" suffix appended — see nextCopySummary — so the duplicate
+   * is distinguishable at a glance, though the name can be edited
+   * afterward like any other), time range, and colorId (Google Calendar's
+   * own field), plus the same life-area category assignment in our
+   * backend. Locked state is deliberately NOT copied — a duplicate starts
+   * out unlocked so it can be adjusted right away.
    */
   const handleDuplicateActivity = async (activity) => {
     if (!calendarAccessToken) return;
     const body = {
-      summary: activity.summary || "(ไม่มีชื่อ)",
+      summary: nextCopySummary(activity.summary),
       start: activity.start,
       end: activity.end
     };
@@ -968,6 +1021,8 @@ export default function App() {
         </div>
       </header>
 
+      {mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
+
       <main className="app-main">
         {mode === "reminder" && <ReminderModeMockup />}
 
@@ -1038,6 +1093,7 @@ export default function App() {
                         activityCategoryMap={activityCategoryMap}
                         expandedDate={expandedDate}
                         onClose={closeDay}
+                        onEditActivity={openEditActivity}
                       />
                     </div>
                   </div>
@@ -1084,14 +1140,18 @@ export default function App() {
       </main>
 
       <ActivityModal
-        // key เปลี่ยนตามกิจกรรมที่กำลังแก้ไข (หรือ "new" ตอนสร้างใหม่) เพื่อบังคับให้
-        // React unmount/remount ActivityModal ทุกครั้งที่เปิดกิจกรรมคนละตัว —
-        // ถ้าไม่มี key นี้ ActivityModal จะถูก mount แค่ครั้งเดียวตลอดอายุแอป
-        // (เพราะ render อยู่ตำแหน่งเดิมเสมอ แค่ return null ตอน closed) ทำให้ทุก
-        // useState(initialActivity?.xxx) ข้างในอ่านค่าเริ่มต้นแค่ครั้งแรกที่แอปโหลด
-        // (ตอนนั้น initialActivity ยังเป็น null) แล้วค้างค่าว่างไว้ตลอด — เปิดแก้ไข
-        // กิจกรรมไหนทีหลังก็เห็นฟอร์มว่างเหมือนสร้างใหม่ทุกครั้ง
-        key={modalEditingActivity?.id || "new"}
+        // key เปลี่ยนตามกิจกรรมที่กำลังแก้ไข (หรือวันที่ที่กำลังจะสร้างใหม่)
+        // เพื่อบังคับให้ React unmount/remount ActivityModal ทุกครั้งที่เปิด
+        // กิจกรรมคนละตัว หรือกดปุ่ม "+ เพิ่มกิจกรรม" ของคนละวัน — ถ้าไม่มี key
+        // นี้ ActivityModal จะถูก mount แค่ครั้งเดียวตลอดอายุแอป (เพราะ render
+        // อยู่ตำแหน่งเดิมเสมอ แค่ return null ตอน closed) ทำให้ทุก
+        // useState(initialActivity?.xxx) ข้างในอ่านค่าเริ่มต้นแค่ครั้งแรกที่แอป
+        // โหลด แล้วค้างค่าไว้ตลอด — เปิดแก้ไขกิจกรรมไหนทีหลังก็เห็นฟอร์มว่าง
+        // เหมือนสร้างใหม่ทุกครั้ง, และกดเพิ่มกิจกรรมของวันไหนทีหลังก็เห็นวันที่
+        // ของครั้งแรกสุดที่เปิดฟอร์มค้างอยู่เสมอ (เดิม key ตอนสร้างใหม่เป็น
+        // ค่าคงที่ "new" เฉยๆ ไม่ผูกกับ modalDefaultDate เลย จึงไม่ remount
+        // เมื่อกดปุ่มเพิ่มกิจกรรมของวันอื่น)
+        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}`}
         open={modalOpen}
         defaultDate={modalDefaultDate}
         initialActivity={modalEditingActivity}

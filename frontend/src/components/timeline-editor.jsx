@@ -2,22 +2,22 @@ import React, { useEffect, useRef, useState } from "react";
 import { activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import ActivityPopup from "./activity-popup.jsx";
-import { SNAP_MINUTES, minutesOfDay, layoutOverlaps } from "../timeline-layout.js";
+import { SNAP_MINUTES, minutesOfDay, minutesFromDayStart, layoutOverlaps, getOutgoingSpillover, getIncomingSpillover } from "../timeline-layout.js";
 import { downloadDayTimelineImage } from "../export-day-image.js";
-/**
- * Google Calendar ส่ง instance id ของ recurring event มาในรูป
- * "<baseId>_<YYYYMMDDTHHmmssZ>" เมื่อใช้ singleEvents=true
- * ต้อง normalize ให้เหลือแค่ base id ก่อน lookup ใน activityCategoryMap
- * และก่อนส่งไป backend — มิฉะนั้นสีและหมวดหมู่จะหายเมื่อดูสัปดาห์อื่น
- */
-function normalizeActivityId(id) {
-  return id.replace(/_\d{8}T\d{6}Z$/, '');
-}
+import { normalizeActivityId } from "../id-utils.js";
+import AutoShrinkText from "./auto-shrink-text.jsx";
 
 const EDIT_HOUR_HEIGHT = 52; // px per hour row
 const EDIT_DAY_START_HOUR = 0; // full 24h day, top to bottom
 const EDIT_DAY_END_HOUR = 24;
 const OVERLAP_GUTTER = 4; // px gap between side-by-side overlapping activities
+// Longest duration reachable by dragging/resizing in the editor — high
+// enough to cover a normal overnight activity (e.g. 20:00-02:00, 6h) with
+// room to spare, without letting a drag runs away into multi-day
+// durations by accident. Activities already longer than this (however
+// they were created — e.g. via ActivityModal, which has no such cap) are
+// left untouched; this only bounds how far a *drag* can push start/end.
+const MAX_DURATION_MINUTES = 12 * 60;
 
 function snap(minutes) {
   return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
@@ -70,6 +70,7 @@ function minutesToLabel(totalMinutes) {
 export default function TimelineEditor({
   day,
   activities,
+  allActivities,
   categories,
   activityCategoryMap,
   activityTagMap,
@@ -95,6 +96,23 @@ export default function TimelineEditor({
   const gridRef = useRef(null);
 
   const timedActivities = activities.filter((activity) => activity.start?.dateTime);
+
+  // Activity that started the day before `day` and whose end time bleeds
+  // into `day` — rendered as a dimmed, non-interactive-for-dragging block
+  // at the top of the grid so it's visually obvious it's a carryover from
+  // last night, not one of today's own activities. Looked up from
+  // `allActivities` (the full fetched range) rather than `activities`
+  // (already filtered to `day`), since by definition this activity's own
+  // start date is yesterday, not `day`.
+  const incomingSpillover = (allActivities || [])
+    .filter((activity) => activity.start?.dateTime)
+    .map((activity) => {
+      const start = activityDate(activity.start);
+      const end = activityDate(activity.end) || start;
+      const spill = getIncomingSpillover(start, end, day);
+      return spill ? { activity, start, end, spilloverEndMin: spill.spilloverEndMin } : null;
+    })
+    .filter(Boolean);
 
   const isLocked = (activityId) => !!lockedActivities?.[normalizeActivityId(activityId)];
 
@@ -142,7 +160,7 @@ export default function TimelineEditor({
       activityId: activity.id,
       mode,
       originStart: minutesOfDay(times.start),
-      originEnd: minutesOfDay(times.end),
+      originEnd: minutesFromDayStart(times.end, day),
       originGrabMinutes: gridMinutesFromClientY(e.clientY)
     });
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -159,12 +177,31 @@ export default function TimelineEditor({
 
     if (dragState.mode === "move") {
       const duration = dragState.originEnd - dragState.originStart;
-      nextStart = snap(Math.max(0, Math.min(1440 - duration, dragState.originStart + delta)));
+      // The activity's start must stay within this day's own grid (dragging
+      // a block shouldn't silently move its start onto a different day) —
+      // but its end is intentionally NOT clamped back down to 1440 here,
+      // since an activity that starts late in the day is allowed to run
+      // past midnight (e.g. 20:00-02:00). durationMinutes still bounds how
+      // long a single drag can stretch it, independent of the day boundary.
+      nextStart = snap(Math.max(0, Math.min(1440 - SNAP_MINUTES, dragState.originStart + delta)));
       nextEnd = nextStart + duration;
     } else if (dragState.mode === "resize-start") {
-      nextStart = snap(Math.max(0, Math.min(dragState.originEnd - SNAP_MINUTES, dragState.originStart + delta)));
+      // Dragging the top edge later can't push nextStart past nextEnd, and
+      // can't push it earlier than (end - MAX_DURATION_MINUTES) so the
+      // activity doesn't silently grow beyond the drag cap from this edge
+      // either.
+      const earliestStart = dragState.originEnd - MAX_DURATION_MINUTES;
+      nextStart = snap(
+        Math.max(Math.max(0, earliestStart), Math.min(dragState.originEnd - SNAP_MINUTES, dragState.originStart + delta))
+      );
     } else if (dragState.mode === "resize-end") {
-      nextEnd = snap(Math.max(dragState.originStart + SNAP_MINUTES, Math.min(1440, dragState.originEnd + delta)));
+      // No longer clamped to 1440 (midnight) — dragging the bottom edge
+      // past midnight is exactly how an overnight activity (e.g.
+      // 20:00-02:00) gets created from the editor. The only limits are: at
+      // least SNAP_MINUTES long, and no longer than MAX_DURATION_MINUTES
+      // total so a drag can't run away into a multi-day span by accident.
+      const latestEnd = dragState.originStart + MAX_DURATION_MINUTES;
+      nextEnd = snap(Math.max(dragState.originStart + SNAP_MINUTES, Math.min(latestEnd, dragState.originEnd + delta)));
     }
 
     const base = new Date(day);
@@ -237,14 +274,24 @@ export default function TimelineEditor({
   const contextActivity = contextMenu ? timedActivities.find((activity) => activity.id === contextMenu.activityId) : null;
   const contextLocked = contextActivity ? isLocked(contextActivity.id) : false;
 
-  const overlapLayout = layoutOverlaps(
-    timedActivities.map((activity) => {
+  const overlapLayout = layoutOverlaps([
+    ...timedActivities.map((activity) => {
       const { start, end } = getTimes(activity);
       const startMin = minutesOfDay(start);
-      const endMin = Math.max(startMin + SNAP_MINUTES, minutesOfDay(end));
+      const endMin = Math.max(startMin + SNAP_MINUTES, minutesFromDayStart(end, day));
       return { id: activity.id, startMin, endMin };
-    })
-  );
+    }),
+    // Incoming spillover blocks (yesterday's activity bleeding into `day`)
+    // get their own entries too, using a prefixed id so they can never
+    // collide with a real activity id — this lets them share columns with
+    // whatever's actually happening early this morning instead of always
+    // rendering full width and overlapping other blocks visually.
+    ...incomingSpillover.map(({ activity, spilloverEndMin }) => ({
+      id: `spillover-in-${activity.id}`,
+      startMin: 0,
+      endMin: Math.max(SNAP_MINUTES, spilloverEndMin)
+    }))
+  ]);
 
   return (
     <div className={`timeline-editor${isFullscreen ? " is-fullscreen" : ""}`}>
@@ -275,7 +322,7 @@ export default function TimelineEditor({
         </button>
       </div>
 
-      {timedActivities.length === 0 ? (
+      {timedActivities.length === 0 && incomingSpillover.length === 0 ? (
         <p className="day-timeline-empty">ไม่มีกิจกรรมตามเวลาในวันนี้</p>
       ) : (
         <div className="day-timeline-scroll day-timeline-scroll-edit" style={{ position: "relative" }}>
@@ -299,10 +346,55 @@ export default function TimelineEditor({
             ))}
 
             <div className="day-timeline-events-layer">
+              {incomingSpillover.map(({ activity, spilloverEndMin }) => {
+                const height = (spilloverEndMin / 60) * EDIT_HOUR_HEIGHT;
+                const color = getDisplayColor(activity, activityCategoryMap, categories);
+                const { column, columns } = overlapLayout[`spillover-in-${activity.id}`] || { column: 0, columns: 1 };
+                const widthPercent = 100 / columns;
+                const leftPercent = column * widthPercent;
+                return (
+                  <div
+                    key={`spillover-in-${activity.id}`}
+                    className="day-timeline-editable-event day-timeline-spillover"
+                    style={{
+                      top: 0,
+                      height,
+                      left: `calc(${leftPercent}% + ${column > 0 ? OVERLAP_GUTTER / 2 : 0}px)`,
+                      width: `calc(${widthPercent}% - ${OVERLAP_GUTTER}px)`,
+                      background: color.bg,
+                      borderLeftColor: color.border
+                    }}
+                    onClick={() => onEditActivity?.(activity)}
+                    title={`ต่อเนื่องจากเมื่อคืน — ${activity.summary || "(ไม่มีชื่อ)"}`}
+                  >
+                    <span className="day-timeline-event-title-row">
+                      <AutoShrinkText
+                        text={`⤴ ${activity.summary || "(ไม่มีชื่อ)"}`}
+                        className="day-timeline-event-title"
+                      />
+                    </span>
+                    <span className="day-timeline-event-time">ต่อจากเมื่อคืน – {minutesToLabel(spilloverEndMin)}</span>
+                  </div>
+                );
+              })}
+
               {timedActivities.map((activity) => {
                 const { start, end } = getTimes(activity);
                 const startMin = minutesOfDay(start);
-                const endMin = Math.max(startMin + SNAP_MINUTES, minutesOfDay(end));
+                // For an overnight activity (end on a later calendar day
+                // than start), the visible block should stop at midnight
+                // (1440) — plain minutesOfDay(end) would incorrectly wrap
+                // "02:00 next day" back to 120, which is LESS than
+                // startMin, making the block render far too short instead
+                // of extending to the bottom of the grid. isOvernight
+                // checks the actual calendar day, not just whether the
+                // clock time looks earlier.
+                const isOvernight = end.getFullYear() !== start.getFullYear() ||
+                  end.getMonth() !== start.getMonth() ||
+                  end.getDate() !== start.getDate();
+                const endMin = isOvernight
+                  ? 1440
+                  : Math.max(startMin + SNAP_MINUTES, minutesOfDay(end));
                 const top = ((startMin - EDIT_DAY_START_HOUR * 60) / 60) * EDIT_HOUR_HEIGHT;
                 const height = ((endMin - startMin) / 60) * EDIT_HOUR_HEIGHT;
                 const color = getDisplayColor(activity, activityCategoryMap, categories);
@@ -311,6 +403,18 @@ export default function TimelineEditor({
                 const { column, columns } = overlapLayout[activity.id] || { column: 0, columns: 1 };
                 const widthPercent = 100 / columns;
                 const leftPercent = column * widthPercent;
+                // Uses the real (un-wrapped) end time, not endMin above — so
+                // this correctly detects "runs past midnight" even while
+                // endMin itself is clamped back to display within the grid.
+                const outgoing = getOutgoingSpillover(start, end, day);
+                const spilloverHeight = outgoing
+                  ? (Math.min(outgoing.spilloverMinutes, 1440) / 60) * EDIT_HOUR_HEIGHT
+                  : 0;
+                // The label always shows the real end time (e.g. "20:00 –
+                // 02:00") — plain minutesOfDay(end) is fine here since it's
+                // just wall-clock hours:minutes, no day-boundary math needed
+                // for display purposes.
+                const endLabel = minutesToLabel(minutesOfDay(end));
                 return (
                   <div
                     key={activity.id}
@@ -338,12 +442,15 @@ export default function TimelineEditor({
                         }}
                       />
                     )}
-                    <span className="day-timeline-event-title">
+                    <span className="day-timeline-event-title-row">
                       {locked && <span className="day-timeline-lock-icon">🔒</span>}
-                      {activity.summary || "(ไม่มีชื่อ)"}
+                      <AutoShrinkText
+                        text={activity.summary || "(ไม่มีชื่อ)"}
+                        className="day-timeline-event-title"
+                      />
                     </span>
                     <span className="day-timeline-event-time">
-                      {minutesToLabel(startMin)} – {minutesToLabel(endMin)}
+                      {minutesToLabel(startMin)} – {endLabel}
                     </span>
                     {!locked && (
                       <div
@@ -353,6 +460,15 @@ export default function TimelineEditor({
                           startDrag(e, activity, "resize-end");
                         }}
                       />
+                    )}
+                    {outgoing && (
+                      <div
+                        className="day-timeline-spillover-tail"
+                        style={{ height: spilloverHeight }}
+                        title={`ต่อไปถึงพรุ่งนี้ — ${minutesToLabel(outgoing.spilloverMinutes)} น. (แสดงในวันถัดไปด้วย)`}
+                      >
+                        <span className="day-timeline-spillover-tail-label">ต่อพรุ่งนี้ ⤵</span>
+                      </div>
                     )}
                   </div>
                 );

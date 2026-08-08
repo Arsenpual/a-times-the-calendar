@@ -167,6 +167,7 @@ export default function AgendaView({
                 <TimelineEditor
                   day={day}
                   activities={dayActivities}
+                  allActivities={activities}
                   categories={categories}
                   activityCategoryMap={activityCategoryMap}
                   activityTagMap={activityTagMap}
