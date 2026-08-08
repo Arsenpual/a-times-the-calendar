@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>โหมด Reminder — Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* --- existing app tokens (kept as-is for continuity) --- */
+    --blue: #1557b0;
+    --blue-dark: #103d82;
+    --blue-tint: #e8f0fe;
+    --red: #b71c1c;
+    --red-tint: #fce8e6;
+    --border: #dadce0;
+    --text-primary: #3c4043;
+    --text-secondary: #5f6368;
+    --bg: #e8eaed;
+    --bg-muted: #ffffff;
+    --hover: #e8eaed;
+
+    /* --- new: reminder-mode accent --- */
+    /* Amber/tangerine = urgency & attention, distinct from calendar's
+       life-area colors so a reminder never gets mistaken for a category */
+    --amber: #e8710a;
+    --amber-dark: #b85a08;
+    --amber-tint: #fdf0e3;
+    --green: #1e8e3e;
+    --green-tint: #e6f4ea;
+
+    font-family: "Google Sans", "Roboto", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ---------- Header (matches existing app-header pattern) ---------- */
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border);
+    gap: 16px;
+  }
+
+  .app-header-left, .app-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-logo {
+    font-size: 20px;
+    font-weight: 500;
+    margin-right: 8px;
+  }
+
+  .mode-switch {
+    display: flex;
+    background: var(--bg);
+    border-radius: 20px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .mode-switch button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 16px;
+    border-radius: 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .mode-switch button.active {
+    background: var(--amber);
+    color: white;
+  }
+
+  .btn {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  .btn.primary {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: white;
+  }
+
+  /* ---------- Dashboard shell: 2 columns, right larger ---------- */
+
+  .dashboard {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  /* ================= LEFT: minute-tape + pomodoro (small, view-only) ================= */
+
+  .tape-panel {
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tape-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tape-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin: 0 0 6px;
+  }
+
+  .tape-session-name {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 2px;
+  }
+
+  .tape-session-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .tape-big-clock {
+    font-family: "Roboto Mono", monospace;
+    font-size: 40px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--amber-dark);
+    margin: 10px 0 2px;
+  }
+
+  .tape-phase-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--green-tint);
+    color: var(--green);
+  }
+
+  .tape-phase-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+  }
+
+  /* The signature element: a vertical ruler of literal minute-ticks.
+     Every reminder appears as a flag pinned to the tick it fires at —
+     this is the one visual that ties "pomodoro running" + "reminders
+     firing every minute" into a single honest picture, instead of a
+     generic circular progress ring next to an unrelated list. */
+  .tape-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+    position: relative;
+  }
+
+  .tape-track {
+    position: relative;
+    padding-left: 56px;
+  }
+
+  .tape-now-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 132px;
+    height: 2px;
+    background: var(--amber);
+    z-index: 3;
+  }
+
+  .tape-now-line::before {
+    content: "ตอนนี้";
+    position: absolute;
+    left: 8px;
+    top: -9px;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    background: var(--amber);
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+
+  .tape-minute {
+    position: relative;
+    height: 44px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tape-minute.elapsed {
+    background: linear-gradient(90deg, var(--amber-tint), transparent 70%);
+  }
+
+  .tape-minute-label {
+    position: absolute;
+    left: -48px;
+    top: -7px;
+    width: 40px;
+    text-align: right;
+    font-family: "Roboto Mono", monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .tape-minute.major .tape-minute-label {
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .tape-flag {
+    position: absolute;
+    left: 8px;
+    top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    background: var(--bg-muted);
+    border: 1px solid var(--amber);
+    color: var(--amber-dark);
+    padding: 3px 8px 3px 6px;
+    border-radius: 12px;
+    white-space: nowrap;
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tape-flag .flag-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex-shrink: 0;
+  }
+
+  .tape-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+  }
+
+  .tape-footer .btn { flex: 1; font-size: 13px; padding: 8px; }
+
+  /* ================= RIGHT: reminder control panel (large) ================= */
+
+  .reminder-panel {
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .reminder-toolbar {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .reminder-toolbar h2 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .reminder-toolbar-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .reminder-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .reminder-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-muted);
+  }
+
+  .reminder-row.active {
+    border-color: var(--amber);
+    background: var(--amber-tint);
+  }
+
+  .reminder-freq-badge {
+    font-family: "Roboto Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    background: var(--blue-tint);
+    color: var(--blue);
+    border-radius: 6px;
+    padding: 6px 2px;
+    line-height: 1.15;
+  }
+
+  .reminder-row.active .reminder-freq-badge {
+    background: var(--amber);
+    color: white;
+  }
+
+  .reminder-freq-badge .n { display: block; font-size: 14px; }
+  .reminder-freq-badge .u { display: block; font-size: 8px; opacity: .8; }
+
+  .reminder-info .title {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 2px;
+  }
+
+  .reminder-info .meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .reminder-toggle {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--border);
+    position: relative;
+    cursor: pointer;
+    border: none;
+  }
+
+  .reminder-toggle.on { background: var(--green); }
+
+  .reminder-toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: white;
+    transition: left .15s ease;
+  }
+
+  .reminder-toggle.on::after { left: 18px; }
+
+  .reminder-row-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .icon-btn:hover { background: var(--hover); }
+
+  .reminder-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 12px 0 2px;
+    padding: 0 4px;
+  }
+
+  /* ---- Inline "add reminder" composer ---- */
+
+  .composer {
+    margin: 0 16px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    background: #fafbfc;
+  }
+
+  .composer label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .composer input, .composer select {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+  }
+
+  .composer .freq-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .composer .freq-row input { width: 56px; flex: none; }
+
+  @media (max-width: 900px) {
+    .dashboard { grid-template-columns: 1fr; overflow: auto; }
+    .tape-panel { max-height: 320px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="app-header">
+    <div class="app-header-left">
+      <span class="app-logo">📅 ปฏิทินของฉัน</span>
+      <div class="mode-switch">
+        <button type="button">Dashboard</button>
+        <button type="button" class="active">⏱ Reminder</button>
+      </div>
+    </div>
+    <div class="app-header-right">
+      <button class="btn">ตั้งค่า</button>
+    </div>
+  </header>
+
+  <div class="dashboard">
+
+    <!-- ================= LEFT: minute-tape + pomodoro (view only) ================= -->
+    <aside class="tape-panel">
+      <div class="tape-header">
+        <p class="tape-label">Pomodoro กำลังทำงาน</p>
+        <p class="tape-session-name">โฟกัส: เตรียมสไลด์ประชุม</p>
+        <p class="tape-session-sub">รอบที่ 2 จาก 4 · พัก 5 นาทีหลังจบรอบนี้</p>
+        <div class="tape-big-clock">18:42</div>
+        <span class="tape-phase-pill"><span class="dot"></span> กำลังโฟกัส</span>
+      </div>
+
+      <div class="tape-scroll">
+        <div class="tape-track">
+          <div class="tape-now-line"></div>
+
+          <div class="tape-minute major"><span class="tape-minute-label">14:05</span></div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:06</span></div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:07</span>
+            <span class="tape-flag"><span class="flag-dot"></span>ดื่มน้ำ</span>
+          </div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:08</span></div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:09</span></div>
+          <div class="tape-minute major elapsed"><span class="tape-minute-label">14:10</span></div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:11</span></div>
+          <div class="tape-minute elapsed"><span class="tape-minute-label">:12</span>
+            <span class="tape-flag"><span class="flag-dot"></span>ยืดตัว 30 วิ</span>
+          </div>
+          <div class="tape-minute"><span class="tape-minute-label">:13</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:14</span></div>
+          <div class="tape-minute major"><span class="tape-minute-label">14:15</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:16</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:17</span>
+            <span class="tape-flag"><span class="flag-dot"></span>ดื่มน้ำ</span>
+          </div>
+          <div class="tape-minute"><span class="tape-minute-label">:18</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:19</span></div>
+          <div class="tape-minute major"><span class="tape-minute-label">14:20</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:21</span></div>
+          <div class="tape-minute"><span class="tape-minute-label">:22</span>
+            <span class="tape-flag"><span class="flag-dot"></span>ยืดตัว 30 วิ</span>
+          </div>
+          <div class="tape-minute"><span class="tape-minute-label">:23</span></div>
+        </div>
+      </div>
+
+      <div class="tape-footer">
+        <button class="btn">หยุดชั่วคราว</button>
+        <button class="btn primary">ข้ามไปพัก</button>
+      </div>
+    </aside>
+
+    <!-- ================= RIGHT: reminder controls (large) ================= -->
+    <section class="reminder-panel">
+      <div class="reminder-toolbar">
+        <div>
+          <h2>Reminder ทั้งหมด</h2>
+          <p class="reminder-toolbar-sub">4 รายการ · 3 กำลังทำงาน</p>
+        </div>
+        <button class="btn primary">+ เพิ่ม Reminder</button>
+      </div>
+
+      <div class="reminder-list">
+
+        <p class="reminder-section-label">กำลังทำงาน</p>
+
+        <div class="reminder-row active">
+          <div class="reminder-freq-badge"><span class="n">1</span><span class="u">นาที</span></div>
+          <div class="reminder-info">
+            <p class="title">ดื่มน้ำ</p>
+            <p class="meta">ทุก 1 นาที · เตือนครั้งถัดไปใน 0:18</p>
+          </div>
+          <button class="reminder-toggle on" aria-label="ปิดการทำงาน"></button>
+          <div class="reminder-row-actions">
+            <button class="icon-btn" title="แก้ไข">✎</button>
+            <button class="icon-btn" title="ลบ">🗑</button>
+          </div>
+        </div>
+
+        <div class="reminder-row active">
+          <div class="reminder-freq-badge"><span class="n">5</span><span class="u">นาที</span></div>
+          <div class="reminder-info">
+            <p class="title">ยืดตัว 30 วินาที</p>
+            <p class="meta">ทุก 5 นาที · เตือนครั้งถัดไปใน 2:18</p>
+          </div>
+          <button class="reminder-toggle on" aria-label="ปิดการทำงาน"></button>
+          <div class="reminder-row-actions">
+            <button class="icon-btn" title="แก้ไข">✎</button>
+            <button class="icon-btn" title="ลบ">🗑</button>
+          </div>
+        </div>
+
+        <div class="reminder-row active">
+          <div class="reminder-freq-badge"><span class="n">20</span><span class="u">นาที</span></div>
+          <div class="reminder-info">
+            <p class="title">พักสายตา มองไกล 20 ฟุต</p>
+            <p class="meta">ทุก 20 นาที · เตือนครั้งถัดไปใน 12:18</p>
+          </div>
+          <button class="reminder-toggle on" aria-label="ปิดการทำงาน"></button>
+          <div class="reminder-row-actions">
+            <button class="icon-btn" title="แก้ไข">✎</button>
+            <button class="icon-btn" title="ลบ">🗑</button>
+          </div>
+        </div>
+
+        <p class="reminder-section-label">ปิดอยู่</p>
+
+        <div class="reminder-row">
+          <div class="reminder-freq-badge"><span class="n">2</span><span class="u">ชม.</span></div>
+          <div class="reminder-info">
+            <p class="title">เช็คอีเมล</p>
+            <p class="meta">ทุก 2 ชั่วโมง · ปิดอยู่</p>
+          </div>
+          <button class="reminder-toggle" aria-label="เปิดการทำงาน"></button>
+          <div class="reminder-row-actions">
+            <button class="icon-btn" title="แก้ไข">✎</button>
+            <button class="icon-btn" title="ลบ">🗑</button>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div>
+            <label>ชื่อ Reminder</label>
+            <input type="text" placeholder="เช่น ลุกยืดเส้น" />
+          </div>
+          <div>
+            <label>ความถี่</label>
+            <div class="freq-row">
+              <input type="number" min="1" value="10" />
+              <select>
+                <option>นาที</option>
+                <option>ชั่วโมง</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn primary" style="height:38px;">เพิ่ม</button>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</body>
+</html>

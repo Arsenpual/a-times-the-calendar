@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>T.i.M.E.S - Logo Concept A</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0b1120;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 900px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3rem;
+    }
+
+    .header {
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #38bdf8;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    /* Card Showcase */
+    .logo-card {
+      background: linear-gradient(145deg, #0f172a, #1e293b);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 4rem 3rem;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+    }
+
+    /* SVG Styling */
+    .logo-svg {
+      width: 280px;
+      height: 280px;
+      filter: drop-shadow(0 10px 20px rgba(56, 189, 248, 0.15));
+    }
+
+    /* Typography inside Logo Showcase */
+    .brand-name {
+      font-size: 3.2rem;
+      font-weight: 800;
+      letter-spacing: 0.35em;
+      margin-top: 1.5rem;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-left: 0.35em; /* Compensate for letter spacing */
+    }
+
+    .brand-dots {
+      color: #38bdf8;
+      -webkit-text-fill-color: #38bdf8;
+    }
+
+    .full-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      color: #38bdf8;
+      text-transform: uppercase;
+      margin-top: 1.2rem;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .full-title span {
+      color: #94a3b8;
+      font-weight: 400;
+    }
+
+    /* Variations Grid */
+    .variants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    .variant-card {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .variant-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .variant-card.light {
+      background: #ffffff;
+      color: #0f172a;
+    }
+
+    .variant-card.light .variant-title {
+      color: #64748b;
+    }
+
+    .variant-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+
+    .mini-svg {
+      width: 80px;
+      height: 80px;
+    }
+
+    /* Explanation Section */
+    .concept-notes {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 1.8rem;
+      width: 100%;
+    }
+
+    .concept-notes h3 {
+      font-size: 1.1rem;
+      color: #38bdf8;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .concept-notes ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .concept-notes li {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      line-height: 1.5;
+    }
+
+    .concept-notes li::before {
+      content: "•";
+      color: #38bdf8;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <div class="header">
+      <h1>Concept A: The Digital Loop & Dynamic Bar</h1>
+      <p>การดีไซน์มินิมอลที่สื่อถึงแถบกิจกรรม (Timeline Bar) และแกนเวลา (Time Axis)</p>
+    </div>
+
+    <!-- Main Showcase Card -->
+    <div class="logo-card">
+      <svg class="logo-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#2563eb" />
+          </linearGradient>
+          <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#06b6d4" />
+            <stop offset="100%" stop-color="#38bdf8" />
+          </linearGradient>
+        </defs>
+
+        <!-- Outer Framing Circle (Light) -->
+        <circle cx="100" cy="100" r="88" stroke="rgba(255,255,255,0.06)" stroke-width="2" />
+        
+        <!-- Timeline Grid Dots (Minimal Context) -->
+        <circle cx="100" cy="35" r="2.5" fill="rgba(56, 189, 248, 0.4)" />
+        <circle cx="100" cy="165" r="2.5" fill="rgba(56, 189, 248, 0.4)" />
+        <circle cx="35" cy="100" r="2.5" fill="rgba(56, 189, 248, 0.4)" />
+        <circle cx="165" cy="100" r="2.5" fill="rgba(56, 189, 248, 0.4)" />
+
+        <!-- Vertical Time Axis (Body of T) -->
+        <path d="M100 68 V148" stroke="url(#blueGradient)" stroke-width="12" stroke-linecap="round" />
+
+        <!-- Top Activity Bars (Head of T) -->
+        <!-- Primary Bar Segment -->
+        <path d="M52 68 H112" stroke="url(#accentGradient)" stroke-width="12" stroke-linecap="round" />
+        <!-- Secondary Overlapping Bar Segment -->
+        <path d="M124 68 H148" stroke="url(#blueGradient)" stroke-width="12" stroke-linecap="round" opacity="0.85" />
+        
+        <!-- Active Event Dot / Pulse Indicator -->
+        <circle cx="148" cy="68" r="3" fill="#ffffff" />
+      </svg>
+
+      <div class="brand-name">T<span class="brand-dots">.</span>i<span class="brand-dots">.</span>M<span class="brand-dots">.</span>E<span class="brand-dots">.</span>S</div>
+      
+      <div class="full-title">
+        Task Interactive <span>&</span><br>Management Efficiency System
+      </div>
+    </div>
+
+    <!-- Small Variants Display -->
+    <div class="variants-grid">
+      
+      <div class="variant-card">
+        <div class="variant-title">App Icon / Favicon</div>
+        <svg class="mini-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="200" height="200" rx="44" fill="#0f172a"/>
+          <rect width="200" height="200" rx="44" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+          <path d="M100 70 V145" stroke="#38bdf8" stroke-width="16" stroke-linecap="round" />
+          <path d="M55 70 H112" stroke="#06b6d4" stroke-width="16" stroke-linecap="round" />
+          <path d="M126 70 H145" stroke="#38bdf8" stroke-width="16" stroke-linecap="round" opacity="0.8" />
+        </svg>
+      </div>
+
+      <div class="variant-card light">
+        <div class="variant-title">Light Mode</div>
+        <svg class="mini-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M100 68 V148" stroke="#0284c7" stroke-width="14" stroke-linecap="round" />
+          <path d="M52 68 H112" stroke="#06b6d4" stroke-width="14" stroke-linecap="round" />
+          <path d="M124 68 H148" stroke="#0284c7" stroke-width="14" stroke-linecap="round" opacity="0.8" />
+          <circle cx="100" cy="100" r="88" stroke="rgba(0,0,0,0.08)" stroke-width="2" />
+        </svg>
+      </div>
+
+    </div>
+
+    <!-- Explanation -->
+    <div class="concept-notes">
+      <h3>💡 รายละเอียดแนวคิดการดีไซน์</h3>
+      <ul>
+        <li><strong>ส่วนหัวของ T (Timeline Bars):</strong> ถูกแบ่งออกเป็น 2 แถบแคปซูล ซ้อนเหลื่อมกัน สื่อถึงบล็อกกิจกรรมต่าง ๆ ที่วางแผนไว้บนปฏิทิน</li>
+        <li><strong>ส่วนลำตัวของ T (Time Axis):</strong> ลากเส้นแกนตั้งที่ตัดผ่านแถบกิจกรรม เปรียบเสมือนแกนเวลาหลักที่ร้อยเรียงกิจกรรมเข้าด้วยกัน</li>
+        <li><strong>ชื่อเต็มโปรเจกต์:</strong> จัดวางชื่อเต็ม <i>Task Interactive & Management Efficiency System</i> ด้านล่างด้วยฟอนต์ Sans-serif มินิมอล อ่านง่ายและชัดเจน</li>
+      </ul>
+    </div>
+
+  </div>
+
+</body>
+</html>
