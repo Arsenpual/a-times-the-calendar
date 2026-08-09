@@ -78,7 +78,104 @@ export default function App() {
   // overlap ourselves.
   const authPopupInFlight = useRef(false);
   const [authReady, setAuthReady] = useState(false); // true once Firebase's initial auth check resolves — avoids a login-button flash before we know if a session already exists
-  const [calendarAccessToken, setCalendarAccessToken] = useState(null);
+
+  // Shows a guide image over the login screen explaining the Google
+  // consent-screen warning people will see, since this app isn't through
+  // Google's App Verification process yet. Starts true (shown immediately
+  // alongside the login card) and only ever goes false via the dismiss
+  // button — deliberately NOT persisted (no localStorage), so it reappears
+  // every time the page is loaded/refreshed rather than being permanently
+  // dismissed after the first close.
+  const [showLoginGuide, setShowLoginGuide] = useState(true);
+
+  // Google Calendar access token persistence (localStorage) — separate
+  // from Firebase's own session persistence (which Firebase's SDK already
+  // handles internally via IndexedDB). Without this, refreshing the page
+  // always re-prompted the Google consent popup even when the token was
+  // still perfectly valid, because calendarAccessToken previously lived
+  // in plain React state (useState(null)) with nothing backing it across
+  // reloads. Storing it doesn't make it last any longer than its real
+  // ~1hr Google-side expiry — it just avoids forcing a popup for a token
+  // that's still good. The existing 401 handling (loadActivities,
+  // handleSaveTimes, the auth-state listener's sign-out branch) already
+  // clears calendarAccessToken to null in every case where the token
+  // turns out to be dead; routing all of those through
+  // persistCalendarAccessToken means the stale value also gets wiped from
+  // localStorage at the same time, not just from React state.
+  //
+  // Also tracks calendarTokenExpiresAt alongside the token itself — Google
+  // Calendar OAuth access tokens minted via Firebase have a fixed 1-hour
+  // lifetime, but nothing in the Firebase SDK response exposes that
+  // expiry directly, so it's computed once (Date.now() + 1 hour) the
+  // moment a fresh token is received and persisted alongside it. This
+  // powers the "expiring soon" warning banner below — silently
+  // auto-reopening the consent popup from a timer isn't possible (browsers
+  // block popups not triggered directly by a user click/tap), so the best
+  // available option is warning ahead of time with a button the person
+  // clicks themselves, which does count as direct user interaction.
+  const CALENDAR_TOKEN_STORAGE_KEY = "calendarAccessToken";
+  const CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY = "calendarAccessTokenExpiresAt";
+  const CALENDAR_TOKEN_LIFETIME_MS = 60 * 60 * 1000; // Google's standard OAuth access token lifetime
+  const CALENDAR_TOKEN_WARNING_WINDOW_MS = 5 * 60 * 1000; // show the renew banner starting 5 minutes before expiry
+
+  const [calendarAccessToken, setCalendarAccessTokenState] = useState(() => {
+    try {
+      return window.localStorage.getItem(CALENDAR_TOKEN_STORAGE_KEY) || null;
+    } catch {
+      // Storage disabled/unavailable (private browsing, some embedded
+      // webviews) — fall back to the old in-memory-only behavior rather
+      // than crashing the app on load.
+      return null;
+    }
+  });
+  const [calendarTokenExpiresAt, setCalendarTokenExpiresAtState] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY);
+      return raw ? parseInt(raw, 10) : null;
+    } catch {
+      return null;
+    }
+  });
+  const setCalendarAccessToken = useCallback((token) => {
+    setCalendarAccessTokenState(token);
+    const expiresAt = token ? Date.now() + CALENDAR_TOKEN_LIFETIME_MS : null;
+    setCalendarTokenExpiresAtState(expiresAt);
+    try {
+      if (token) {
+        window.localStorage.setItem(CALENDAR_TOKEN_STORAGE_KEY, token);
+        window.localStorage.setItem(CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY, String(expiresAt));
+      } else {
+        window.localStorage.removeItem(CALENDAR_TOKEN_STORAGE_KEY);
+        window.localStorage.removeItem(CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY);
+      }
+    } catch {
+      // Same as above — if localStorage isn't available, the app still
+      // works, it just goes back to prompting for a new token every
+      // reload like before this change.
+    }
+  }, []);
+
+  // Re-checked once a minute (not on every render) whether the token is
+  // within the warning window — a plain comparison in the render body
+  // would technically work too, but wouldn't by itself trigger a
+  // re-render when the clock ticks past the threshold with no other
+  // state change happening; this interval is what actually wakes the
+  // component up to show the banner at the right moment.
+  const [tokenNearingExpiry, setTokenNearingExpiry] = useState(false);
+  useEffect(() => {
+    if (!calendarTokenExpiresAt) {
+      setTokenNearingExpiry(false);
+      return;
+    }
+    const checkExpiry = () => {
+      const msRemaining = calendarTokenExpiresAt - Date.now();
+      setTokenNearingExpiry(msRemaining > 0 && msRemaining <= CALENDAR_TOKEN_WARNING_WINDOW_MS);
+    };
+    checkExpiry();
+    const interval = setInterval(checkExpiry, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [calendarTokenExpiresAt]);
+
   const [cursorDate, setCursorDate] = useState(new Date());
   const [activities, setActivities] = useState([]);
   // ค้นหากิจกรรมด้วย tag (หลายอันพร้อมกัน แบบ OR — เจอกิจกรรมที่มี tag
@@ -905,123 +1002,139 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="app-header-left">
-          <span className="app-logo">
-            <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
-            <span style={{ color: "#B71C1C" }}>ของ</span>
-            <span style={{ color: "#F29900" }}>ฉัน</span>
-          </span>
-          <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "dashboard"}
-              className={mode === "dashboard" ? "active" : ""}
-              onClick={() => setMode("dashboard")}
-            >
-              Dashboard
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "reminder"}
-              className={mode === "reminder" ? "active" : ""}
-              onClick={() => setMode("reminder")}
-              title="ยังเป็นแค่ mockup — ใช้งานจริงไม่ได้"
-            >
-              ⏱ Reminder
-            </button>
+      {firebaseUser && (
+        <header className="app-header">
+          <div className="app-header-left">
+            <span className="app-logo">
+              <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
+              <span style={{ color: "#B71C1C" }}>ของ</span>
+              <span style={{ color: "#F29900" }}>ฉัน</span>
+            </span>
+            <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "dashboard"}
+                className={mode === "dashboard" ? "active" : ""}
+                onClick={() => setMode("dashboard")}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "reminder"}
+                className={mode === "reminder" ? "active" : ""}
+                onClick={() => setMode("reminder")}
+                title="ยังเป็นแค่ mockup — ใช้งานจริงไม่ได้"
+              >
+                ⏱ Reminder
+              </button>
+            </div>
+            {mode === "dashboard" && (
+              <>
+                <button className="btn btn-outline" onClick={goToday}>
+                  วันนี้
+                </button>
+                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
+                  ‹
+                </button>
+                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
+                  ›
+                </button>
+                <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
+              </>
+            )}
           </div>
-          {mode === "dashboard" && firebaseUser && (
-            <>
-              <button className="btn btn-outline" onClick={goToday}>
-                วันนี้
-              </button>
-              <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
-                ‹
-              </button>
-              <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
-                ›
-              </button>
-              <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
-            </>
-          )}
-        </div>
 
-        <div className="app-header-right">
-          {mode === "dashboard" && firebaseUser ? (
-            <>
-              <div className="tag-search-wrap">
-                <span className="tag-search-icon">🔍</span>
-                {tagSearchTerms.map((term) => (
-                  <span key={term} className="tag-search-chip">
-                    #{term}
+          <div className="app-header-right">
+            {mode === "dashboard" ? (
+              <>
+                <div className="tag-search-wrap">
+                  <span className="tag-search-icon">🔍</span>
+                  {tagSearchTerms.map((term) => (
+                    <span key={term} className="tag-search-chip">
+                      #{term}
+                      <button
+                        type="button"
+                        className="tag-search-chip-remove"
+                        onClick={() => setTagSearchTerms((prev) => prev.filter((t) => t !== term))}
+                        aria-label={`ลบคำค้นหา ${term}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    className="tag-search-input"
+                    placeholder={tagSearchTerms.length === 0 ? "ค้นหาด้วย tag..." : "เพิ่ม tag..."}
+                    value={tagSearchDraft}
+                    onChange={(e) => setTagSearchDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        const trimmed = tagSearchDraft.trim();
+                        setTagSearchDraft("");
+                        if (!trimmed) return;
+                        setTagSearchTerms((prev) =>
+                          prev.some((t) => t.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+                        );
+                      } else if (e.key === "Backspace" && tagSearchDraft === "" && tagSearchTerms.length > 0) {
+                        setTagSearchTerms((prev) => prev.slice(0, -1));
+                      }
+                    }}
+                    aria-label="ค้นหากิจกรรมด้วย tag — พิมพ์แล้วกด Enter เพื่อค้นหาได้หลาย tag พร้อมกัน"
+                  />
+                  {(tagSearchTerms.length > 0 || tagSearchDraft) && (
                     <button
                       type="button"
-                      className="tag-search-chip-remove"
-                      onClick={() => setTagSearchTerms((prev) => prev.filter((t) => t !== term))}
-                      aria-label={`ลบคำค้นหา ${term}`}
+                      className="tag-search-clear"
+                      onClick={() => {
+                        setTagSearchTerms([]);
+                        setTagSearchDraft("");
+                      }}
+                      aria-label="ล้างคำค้นหาทั้งหมด"
                     >
                       ✕
                     </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  className="tag-search-input"
-                  placeholder={tagSearchTerms.length === 0 ? "ค้นหาด้วย tag..." : "เพิ่ม tag..."}
-                  value={tagSearchDraft}
-                  onChange={(e) => setTagSearchDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") {
-                      e.preventDefault();
-                      const trimmed = tagSearchDraft.trim();
-                      setTagSearchDraft("");
-                      if (!trimmed) return;
-                      setTagSearchTerms((prev) =>
-                        prev.some((t) => t.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
-                      );
-                    } else if (e.key === "Backspace" && tagSearchDraft === "" && tagSearchTerms.length > 0) {
-                      setTagSearchTerms((prev) => prev.slice(0, -1));
-                    }
-                  }}
-                  aria-label="ค้นหากิจกรรมด้วย tag — พิมพ์แล้วกด Enter เพื่อค้นหาได้หลาย tag พร้อมกัน"
-                />
-                {(tagSearchTerms.length > 0 || tagSearchDraft) && (
-                  <button
-                    type="button"
-                    className="tag-search-clear"
-                    onClick={() => {
-                      setTagSearchTerms([]);
-                      setTagSearchDraft("");
-                    }}
-                    aria-label="ล้างคำค้นหาทั้งหมด"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-              <button
-                className="btn btn-primary"
-                onClick={() => openAddActivity(new Date(cursorDate))}
-                disabled={!calendarAccessToken}
-              >
-                + เพิ่มกิจกรรม
-              </button>
-              <button className="btn btn-outline" onClick={handleLogout}>
-                ออกจากระบบ
-              </button>
-            </>
-          ) : mode === "dashboard" ? (
-            <button className="btn btn-primary" onClick={handleLogin} disabled={!authReady}>
-              เข้าสู่ระบบด้วย Google
-            </button>
-          ) : null}
-        </div>
-      </header>
+                  )}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => openAddActivity(new Date(cursorDate))}
+                  disabled={!calendarAccessToken}
+                >
+                  + เพิ่มกิจกรรม
+                </button>
+                <button className="btn btn-outline" onClick={handleLogout}>
+                  ออกจากระบบ
+                </button>
+              </>
+            ) : null}
+          </div>
+        </header>
+      )}
 
-      {mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
+      {firebaseUser && mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
+
+      {/* Non-blocking heads-up shown ~5 minutes before the current Google
+          Calendar token expires — lets the person renew it with one click
+          before it actually dies, instead of only ever finding out via a
+          failed save/load (the existing full-page "ยืนยันตัวตน Google
+          Calendar" prompt further down, which only appears once the token
+          is already dead). Deliberately does NOT auto-open the popup from
+          a timer — browsers block popups that aren't triggered by a direct
+          click, so a button the person presses themselves is the only
+          reliable way to renew ahead of time. */}
+      {firebaseUser && calendarAccessToken && tokenNearingExpiry && mode === "dashboard" && (
+        <div className="token-expiry-banner" role="status">
+          <span>สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด</span>
+          <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
+            ต่ออายุตอนนี้
+          </button>
+        </div>
+      )}
 
       <main className="app-main">
         {mode === "reminder" && <ReminderModeMockup />}
@@ -1035,8 +1148,56 @@ export default function App() {
             )}
 
             {authReady && !firebaseUser && (
-              <div className="empty-state">
-                <p>เข้าสู่ระบบด้วย Google เพื่อดึงปฏิทินของคุณมาแสดง</p>
+              <div className="login-screen">
+                <div className="login-card">
+                  <span className="login-logo">
+                    <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
+                    <span style={{ color: "#B71C1C" }}>ของ</span>
+                    <span style={{ color: "#F29900" }}>ฉัน</span>
+                  </span>
+                  <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
+                  <p className="login-subtext">
+                    เข้าสู่ระบบด้วย Google เพื่อ sync ปฏิทินของคุณโดยตรง — ปลอดภัย ไม่มีการเก็บสำเนาข้อมูลกิจกรรมไว้ที่อื่น
+                  </p>
+                  <button className="google-signin-btn" onClick={handleLogin}>
+                    <svg className="google-signin-icon" viewBox="0 0 18 18" aria-hidden="true">
+                      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.85.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+                      <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
+                      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+                    </svg>
+                    เข้าสู่ระบบด้วย Google
+                  </button>
+                </div>
+
+                {/* App ยังไม่ผ่าน Google App Verification — Google จะโชว์
+                    หน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ระหว่าง OAuth consent
+                    ซึ่งอาจทำให้ผู้ใช้ที่ไม่คุ้นเคยกดยกเลิกไปเฉยๆ ภาพนี้แสดง
+                    ขั้นตอนที่ต้องกด ("Advanced" > "ไปที่ ... (ไม่ปลอดภัย)")
+                    เพื่อผ่านหน้าจอนั้นไปให้ signInWithGoogle() ทำงานต่อได้
+                    ปิดแล้วหายไปแค่ในเซสชันนี้ (ไม่บันทึกไว้) — รีเฟรชหน้าจะ
+                    เห็นอีกครั้งเสมอ ตั้งใจไว้แบบนี้เพราะสถานะ verification
+                    อาจเปลี่ยนไปเมื่อไหร่ก็ได้ ไม่อยากให้คนที่เคยปิดไปแล้ว
+                    พลาดเห็นตอนที่ยังจำเป็นต้องรู้ */}
+                {showLoginGuide && (
+                  <div className="login-guide-overlay" role="dialog" aria-label="วิธีเข้าสู่ระบบ Google">
+                    <div className="login-guide-panel">
+                      <button
+                        type="button"
+                        className="login-guide-close"
+                        onClick={() => setShowLoginGuide(false)}
+                        aria-label="ปิด"
+                      >
+                        ✕
+                      </button>
+                      <img
+                        src="/login-guide.png"
+                        alt="วิธีเข้าสู่ระบบ Google เมื่อเจอหน้าจอเตือนแอปยังไม่ได้ยืนยัน"
+                        className="login-guide-image"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

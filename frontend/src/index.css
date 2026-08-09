@@ -419,6 +419,150 @@ html.screen-reader-mode .tag-search-input {
   text-align: center;
 }
 
+/* Login screen — shown in place of .empty-state specifically when the
+   person isn't signed in yet, so first impressions get a proper branded
+   card instead of a bare line of text. */
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 360px;
+  width: 100%;
+  padding: 40px 32px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(60, 64, 67, 0.08);
+  text-align: center;
+}
+
+.login-logo {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.login-headline {
+  margin: 4px 0 0;
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.login-subtext {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* Styled to match Google's own sign-in button guidelines (white
+   background, gray border, official four-color "G" mark) so it reads as
+   trustworthy/familiar rather than a generic branded button — people
+   recognize this exact shape from countless other sites. */
+.google-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.google-signin-btn:hover {
+  background: var(--hover);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
+}
+
+.google-signin-btn:active {
+  background: var(--bg);
+}
+
+.google-signin-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Overlay explaining the Google "unverified app" warning screen, shown on
+   top of the login card until the person dismisses it or reloads the
+   page (see showLoginGuide in app.jsx — deliberately not persisted).
+   Fixed positioning centers it against the viewport rather than just
+   .login-screen's own box, so it stays centered regardless of where the
+   login card sits in the page layout. */
+.login-guide-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(32, 33, 36, 0.5);
+  z-index: 50;
+  padding: 24px;
+}
+
+.login-guide-panel {
+  position: relative;
+  width: 50vw;
+  height: 50vh;
+  max-width: 640px;
+  max-height: 640px;
+  background: var(--bg-muted);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(60, 64, 67, 0.3);
+  overflow: hidden;
+  display: flex;
+}
+
+.login-guide-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg-muted);
+}
+
+.login-guide-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(32, 33, 36, 0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+  transition: background-color 0.15s ease;
+}
+
+.login-guide-close:hover {
+  background: rgba(32, 33, 36, 0.8);
+}
+
 .error-banner {
   background: #fce8e6;
   color: #c5221f;
@@ -426,6 +570,29 @@ html.screen-reader-mode .tag-search-input {
   border-radius: 4px;
   margin-bottom: 12px;
   font-size: 14px;
+}
+
+/* Pre-expiry heads-up for the Google Calendar token — amber/warning tone
+   (not the red .error-banner) since nothing has actually failed yet, this
+   is just a proactive nudge to renew before it does. Full-width strip
+   below the header, same footprint as .announcement-ticker, so it reads
+   as part of the app chrome rather than an interrupting popup. */
+.token-expiry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #fef7e0;
+  color: #7a5c00;
+  border-bottom: 1px solid #f9d97a;
+  font-size: 13px;
+}
+
+.token-expiry-renew-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .loading-banner {

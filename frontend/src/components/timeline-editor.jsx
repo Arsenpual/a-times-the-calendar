@@ -304,7 +304,7 @@ export default function TimelineEditor({
           type="button"
           className="btn-icon timeline-editor-export"
           onClick={() =>
-            downloadDayTimelineImage({ day, activities: timedActivities, categories, activityCategoryMap })
+            downloadDayTimelineImage({ day, activities: timedActivities, allActivities, categories, activityCategoryMap })
           }
           aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ"
           title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)"
