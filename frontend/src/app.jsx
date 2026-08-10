@@ -45,9 +45,9 @@ const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใ
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง)
 const LOGIN_GUIDE_STEPS = [
-  { number: 1, image: "/login-guide-step1.jpg", text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
-  { number: 2, image: "/login-guide-step2.jpg", text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
-  { number: 3, image: "/login-guide-step3.jpg", text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
+  { number: 1, image: "/login-guide-step1.png", text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
+  { number: 2, image: "/login-guide-step2.png", text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
+  { number: 3, image: "/login-guide-step3.png", text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
 ];
 
 export default function App() {
