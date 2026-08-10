@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import loginGuideStep1 from "../public/login-guide-step1.jpg";
+import loginGuideStep2 from "../public/login-guide-step2.jpg";
+import loginGuideStep3 from "../public/login-guide-step3.jpg";
 import AgendaView from "./components/agenda-view.jsx";
 import TagSearchResults from "./components/tag-search-results.jsx";
 import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
@@ -43,11 +46,15 @@ import { normalizeActivityId } from "./id-utils.js";
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
-// OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง)
+// OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
+// แทน string path ตรงๆ ("/login-guide-step1.jpg") เพราะ GitHub Pages เสิร์ฟ
+// ที่ subpath /a-times-the-calendar/ ไม่ใช่ root — path ที่ขึ้นต้นด้วย "/"
+// ตรงๆ จะไม่ผ่าน Vite's base config เลยหาไฟล์ไม่เจอ (404) ตอน deploy จริง
+// ถึงแม้ localhost จะใช้ได้ปกติเพราะ dev server เสิร์ฟจาก root เสมอ
 const LOGIN_GUIDE_STEPS = [
-  { number: 1, image: "../public/login-guide-step1.jpg", text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
-  { number: 2, image: "../public/login-guide-step2.jpg", text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
-  { number: 3, image: "../public/login-guide-step3.jpg", text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
+  { number: 1, image: loginGuideStep1, text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
+  { number: 2, image: loginGuideStep2, text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
+  { number: 3, image: loginGuideStep3, text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
 ];
 
 export default function App() {
