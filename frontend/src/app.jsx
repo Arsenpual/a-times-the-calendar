@@ -6,6 +6,7 @@ import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
 import ActivityModal from "./components/activity-modal.jsx";
 import ReminderModeMockup from "./components/reminder-mode-mockup.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
+import SettingsDrawer from "./components/settings-drawer.jsx";
 import {
   auth,
   signInWithGoogle,
@@ -40,6 +41,14 @@ import { normalizeActivityId } from "./id-utils.js";
 // this string and redeploying. Set to "" (or null) to hide the ticker
 // entirely without removing the component from the tree.
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
+
+// 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
+// OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง)
+const LOGIN_GUIDE_STEPS = [
+  { number: 1, image: "/login-guide-step1.jpg", text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
+  { number: 2, image: "/login-guide-step2.jpg", text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
+  { number: 3, image: "/login-guide-step3.jpg", text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
+];
 
 export default function App() {
   // Phase 2 (Firebase Auth): two separate pieces of auth state now instead
@@ -87,6 +96,38 @@ export default function App() {
   // every time the page is loaded/refreshed rather than being permanently
   // dismissed after the first close.
   const [showLoginGuide, setShowLoginGuide] = useState(true);
+
+  // Dark mode theme — persisted in localStorage so it survives refresh,
+  // same pattern as calendarAccessToken above. Read once at mount; applied
+  // to <html> as a data-theme attribute (see the effect below) so CSS can
+  // key off [data-theme="dark"] selectors globally, rather than needing a
+  // class/prop threaded through every component that renders a color.
+  // Defaults to the system preference (prefers-color-scheme) on first-ever
+  // visit, before anything has been explicitly chosen/saved.
+  const THEME_STORAGE_KEY = "theme";
+  const [theme, setThemeState] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === "light" || saved === "dark") return saved;
+    } catch {
+      // localStorage unavailable — fall through to system preference below.
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  const setTheme = (next) => {
+    setThemeState(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // Same as calendarAccessToken's setter — if storage isn't available,
+      // the app still works, it just won't remember the choice on reload.
+    }
+  };
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Google Calendar access token persistence (localStorage) — separate
   // from Firebase's own session persistence (which Firebase's SDK already
@@ -1110,6 +1151,15 @@ export default function App() {
                 <button className="btn btn-outline" onClick={handleLogout}>
                   ออกจากระบบ
                 </button>
+                <button
+                  type="button"
+                  className="btn-icon settings-open-btn"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="เปิดการตั้งค่า"
+                  title="การตั้งค่า"
+                >
+                  ⚙️
+                </button>
               </>
             ) : null}
           </div>
@@ -1118,21 +1168,25 @@ export default function App() {
 
       {firebaseUser && mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
 
-      {/* Non-blocking heads-up shown ~5 minutes before the current Google
-          Calendar token expires — lets the person renew it with one click
-          before it actually dies, instead of only ever finding out via a
-          failed save/load (the existing full-page "ยืนยันตัวตน Google
-          Calendar" prompt further down, which only appears once the token
-          is already dead). Deliberately does NOT auto-open the popup from
-          a timer — browsers block popups that aren't triggered by a direct
-          click, so a button the person presses themselves is the only
-          reliable way to renew ahead of time. */}
+      {/* Blocking heads-up shown ~5 minutes before the current Google
+          Calendar token expires — small card, top-left corner, but now
+          backed by a dimmed full-viewport backdrop that blocks all other
+          interaction (like a modal) until the person renews. Escalated
+          from a passive toast to a hard block because letting the token
+          expire mid-action (e.g. mid-drag in TimelineEditor) risks losing
+          unsaved work, so forcing a decision here is safer than leaving
+          it easy to ignore. Deliberately does NOT auto-open the Google
+          popup from a timer — browsers block popups that aren't
+          triggered by a direct click, so a button the person presses
+          themselves is the only reliable way to renew ahead of time. */}
       {firebaseUser && calendarAccessToken && tokenNearingExpiry && mode === "dashboard" && (
-        <div className="token-expiry-banner" role="status">
-          <span>สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด</span>
-          <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
-            ต่ออายุตอนนี้
-          </button>
+        <div className="token-expiry-backdrop">
+          <div className="token-expiry-banner" role="alertdialog" aria-label="แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ">
+            <span>สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด</span>
+            <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
+              ต่ออายุตอนนี้
+            </button>
+          </div>
         </div>
       )}
 
@@ -1172,9 +1226,11 @@ export default function App() {
 
                 {/* App ยังไม่ผ่าน Google App Verification — Google จะโชว์
                     หน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ระหว่าง OAuth consent
-                    ซึ่งอาจทำให้ผู้ใช้ที่ไม่คุ้นเคยกดยกเลิกไปเฉยๆ ภาพนี้แสดง
-                    ขั้นตอนที่ต้องกด ("Advanced" > "ไปที่ ... (ไม่ปลอดภัย)")
-                    เพื่อผ่านหน้าจอนั้นไปให้ signInWithGoogle() ทำงานต่อได้
+                    ซึ่งอาจทำให้ผู้ใช้ที่ไม่คุ้นเคยกดยกเลิกไปเฉยๆ การ์ด 3
+                    ขั้นตอนนี้แสดงขั้นตอนที่ต้องกด ("ขั้นสูง" > "ไปที่ ...
+                    (ไม่ปลอดภัย)" > "ดำเนินต่อ") เพื่อผ่านหน้าจอนั้นไปให้
+                    signInWithGoogle() ทำงานต่อได้ รูปประกอบยังเป็น
+                    placeholder รอใส่ภาพสกรีนช็อตจริงทีหลัง (STEP_GUIDE_IMAGES)
                     ปิดแล้วหายไปแค่ในเซสชันนี้ (ไม่บันทึกไว้) — รีเฟรชหน้าจะ
                     เห็นอีกครั้งเสมอ ตั้งใจไว้แบบนี้เพราะสถานะ verification
                     อาจเปลี่ยนไปเมื่อไหร่ก็ได้ ไม่อยากให้คนที่เคยปิดไปแล้ว
@@ -1190,11 +1246,41 @@ export default function App() {
                       >
                         ✕
                       </button>
-                      <img
-                        src="/login-guide.png"
-                        alt="วิธีเข้าสู่ระบบ Google เมื่อเจอหน้าจอเตือนแอปยังไม่ได้ยืนยัน"
-                        className="login-guide-image"
-                      />
+                      <div className="login-guide-header">
+                        <h2 className="login-guide-title">
+                          📌 วิธีเข้าใช้งานครั้งแรก (3 ขั้นตอนง่ายๆ)
+                        </h2>
+                        <p className="login-guide-note">
+                          เนื่องจากระบบกำลังอยู่ในช่วงยื่นขอการยืนยันสิทธิ์จาก Google
+                          ท่านสามารถกดข้ามตามขั้นตอนด้านล่างเพื่อเข้าใช้งานได้อย่างปลอดภัย
+                        </p>
+                      </div>
+
+                      <div className="login-guide-steps">
+                        {LOGIN_GUIDE_STEPS.map((step) => (
+                          <div className="login-guide-step" key={step.number}>
+                            {step.image ? (
+                              <img
+                                src={step.image}
+                                alt={`ขั้นตอนที่ ${step.number}`}
+                                className="login-guide-step-image"
+                              />
+                            ) : (
+                              <div className="login-guide-step-placeholder">
+                                รูปประกอบ Step {step.number}
+                              </div>
+                            )}
+                            <p>
+                              <strong>Step {step.number}:</strong> {step.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="login-guide-footnote">
+                        <strong>📌 หมายเหตุ:</strong> ทำขั้นตอนเหล่านี้แค่ครั้งแรกที่เข้าสู่ระบบเท่านั้น
+                        เมื่อเข้าสู่ระบบสำเร็จแล้ว ครั้งถัดไปจะเข้าหน้าแอปได้ทันทีโดยไม่ขึ้นหน้าเตือนนี้อีก
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1280,6 +1366,7 @@ export default function App() {
                     expandedDate={expandedDate}
                     onAddActivity={openAddActivity}
                     onSelectDay={openDay}
+                    onNavigateWeek={navigateWeek}
                     onAssignCategory={handleAssignCategory}
                     onEditActivity={openEditActivity}
                     onSaveTimes={handleSaveTimes}
@@ -1325,6 +1412,13 @@ export default function App() {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         onClose={closeModal}
+      />
+
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        theme={theme}
+        onThemeChange={setTheme}
       />
     </div>
   );

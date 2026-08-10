@@ -14,6 +14,29 @@
   font-family: "Google Sans", "Roboto", Arial, sans-serif;
 }
 
+/* Dark mode — toggled via the Settings drawer (see app.jsx's `theme`
+   state), applied as a data-theme attribute on <html> rather than a class
+   on some inner wrapper, so it can't accidentally miss anything rendered
+   outside the main .app tree (e.g. a future portal/toast). Overrides only
+   the core surface/text/border variables above — accent colors (--blue,
+   --red) are intentionally left close to their light-mode values since
+   they're already legible on dark backgrounds and retuning them would
+   need re-checking contrast at every place they're used as text vs. fill.
+   Hardcoded hex colors elsewhere in this file (error/warning banners,
+   spillover indicators, etc. that don't yet reference these variables)
+   are NOT covered by this block — a separate pass. */
+html[data-theme="dark"] {
+  --blue-tint: #1a2b47;
+  --red-tint: #3c1c1c;
+  --border: #4a4d51;
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --bg: #202124;
+  --bg-muted: #2d2e30;
+  --hover: #35363a;
+  --today: #8ab4f8;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -521,22 +544,99 @@ html.screen-reader-mode .tag-search-input {
 
 .login-guide-panel {
   position: relative;
-  width: 50vw;
-  height: 50vh;
-  max-width: 640px;
-  max-height: 640px;
+  width: min(90vw, 900px);
+  max-height: 90vh;
   background: var(--bg-muted);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 8px 28px rgba(60, 64, 67, 0.3);
-  overflow: hidden;
-  display: flex;
+  overflow-y: auto;
+  padding: 28px 28px 24px;
+  border: 1px solid var(--border);
 }
 
-.login-guide-image {
+.login-guide-header {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-right: 24px;
+}
+
+.login-guide-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.login-guide-note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.login-guide-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .login-guide-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+.login-guide-step {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-guide-step-image {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
   object-fit: contain;
   background: var(--bg-muted);
+  border: 1px dashed var(--border);
+}
+
+.login-guide-step-placeholder {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  background: var(--bg-muted);
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+}
+
+.login-guide-step p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.login-guide-footnote {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .login-guide-close {
@@ -572,20 +672,39 @@ html.screen-reader-mode .tag-search-input {
   font-size: 14px;
 }
 
+/* Dimmed backdrop for the pre-expiry token warning — blocks all other
+   interaction until the person renews, same idea as .modal-overlay but
+   with no click-to-dismiss (renewing is the only way out, there's no
+   "cancel" that makes sense here). Highest z-index in the app: needs to
+   sit above even .modal-overlay (z-index: 100), since letting the token
+   expire while someone has an ActivityModal open mid-edit would risk
+   losing unsaved form input when the eventual save fails with a 401. */
+.token-expiry-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 33, 36, 0.35);
+  z-index: 110;
+}
+
 /* Pre-expiry heads-up for the Google Calendar token — amber/warning tone
    (not the red .error-banner) since nothing has actually failed yet, this
-   is just a proactive nudge to renew before it does. Full-width strip
-   below the header, same footprint as .announcement-ticker, so it reads
-   as part of the app chrome rather than an interrupting popup. */
+   is just a proactive nudge to renew before it does. Small card, top-left
+   corner, sitting on top of .token-expiry-backdrop above. */
 .token-expiry-banner {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 111;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: 10px;
+  max-width: 320px;
+  padding: 10px 12px;
   background: #fef7e0;
   color: #7a5c00;
-  border-bottom: 1px solid #f9d97a;
+  border: 1px solid #f9d97a;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(60, 64, 67, 0.18);
   font-size: 13px;
 }
 
@@ -627,17 +746,100 @@ html.screen-reader-mode .tag-search-input {
   padding: 8px 16px;
 }
 
-.agenda-row {
-  display: flex;
-  gap: 12px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--border);
+.agenda-view:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
+.agenda-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  background: var(--bg-muted);
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.15s ease;
+}
+
+.agenda-row:hover {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+/* Focus changes the row's own background (a soft tint, not a solid fill —
+   deliberately gentle) plus a lifted/embossed look (shadow + a hair of
+   scale) so the whole row reads as "this one" without the activity color
+   pills or the ⚙/+ buttons inside it losing their own distinct colors —
+   nothing in here overrides child element colors, it only changes the
+   row's own background/shadow/position. The bounce-ish cubic-bezier
+   easing (overshoots slightly before settling) is what gives the "pop"
+   feel on focus change rather than a flat instant snap. */
+.agenda-row:focus-visible {
+  outline: none;
+  background: var(--blue-tint); /* fallback for browsers without color-mix() support */
+  background: color-mix(in srgb, var(--blue-tint) 55%, var(--bg-muted));
+  box-shadow: 0 6px 18px rgba(21, 87, 176, 0.24), 0 1px 3px rgba(21, 87, 176, 0.15);
+  transform: translateY(-2px) scale(1.015);
+}
+
+/* Critical: a CSS `transform` on ANY ancestor (even translateY(-1px)) makes
+   that ancestor the containing block for descendant `position: fixed`
+   elements per spec — TimelineEditor's fullscreen mode uses
+   position:fixed to cover the viewport (see .timeline-editor.is-fullscreen
+   below), and .agenda-row is TimelineEditor's ancestor. Without this
+   override, opening the editor (which focuses/hovers the row to get
+   there) silently broke fullscreen: it anchored to the row's own box
+   instead of the viewport, and the row's still-transitioning transform
+   fought with TimelineEditor's own rapid re-renders during drag,
+   producing the shake/jitter. Editing rows never need the hover/focus
+   lift effect anyway — they already have their own distinct
+   .is-row-editing treatment (border below) — so simply zeroing transform
+   here removes the containing-block trap entirely.
+   IMPORTANT: keep this override — do not tune the lift effect on
+   .is-row-editing rows expecting a plain :hover/:focus-visible transform
+   to also apply; it will re-break fullscreen. */
+.agenda-row.is-row-editing:hover,
+.agenda-row.is-row-editing:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-row {
+    transition: none;
+  }
+  .agenda-row:hover,
+  .agenda-row:focus-visible {
+    transform: none;
+  }
+}
+
+/* "วันนี้" ใช้แค่กรอบบางๆ สีน้ำเงิน ไม่ใช่พื้นหลังฟ้าทึบ — พื้นหลังฟ้าอ่อน
+   ถาวรของ "วันนี้" กับ background ตอน focus (กด ↑↓) จะแย่งความสนใจกัน ทำให้
+   ดูเหมือนมีจุดถูกไฮไลต์อยู่ 2 จุดพร้อมกัน ทั้งที่เป็นคนละความหมายกัน (วันนี้
+   vs วันที่กำลังโฟกัส) — กรอบบางๆ ยังบอกได้ว่า "นี่คือวันนี้" แต่ไม่แย่ง
+   ความสนใจจาก focus ซึ่งควรเป็นจุดเด่นเดียวบนหน้าจอ ตัวบอกหลักจริงๆ ของ
+   "วันนี้" คือ badge วงกลมสีน้ำเงินทึบ + ✨ ที่ agenda-day-badge แทน */
 .agenda-row.is-today {
-  background: #d2e3fc;
-  border-radius: 8px;
-  border-bottom-color: transparent;
+  border-color: var(--blue-tint);
+  border-bottom-color: var(--blue-tint);
+}
+
+.agenda-row.is-today:hover {
+  background: var(--hover);
+}
+
+/* Today + focused at the same time — focus-visible's stronger background
+   tint and shadow still read clearly as the dominant highlight; this just
+   keeps the today ring's border color from being overridden back to
+   transparent underneath it. */
+.agenda-row.is-today:focus-visible {
+  border-color: var(--blue-tint);
 }
 
 /* When a row's ⚙ timeline-editor is open, it expands full width in place
@@ -645,37 +847,100 @@ html.screen-reader-mode .tag-search-input {
 .agenda-row.is-row-editing {
   background: var(--bg-muted);
   border: 1px solid var(--blue);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 18px;
+  padding: 14px;
   align-items: flex-start;
 }
 
-.agenda-day-label {
-  width: 44px;
+/* Fullscreen mode: TimelineEditor switches to position:fixed and covers
+   the whole viewport (see .timeline-editor.is-fullscreen), but it's still
+   rendered inside this row in the DOM — it isn't portaled out to the
+   document root. A position:fixed descendant is removed from normal flow,
+   so it doesn't visually push this row around, but the row itself is
+   still sitting there in its own normal spot underneath, fully
+   interactive. Moving the mouse over the screen area now covered by the
+   fullscreen editor was landing on BOTH elements depending on the exact
+   pixel/frame (the fixed editor on top, this row still receiving the
+   hover event from underneath), which flickered :hover on/off rapidly as
+   the mouse moved — the reported "กระพริบ". Disabling pointer events and
+   collapsing this row out of the layout entirely while a fullscreen
+   descendant exists removes the overlap: nothing underneath can receive
+   hover/click anymore, so there's nothing left to flicker with. */
+.agenda-row:has(.timeline-editor.is-fullscreen) {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Prominent circular day badge — replaces the old plain stacked weekday/
+   date text label. Today gets a solid blue fill + a small floating
+   sparkle emoji instead of just colored text, so "today" reads instantly
+   at a glance rather than needing to read the number's color. */
+.agenda-day-badge {
+  position: relative;
   flex-shrink: 0;
-  text-align: center;
-  padding: 4px 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agenda-row:hover .agenda-day-badge {
+  transform: scale(1.06) rotate(-2deg);
+}
+
+.agenda-row.is-today .agenda-day-badge {
+  background: var(--blue);
 }
 
 .agenda-weekday {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 500;
   color: var(--text-secondary);
+  line-height: 1.2;
 }
 
 .agenda-row.is-today .agenda-weekday {
-  color: var(--blue);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .agenda-date {
   display: block;
-  font-size: 16px;
-  font-weight: 500;
-  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
 }
 
-.agenda-date.is-today {
-  color: var(--blue);
+.agenda-row.is-today .agenda-date {
+  color: #fff;
+}
+
+.agenda-today-spark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 15px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-day-badge {
+    transition: none;
+  }
+  .agenda-row:hover .agenda-day-badge {
+    transform: none;
+  }
 }
 
 .agenda-day-content {
@@ -687,8 +952,9 @@ html.screen-reader-mode .tag-search-input {
   justify-content: center;
 }
 
-/* Per-day category proportion bar — replaces the old per-event chip list;
-   click it to open the mini timeline for that day (see agenda-view.jsx). */
+/* Per-day category proportion, shown as rounded pill segments (replaces
+   the old flat continuous bar) — click it to open the mini timeline for
+   that day (see agenda-view.jsx). */
 
 .agenda-day-bar-row {
   display: flex;
@@ -705,10 +971,11 @@ html.screen-reader-mode .tag-search-input {
   font-family: inherit;
   background: none;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 8px 10px;
   cursor: pointer;
   text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .agenda-day-bar-btn:hover {
@@ -716,25 +983,38 @@ html.screen-reader-mode .tag-search-input {
 }
 
 .agenda-day-bar-btn.is-expanded {
-  background: #d2e3fc;
+  background: var(--blue-tint);
   border-color: var(--blue);
 }
 
-.agenda-day-bar {
+.agenda-day-pills {
   display: flex;
-  height: 10px;
-  border-radius: 5px;
-  overflow: hidden;
-  background: var(--border);
+  align-items: center;
+  gap: 3px;
+  height: 12px;
 }
 
-.agenda-day-bar-empty {
-  background: var(--border);
-  opacity: 0.5;
+.agenda-day-pills-empty {
+  gap: 0;
 }
 
-.agenda-day-bar-segment {
+.agenda-day-pill,
+.agenda-day-pill-placeholder {
   height: 100%;
+  min-width: 6px;
+  border-radius: 999px;
+  transition: transform 0.15s ease;
+}
+
+.agenda-day-bar-btn:hover .agenda-day-pill {
+  transform: scaleY(1.15);
+}
+
+.agenda-day-pill-placeholder {
+  flex-grow: 1;
+  background: var(--text-secondary); /* fallback for browsers without color-mix() support */
+  background: color-mix(in srgb, var(--border) 70%, var(--text-secondary));
+  opacity: 0.4;
 }
 
 .agenda-day-bar-count {
@@ -749,25 +1029,33 @@ html.screen-reader-mode .tag-search-input {
 
 .agenda-edit-toggle {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: none;
   font-size: 14px;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .agenda-edit-toggle:hover {
   background: var(--hover);
   color: var(--blue);
+  transform: rotate(45deg);
 }
 
 .agenda-edit-toggle.is-active {
   background: var(--blue);
   border-color: var(--blue);
   color: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-edit-toggle:hover {
+    transform: none;
+  }
 }
 
 /* Weekly summary panel */
@@ -1122,6 +1410,12 @@ html.screen-reader-mode .tag-search-input {
   padding: 16px;
   gap: 12px;
   overflow: hidden;
+  /* pointer-events is inherited through the DOM tree independent of
+     layout flow — without this, the editor would silently inherit
+     pointer-events:none from its parent .agenda-row (which is
+     deliberately disabled while a fullscreen descendant exists, see
+     .agenda-row:has(...) above) and stop responding to any input at all. */
+  pointer-events: auto;
 }
 
 .timeline-editor-header {
@@ -1739,6 +2033,157 @@ html.screen-reader-mode .tag-search-input {
 }
 
 /* Event create/edit modal (two-way sync) */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 33, 36, 0.4);
+  z-index: 105;
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-muted);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: settings-drawer-slide-in 0.2s ease-out;
+}
+
+@keyframes settings-drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer {
+    animation: none;
+  }
+}
+
+.settings-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-drawer-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-drawer-close {
+  appearance: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.settings-drawer-close:hover {
+  background: var(--hover);
+}
+
+.settings-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.settings-section {
+  padding: 12px 20px;
+}
+
+.settings-section-title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-row-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Toggle switch — built from scratch (no <input type="checkbox"> styled
+   with appearance:none) since a plain <button role="switch"> gives full
+   control over the knob animation without fighting browser-default
+   checkbox styling, which varies enough across browsers that overriding
+   it consistently is more code than this. */
+.settings-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--border);
+  cursor: pointer;
+  padding: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.settings-toggle.is-on {
+  background: var(--blue);
+}
+
+.settings-toggle-knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.settings-toggle.is-on .settings-toggle-knob {
+  transform: translateX(20px);
+}
+
+.settings-open-btn {
+  font-size: 16px;
+}
 
 .modal-overlay {
   position: fixed;

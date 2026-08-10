@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getWeekRange, isSameDay, activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import TimelineEditor from "./timeline-editor.jsx";
@@ -59,6 +59,7 @@ export default function AgendaView({
   expandedDate,
   onAddActivity,
   onSelectDay,
+  onNavigateWeek,
   onAssignCategory,
   onEditActivity,
   onSaveTimes,
@@ -107,9 +108,48 @@ export default function AgendaView({
     setEditingDay((prev) => (prev && isSameDay(prev, day) ? null : day));
   };
 
+  // One ref per visible day, indexed the same as `days` — lets arrow-key
+  // navigation move real DOM focus between rows (rowRefs.current[i].focus())
+  // rather than just tracking a "selected index" in state, since each row
+  // is now its own native Tab stop (tabIndex={0} below) rather than the
+  // whole view being a single stop with a virtual selection. Rebuilt each
+  // render (a plain array, not useRef(new Array(...))) since `days` itself
+  // is already recomputed fresh every render from `anchorDate` — no need
+  // to persist the ref array across renders independent of that.
+  const rowRefs = useRef([]);
+  rowRefs.current = [];
+
+  // Up/Down moves focus to the previous/next row and wraps around at the
+  // edges (↑ from row 0 goes to row 6, ↓ from row 6 goes back to row 0)
+  // — the visible 7-day grid never changes shape from this, only which
+  // row has focus. Also calls onSelectDay so the mini-timeline follows
+  // the newly focused day, matching what a mouse click on that row does.
+  // Left/Right switches weeks entirely via onNavigateWeek (the same
+  // handler the ‹ › header buttons use), independent of which row
+  // currently has focus — attached to every row so it works no matter
+  // which day happens to be focused when the person presses it.
+  const handleRowKeyDown = (e, index) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelectDay?.(days[index]);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const delta = e.key === "ArrowUp" ? -1 : 1;
+      const nextIndex = (index + delta + 7) % 7;
+      rowRefs.current[nextIndex]?.focus();
+      onSelectDay?.(days[nextIndex]);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      onNavigateWeek?.(-1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      onNavigateWeek?.(1);
+    }
+  };
+
   return (
     <div className="agenda-view">
-      {days.map((day) => {
+      {days.map((day, index) => {
         const isToday = isSameDay(day, today);
         const isExpanded = expandedDate && isSameDay(day, expandedDate);
         const isEditing = editingDay && isSameDay(editingDay, day);
@@ -119,42 +159,58 @@ export default function AgendaView({
         return (
           <div
             key={day.toISOString()}
+            ref={(el) => { rowRefs.current[index] = el; }}
             className={`agenda-row${isToday ? " is-today" : ""}${isEditing ? " is-row-editing" : ""}`}
+            onClick={() => onSelectDay?.(day)}
+            onKeyDown={(e) => handleRowKeyDown(e, index)}
+            role="button"
+            tabIndex={0}
+            aria-label={`เลือกวันที่ ${day.getDate()} — มี ${dayActivities.length} กิจกรรม`}
+            aria-pressed={!!isExpanded}
           >
-            <div className="agenda-day-label">
+            <div className="agenda-day-badge">
               <span className="agenda-weekday">{WEEKDAY_SHORT[day.getDay()]}</span>
-              <span className={`agenda-date${isToday ? " is-today" : ""}`}>{day.getDate()}</span>
+              <span className="agenda-date">{day.getDate()}</span>
+              {isToday && <span className="agenda-today-spark" aria-hidden="true">✨</span>}
             </div>
             <div className="agenda-day-content">
               <div className="agenda-day-bar-row">
                 <button
                   type="button"
                   className={`agenda-day-bar-btn${isExpanded ? " is-expanded" : ""}`}
-                  onClick={() => onSelectDay?.(day)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectDay?.(day);
+                  }}
                   aria-label={`ดู mini timeline วันที่ ${day.getDate()} — มี ${dayActivities.length} กิจกรรม`}
                   aria-pressed={!!isExpanded}
                 >
                   {breakdown.length > 0 ? (
-                    <span className="agenda-day-bar">
+                    <span className="agenda-day-pills">
                       {breakdown.map((seg, i) => (
                         <span
                           key={i}
-                          className="agenda-day-bar-segment"
-                          style={{ width: `${seg.percent}%`, background: seg.border }}
+                          className="agenda-day-pill"
+                          style={{ flexGrow: seg.percent, background: seg.border }}
                         />
                       ))}
                     </span>
                   ) : (
-                    <span className="agenda-day-bar agenda-day-bar-empty" />
+                    <span className="agenda-day-pills agenda-day-pills-empty">
+                      <span className="agenda-day-pill-placeholder" />
+                    </span>
                   )}
                   <span className="agenda-day-bar-count">
-                    {dayActivities.length > 0 ? `${dayActivities.length} กิจกรรม` : "ไม่มีกิจกรรม"}
+                    {dayActivities.length > 0 ? `${dayActivities.length} กิจกรรม` : "ว่างทั้งวัน 🌤️"}
                   </span>
                 </button>
                 <button
                   type="button"
                   className={`agenda-edit-toggle${isEditing ? " is-active" : ""}`}
-                  onClick={() => toggleEditing(day)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleEditing(day);
+                  }}
                   aria-label={isEditing ? "ปิดโหมดแก้ไขเวลากิจกรรม" : "เปิดโหมดแก้ไขเวลากิจกรรม"}
                   aria-pressed={isEditing}
                   title="แก้ไขเวลากิจกรรม"
@@ -163,33 +219,35 @@ export default function AgendaView({
                 </button>
               </div>
 
-              {isEditing ? (
-                <TimelineEditor
-                  day={day}
-                  activities={dayActivities}
-                  allActivities={activities}
-                  categories={categories}
-                  activityCategoryMap={activityCategoryMap}
-                  activityTagMap={activityTagMap}
-                  lockedActivities={lockedActivities}
-                  onCancel={() => setEditingDay(null)}
-                  onSaveTimes={onSaveTimes}
-                  onAssignCategory={onAssignCategory}
-                  onEditActivity={onEditActivity}
-                  onToggleLock={onToggleLock}
-                  onDeleteActivity={onDeleteActivity}
-                  onDeleteSeries={onDeleteSeries}
-                  onDuplicateActivity={onDuplicateActivity}
-                  onMoveActivityToDay={onMoveActivityToDay}
-                  onSetActivityColor={onSetActivityColor}
-                  onEditSeries={onEditSeries}
-                  onFetchSeriesCount={onFetchSeriesCount}
-                />
-              ) : (
-                <button type="button" className="agenda-add-btn" onClick={() => onAddActivity?.(day)}>
-                  + เพิ่มกิจกรรม
-                </button>
-              )}
+              <div onClick={(e) => e.stopPropagation()}>
+                {isEditing ? (
+                  <TimelineEditor
+                    day={day}
+                    activities={dayActivities}
+                    allActivities={activities}
+                    categories={categories}
+                    activityCategoryMap={activityCategoryMap}
+                    activityTagMap={activityTagMap}
+                    lockedActivities={lockedActivities}
+                    onCancel={() => setEditingDay(null)}
+                    onSaveTimes={onSaveTimes}
+                    onAssignCategory={onAssignCategory}
+                    onEditActivity={onEditActivity}
+                    onToggleLock={onToggleLock}
+                    onDeleteActivity={onDeleteActivity}
+                    onDeleteSeries={onDeleteSeries}
+                    onDuplicateActivity={onDuplicateActivity}
+                    onMoveActivityToDay={onMoveActivityToDay}
+                    onSetActivityColor={onSetActivityColor}
+                    onEditSeries={onEditSeries}
+                    onFetchSeriesCount={onFetchSeriesCount}
+                  />
+                ) : (
+                  <button type="button" className="agenda-add-btn" onClick={() => onAddActivity?.(day)}>
+                    ✚ เพิ่มกิจกรรม
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         );

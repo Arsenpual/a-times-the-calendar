@@ -203,6 +203,21 @@ export default function ActivityModal({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
 
+  // Escape ปิด modal ได้เหมือนคลิกนอกกรอบ (.modal-overlay's onClick={onClose}
+  // ด้านล่าง) — attach ที่ document เพราะโฟกัสอาจอยู่ตรงไหนก็ได้ในฟอร์ม
+  // (input, textarea, ปุ่ม) ไม่ใช่แค่ตอน modal เองมีโฟกัสตรงๆ ใส่ effect นี้
+  // ไว้ก่อน early return (`if (!open) return null` ด้านล่าง) เพราะ hook
+  // ต้องถูกเรียกทุก render เสมอ (Rules of Hooks) — ตัว effect เองเช็ค `open`
+  // ข้างในแทน ไม่ใช่การข้าม hook ทั้งก้อนแบบมีเงื่อนไข
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const toggleWeekday = (code) => {

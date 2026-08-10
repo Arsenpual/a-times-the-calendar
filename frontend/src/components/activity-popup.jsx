@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { toDateInputValue } from "../date-utils.js";
 import { EVENT_COLORS } from "../activity-colors.js";
 
@@ -67,6 +67,36 @@ export default function ActivityPopup({
   const isRecurring = !!activity.recurringEventId;
 
   const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  // Escape ถอยกลับทีละขั้นให้ตรงกับปุ่ม "กลับ"/"ยกเลิก" ที่มีอยู่แล้วในแต่ละ
+  // sub-mode — ลำดับชั้นจริงลึกกว่า 2 ระดับ (เช่น menu → recurring-action →
+  // series-limit-warning → confirm-delete-series) และ "confirm-delete" เอง
+  // ก็กลับไปคนละที่กันตาม isRecurring (ดูปุ่ม "ยกเลิก" ของมันเอง) จึงต้องเป็น
+  // ฟังก์ชันแทนตารางคงที่ ปิด popup ทั้งอันเฉพาะตอนอยู่ที่เมนูหลักแล้วเท่านั้น
+  const getPreviousMode = () => {
+    switch (mode) {
+      case "confirm-delete":
+        return isRecurring ? "recurring-action" : "menu";
+      case "series-limit-warning":
+      case "confirm-delete-series":
+        return "recurring-action";
+      default:
+        return "menu";
+    }
+  };
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (mode === "menu") {
+        onClose?.();
+      } else {
+        setMode(getPreviousMode());
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, onClose, isRecurring]);
 
   const runQuickAction = async (key, fn) => {
     setBusyAction(key);
