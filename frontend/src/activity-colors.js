@@ -11,6 +11,12 @@
 // better contrast — deliberately deeper/more saturated than a first pass,
 // per user feedback (colorblind, wanted less washed-out colors).
 // Reference: https://developers.google.com/calendar/api/v3/reference/colors
+//
+// normalizeActivityId is imported (not redefined here) so every lookup in
+// this file always uses the single shared implementation in id-utils.js —
+// this file used to keep its own local copy, which is exactly the kind of
+// drift id-utils.js's own module comment warns against.
+import { normalizeActivityId } from "./id-utils.js";
 
 export const EVENT_COLORS = {
   1: { name: "Lavender", border: "#5C6BC0", bg: "#D1D9F5" },
@@ -50,14 +56,6 @@ export function getEventColor(colorId) {
  * @param {Record<string,string>} activityCategoryMap activityId -> categoryId
  * @param {Array<{id:string,color:string}>} categories
  */
-/**
- * Strip the instance-id suffix Google Calendar appends to recurring event
- * occurrences ("<baseId>_<YYYYMMDDTHHmmssZ>") so the lookup always hits
- * the single base-id key stored in activityCategoryMap / db.json.
- */
-function normalizeActivityId(id) {
-  return id ? id.replace(/_\d{8}T\d{6}Z$/, '') : id;
-}
 
 export function getDisplayColor(activity, activityCategoryMap, categories) {
   const categoryId = activityCategoryMap[normalizeActivityId(activity.id)];

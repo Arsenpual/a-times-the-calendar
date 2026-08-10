@@ -366,8 +366,33 @@ html.screen-reader-mode .tag-search-input {
 
 .app-main {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  /* .app-main itself no longer scrolls — .dashboard's own children each
+     own their scroll region instead (see .agenda-view below), so
+     scrolling through the day list doesn't drag the summary/mini-timeline
+     column along with it. .dashboard is given flex: 1 + min-height: 0
+     below so it still fills the remaining space under the banners above
+     it, the same as before this change. */
+}
+
+.app-main > .dashboard {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Non-dashboard main content (login screen, "checking session" state,
+   reminder mockup) has no scroll container above it anymore either, now
+   that .app-main doesn't scroll — give these their own so they still
+   scroll on their own if taller than the viewport. */
+.app-main > .empty-state,
+.app-main > .login-screen,
+.app-main > .reminder-mockup {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Scrolling announcement strip below the header in calendar mode — see
@@ -726,13 +751,25 @@ html.screen-reader-mode .tag-search-input {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  /* No align-items here (it used to be "start" for both columns, each
+     only as tall as its own content) — .agenda-view now needs to stretch
+     to the full row height to have a real scroll region of its own (see
+     its rule below, which sets height: 100%). .summary-column instead
+     gets align-self: start explicitly, so it keeps the old behavior —
+     sitting at its own natural height — instead of stretching to match
+     .agenda-view's new full-height sizing. */
+  height: 100%;
+  min-height: 0; /* grid items don't shrink below content size by default; without this the grid row itself grows to fit .agenda-view's full content height instead of clipping it, defeating the scroll below */
 }
 
 .summary-column {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Sits at its own natural (shorter) height instead of stretching to
+     match .agenda-view's full-row height beside it — see .dashboard's
+     comment above for why align-items moved off the grid shorthand. */
+  align-self: start;
 }
 
 /* Agenda view */
@@ -744,6 +781,17 @@ html.screen-reader-mode .tag-search-input {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 8px 16px;
+  /* Own scroll region, independent from .summary-column beside it — this
+     is what actually fixes "scrolling through the day list drags the
+     summary/mini-timeline panel along with it": before this, .app-main
+     was the only scrolling ancestor, so any scroll gesture over either
+     column scrolled both together as one page. Height comes from
+     .dashboard's height:100% + this flex row's remaining space (via the
+     grid's align-items: start on .summary-column not applying here, so
+     .agenda-view is free to stretch to the row's full height instead). */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .agenda-view:focus-visible {

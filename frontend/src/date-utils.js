@@ -160,3 +160,16 @@ export function formatWeekLabel(date) {
   const total = totalWeeksInYear(weekStart.getFullYear());
   return `${weekStart.getDate()} ${THAI_MONTHS[weekStart.getMonth()]} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
 }
+
+/**
+ * e.g. "11 สิงหาคม สัปดาห์ที่ 33/53 ของปี" — same "สัปดาห์ที่ N/total" tail
+ * as formatWeekLabel, but the date shown is `date` itself, not the Sunday
+ * that starts its week. Used for the header title when a specific day is
+ * focused/selected (see app.jsx's expandedDate) so the title reflects
+ * whichever day the person is actually looking at right now, while the
+ * week number still correctly describes which week that day falls in.
+ */
+export function formatFocusedDayLabel(date) {
+  const total = totalWeeksInYear(date.getFullYear());
+  return `${date.getDate()} ${THAI_MONTHS[date.getMonth()]} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
+}

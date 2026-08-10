@@ -119,6 +119,30 @@ export default function AgendaView({
   const rowRefs = useRef([]);
   rowRefs.current = [];
 
+  // Syncs real DOM focus to whichever day `expandedDate` points at,
+  // whenever that day wasn't already the browser's focused element. This
+  // is what makes app.jsx's navigateWeek auto-focus (setting expandedDate
+  // to the new week's first day right after ← →, when nothing was
+  // focused before) actually move focus — setting expandedDate alone only
+  // changes which day the mini-timeline shows; it was never wired to
+  // request real DOM focus on that day's row. Guarded by the
+  // document.activeElement check so this doesn't fight the user: clicking
+  // a row already focuses it natively (and also calls onSelectDay,
+  // setting expandedDate to that same day) — re-focusing the same element
+  // here is a harmless no-op, but this guard also means a parent-driven
+  // expandedDate change while a *different* element entirely has focus
+  // (e.g. the tag-search input) is left alone rather than yanking focus
+  // away from what the user is actually doing.
+  useEffect(() => {
+    if (!expandedDate) return;
+    const index = days.findIndex((d) => isSameDay(d, expandedDate));
+    if (index === -1) return;
+    const el = rowRefs.current[index];
+    if (el && document.activeElement !== el) {
+      el.focus();
+    }
+  }, [expandedDate]);
+
   // Up/Down moves focus to the previous/next row and wraps around at the
   // edges (↑ from row 0 goes to row 6, ↓ from row 6 goes back to row 0)
   // — the visible 7-day grid never changes shape from this, only which
@@ -136,8 +160,10 @@ export default function AgendaView({
       e.preventDefault();
       const delta = e.key === "ArrowUp" ? -1 : 1;
       const nextIndex = (index + delta + 7) % 7;
+      // .focus() below now fires the row's own onFocus handler, which
+      // already calls onSelectDay(days[nextIndex]) — no need to call it
+      // again here separately (see the row's onFocus prop below).
       rowRefs.current[nextIndex]?.focus();
-      onSelectDay?.(days[nextIndex]);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
       onNavigateWeek?.(-1);
@@ -162,6 +188,7 @@ export default function AgendaView({
             ref={(el) => { rowRefs.current[index] = el; }}
             className={`agenda-row${isToday ? " is-today" : ""}${isEditing ? " is-row-editing" : ""}`}
             onClick={() => onSelectDay?.(day)}
+            onFocus={() => onSelectDay?.(day)}
             onKeyDown={(e) => handleRowKeyDown(e, index)}
             role="button"
             tabIndex={0}

@@ -239,6 +239,17 @@ export default function App() {
   const [tagSearchResults, setTagSearchResults] = useState([]);
   const [tagSearchLoading, setTagSearchLoading] = useState(false);
   const [tagSearchError, setTagSearchError] = useState(null);
+  // Bumped by every handler that writes an activity (save/delete/move/
+  // duplicate/set-color/save-times/delete-series) so the tag-search effect
+  // below knows to refetch even though tagSearchTerms itself didn't change —
+  // without this, editing/deleting/moving an activity from inside
+  // TagSearchResults left tagSearchResults showing stale data until the
+  // person cleared and retyped their search (see the "ดึงไปแล้ว ไม่ต้องซ้ำ"
+  // guard below, which otherwise skips every refetch after the first).
+  const [tagSearchRefreshKey, setTagSearchRefreshKey] = useState(0);
+  const refreshTagSearchIfActive = () => {
+    if (tagSearchTerms.length > 0) setTagSearchRefreshKey((k) => k + 1);
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -336,7 +347,6 @@ export default function App() {
   // ทุกครั้งที่เพิ่ม/ลบคำค้นหา เพราะช่วงเวลาที่ดึงไม่ได้เปลี่ยนตามคำค้นหา
   useEffect(() => {
     if (tagSearchTerms.length === 0 || !calendarAccessToken) return;
-    if (tagSearchResults.length > 0) return; // ดึงไปแล้ว ไม่ต้องซ้ำ
 
     let cancelled = false;
     setTagSearchLoading(true);
@@ -361,7 +371,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [tagSearchTerms, calendarAccessToken, tagSearchResults.length]);
+    // tagSearchRefreshKey deliberately triggers a refetch on every bump
+    // (see refreshTagSearchIfActive) even though it carries no data of its
+    // own — this is what keeps search results in sync after an edit/
+    // delete/move instead of only fetching once per search session.
+  }, [tagSearchTerms, calendarAccessToken, tagSearchRefreshKey]);
 
   // เคลียร์ผลค้นหาทิ้งเมื่อไม่มีคำค้นหาเหลืออยู่แล้ว (กันผลเก่าค้าง ถ้า
   // ผู้ใช้ลบคำค้นหาหมดแล้วพิมพ์ใหม่ทีหลัง จะได้ไปดึงข้อมูลรอบใหม่)
@@ -453,23 +467,107 @@ export default function App() {
     }
   };
 
-  const navigateWeek = (direction) => {
-    const next = new Date(cursorDate);
-    next.setDate(next.getDate() + direction * 7);
-    setCursorDate(next);
-  };
+  /**
+   * เปลี่ยนสัปดาห์ที่กำลังดู — เรียกจากทั้งปุ่ม ‹ › ในหัว, ปุ่มลูกศรของแถว
+   * ใน AgendaView, และ global ← → shortcut ด้านล่าง (ดู handleGlobalKeyDown)
+   * ทั้งสามทางเรียกฟังก์ชันเดียวกันนี้เสมอเพื่อไม่ให้ logic เพี้ยนจากกัน
+   * ห่อด้วย useCallback (identity คงที่) เพราะ effect ของ global shortcut
+   * ด้านล่าง add/remove event listener ตาม dependency ของมันเอง — ถ้า
+   * navigateWeek เป็นฟังก์ชันใหม่ทุก render (เหมือนตอนเป็น const ธรรมดา)
+   * effect นั้นจะ add/remove listener ใหม่ทุก render ไปด้วยโดยไม่จำเป็น
+   *
+   * ไม่แตะ expandedDate โดยตรงในนี้ (ทำที่ effect ผูกกับ cursorDate ด้านล่าง
+   * แทน) เพราะฟังก์ชันนี้ต้องเป็น pure ต่อ cursorDate เท่านั้นเพื่อให้
+   * dependency array ของ useCallback ว่างเปล่าคงที่ได้
+   */
+  const navigateWeek = useCallback((direction) => {
+    setCursorDate((prevCursorDate) => {
+      const next = new Date(prevCursorDate);
+      next.setDate(next.getDate() + direction * 7);
+      return next;
+    });
+  }, []);
 
   const goToday = () => setCursorDate(new Date());
 
-  // Reset the open timeline day whenever the visible week changes, since a
-  // day from last week's selection wouldn't have activities loaded anyway.
-  useEffect(() => {
-    setExpandedDate(null);
-  }, [cursorDate]);
+  // Ref เดียวที่ track ว่า effect ด้านล่าง (ผูกกับ cursorDate) เคยรันมาแล้ว
+  // อย่างน้อยหนึ่งครั้งหรือยัง — ต้องกันการรันตอน initial mount โดยเฉพาะ
+  // เพราะ useEffect รันเสมอตอน mount ครั้งแรกไม่ว่า dependency จะ "เปลี่ยน"
+  // จริงหรือไม่ ถ้าไม่กันไว้ expandedDate (เริ่มต้นเป็น null ตาม useState
+  // ด้านบน) จะถูกเปลี่ยนเป็นวันแรกของสัปดาห์ปัจจุบันทันทีตั้งแต่โหลดหน้า
+  // แรก ทั้งที่ควรว่างเปล่าจนกว่าผู้ใช้จะเลือกวันเอง (ยังไม่เคยกด ←→ เลย)
+  const isFirstCursorDateRun = useRef(true);
 
   const openDay = (date) => setExpandedDate(date);
 
   const closeDay = () => setExpandedDate(null);
+
+  // Reset (หรือ auto-focus) the open timeline day whenever the visible
+  // week changes:
+  //   - ถ้ามีวันที่ถูกเลือกอยู่แล้วก่อนเปลี่ยนสัปดาห์ (prev ไม่ null) และวัน
+  //     นั้นไม่อยู่ในสัปดาห์ใหม่อีกต่อไป → clear เป็น null (พฤติกรรมเดิม —
+  //     วันจากสัปดาห์เก่าไม่มี activities โหลดมาแสดงอยู่แล้ว)
+  //   - ถ้ายังไม่มีวันไหนถูกเลือกอยู่เลย (prev เป็น null) → โฟกัสวันแรกของ
+  //     สัปดาห์ใหม่ให้อัตโนมัติแทน เพื่อให้ปุ่มลูกศรขึ้น/ลงใน AgendaView
+  //     (ซึ่งต้องมีแถวใดแถวหนึ่งถูก focus ก่อนถึงจะใช้งานได้) ใช้งานต่อได้
+  //     ทันทีโดยไม่ต้องคลิก/tab เข้าไปเลือกวันเอง — agenda-view.jsx มี
+  //     effect ของตัวเองที่คอย sync expandedDate นี้ไปเป็น DOM focus จริง
+  //   - ยกเว้น "รอบแรกสุด" ตอน mount (isFirstCursorDateRun) ที่จะไม่ทำ
+  //     อะไรเลย — คงพฤติกรรมเดิมที่หน้าเพิ่งโหลดมาแล้วยังไม่มี mini-timeline
+  //     ใดๆ เปิดอยู่จนกว่าผู้ใช้จะเลือกวันเอง ไม่ใช่ auto-select ตั้งแต่แรก
+  useEffect(() => {
+    if (isFirstCursorDateRun.current) {
+      isFirstCursorDateRun.current = false;
+      return;
+    }
+    setExpandedDate((prev) => {
+      const [weekStart, weekEnd] = getWeekRange(cursorDate);
+      if (!prev) return weekStart;
+      return prev >= weekStart && prev <= weekEnd ? prev : null;
+    });
+  }, [cursorDate]);
+
+  /**
+   * Global ← → shortcut for switching weeks, independent of which element
+   * currently has focus — before this, ArrowLeft/ArrowRight only worked
+   * when a day row inside AgendaView happened to be focused (see
+   * handleRowKeyDown in agenda-view.jsx), so the shortcut was unusable
+   * until the person had already clicked/tabbed into some row first. This
+   * listens on `document` directly and calls the exact same navigateWeek
+   * the ‹ › header buttons use, so both paths always stay in sync — no
+   * separate logic to keep matching.
+   *
+   * Two guards keep this from firing where arrow keys should do something
+   * else instead:
+   *   1. Skipped entirely outside dashboard mode (mode !== "dashboard"),
+   *      since there's no week to navigate in reminder mode.
+   *   2. Skipped while focus is inside a text input, textarea, or
+   *      contenteditable element (tag search box, any field inside
+   *      ActivityModal, etc.) — arrow keys there need to move the text
+   *      cursor, not the calendar week. Also skipped while focus is on an
+   *      agenda-row itself, since that row's own onKeyDown already calls
+   *      onNavigateWeek for ArrowLeft/ArrowRight (see agenda-view.jsx) —
+   *      without this check both handlers would fire for the same
+   *      keypress and navigateWeek would run twice.
+   */
+  useEffect(() => {
+    if (mode !== "dashboard") return;
+    const handleGlobalKeyDown = (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const active = document.activeElement;
+      const isTextEntry =
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.isContentEditable);
+      const isAgendaRow = active?.closest?.(".agenda-row");
+      if (isTextEntry || isAgendaRow) return;
+      e.preventDefault();
+      navigateWeek(e.key === "ArrowLeft" ? -1 : 1);
+    };
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [mode, navigateWeek]);
 
   /**
    * Shared two-way sync conflict check (see also ActivityModal's own check
@@ -689,6 +787,7 @@ export default function App() {
     }
 
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
@@ -757,6 +856,7 @@ export default function App() {
       setError("บางกิจกรรมถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
     }
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
 
@@ -827,6 +927,7 @@ export default function App() {
       // Non-fatal — the activity itself is already gone from Google Calendar.
     }
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
@@ -882,6 +983,7 @@ export default function App() {
       )
     );
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
@@ -937,27 +1039,29 @@ export default function App() {
     if (activity.colorId) body.colorId = activity.colorId;
 
     const created = await createActivity(calendarAccessToken, body);
+    const normalizedCreatedId = created?.id ? normalizeActivityId(created.id) : null;
 
     const existingCategoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
-    if (created?.id && existingCategoryId) {
-      setActivityCategoryMap((prev) => ({ ...prev, [created.id]: existingCategoryId }));
+    if (normalizedCreatedId && existingCategoryId) {
+      setActivityCategoryMap((prev) => ({ ...prev, [normalizedCreatedId]: existingCategoryId }));
       try {
-        await assignActivityCategory(created.id, existingCategoryId);
+        await assignActivityCategory(normalizedCreatedId, existingCategoryId);
       } catch (e) {
         setError(`ทำสำเนากิจกรรมสำเร็จ แต่บันทึกหมวดหมู่ของสำเนาไม่สำเร็จ: ${e.message}`);
       }
     }
 
     const existingTags = activityTagMap[normalizeActivityId(activity.id)] || [];
-    if (created?.id && existingTags.length > 0) {
-      setActivityTagMap((prev) => ({ ...prev, [created.id]: existingTags }));
+    if (normalizedCreatedId && existingTags.length > 0) {
+      setActivityTagMap((prev) => ({ ...prev, [normalizedCreatedId]: existingTags }));
       try {
-        await setActivityTags(created.id, existingTags);
+        await setActivityTags(normalizedCreatedId, existingTags);
       } catch (e) {
         setError(`ทำสำเนากิจกรรมสำเร็จ แต่บันทึก tag ของสำเนาไม่สำเร็จ: ${e.message}`);
       }
     }
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
@@ -999,6 +1103,7 @@ export default function App() {
       setError("กิจกรรมนี้ถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
     }
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
@@ -1027,6 +1132,7 @@ export default function App() {
     if (!activity) return;
     await updateActivity(calendarAccessToken, activity.id, { colorId: colorId || "" });
     await loadActivities();
+    refreshTagSearchIfActive();
   };
 
   /**
