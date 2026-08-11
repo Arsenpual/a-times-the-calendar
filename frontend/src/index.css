@@ -872,7 +872,7 @@ html.screen-reader-mode .tag-search-input {
   transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
     transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-color 0.15s ease;
+    border-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .agenda-row:hover {
@@ -1125,7 +1125,11 @@ html.screen-reader-mode .tag-search-input {
   padding: 8px 10px;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  /* Uses the same duration and easing as .agenda-row, since both are
+     driven by the same is-expanded state. This keeps the blue selection
+     moving as one effect for mouse clicks and keyboard day navigation. */
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .agenda-day-bar-btn:hover {
