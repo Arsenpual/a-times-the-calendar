@@ -1,16 +1,18 @@
-const THAI_MONTHS = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-];
+// ทุกฟังก์ชันที่ format วันที่เป็นข้อความรับ `lang` ("th"|"en") เป็นพารามิเตอร์
+// สุดท้ายเสมอ ค่า default เป็น "th" เพื่อคง backward-compat กับจุดเรียกเก่าที่
+// ยังไม่ได้ส่ง lang มา (เผื่อมีจุดที่ตกหล่นตอน migrate) — ชื่อเดือน/วันและปี
+// พ.ศ.-ค.ศ. ดึงมาจาก i18n.jsx จุดเดียว ไม่มี Thai-specific array อยู่ในไฟล์นี้
+// เองอีกต่อไป ฟังก์ชันที่ไม่เกี่ยวกับการแสดงผล (isSameDay, getWeekRange,
+// activityDate, toDateInputValue ฯลฯ) ไม่ต้องรับ lang เพราะทำงานกับ Date
+// object/ISO string ล้วนๆ ไม่มีข้อความให้แปล
+import { MONTHS, MONTHS_SHORT, WEEKDAYS_SHORT, displayYear, DEFAULT_LANGUAGE } from "./i18n.jsx";
 
-const THAI_WEEKDAYS_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-
-export function formatMonthYear(date) {
-  return `${THAI_MONTHS[date.getMonth()]} ${date.getFullYear() + 543}`;
+export function formatMonthYear(date, lang = DEFAULT_LANGUAGE) {
+  return `${MONTHS[lang][date.getMonth()]} ${displayYear(date.getFullYear(), lang)}`;
 }
 
-export function weekdayShortLabels() {
-  return THAI_WEEKDAYS_SHORT;
+export function weekdayShortLabels(lang = DEFAULT_LANGUAGE) {
+  return WEEKDAYS_SHORT[lang];
 }
 
 export function isSameDay(a, b) {
@@ -69,16 +71,24 @@ export function activityDate(activityDateTimeObj) {
   return null;
 }
 
-export function formatTime(date) {
-  return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+/**
+ * toLocaleTimeString's locale tag controls things like am/pm conventions
+ * and separator characters, not just digit script — "th-TH" and "en-US"
+ * both render as 24-hour "HH:mm" for this app's chosen options either way,
+ * but keeping the locale tag correct per-language is still more robust
+ * against future Intl behavior differences than hardcoding "th-TH" always.
+ */
+export function formatTime(date, lang = DEFAULT_LANGUAGE) {
+  const locale = lang === "th" ? "th-TH" : "en-US";
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /**
- * Converts a weekday label ("อา".."ส", same order the backend uses) back into
- * an actual Date within the week starting at `weekStart`.
+ * Converts a weekday label (short label in the given language, e.g. "อา" or
+ * "Sun") back into an actual Date within the week starting at `weekStart`.
  */
-export function dateForWeekdayLabel(weekStart, label) {
-  const index = THAI_WEEKDAYS_SHORT.indexOf(label);
+export function dateForWeekdayLabel(weekStart, label, lang = DEFAULT_LANGUAGE) {
+  const index = WEEKDAYS_SHORT[lang].indexOf(label);
   if (index === -1) return null;
   const d = new Date(weekStart);
   d.setDate(weekStart.getDate() + index);
@@ -109,29 +119,26 @@ export function combineDateAndTime(dateStr, timeStr) {
   return new Date(y, m - 1, d, h, min, 0, 0);
 }
 
-/** e.g. "17 - 23 ก.ค. 2569" for the week containing `date`. */
-export function formatWeekRange(date) {
+/** e.g. "17 - 23 ก.ค. 2569" (th) or "17 - 23 Jul 2026" (en) for the week containing `date`. */
+export function formatWeekRange(date, lang = DEFAULT_LANGUAGE) {
   const [start, end] = getWeekRange(date);
-  const shortMonths = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
-  ];
+  const shortMonths = MONTHS_SHORT[lang];
   // เดิมใช้ end.getFullYear() ตัวเดียวสำหรับทั้งช่วง — พอสัปดาห์คาบเกี่ยว
-  // ข้ามปี (เช่น เริ่ม 28 ธ.ค. 2568 จบ 3 ม.ค. 2569) จะโชว์ปี พ.ศ. ของ "end"
-  // (2569) ทับวันที่ของ "start" ที่จริงๆ อยู่คนละปี (2568) ไปด้วย ทำให้ขึ้น
-  // "28 ธ.ค. - 3 ม.ค. 2569" ซึ่งวันที่ 28 ธ.ค. ผิดปีไปเงียบๆ — ต้องคำนวณปี
-  // พ.ศ. ของแต่ละฝั่งแยกกันเผื่อกรณีนี้โดยเฉพาะ
-  const startBeYear = start.getFullYear() + 543;
-  const endBeYear = end.getFullYear() + 543;
+  // ข้ามปี (เช่น เริ่ม 28 ธ.ค. 2568 จบ 3 ม.ค. 2569) จะโชว์ปีของ "end" ทับ
+  // วันที่ของ "start" ที่จริงๆ อยู่คนละปี ทำให้วันที่ผิดปีไปเงียบๆ — ต้อง
+  // คำนวณปีที่แสดงของแต่ละฝั่งแยกกันเผื่อกรณีนี้โดยเฉพาะ (แปลงผ่าน
+  // displayYear() ให้ถูก พ.ศ./ค.ศ. ตามภาษาด้วย ไม่ hardcode +543 ตรงนี้)
+  const startDisplayYear = displayYear(start.getFullYear(), lang);
+  const endDisplayYear = displayYear(end.getFullYear(), lang);
   if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
-    return `${start.getDate()} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
+    return `${start.getDate()} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endDisplayYear}`;
   }
   if (start.getFullYear() !== end.getFullYear()) {
-    // สัปดาห์คาบเกี่ยวข้ามปี — โชว่ปี พ.ศ. กำกับทั้งสองฝั่งให้ชัดเจน ไม่งั้น
-    // จะดูเหมือนวันที่ผิดปีไปเงียบๆ (เช่น 28 ธ.ค. ที่จริงเป็นปีก่อนหน้า)
-    return `${start.getDate()} ${shortMonths[start.getMonth()]} ${startBeYear} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
+    // สัปดาห์คาบเกี่ยวข้ามปี — กำกับปีทั้งสองฝั่งให้ชัดเจน ไม่งั้นจะดูเหมือน
+    // วันที่ผิดปีไปเงียบๆ (เช่น 28 ธ.ค. ที่จริงเป็นปีก่อนหน้า)
+    return `${start.getDate()} ${shortMonths[start.getMonth()]} ${startDisplayYear} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endDisplayYear}`;
   }
-  return `${start.getDate()} ${shortMonths[start.getMonth()]} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endBeYear}`;
+  return `${start.getDate()} ${shortMonths[start.getMonth()]} - ${end.getDate()} ${shortMonths[end.getMonth()]} ${endDisplayYear}`;
 }
 
 /**
@@ -139,6 +146,8 @@ export function formatWeekRange(date) {
  * getWeekRange/buildMonthGrid elsewhere in this file): the week containing
  * Jan 1st is week 1, and each following Sunday-to-Saturday span increments
  * by one. This is a simple sequential count, not the ISO-8601 definition.
+ * Language-independent — a week number is the same number regardless of
+ * display language, so this function intentionally has no lang parameter.
  */
 export function weekOfYear(date) {
   const [weekStart] = getWeekRange(date);
@@ -149,27 +158,36 @@ export function weekOfYear(date) {
   return Math.floor(diffDays / 7) + 1;
 }
 
-/** Total number of Sunday-start weeks (using the same counting as weekOfYear) that touch `year`. */
+/** Total number of Sunday-start weeks (using the same counting as weekOfYear) that touch `year`. Language-independent, same reasoning as weekOfYear. */
 export function totalWeeksInYear(year) {
   return weekOfYear(new Date(year, 11, 31));
 }
 
-/** e.g. "26 กรกฎาคม สัปดาห์ที่ 31/52 ของปี" — the first day of the week containing `date`. */
-export function formatWeekLabel(date) {
+/** e.g. "26 กรกฎาคม สัปดาห์ที่ 31/52 ของปี" (th) or "26 July, week 31/52 of the year" (en) — the first day of the week containing `date`. */
+export function formatWeekLabel(date, lang = DEFAULT_LANGUAGE) {
   const [weekStart] = getWeekRange(date);
   const total = totalWeeksInYear(weekStart.getFullYear());
-  return `${weekStart.getDate()} ${THAI_MONTHS[weekStart.getMonth()]} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
+  const monthName = MONTHS[lang][weekStart.getMonth()];
+  if (lang === "th") {
+    return `${weekStart.getDate()} ${monthName} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
+  }
+  return `${weekStart.getDate()} ${monthName}, week ${weekOfYear(date)}/${total} of the year`;
 }
 
 /**
- * e.g. "11 สิงหาคม สัปดาห์ที่ 33/53 ของปี" — same "สัปดาห์ที่ N/total" tail
- * as formatWeekLabel, but the date shown is `date` itself, not the Sunday
- * that starts its week. Used for the header title when a specific day is
- * focused/selected (see app.jsx's expandedDate) so the title reflects
- * whichever day the person is actually looking at right now, while the
- * week number still correctly describes which week that day falls in.
+ * e.g. "11 สิงหาคม สัปดาห์ที่ 33/53 ของปี" (th) or "11 August, week 33/53 of
+ * the year" (en) — same "week N/total" tail as formatWeekLabel, but the
+ * date shown is `date` itself, not the Sunday that starts its week. Used
+ * for the header title when a specific day is focused/selected (see
+ * app.jsx's expandedDate) so the title reflects whichever day the person
+ * is actually looking at right now, while the week number still correctly
+ * describes which week that day falls in.
  */
-export function formatFocusedDayLabel(date) {
+export function formatFocusedDayLabel(date, lang = DEFAULT_LANGUAGE) {
   const total = totalWeeksInYear(date.getFullYear());
-  return `${date.getDate()} ${THAI_MONTHS[date.getMonth()]} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
+  const monthName = MONTHS[lang][date.getMonth()];
+  if (lang === "th") {
+    return `${date.getDate()} ${monthName} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
+  }
+  return `${date.getDate()} ${monthName}, week ${weekOfYear(date)}/${total} of the year`;
 }

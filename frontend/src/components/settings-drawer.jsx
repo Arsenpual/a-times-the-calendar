@@ -1,16 +1,24 @@
 import React, { useEffect } from "react";
+import { useLanguage, SUPPORTED_LANGUAGES } from "../i18n.jsx";
 
 /**
  * Slide-over settings drawer, opened from the ⚙️ icon in the header
- * (next to "ออกจากระบบ"). Modal-style overlay + panel from the right,
- * matching the existing .modal-overlay pattern elsewhere in the app
- * rather than introducing a new routing concept — there's no dedicated
- * "settings page", this is just another overlay on top of the dashboard.
+ * (next to the sign-out button). Modal-style overlay + panel from the
+ * right, matching the existing .modal-overlay pattern elsewhere in the
+ * app rather than introducing a new routing concept — there's no
+ * dedicated "settings page", this is just another overlay on top of the
+ * dashboard.
  *
- * Currently holds one setting (dark mode) but structured as a list of
- * labeled sections so more settings can be added later without
- * restructuring — each section is its own block with a heading and one
- * or more controls, not a flat list of unrelated toggles.
+ * Holds dark mode and language, structured as a list of labeled sections
+ * so more settings can be added later without restructuring — each
+ * section is its own block with a heading and one or more controls, not a
+ * flat list of unrelated toggles.
+ *
+ * Reads/writes language via useLanguage() directly (not through props
+ * like theme is) since LanguageProvider already owns that state globally
+ * — no need for app.jsx to thread language/onLanguageChange down as
+ * separate props when this component can just reach the context itself,
+ * the same way any other component that needs a translated string does.
  *
  * @param {boolean} open
  * @param {() => void} onClose
@@ -18,6 +26,8 @@ import React, { useEffect } from "react";
  * @param {(theme: "light"|"dark") => void} onThemeChange
  */
 export default function SettingsDrawer({ open, onClose, theme, onThemeChange }) {
+  const { language, setLanguage, t } = useLanguage();
+
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
   useEffect(() => {
     if (!open) return;
@@ -36,15 +46,15 @@ export default function SettingsDrawer({ open, onClose, theme, onThemeChange }) 
         className="settings-drawer"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="การตั้งค่า"
+        aria-label={t("settings.title")}
       >
         <div className="settings-drawer-header">
-          <h2 className="settings-drawer-title">การตั้งค่า</h2>
+          <h2 className="settings-drawer-title">{t("settings.title")}</h2>
           <button
             type="button"
             className="settings-drawer-close"
             onClick={onClose}
-            aria-label="ปิดการตั้งค่า"
+            aria-label={t("settings.close")}
           >
             ✕
           </button>
@@ -52,22 +62,47 @@ export default function SettingsDrawer({ open, onClose, theme, onThemeChange }) 
 
         <div className="settings-drawer-body">
           <section className="settings-section">
-            <h3 className="settings-section-title">การแสดงผล</h3>
+            <h3 className="settings-section-title">{t("settings.display")}</h3>
             <div className="settings-row">
               <div className="settings-row-label">
-                <span className="settings-row-title">Dark Mode</span>
-                <span className="settings-row-desc">เปลี่ยนธีมเป็นโหมดมืด ลดแสงจ้าตอนใช้งานตอนกลางคืน</span>
+                <span className="settings-row-title">{t("settings.darkMode")}</span>
+                <span className="settings-row-desc">{t("settings.darkModeDesc")}</span>
               </div>
               <button
                 type="button"
                 className={`settings-toggle${theme === "dark" ? " is-on" : ""}`}
                 role="switch"
                 aria-checked={theme === "dark"}
-                aria-label="สลับ Dark Mode"
+                aria-label={t("settings.darkMode")}
                 onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
               >
                 <span className="settings-toggle-knob" />
               </button>
+            </div>
+
+            {/* ภาษา: segmented control สองปุ่มแทน toggle เดี่ยวแบบ dark mode
+                — เพราะนี่ไม่ใช่ binary on/off แต่เป็นการ "เลือกหนึ่งจาก N
+                ตัวเลือก" ซึ่งขยายรองรับภาษาที่ 3 ในอนาคตได้ง่ายกว่าแค่สลับ
+                true/false (ดู SUPPORTED_LANGUAGES ใน i18n.jsx) */}
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <span className="settings-row-title">{t("settings.language")}</span>
+                <span className="settings-row-desc">{t("settings.languageDesc")}</span>
+              </div>
+              <div className="settings-lang-switch" role="radiogroup" aria-label={t("settings.language")}>
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    className={`settings-lang-option${language === lang ? " is-active" : ""}`}
+                    role="radio"
+                    aria-checked={language === lang}
+                    onClick={() => setLanguage(lang)}
+                  >
+                    {t(lang === "th" ? "settings.languageTh" : "settings.languageEn")}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
         </div>

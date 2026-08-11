@@ -10,6 +10,7 @@ import ActivityModal from "./components/activity-modal.jsx";
 import ReminderModeMockup from "./components/reminder-mode-mockup.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
+import { useLanguage } from "./i18n.jsx";
 import {
   auth,
   signInWithGoogle,
@@ -35,7 +36,7 @@ import {
   fetchLockedActivities,
   setActivityLocked
 } from "./api.js";
-import { getWeekRange, formatWeekLabel, activityDate, toDateInputValue } from "./date-utils.js";
+import { getWeekRange, formatFocusedDayLabel, activityDate, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
 
 // Hardcoded broadcast message shown in the scrolling ticker below the
@@ -58,6 +59,8 @@ const LOGIN_GUIDE_STEPS = [
 ];
 
 export default function App() {
+  const { language, t } = useLanguage();
+
   // Phase 2 (Firebase Auth): two separate pieces of auth state now instead
   // of one accessToken —
   //   - firebaseUser: the Firebase Auth session itself. This is the source
@@ -1188,15 +1191,20 @@ export default function App() {
             {mode === "dashboard" && (
               <>
                 <button className="btn btn-outline" onClick={goToday}>
-                  วันนี้
+                  {t("header.today")}
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
+                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label={t("header.prevWeek")}>
                   ‹
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
+                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label={t("header.nextWeek")}>
                   ›
                 </button>
-                <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
+                {/* หัวข้อแสดงวันที่โฟกัส/เลือกอยู่จริง (expandedDate) เมื่อมี
+                    — ไม่ใช่แค่ต้นสัปดาห์เสมอไปแบบเดิม — และ fallback กลับไป
+                    ที่ cursorDate (ต้นสัปดาห์) เมื่อยังไม่มีวันไหนถูกเลือก
+                    ส่ง language เข้า formatFocusedDayLabel เพื่อให้ชื่อเดือน/
+                    คำว่า "สัปดาห์ที่...ของปี" เปลี่ยนตามภาษาที่เลือกไว้ด้วย */}
+                <h1 className="app-title">{formatFocusedDayLabel(expandedDate || cursorDate, language)}</h1>
               </>
             )}
           </div>
@@ -1259,17 +1267,17 @@ export default function App() {
                   onClick={() => openAddActivity(new Date(cursorDate))}
                   disabled={!calendarAccessToken}
                 >
-                  + เพิ่มกิจกรรม
+                  + {t("header.addActivity")}
                 </button>
                 <button className="btn btn-outline" onClick={handleLogout}>
-                  ออกจากระบบ
+                  {t("header.signOut")}
                 </button>
                 <button
                   type="button"
                   className="btn-icon settings-open-btn"
                   onClick={() => setSettingsOpen(true)}
-                  aria-label="เปิดการตั้งค่า"
-                  title="การตั้งค่า"
+                  aria-label={t("header.settings")}
+                  title={t("header.settings")}
                 >
                   ⚙️
                 </button>

@@ -873,21 +873,42 @@ html.screen-reader-mode .tag-search-input {
    vs วันที่กำลังโฟกัส) — กรอบบางๆ ยังบอกได้ว่า "นี่คือวันนี้" แต่ไม่แย่ง
    ความสนใจจาก focus ซึ่งควรเป็นจุดเด่นเดียวบนหน้าจอ ตัวบอกหลักจริงๆ ของ
    "วันนี้" คือ badge วงกลมสีน้ำเงินทึบ + ✨ ที่ agenda-day-badge แทน */
+/* วันนี้ดูเหมือนถูกกดบุ๋มลงไปในพื้นผิว (pressed/inset look) แทนกรอบสีฟ้า
+   ธรรมดา — ใช้ inset box-shadow สองชั้น (เงามืดด้านบน-ซ้าย + ไฮไลต์จางๆ
+   ด้านล่าง-ขวา) จำลองแสงตกกระทบขอบบุ๋ม บวกกับพื้นหลังมืดลงเล็กน้อยจาก
+   --bg-muted ปกติ (ผสม black 6% ทับ) ให้ดูเหมือนพื้นผิวถูกกดจมลงไปจริงๆ
+   ไม่ใช่แค่ขอบเปลี่ยนสีเฉยๆ ไม่ใช้ transform เลื่อนตำแหน่ง เพราะจะไปชนกับ
+   transform: translateY(-1px) ตอน hover ของ .agenda-row ทำให้ระยะขยับไม่
+   สม่ำเสมอ ตั้งใจไม่มี transition ใดๆ กับเอฟเฟกต์นี้ (ไม่อยู่ใน property
+   list ของ .agenda-row's transition ด้านบนเลย) เพราะอยากให้ขึ้น/หายทันที
+   เหมือนเป็นสถานะของวัน ไม่ใช่ปฏิกิริยาต่อการกระทำของผู้ใช้ */
 .agenda-row.is-today {
-  border-color: var(--blue-tint);
-  border-bottom-color: var(--blue-tint);
+  border-color: transparent;
+  border-bottom-color: var(--border);
+  background: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)), var(--bg-muted);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
+  /* .agenda-row's own transition list above includes background-color and
+     box-shadow (for the hover effect on ordinary rows) — override it to
+     "none" here so today's pressed-in look snaps in/out immediately as a
+     state, instead of inheriting that easing and visibly animating in. */
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.15s ease;
 }
 
 .agenda-row.is-today:hover {
-  background: var(--hover);
+  background: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)), var(--hover);
+  /* คงเอฟเฟกต์บุ๋มไว้ตอน hover ด้วย — ไม่ให้ hover's translateY(-1px) ของ
+     .agenda-row ทำให้ดูเหมือน "ลอยขึ้น" ขัดกับความรู้สึกบุ๋มลง */
+  transform: none;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Today + focused at the same time — focus-visible's stronger background
-   tint and shadow still read clearly as the dominant highlight; this just
-   keeps the today ring's border color from being overridden back to
-   transparent underneath it. */
+/* Today + focused at the same time — focus-visible's own background tint
+   and outline still read clearly as the dominant highlight; this just
+   keeps the inset "pressed" shadow from today's own style underneath it,
+   so focusing today's row doesn't flatten the pressed look back out. */
 .agenda-row.is-today:focus-visible {
-  border-color: var(--blue-tint);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
 }
 
 /* When a row's ⚙ timeline-editor is open, it expands full width in place

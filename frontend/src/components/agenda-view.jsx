@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getWeekRange, isSameDay, activityDate } from "../date-utils.js";
+import { getWeekRange, isSameDay, activityDate, weekdayShortLabels } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
+import { useLanguage } from "../i18n.jsx";
 import TimelineEditor from "./timeline-editor.jsx";
-
-const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
 /** Minutes covered by an activity, treating all-day/zero-length as 30min (mirrors the backend). */
 function durationMinutes(activity) {
@@ -73,6 +72,8 @@ export default function AgendaView({
   onEditSeries,
   onFetchSeriesCount
 }) {
+  const { language, t } = useLanguage();
+  const WEEKDAY_SHORT = weekdayShortLabels(language);
   const [weekStart] = getWeekRange(anchorDate);
   const today = new Date();
 
@@ -192,7 +193,7 @@ export default function AgendaView({
             onKeyDown={(e) => handleRowKeyDown(e, index)}
             role="button"
             tabIndex={0}
-            aria-label={`เลือกวันที่ ${day.getDate()} — มี ${dayActivities.length} กิจกรรม`}
+            aria-label={t("agenda.selectDay", { date: day.getDate(), count: dayActivities.length })}
             aria-pressed={!!isExpanded}
           >
             <div className="agenda-day-badge">
@@ -209,7 +210,7 @@ export default function AgendaView({
                     e.stopPropagation();
                     onSelectDay?.(day);
                   }}
-                  aria-label={`ดู mini timeline วันที่ ${day.getDate()} — มี ${dayActivities.length} กิจกรรม`}
+                  aria-label={t("agenda.viewMiniTimeline", { date: day.getDate(), count: dayActivities.length })}
                   aria-pressed={!!isExpanded}
                 >
                   {breakdown.length > 0 ? (
@@ -228,7 +229,9 @@ export default function AgendaView({
                     </span>
                   )}
                   <span className="agenda-day-bar-count">
-                    {dayActivities.length > 0 ? `${dayActivities.length} กิจกรรม` : "ว่างทั้งวัน 🌤️"}
+                    {dayActivities.length > 0
+                      ? t("agenda.activityCountShort", { count: dayActivities.length })
+                      : t("agenda.empty")}
                   </span>
                 </button>
                 <button
@@ -238,9 +241,9 @@ export default function AgendaView({
                     e.stopPropagation();
                     toggleEditing(day);
                   }}
-                  aria-label={isEditing ? "ปิดโหมดแก้ไขเวลากิจกรรม" : "เปิดโหมดแก้ไขเวลากิจกรรม"}
+                  aria-label={isEditing ? t("agenda.closeEditTimes") : t("agenda.openEditTimes")}
                   aria-pressed={isEditing}
-                  title="แก้ไขเวลากิจกรรม"
+                  title={t("agenda.editTimes")}
                 >
                   ⚙
                 </button>
@@ -271,7 +274,7 @@ export default function AgendaView({
                   />
                 ) : (
                   <button type="button" className="agenda-add-btn" onClick={() => onAddActivity?.(day)}>
-                    ✚ เพิ่มกิจกรรม
+                    ✚ {t("agenda.addActivity")}
                   </button>
                 )}
               </div>
