@@ -362,6 +362,18 @@ html.screen-reader-mode .tag-search-input {
   background: var(--hover);
 }
 
+/* 🧪 DEV TEST BUTTON — ลบ block นี้ทิ้งพร้อมกับปุ่มใน app.jsx ก่อน deploy
+   จริง พื้นหลังส้ม/เหลืองเตือนตาให้ต่างจากปุ่ม header อื่นๆ อย่างชัดเจน
+   ทันทีที่มองเห็น เพื่อไม่ให้ปนกับปุ่มถาวรของแอปโดยไม่ตั้งใจ */
+.dev-test-btn {
+  background: #fef3c7;
+  border: 1px dashed #d97706;
+}
+
+.dev-test-btn:hover {
+  background: #fde68a;
+}
+
 /* Main area */
 
 .app-main {
@@ -697,13 +709,15 @@ html.screen-reader-mode .tag-search-input {
   font-size: 14px;
 }
 
-/* Dimmed backdrop for the pre-expiry token warning — blocks all other
+/* Dimmed backdrop for the token warning/expiry banner — blocks all other
    interaction until the person renews, same idea as .modal-overlay but
    with no click-to-dismiss (renewing is the only way out, there's no
    "cancel" that makes sense here). Highest z-index in the app: needs to
    sit above even .modal-overlay (z-index: 100), since letting the token
-   expire while someone has an ActivityModal open mid-edit would risk
-   losing unsaved form input when the eventual save fails with a 401. */
+   die while someone has an ActivityModal open mid-edit would risk losing
+   unsaved form input when the eventual save fails with a 401. Covers both
+   the "nearing expiry" and "already expired" situations (see app.jsx) with
+   the same visual treatment. */
 .token-expiry-backdrop {
   position: fixed;
   inset: 0;
@@ -711,10 +725,10 @@ html.screen-reader-mode .tag-search-input {
   z-index: 110;
 }
 
-/* Pre-expiry heads-up for the Google Calendar token — amber/warning tone
-   (not the red .error-banner) since nothing has actually failed yet, this
-   is just a proactive nudge to renew before it does. Small card, top-left
-   corner, sitting on top of .token-expiry-backdrop above. */
+/* Heads-up for the Google Calendar token — amber/warning tone (not the red
+   .error-banner) even in the "already expired" wording, since this is
+   still a recoverable one-click fix, not a hard failure. Small card,
+   top-left corner, sitting on top of .token-expiry-backdrop above. */
 .token-expiry-banner {
   position: fixed;
   top: 16px;
@@ -786,9 +800,7 @@ html.screen-reader-mode .tag-search-input {
      summary/mini-timeline panel along with it": before this, .app-main
      was the only scrolling ancestor, so any scroll gesture over either
      column scrolled both together as one page. Height comes from
-     .dashboard's height:100% + this flex row's remaining space (via the
-     grid's align-items: start on .summary-column not applying here, so
-     .agenda-view is free to stretch to the row's full height instead). */
+     .dashboard's height:100% + this flex row's remaining space. */
   height: 100%;
   min-height: 0;
   overflow-y: auto;

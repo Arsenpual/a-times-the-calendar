@@ -10,7 +10,6 @@ import ActivityModal from "./components/activity-modal.jsx";
 import ReminderModeMockup from "./components/reminder-mode-mockup.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
-import { useLanguage } from "./i18n.jsx";
 import {
   auth,
   signInWithGoogle,
@@ -36,7 +35,7 @@ import {
   fetchLockedActivities,
   setActivityLocked
 } from "./api.js";
-import { getWeekRange, formatFocusedDayLabel, activityDate, toDateInputValue } from "./date-utils.js";
+import { getWeekRange, formatWeekLabel, activityDate, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
 
 // Hardcoded broadcast message shown in the scrolling ticker below the
@@ -59,8 +58,6 @@ const LOGIN_GUIDE_STEPS = [
 ];
 
 export default function App() {
-  const { language, t } = useLanguage();
-
   // Phase 2 (Firebase Auth): two separate pieces of auth state now instead
   // of one accessToken —
   //   - firebaseUser: the Firebase Auth session itself. This is the source
@@ -1191,20 +1188,15 @@ export default function App() {
             {mode === "dashboard" && (
               <>
                 <button className="btn btn-outline" onClick={goToday}>
-                  {t("header.today")}
+                  วันนี้
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label={t("header.prevWeek")}>
+                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
                   ‹
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label={t("header.nextWeek")}>
+                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
                   ›
                 </button>
-                {/* หัวข้อแสดงวันที่โฟกัส/เลือกอยู่จริง (expandedDate) เมื่อมี
-                    — ไม่ใช่แค่ต้นสัปดาห์เสมอไปแบบเดิม — และ fallback กลับไป
-                    ที่ cursorDate (ต้นสัปดาห์) เมื่อยังไม่มีวันไหนถูกเลือก
-                    ส่ง language เข้า formatFocusedDayLabel เพื่อให้ชื่อเดือน/
-                    คำว่า "สัปดาห์ที่...ของปี" เปลี่ยนตามภาษาที่เลือกไว้ด้วย */}
-                <h1 className="app-title">{formatFocusedDayLabel(expandedDate || cursorDate, language)}</h1>
+                <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
               </>
             )}
           </div>
@@ -1267,19 +1259,55 @@ export default function App() {
                   onClick={() => openAddActivity(new Date(cursorDate))}
                   disabled={!calendarAccessToken}
                 >
-                  + {t("header.addActivity")}
+                  + เพิ่มกิจกรรม
                 </button>
                 <button className="btn btn-outline" onClick={handleLogout}>
-                  {t("header.signOut")}
+                  ออกจากระบบ
                 </button>
                 <button
                   type="button"
                   className="btn-icon settings-open-btn"
                   onClick={() => setSettingsOpen(true)}
-                  aria-label={t("header.settings")}
-                  title={t("header.settings")}
+                  aria-label="เปิดการตั้งค่า"
+                  title="การตั้งค่า"
                 >
                   ⚙️
+                </button>
+                {/* 🧪 DEV TEST BUTTON — ลบทิ้งก่อน deploy จริง
+                    จำลอง token "ใกล้หมดอายุ" — ตั้ง calendarTokenExpiresAt
+                    ให้เหลือ 4 นาทีจากตอนนี้ (น้อยกว่า
+                    CALENDAR_TOKEN_WARNING_WINDOW_MS ที่ตั้งไว้ 5 นาที แต่
+                    ยังมากกว่า 0) เพื่อให้ผ่านเงื่อนไขทั้งสองใน checkExpiry()
+                    ด้านบนพร้อมกัน (msRemaining > 0 && msRemaining <= 5
+                    นาที) แล้วเห็นการ์ดเตือนใกล้หมดอายุทันที โดยไม่ต้องรอ
+                    token ใกล้หมดอายุจริง (~55 นาทีหลัง login) — เขียนลง
+                    localStorage ควบคู่ด้วยเพื่อให้ค่าคงอยู่ข้าม refresh
+                    เหมือนกับที่ setCalendarAccessToken ทำกับ token เอง
+                    ไม่ได้เรียก setCalendarAccessToken ตรงนี้ เพราะต้องคง
+                    calendarAccessToken เดิมไว้ (การ์ดนี้ต้องมี token อยู่
+                    จริงถึงจะขึ้น — ดูเงื่อนไข render ด้านล่าง) ถ้าลบ token
+                    ไปด้วยจะไปโดนการ์ด "หมดอายุแล้ว" แทน ไม่ใช่การ์ดนี้ */}
+                <button
+                  type="button"
+                  className="btn-icon dev-test-btn"
+                  onClick={() => {
+                    const fakeExpiresAt = Date.now() + 4 * 60 * 1000;
+                    setCalendarTokenExpiresAtState(fakeExpiresAt);
+                    try {
+                      window.localStorage.setItem(
+                        CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY,
+                        String(fakeExpiresAt)
+                      );
+                    } catch {
+                      // localStorage ไม่พร้อมใช้งาน — การ์ดยังขึ้นได้ปกติ
+                      // จาก state ในตอนนี้ แค่ไม่รอดข้าม refresh เท่านั้น
+                    }
+                  }}
+                  disabled={!calendarAccessToken}
+                  aria-label="[ทดสอบ] จำลอง token ใกล้หมดอายุ"
+                  title="[DEV] จำลอง token ใกล้หมดอายุ (เหลือ 4 นาที) — ลบปุ่มนี้ก่อน deploy จริง"
+                >
+                  ⏰
                 </button>
               </>
             ) : null}
@@ -1289,23 +1317,49 @@ export default function App() {
 
       {firebaseUser && mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
 
-      {/* Blocking heads-up shown ~5 minutes before the current Google
-          Calendar token expires — small card, top-left corner, but now
-          backed by a dimmed full-viewport backdrop that blocks all other
-          interaction (like a modal) until the person renews. Escalated
-          from a passive toast to a hard block because letting the token
-          expire mid-action (e.g. mid-drag in TimelineEditor) risks losing
-          unsaved work, so forcing a decision here is safer than leaving
-          it easy to ignore. Deliberately does NOT auto-open the Google
-          popup from a timer — browsers block popups that aren't
-          triggered by a direct click, so a button the person presses
-          themselves is the only reliable way to renew ahead of time. */}
-      {firebaseUser && calendarAccessToken && tokenNearingExpiry && mode === "dashboard" && (
+      {/* Blocking heads-up for the Google Calendar token — covers two
+          situations with the same visual treatment (dimmed backdrop +
+          small banner, top-left corner), just different wording:
+            1. Nearing expiry (tokenNearingExpiry): token still works for
+               now, this is a proactive nudge (~5 min warning window).
+            2. Already expired (!calendarAccessToken): token is dead,
+               nothing works until renewed — same urgency, same banner.
+          Blocks all other interaction until the person renews (no
+          click-to-dismiss — renewing is the only way out, there's no
+          "cancel" that makes sense here), same idea as .modal-overlay but
+          escalated: letting the token die mid-action (e.g. mid-drag in
+          TimelineEditor) risks losing unsaved work, so forcing a decision
+          here is safer than leaving it easy to ignore.
+
+          Persists across refresh in the "already expired" case: nothing
+          here needs its own persistence, since it's purely derived from
+          calendarAccessToken/tokenNearingExpiry, and calendarAccessToken
+          itself is already cleared from localStorage the moment it
+          expires (see setCalendarAccessToken above) — so !calendarAccessToken
+          still evaluates true after a reload, no separate flag needed.
+
+          Deliberately does NOT auto-open the Google popup from a timer —
+          browsers block popups that aren't triggered by a direct click, so
+          a button the person presses themselves is the only reliable way
+          to renew either way. */}
+      {firebaseUser && (tokenNearingExpiry || !calendarAccessToken) && mode === "dashboard" && (
         <div className="token-expiry-backdrop">
-          <div className="token-expiry-banner" role="alertdialog" aria-label="แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ">
-            <span>สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด</span>
+          <div
+            className="token-expiry-banner"
+            role="alertdialog"
+            aria-label={
+              calendarAccessToken
+                ? "แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ"
+                : "ต้องยืนยันตัวตนกับ Google Calendar อีกครั้ง"
+            }
+          >
+            <span>
+              {calendarAccessToken
+                ? "สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด"
+                : "สิทธิ์เข้าถึง Google Calendar หมดอายุแล้ว — ยืนยันตัวตนอีกครั้งเพื่อดึงปฏิทินของคุณกลับมาแสดง"}
+            </span>
             <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
-              ต่ออายุตอนนี้
+              {calendarAccessToken ? "ต่ออายุตอนนี้" : "ยืนยันตัวตน"}
             </button>
           </div>
         </div>
@@ -1408,18 +1462,19 @@ export default function App() {
               </div>
             )}
 
-            {/* Signed in to Firebase, but the separate Google Calendar consent
-                hasn't happened yet (first sign-in denied Calendar scope) or its
-                token specifically expired mid-session (see loadActivities'
-                catch block above, which clears calendarAccessToken on a 401
-                without touching firebaseUser) — offer just the Calendar re-auth
-                popup instead of a full logout/login round-trip. */}
+            {/* Signed in to Firebase, but the Google Calendar consent hasn't
+                happened yet (first sign-in denied Calendar scope), OR its
+                token specifically expired mid-session — either way there's
+                no calendarAccessToken to work with. Rendered as an
+                empty-state placeholder in the main content area; the
+                *actionable* blocking prompt (backdrop + banner asking to
+                re-auth) is handled separately below, right before <main>,
+                using the exact same token-expiry-backdrop/banner styling as
+                the "nearing expiry" warning — see that block's comment for
+                why both share one visual treatment. */}
             {firebaseUser && !calendarAccessToken && (
               <div className="empty-state">
                 <p>ต้องยืนยันตัวตนกับ Google Calendar อีกครั้งเพื่อดึงปฏิทินของคุณมาแสดง</p>
-                <button className="btn btn-primary" onClick={handleReauthCalendar}>
-                  ยืนยันตัวตน Google Calendar
-                </button>
               </div>
             )}
 
