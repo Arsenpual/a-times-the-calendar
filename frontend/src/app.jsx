@@ -44,6 +44,7 @@ import { normalizeActivityId } from "./id-utils.js";
 // this string and redeploying. Set to "" (or null) to hide the ticker
 // entirely without removing the component from the tree.
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
+const BRAND_WORDMARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
@@ -387,28 +388,62 @@ export default function App() {
   }, [tagSearchTerms]);
 
   // Recompute the weekly summary from our backend whenever the activities
-  // for the visible week (or their category assignments) change.
+  // for the visible week (or their category assignments) change. activities
+  // deliberately includes the day before the week for the timeline's
+  // overnight-spillover indicator, so filter it back to the visible Sunday–
+  // Saturday range before sending it to the summary API.
   useEffect(() => {
-    if (!firebaseUser || activities.length === 0) {
+    const [weekStart, weekEnd] = getWeekRange(cursorDate);
+    const weeklyActivities = activities.filter((activity) => {
+      const start = activityDate(activity.start);
+      return start && start >= weekStart && start <= weekEnd;
+    });
+
+    if (!firebaseUser || weeklyActivities.length === 0) {
       setSummary(null);
+      setSummaryLoading(false);
       return;
     }
+
+    // A duplicate/move can trigger a fresh load and summary request while
+    // the previous request is still in flight. Ignore the older response if
+    // its effect has already been superseded, so stale totals cannot flash
+    // back over the latest calendar state.
+    let cancelled = false;
     setSummaryLoading(true);
     setSummaryError(null);
-    const payload = activities
+    const payload = weeklyActivities
       .map((activity) => {
         const start = activityDate(activity.start);
         const end = activityDate(activity.end);
         if (!start || !end) return null;
-        return { id: activity.id, summary: activity.summary, start: start.toISOString(), end: end.toISOString() };
+        return {
+          id: activity.id,
+          summary: activity.summary,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          // Keep the browser-local day that AgendaView and MiniTimelinePanel
+          // use, rather than relying on the server's timezone for grouping.
+          startDate: toDateInputValue(start)
+        };
       })
       .filter(Boolean);
 
     fetchWeeklySummary(payload)
-      .then(setSummary)
-      .catch((e) => setSummaryError(e.message))
-      .finally(() => setSummaryLoading(false));
-  }, [firebaseUser, activities, activityCategoryMap]);
+      .then((nextSummary) => {
+        if (!cancelled) setSummary(nextSummary);
+      })
+      .catch((e) => {
+        if (!cancelled) setSummaryError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseUser, activities, activityCategoryMap, cursorDate]);
 
   const handleLogin = async () => {
     if (authPopupInFlight.current) return;
@@ -488,6 +523,24 @@ export default function App() {
     });
   }, []);
 
+  // เปลี่ยนวันโดยยึดวันที่ที่กำลังเปิด mini timeline อยู่เป็นหลัก; ถ้ายังไม่
+  // เคยเลือกวัน ให้เริ่มจากวันของ cursor ปัจจุบันแทน `cursorDate` จะเปลี่ยน
+  // เฉพาะเมื่อข้ามสัปดาห์เท่านั้น: การเลื่อนวันภายในสัปดาห์เดิมต้องเปลี่ยน
+  // แค่ expandedDate มิฉะนั้นจะไป re-fetch Calendar และคำนวณ summary ใหม่
+  // ทุกครั้ง ทำให้สี/animation ของทั้งหน้ากระพริบโดยไม่จำเป็น
+  const navigateDay = useCallback((direction) => {
+    const baseDate = expandedDate || cursorDate;
+    const next = new Date(baseDate);
+    next.setDate(next.getDate() + direction);
+    setExpandedDate(next);
+
+    const [currentWeekStart] = getWeekRange(cursorDate);
+    const [nextWeekStart] = getWeekRange(next);
+    if (currentWeekStart.getTime() !== nextWeekStart.getTime()) {
+      setCursorDate(next);
+    }
+  }, [cursorDate, expandedDate]);
+
   const goToday = () => setCursorDate(new Date());
 
   // Ref เดียวที่ track ว่า effect ด้านล่าง (ผูกกับ cursorDate) เคยรันมาแล้ว
@@ -502,16 +555,14 @@ export default function App() {
 
   const closeDay = () => setExpandedDate(null);
 
-  // Reset (หรือ auto-focus) the open timeline day whenever the visible
+  // Reset the open timeline day whenever the visible
   // week changes:
   //   - ถ้ามีวันที่ถูกเลือกอยู่แล้วก่อนเปลี่ยนสัปดาห์ (prev ไม่ null) และวัน
   //     นั้นไม่อยู่ในสัปดาห์ใหม่อีกต่อไป → clear เป็น null (พฤติกรรมเดิม —
   //     วันจากสัปดาห์เก่าไม่มี activities โหลดมาแสดงอยู่แล้ว)
-  //   - ถ้ายังไม่มีวันไหนถูกเลือกอยู่เลย (prev เป็น null) → โฟกัสวันแรกของ
-  //     สัปดาห์ใหม่ให้อัตโนมัติแทน เพื่อให้ปุ่มลูกศรขึ้น/ลงใน AgendaView
-  //     (ซึ่งต้องมีแถวใดแถวหนึ่งถูก focus ก่อนถึงจะใช้งานได้) ใช้งานต่อได้
-  //     ทันทีโดยไม่ต้องคลิก/tab เข้าไปเลือกวันเอง — agenda-view.jsx มี
-  //     effect ของตัวเองที่คอย sync expandedDate นี้ไปเป็น DOM focus จริง
+  //   - ถ้ายังไม่มีวันไหนถูกเลือกอยู่ (prev เป็น null) → คง null ไว้;
+  //     global ↑/↓ สามารถเริ่มเลือกวันจาก cursorDate ได้เอง จึงไม่ต้อง
+  //     สร้าง DOM focus ให้แถว AgendaView เพื่อให้ keyboard ใช้งานได้
   //   - ยกเว้น "รอบแรกสุด" ตอน mount (isFirstCursorDateRun) ที่จะไม่ทำ
   //     อะไรเลย — คงพฤติกรรมเดิมที่หน้าเพิ่งโหลดมาแล้วยังไม่มี mini-timeline
   //     ใดๆ เปิดอยู่จนกว่าผู้ใช้จะเลือกวันเอง ไม่ใช่ auto-select ตั้งแต่แรก
@@ -522,20 +573,16 @@ export default function App() {
     }
     setExpandedDate((prev) => {
       const [weekStart, weekEnd] = getWeekRange(cursorDate);
-      if (!prev) return weekStart;
+      if (!prev) return null;
       return prev >= weekStart && prev <= weekEnd ? prev : null;
     });
   }, [cursorDate]);
 
   /**
-   * Global ← → shortcut for switching weeks, independent of which element
-   * currently has focus — before this, ArrowLeft/ArrowRight only worked
-   * when a day row inside AgendaView happened to be focused (see
-   * handleRowKeyDown in agenda-view.jsx), so the shortcut was unusable
-   * until the person had already clicked/tabbed into some row first. This
-   * listens on `document` directly and calls the exact same navigateWeek
-   * the ‹ › header buttons use, so both paths always stay in sync — no
-   * separate logic to keep matching.
+   * Global arrow-key shortcuts, independent of focus inside AgendaView.
+   * ←/→ call the week buttons' handler; ↑/↓ call the day buttons' handler.
+   * Keeping the shortcut here rather than inside an agenda row means it
+   * works immediately after login and while focus is on any non-text UI.
    *
    * Two guards keep this from firing where arrow keys should do something
    * else instead:
@@ -544,30 +591,29 @@ export default function App() {
    *   2. Skipped while focus is inside a text input, textarea, or
    *      contenteditable element (tag search box, any field inside
    *      ActivityModal, etc.) — arrow keys there need to move the text
-   *      cursor, not the calendar week. Also skipped while focus is on an
-   *      agenda-row itself, since that row's own onKeyDown already calls
-   *      onNavigateWeek for ArrowLeft/ArrowRight (see agenda-view.jsx) —
-   *      without this check both handlers would fire for the same
-   *      keypress and navigateWeek would run twice.
+   *      cursor, not navigate the calendar.
    */
   useEffect(() => {
     if (mode !== "dashboard") return;
     const handleGlobalKeyDown = (e) => {
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
       const active = document.activeElement;
       const isTextEntry =
         active &&
         (active.tagName === "INPUT" ||
           active.tagName === "TEXTAREA" ||
           active.isContentEditable);
-      const isAgendaRow = active?.closest?.(".agenda-row");
-      if (isTextEntry || isAgendaRow) return;
+      if (isTextEntry) return;
       e.preventDefault();
-      navigateWeek(e.key === "ArrowLeft" ? -1 : 1);
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        navigateWeek(e.key === "ArrowLeft" ? -1 : 1);
+      } else {
+        navigateDay(e.key === "ArrowUp" ? -1 : 1);
+      }
     };
     document.addEventListener("keydown", handleGlobalKeyDown);
     return () => document.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [mode, navigateWeek]);
+  }, [mode, navigateDay, navigateWeek]);
 
   /**
    * Shared two-way sync conflict check (see also ActivityModal's own check
@@ -1159,11 +1205,7 @@ export default function App() {
       {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
-            <span className="app-logo">
-              <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
-              <span style={{ color: "#B71C1C" }}>ของ</span>
-              <span style={{ color: "#F29900" }}>ฉัน</span>
-            </span>
+            <img className="app-logo" src={BRAND_WORDMARK_SRC} alt="T.i.M.E.S." />
             <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
               <button
                 type="button"
@@ -1190,12 +1232,21 @@ export default function App() {
                 <button className="btn btn-outline" onClick={goToday}>
                   วันนี้
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
-                  ‹
-                </button>
-                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
-                  ›
-                </button>
+                <div className="calendar-nav-pad" role="group" aria-label="ปุ่มนำทางปฏิทิน">
+                  <button className="btn-icon calendar-nav-up" onClick={() => navigateDay(-1)} aria-label="วันก่อนหน้า">
+                    ▲
+                  </button>
+                  <button className="btn-icon calendar-nav-left" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
+                    ◀
+                  </button>
+                  <span className="calendar-nav-center" aria-hidden="true" />
+                  <button className="btn-icon calendar-nav-right" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
+                    ▶
+                  </button>
+                  <button className="btn-icon calendar-nav-down" onClick={() => navigateDay(1)} aria-label="วันถัดไป">
+                    ▼
+                  </button>
+                </div>
                 <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
               </>
             )}
@@ -1379,11 +1430,7 @@ export default function App() {
             {authReady && !firebaseUser && (
               <div className="login-screen">
                 <div className="login-card">
-                  <span className="login-logo">
-                    <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
-                    <span style={{ color: "#B71C1C" }}>ของ</span>
-                    <span style={{ color: "#F29900" }}>ฉัน</span>
-                  </span>
+                  <img className="login-logo" src={BRAND_WORDMARK_SRC} alt="T.i.M.E.S." />
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
                     เข้าสู่ระบบด้วย Google เพื่อ sync ปฏิทินของคุณโดยตรง — ปลอดภัย ไม่มีการเก็บสำเนาข้อมูลกิจกรรมไว้ที่อื่น
@@ -1542,7 +1589,6 @@ export default function App() {
                     expandedDate={expandedDate}
                     onAddActivity={openAddActivity}
                     onSelectDay={openDay}
-                    onNavigateWeek={navigateWeek}
                     onAssignCategory={handleAssignCategory}
                     onEditActivity={openEditActivity}
                     onSaveTimes={handleSaveTimes}

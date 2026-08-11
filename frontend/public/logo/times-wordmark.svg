@@ -1,0 +1,18 @@
+<svg width="600" height="160" viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>T.i.M.E.S. wordmark</title>
+<desc>โลโก้ตัวอักษร T.i.M.E.S. ตัวใหญ่ทั้งหมดยกเว้นตัว i เล็กที่มีวงแหวนล้อมรอบจุด สื่อถึงขณะปัจจุบัน</desc>
+<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="84" fill="#1C1C1A">
+<text x="16" y="108">T</text>
+<text x="90" y="108" font-size="40" fill="#8A8A85">.</text>
+<rect x="115" y="72" width="16" height="36" fill="#1C1C1A"/>
+<text x="150" y="108" font-size="40" fill="#8A8A85">.</text>
+<text x="172" y="108">M</text>
+<text x="270" y="108" font-size="40" fill="#8A8A85">.</text>
+<text x="292" y="108">E</text>
+<text x="360" y="108" font-size="40" fill="#8A8A85">.</text>
+<text x="382" y="108">S</text>
+<text x="450" y="108" font-size="40" fill="#8A8A85">.</text>
+</g>
+<circle cx="123" cy="52" r="9" fill="none" stroke="#D85A30" stroke-width="1.5" opacity="0.4"/>
+<circle cx="123" cy="52" r="4.5" fill="#D85A30"/>
+</svg>

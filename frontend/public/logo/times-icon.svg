@@ -1,0 +1,8 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>T.i.M.E.S. icon</title>
+<desc>ไอคอนตัว i พร้อมจุดวงแหวนสื่อถึงขณะปัจจุบัน ใช้เป็น favicon หรือ app icon</desc>
+<rect width="256" height="256" rx="56" fill="#1C1C1A"/>
+<rect x="118" y="132" width="20" height="76" fill="#F4F1EA"/>
+<circle cx="128" cy="88" r="17" fill="none" stroke="#D85A30" stroke-width="3" opacity="0.55"/>
+<circle cx="128" cy="88" r="8" fill="#D85A30"/>
+</svg>

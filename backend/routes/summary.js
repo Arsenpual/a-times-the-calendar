@@ -24,9 +24,21 @@ const WEEKDAY_TH_FULL = {
   "พฤ": "พฤหัสบดี", "ศ": "ศุกร์", "ส": "เสาร์"
 };
 
+// Use the same local start date as AgendaView and MiniTimelinePanel. Calling
+// getDay() on an ISO timestamp here would use the server timezone (often
+// UTC), which can move an event near midnight onto the wrong weekday.
+function weekdayFromLocalStartDate(startDate, fallbackStart) {
+  if (typeof startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    const [year, month, day] = startDate.split("-").map(Number);
+    // UTC noon preserves the intended calendar day in every server timezone.
+    return WEEKDAY_TH[new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay()];
+  }
+  return WEEKDAY_TH[fallbackStart.getDay()];
+}
+
 /**
  * POST /api/summary/week
- * Body: { activities: [{ id, summary, start: ISOString, end: ISOString }] }
+ * Body: { activities: [{ id, summary, start: ISOString, end: ISOString, startDate: "YYYY-MM-DD" }] }
  *
  * รับกิจกรรมของสัปดาห์จาก frontend (ที่ดึงมาจาก Google Calendar อยู่แล้ว)
  * แล้วคำนวณสรุป: จำนวนกิจกรรม, สัดส่วนตามหมวดหมู่, วันที่ยุ่งที่สุด, insight
@@ -75,7 +87,9 @@ router.post("/week", async (req, res, next) => {
       minutesByCategory[categoryId] = (minutesByCategory[categoryId] || 0) + durationMin;
       totalMinutes += durationMin;
 
-      const dayLabel = WEEKDAY_TH[start.getDay()];
+      // An overnight activity belongs to its local start day and is never
+      // counted a second time on the day it spills into.
+      const dayLabel = weekdayFromLocalStartDate(activity.startDate, start);
       countByDay[dayLabel] = (countByDay[dayLabel] || 0) + 1;
     }
 

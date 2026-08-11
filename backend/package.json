@@ -4,7 +4,7 @@
   "description": "Backend สำหรับแอปปฏิทิน — จัดการหมวดหมู่ชีวิต (Life Areas) และคำนวณสรุปรายสัปดาห์",
   "main": "index.js",
   "scripts": {
-    "dev": "node --watch-path=index.js --watch-path=db.js --watch-path=routes index.js",
+    "dev": "node --watch index.js",
     "start": "node index.js"
   },
   "keywords": [],
