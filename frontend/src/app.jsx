@@ -37,6 +37,7 @@ import {
 } from "./api.js";
 import { getWeekRange, formatWeekLabel, activityDate, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
+import { useLanguage } from "./i18n.jsx";
 
 // Hardcoded broadcast message shown in the scrolling ticker below the
 // header, calendar (dashboard) mode only — see AnnouncementTicker. Not
@@ -52,12 +53,14 @@ const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใ
 // ตรงๆ จะไม่ผ่าน Vite's base config เลยหาไฟล์ไม่เจอ (404) ตอน deploy จริง
 // ถึงแม้ localhost จะใช้ได้ปกติเพราะ dev server เสิร์ฟจาก root เสมอ
 const LOGIN_GUIDE_STEPS = [
-  { number: 1, image: loginGuideStep1, text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
-  { number: 2, image: loginGuideStep2, text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
-  { number: 3, image: loginGuideStep3, text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
+  { number: 1, image: loginGuideStep1, textKey: "app.loginGuideStep1" },
+  { number: 2, image: loginGuideStep2, textKey: "app.loginGuideStep2" },
+  { number: 3, image: loginGuideStep3, textKey: "app.loginGuideStep3" },
 ];
 
 export default function App() {
+  const { language, t } = useLanguage();
+
   // Phase 2 (Firebase Auth): two separate pieces of auth state now instead
   // of one accessToken —
   //   - firebaseUser: the Firebase Auth session itself. This is the source
@@ -616,7 +619,7 @@ export default function App() {
     try {
       await setActivityLocked(activityId, locked);
     } catch (e) {
-      setError(`${locked ? "ล็อก" : "ปลดล็อก"}กิจกรรมไม่สำเร็จ: ${e.message}`);
+      setError(t("app.errorLockToggleFailed", { action: locked ? t("app.lockActionLock") : t("app.lockActionUnlock"), message: e.message }));
       // Roll back by re-fetching the source of truth.
       fetchLockedActivities().then(setLockedActivities).catch(() => {});
     }
@@ -624,7 +627,7 @@ export default function App() {
 
   const handleAssignCategory = async (activityId, categoryId) => {
     if (lockedActivities[activityId]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนเปลี่ยนหมวดหมู่");
+      setError(t("app.errorActivityLockedCategory"));
       return;
     }
     const conflict = await checkConflict(activityId);
@@ -641,10 +644,10 @@ export default function App() {
     try {
       await assignActivityCategory(activityId, categoryId);
       if (conflict) {
-        setError("กิจกรรมนี้ถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
+        setError(t("app.errorActivityConflictOverwritten"));
       }
     } catch (e) {
-      setError(`บันทึกหมวดหมู่ไม่สำเร็จ: ${e.message}`);
+      setError(t("app.errorCategorySaveFailed", { message: e.message }));
       // Roll back by re-fetching the source of truth.
       fetchActivityCategoryMap().then(setActivityCategoryMap).catch(() => {});
     }
@@ -698,7 +701,7 @@ export default function App() {
 
   const openEditActivity = (activity) => {
     if (lockedActivities[normalizeActivityId(activity.id)]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
+      setError(t("app.errorActivityLockedEditDelete"));
       return;
     }
     setModalDefaultDate(null);
@@ -763,7 +766,7 @@ export default function App() {
       try {
         await assignActivityCategory(normalizedId, categoryId);
       } catch (e) {
-        setError(`บันทึกหมวดหมู่ไม่สำเร็จ: ${e.message}`);
+        setError(t("app.errorCategorySaveFailed", { message: e.message }));
       }
 
       const cleanTags = Array.isArray(tags) ? tags : [];
@@ -776,14 +779,12 @@ export default function App() {
       try {
         await setActivityTags(normalizedId, cleanTags);
       } catch (e) {
-        setError(`บันทึก tag ไม่สำเร็จ: ${e.message}`);
+        setError(t("app.errorTagSaveFailed", { message: e.message }));
       }
     }
 
     if (conflictDetected) {
-      setError(
-        `กิจกรรม "${activityBody.summary}" ถูกแก้ไขที่อื่นหลังจากเปิดฟอร์มนี้ — บันทึกทับข้อมูลล่าสุดแล้ว`
-      );
+      setError(t("app.errorActivityConflictOnSaveNamed", { name: activityBody.summary }));
     }
 
     await loadActivities();
@@ -843,17 +844,17 @@ export default function App() {
       // Google Calendar" reauth prompt (see render below) rather than
       // forcing a full sign-out/sign-in round-trip.
       setCalendarAccessToken(null);
-      setError("สิทธิ์เข้าถึง Google Calendar หมดอายุระหว่างบันทึก — กรุณายืนยันตัวตนอีกครั้งแล้วลองอีกครั้ง");
+      setError(t("app.errorCalendarTokenExpiredSaving"));
       return;
     }
     if (failures.length > 0) {
-      setError(`ปรับเวลาบางกิจกรรมไม่สำเร็จ — ${failures.join(", ")}`);
+      setError(t("app.errorSomeTimesFailed", { reasons: failures.join(", ") }));
     } else if (anySkippedLocked && anyConflicts) {
-      setError("บางกิจกรรมถูกล็อกไว้จึงข้ามไป และบางกิจกรรมถูกแก้ไขที่อื่น — บันทึกทับข้อมูลนั้นแล้ว");
+      setError(t("app.errorSomeLockedSomeConflict"));
     } else if (anySkippedLocked) {
-      setError("บางกิจกรรมถูกล็อกไว้จึงไม่ถูกบันทึก");
+      setError(t("app.errorSomeLockedNotSaved"));
     } else if (anyConflicts) {
-      setError("บางกิจกรรมถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
+      setError(t("app.errorSomeConflictOverwritten"));
     }
     await loadActivities();
     refreshTagSearchIfActive();
@@ -879,7 +880,7 @@ export default function App() {
   const handleEditSeries = async (activity) => {
     if (!calendarAccessToken) return;
     if (lockedActivities[normalizeActivityId(activity.id)]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไข");
+      setError(t("app.errorActivityLockedEdit"));
       return;
     }
     try {
@@ -889,7 +890,7 @@ export default function App() {
       setModalEditingAsSeries(true);
       setModalOpen(true);
     } catch (e) {
-      setError("โหลดข้อมูลชุดกิจกรรมไม่สำเร็จ: " + e.message);
+      setError(t("app.errorLoadSeriesFailed", { message: e.message }));
     }
   };
 
@@ -903,7 +904,7 @@ export default function App() {
     // Google Calendar delete call, which needs the real instance id.
     const normalizedId = normalizeActivityId(activityId);
     if (lockedActivities[normalizedId]) {
-      throw new Error("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนลบ");
+      throw new Error(t("app.errorActivityLockedDelete"));
     }
     await deleteActivity(calendarAccessToken, activityId);
     setActivityCategoryMap((prev) => {
@@ -955,7 +956,7 @@ export default function App() {
     const normalizedSeriesIds = seriesActivityIds.map(normalizeActivityId);
     const lockedInSeries = normalizedSeriesIds.filter((id) => lockedActivities[id]);
     if (lockedInSeries.length > 0) {
-      throw new Error("บางกิจกรรมในชุดนี้ถูกล็อกไว้ — ปลดล็อกทั้งหมดก่อนลบทั้งชุด");
+      throw new Error(t("app.errorSeriesLockedDelete"));
     }
     await deleteActivity(calendarAccessToken, recurringEventId);
     setActivityCategoryMap((prev) => {
@@ -1005,7 +1006,7 @@ export default function App() {
    * @param {string} originalSummary
    */
   const nextCopySummary = (originalSummary) => {
-    const base = (originalSummary || "(ไม่มีชื่อ)").replace(/\s*\(copy(?:\s+\d+)?\)\s*$/, "");
+    const base = (originalSummary || t("app.untitledActivity")).replace(/\s*\(copy(?:\s+\d+)?\)\s*$/, "");
     const copyPattern = new RegExp(
       `^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(copy(?:\\s+(\\d+))?\\)$`
     );
@@ -1047,7 +1048,7 @@ export default function App() {
       try {
         await assignActivityCategory(normalizedCreatedId, existingCategoryId);
       } catch (e) {
-        setError(`ทำสำเนากิจกรรมสำเร็จ แต่บันทึกหมวดหมู่ของสำเนาไม่สำเร็จ: ${e.message}`);
+        setError(t("app.errorDuplicateCategorySaveFailed", { message: e.message }));
       }
     }
 
@@ -1057,7 +1058,7 @@ export default function App() {
       try {
         await setActivityTags(normalizedCreatedId, existingTags);
       } catch (e) {
-        setError(`ทำสำเนากิจกรรมสำเร็จ แต่บันทึก tag ของสำเนาไม่สำเร็จ: ${e.message}`);
+        setError(t("app.errorDuplicateTagSaveFailed", { message: e.message }));
       }
     }
     await loadActivities();
@@ -1081,7 +1082,7 @@ export default function App() {
     // so match on normalized id, then use the matched activity's own raw
     // `.id` for everything that talks to Google Calendar below.
     if (lockedActivities[activityId]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนย้ายวัน");
+      setError(t("app.errorActivityLockedMove"));
       return;
     }
     const activity = activities.find((a) => normalizeActivityId(a.id) === activityId);
@@ -1100,7 +1101,7 @@ export default function App() {
     const conflict = await checkConflict(rawId);
     await updateActivity(calendarAccessToken, rawId, body);
     if (conflict) {
-      setError("กิจกรรมนี้ถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
+      setError(t("app.errorActivityConflictOverwritten"));
     }
     await loadActivities();
     refreshTagSearchIfActive();
@@ -1125,7 +1126,7 @@ export default function App() {
     // activityId arrives normalized, lockedActivities check is fine as-is,
     // but Google Calendar's update call needs the matched activity's raw id.
     if (lockedActivities[activityId]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนเปลี่ยนสี");
+      setError(t("app.errorActivityLockedColor"));
       return;
     }
     const activity = activities.find((a) => normalizeActivityId(a.id) === activityId);
@@ -1160,11 +1161,11 @@ export default function App() {
         <header className="app-header">
           <div className="app-header-left">
             <span className="app-logo">
-              <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
-              <span style={{ color: "#B71C1C" }}>ของ</span>
-              <span style={{ color: "#F29900" }}>ฉัน</span>
+              <span style={{ color: "#1557B0" }}>{t("app.brandCalendar")}</span>
+              <span style={{ color: "#B71C1C" }}>{t("app.brandOf")}</span>
+              <span style={{ color: "#F29900" }}>{t("app.brandMe")}</span>
             </span>
-            <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
+            <div className="mode-switch" role="tablist" aria-label={t("app.modeSwitch")}>
               <button
                 type="button"
                 role="tab"
@@ -1180,7 +1181,7 @@ export default function App() {
                 aria-selected={mode === "reminder"}
                 className={mode === "reminder" ? "active" : ""}
                 onClick={() => setMode("reminder")}
-                title="ยังเป็นแค่ mockup — ใช้งานจริงไม่ได้"
+                title={t("app.mockupOnly")}
               >
                 ⏱ Reminder
               </button>
@@ -1188,15 +1189,15 @@ export default function App() {
             {mode === "dashboard" && (
               <>
                 <button className="btn btn-outline" onClick={goToday}>
-                  วันนี้
+                  {t("header.today")}
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
+                <button className="btn-icon" onClick={() => navigateWeek(-1)} aria-label={t("app.prevWeek")}>
                   ‹
                 </button>
-                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
+                <button className="btn-icon" onClick={() => navigateWeek(1)} aria-label={t("app.nextWeek")}>
                   ›
                 </button>
-                <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
+                <h1 className="app-title">{formatWeekLabel(cursorDate, language)}</h1>
               </>
             )}
           </div>
@@ -1213,7 +1214,7 @@ export default function App() {
                         type="button"
                         className="tag-search-chip-remove"
                         onClick={() => setTagSearchTerms((prev) => prev.filter((t) => t !== term))}
-                        aria-label={`ลบคำค้นหา ${term}`}
+                        aria-label={t("app.removeSearchTerm", { term })}
                       >
                         ✕
                       </button>
@@ -1222,7 +1223,7 @@ export default function App() {
                   <input
                     type="text"
                     className="tag-search-input"
-                    placeholder={tagSearchTerms.length === 0 ? "ค้นหาด้วย tag..." : "เพิ่ม tag..."}
+                    placeholder={tagSearchTerms.length === 0 ? t("app.tagSearchPlaceholderEmpty") : t("app.tagSearchPlaceholderFilled")}
                     value={tagSearchDraft}
                     onChange={(e) => setTagSearchDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -1238,7 +1239,7 @@ export default function App() {
                         setTagSearchTerms((prev) => prev.slice(0, -1));
                       }
                     }}
-                    aria-label="ค้นหากิจกรรมด้วย tag — พิมพ์แล้วกด Enter เพื่อค้นหาได้หลาย tag พร้อมกัน"
+                    aria-label={t("app.tagSearchAriaLabel")}
                   />
                   {(tagSearchTerms.length > 0 || tagSearchDraft) && (
                     <button
@@ -1248,7 +1249,7 @@ export default function App() {
                         setTagSearchTerms([]);
                         setTagSearchDraft("");
                       }}
-                      aria-label="ล้างคำค้นหาทั้งหมด"
+                      aria-label={t("app.clearAllSearch")}
                     >
                       ✕
                     </button>
@@ -1259,17 +1260,17 @@ export default function App() {
                   onClick={() => openAddActivity(new Date(cursorDate))}
                   disabled={!calendarAccessToken}
                 >
-                  + เพิ่มกิจกรรม
+                  + {t("header.addActivity")}
                 </button>
                 <button className="btn btn-outline" onClick={handleLogout}>
-                  ออกจากระบบ
+                  {t("header.signOut")}
                 </button>
                 <button
                   type="button"
                   className="btn-icon settings-open-btn"
                   onClick={() => setSettingsOpen(true)}
-                  aria-label="เปิดการตั้งค่า"
-                  title="การตั้งค่า"
+                  aria-label={t("app.openSettings")}
+                  title={t("app.settingsTitle")}
                 >
                   ⚙️
                 </button>
@@ -1304,8 +1305,8 @@ export default function App() {
                     }
                   }}
                   disabled={!calendarAccessToken}
-                  aria-label="[ทดสอบ] จำลอง token ใกล้หมดอายุ"
-                  title="[DEV] จำลอง token ใกล้หมดอายุ (เหลือ 4 นาที) — ลบปุ่มนี้ก่อน deploy จริง"
+                  aria-label={t("app.devSimulateExpiryAriaLabel")}
+                  title={t("app.devSimulateExpiryTitle")}
                 >
                   ⏰
                 </button>
@@ -1349,17 +1350,17 @@ export default function App() {
             role="alertdialog"
             aria-label={
               calendarAccessToken
-                ? "แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ"
-                : "ต้องยืนยันตัวตนกับ Google Calendar อีกครั้ง"
+                ? t("app.tokenNearExpiryAriaLabel")
+                : t("app.tokenExpiredAriaLabel")
             }
           >
             <span>
               {calendarAccessToken
-                ? "สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด"
-                : "สิทธิ์เข้าถึง Google Calendar หมดอายุแล้ว — ยืนยันตัวตนอีกครั้งเพื่อดึงปฏิทินของคุณกลับมาแสดง"}
+                ? t("app.tokenNearExpiryMessage")
+                : t("app.tokenExpiredMessage")}
             </span>
             <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
-              {calendarAccessToken ? "ต่ออายุตอนนี้" : "ยืนยันตัวตน"}
+              {calendarAccessToken ? t("app.renewNow") : t("app.reauthenticate")}
             </button>
           </div>
         </div>
@@ -1372,7 +1373,7 @@ export default function App() {
           <React.Fragment>
             {!authReady && (
               <div className="empty-state">
-                <p>กำลังตรวจสอบสถานะการเข้าสู่ระบบ...</p>
+                <p>{t("app.checkingLogin")}</p>
               </div>
             )}
 
@@ -1380,13 +1381,13 @@ export default function App() {
               <div className="login-screen">
                 <div className="login-card">
                   <span className="login-logo">
-                    <span style={{ color: "#1557B0" }}>ปฏิทิน</span>
-                    <span style={{ color: "#B71C1C" }}>ของ</span>
-                    <span style={{ color: "#F29900" }}>ฉัน</span>
+                    <span style={{ color: "#1557B0" }}>{t("app.brandCalendar")}</span>
+                    <span style={{ color: "#B71C1C" }}>{t("app.brandOf")}</span>
+                    <span style={{ color: "#F29900" }}>{t("app.brandMe")}</span>
                   </span>
-                  <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
+                  <h1 className="login-headline">{t("app.loginHeadline")}</h1>
                   <p className="login-subtext">
-                    เข้าสู่ระบบด้วย Google เพื่อ sync ปฏิทินของคุณโดยตรง — ปลอดภัย ไม่มีการเก็บสำเนาข้อมูลกิจกรรมไว้ที่อื่น
+                    {t("app.loginSubtext")}
                   </p>
                   <button className="google-signin-btn" onClick={handleLogin}>
                     <svg className="google-signin-icon" viewBox="0 0 18 18" aria-hidden="true">
@@ -1395,7 +1396,7 @@ export default function App() {
                       <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
                       <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
                     </svg>
-                    เข้าสู่ระบบด้วย Google
+                    {t("app.signInWithGoogle")}
                   </button>
                 </div>
 
@@ -1411,23 +1412,22 @@ export default function App() {
                     อาจเปลี่ยนไปเมื่อไหร่ก็ได้ ไม่อยากให้คนที่เคยปิดไปแล้ว
                     พลาดเห็นตอนที่ยังจำเป็นต้องรู้ */}
                 {showLoginGuide && (
-                  <div className="login-guide-overlay" role="dialog" aria-label="วิธีเข้าสู่ระบบ Google">
+                  <div className="login-guide-overlay" role="dialog" aria-label={t("app.loginGuideAriaLabel")}>
                     <div className="login-guide-panel">
                       <button
                         type="button"
                         className="login-guide-close"
                         onClick={() => setShowLoginGuide(false)}
-                        aria-label="ปิด"
+                        aria-label={t("app.close")}
                       >
                         ✕
                       </button>
                       <div className="login-guide-header">
                         <h2 className="login-guide-title">
-                          📌 วิธีเข้าใช้งานครั้งแรก (3 ขั้นตอนง่ายๆ)
+                          {t("app.loginGuideTitle")}
                         </h2>
                         <p className="login-guide-note">
-                          เนื่องจากระบบกำลังอยู่ในช่วงยื่นขอการยืนยันสิทธิ์จาก Google
-                          ท่านสามารถกดข้ามตามขั้นตอนด้านล่างเพื่อเข้าใช้งานได้อย่างปลอดภัย
+                          {t("app.loginGuideNote")}
                         </p>
                       </div>
 
@@ -1437,24 +1437,23 @@ export default function App() {
                             {step.image ? (
                               <img
                                 src={step.image}
-                                alt={`ขั้นตอนที่ ${step.number}`}
+                                alt={t("app.stepImageAlt", { number: step.number })}
                                 className="login-guide-step-image"
                               />
                             ) : (
                               <div className="login-guide-step-placeholder">
-                                รูปประกอบ Step {step.number}
+                                {t("app.loginGuideStepPlaceholder", { number: step.number })}
                               </div>
                             )}
                             <p>
-                              <strong>Step {step.number}:</strong> {step.text}
+                              <strong>{t("app.loginGuideStepLabel", { number: step.number })}</strong> {t(step.textKey)}
                             </p>
                           </div>
                         ))}
                       </div>
 
                       <div className="login-guide-footnote">
-                        <strong>📌 หมายเหตุ:</strong> ทำขั้นตอนเหล่านี้แค่ครั้งแรกที่เข้าสู่ระบบเท่านั้น
-                        เมื่อเข้าสู่ระบบสำเร็จแล้ว ครั้งถัดไปจะเข้าหน้าแอปได้ทันทีโดยไม่ขึ้นหน้าเตือนนี้อีก
+                        <strong>{t("app.loginGuideFootnote")}</strong> {t("app.loginGuideFootnoteText")}
                       </div>
                     </div>
                   </div>
@@ -1474,7 +1473,7 @@ export default function App() {
                 why both share one visual treatment. */}
             {firebaseUser && !calendarAccessToken && (
               <div className="empty-state">
-                <p>ต้องยืนยันตัวตนกับ Google Calendar อีกครั้งเพื่อดึงปฏิทินของคุณมาแสดง</p>
+                <p>{t("app.reauthNeeded")}</p>
               </div>
             )}
 
@@ -1485,13 +1484,15 @@ export default function App() {
             )}
             {firebaseUser && loading && (
               <div className="loading-banner" role="status" aria-live="polite">
-                กำลังโหลด...
+                {t("app.loading")}
               </div>
             )}
             {firebaseUser && isSearchingTags && !tagSearchLoading && (
               <div className="tag-search-status">
-                พบ {visibleActivities.length} กิจกรรมที่มี tag ตรงกับ{" "}
-                {tagSearchTerms.map((t) => `#${t}`).join(" หรือ ")} (ค้นหาช่วง ±3 เดือนจากวันนี้)
+                {t("app.tagSearchResultsCount", {
+                  count: visibleActivities.length,
+                  terms: tagSearchTerms.map((term) => `#${term}`).join(` ${t("app.orWordJoiner")} `)
+                })}
               </div>
             )}
 

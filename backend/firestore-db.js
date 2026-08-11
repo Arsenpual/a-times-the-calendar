@@ -137,19 +137,47 @@ const DEFAULT_CATEGORIES = [
  *
  * ไม่ทำอะไรถ้า user นั้นมีข้อมูลอยู่แล้ว (ไม่ทับของเดิม) — ปลอดภัยเรียกซ้ำได้
  * ทุก request โดยไม่มีผลข้างเคียงถ้า user เคยถูก seed ไปแล้ว
+ *
+ * *** แก้ไข (race condition) ***
+ * เดิมใช้ check-then-write ธรรมดา (query .limit(1).get() แล้วค่อยเขียนถ้า
+ * ว่าง) — ไม่ atomic เพราะ requireAuth เรียกฟังก์ชันนี้จากทุก request แบบ
+ * ขนานกัน (frontend ยิงหลาย request พร้อมกันตอน mount แรกเสมอ เช่น
+ * fetchCategories/fetchActivityCategoryMap/fetchLockedActivities/
+ * fetchActivityTagMap ใน api.js) ผู้ใช้ใหม่คนเดียวจึงมักโดนหลาย request
+ * เข้ามาพร้อมกันตั้งแต่ครั้งแรกที่ login เสมอ ไม่ใช่กรณีขอบ — ทุก request
+ * เห็น snapshot ว่างเหมือนกันหมดก่อนตัวไหนจะเขียนเสร็จ ทำให้เขียนซ้ำหลายรอบ
+ * (ปลอดภัยจากข้อมูลซ้ำเพราะใช้ id คงที่ + .set() แต่ยังเสีย write quota
+ * โดยไม่จำเป็นทุกครั้งที่ user ใหม่ล็อกอิน)
+ *
+ * ใช้ Firestore transaction คร่อม "marker document" เดี่ยว (users/{userId},
+ * field defaultCategoriesSeeded) แทนการเช็คทั้ง subcollection — transaction
+ * รับประกันว่าถ้าหลาย request แข่งกันเข้ามา จะมีแค่ตัวเดียวที่ read เห็น
+ * marker เป็น false/ไม่มี แล้วชนะเขียนได้ ตัวที่เหลือ Firestore จะ auto-retry
+ * ให้เอง ตัว retry จะเห็น marker เป็น true แล้วออกจาก transaction โดยไม่
+ * เขียนซ้ำ — marker เป็น field เดี่ยวบน parent doc (ไม่ใช่ query กับทั้ง
+ * subcollection แบบเดิม) เพราะ transaction ของ Firestore อ่าน "document" ได้
+ * เท่านั้น ไม่รองรับ query ภายใน transaction
  */
 async function ensureDefaultCategoriesForUser(userId) {
+  const userRef = userDoc(userId);
   const col = categoriesCol(userId);
-  const snapshot = await col.limit(1).get();
-  if (!snapshot.empty) return;
 
-  const batch = db.batch();
-  for (const cat of DEFAULT_CATEGORIES) {
-    const { id, ...rest } = cat;
-    batch.set(col.doc(id), rest);
+  const seeded = await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (userSnap.exists && userSnap.data().defaultCategoriesSeeded) {
+      return false; // เคย seed แล้ว (หรือกำลังถูก request อื่นชนะไปก่อน) — ไม่ต้องทำอะไร
+    }
+    tx.set(userRef, { defaultCategoriesSeeded: true }, { merge: true });
+    for (const cat of DEFAULT_CATEGORIES) {
+      const { id, ...rest } = cat;
+      tx.set(col.doc(id), rest);
+    }
+    return true;
+  });
+
+  if (seeded) {
+    console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
   }
-  await batch.commit();
-  console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
 }
 
 module.exports = {
