@@ -7,7 +7,7 @@ import TagSearchResults from "./components/tag-search-results.jsx";
 import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
 import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
 import ActivityModal from "./components/activity-modal.jsx";
-import ReminderModeMockup from "./components/reminder-mode-mockup.jsx";
+import ReminderMode from "./components/reminder-mode-mockup.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
 import {
@@ -76,10 +76,8 @@ export default function App() {
   //     reauthenticateWithGooglePopup() whenever a Calendar API call comes
   //     back 401.
   const [firebaseUser, setFirebaseUser] = useState(null);
-  // "dashboard" = ปฏิทินปกติ (ของจริง), "reminder" = โหมด Reminder ซึ่งยังเป็น
-  // แค่ mockup ล้วนๆ ตอนนี้ (ดู ReminderModeMockup — ยังไม่มี state/logic จริง
-  // อยู่เบื้องหลังเลย รอ commit เรื่อง Cloud Messaging/Pomodoro ตามที่ระบุใน
-  // firebase-migration-plan.md ระยะ 4 ก่อน) แยก state ออกมาต่างหากจาก
+  // "dashboard" = ปฏิทินปกติ, "reminder" = reminder/Pomodoro ที่ทำงานใน
+  // browser tab และเก็บรายการไว้ใน localStorage แยก state ออกมาต่างหากจาก
   // firebaseUser/calendarAccessToken เพราะสลับโหมดได้ไม่ว่าจะ login อยู่หรือไม่
   const [mode, setMode] = useState("dashboard");
   // Guards signInWithGoogle()/reauthenticateWithGooglePopup() against being
@@ -1222,7 +1220,6 @@ export default function App() {
                 aria-selected={mode === "reminder"}
                 className={mode === "reminder" ? "active" : ""}
                 onClick={() => setMode("reminder")}
-                title="ยังเป็นแค่ mockup — ใช้งานจริงไม่ได้"
               >
                 ⏱ Reminder
               </button>
@@ -1417,7 +1414,7 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {mode === "reminder" && <ReminderModeMockup />}
+        {mode === "reminder" && <ReminderMode />}
 
         {mode === "dashboard" && (
           <React.Fragment>
