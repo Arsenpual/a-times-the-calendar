@@ -11,7 +11,8 @@ const REMINDER_TYPE = {
   EVENT_ANCHORED: "event-anchored",
   ROUTINE: "routine",
   ONCE_AT: "once-at",
-  COUNTDOWN: "countdown"
+  COUNTDOWN: "countdown",
+  STOPWATCH: "stopwatch"
 };
 
 const DAYS_OF_WEEK = [
@@ -26,6 +27,16 @@ const DAYS_OF_WEEK = [
 
 function isOneShotType(type) {
   return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
+}
+
+// แปลง timestamp เป็น "YYYY-MM-DD" ตามเวลาท้องถิ่นของเครื่อง (ไม่ใช้ toISOString() เพราะแปลงเป็น UTC
+// ทำให้วันที่เพี้ยนได้เมื่อเวลาใกล้เที่ยงคืนในโซนเวลาที่ต่างจาก UTC เช่น ไทย +7)
+function toLocalDateInputValue(ms) {
+  const d = new Date(ms);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const DEFAULT_REMINDERS = [
@@ -46,6 +57,17 @@ function intervalLabel(reminder) {
 
 function hasWindow(reminder) {
   return Boolean(reminder.windowStart && reminder.windowEnd);
+}
+
+// จัดรูปแบบวินาทีทั้งหมดเป็น "mm:ss" หรือ "h:mm:ss" ถ้าเกิน 1 ชั่วโมง ใช้ร่วมกันทั้ง stopwatch และ countdown
+function formatDurationClock(totalSeconds) {
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = totalSeconds % 60;
+  if (hh > 0) {
+    return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+  return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
 function minuteOfDayAt(ms) {
@@ -112,6 +134,9 @@ function computeNextDueAt(reminder, from) {
       return reminder.atMs;
     case REMINDER_TYPE.COUNTDOWN:
       return reminder.startedAt + reminder.durationMs;
+    case REMINDER_TYPE.STOPWATCH:
+      // Stopwatch จับเวลาอย่างเดียว ไม่มีแจ้งเตือน จึงไม่มี "ถึงกำหนด" ตลอดไป
+      return Infinity;
     case REMINDER_TYPE.INTERVAL:
     default: {
       const next = from + intervalMs(reminder);
@@ -120,7 +145,7 @@ function computeNextDueAt(reminder, from) {
   }
 }
 
-function describeReminder(reminder) {
+function describeReminder(reminder, nowMs) {
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
       const dayNames = reminder.days?.map(d => DAYS_OF_WEEK.find(x => x.value === d)?.label).join(" ");
@@ -143,12 +168,78 @@ function describeReminder(reminder) {
       return `ครั้งเดียว · ${dateLabel} ${timeLabel}`;
     }
     case REMINDER_TYPE.COUNTDOWN: {
-      const mins = Math.round(reminder.durationMs / 60000);
-      return `นับถอยหลัง · อีก ${mins} นาที`;
+      if (!reminder.enabled || !reminder.startedAt) {
+        const mins = Math.round(reminder.durationMs / 60000);
+        return `นับถอยหลัง · ตั้งไว้ ${mins} นาที`;
+      }
+      const endMs = reminder.startedAt + reminder.durationMs;
+      const remainingMs = endMs - (nowMs ?? Date.now());
+      if (remainingMs <= 0) return "นับถอยหลัง · ถึงเวลาแล้ว";
+      const totalSeconds = Math.ceil(remainingMs / 1000);
+      return `นับถอยหลัง · เหลือ ${formatDurationClock(totalSeconds)}`;
+    }
+    case REMINDER_TYPE.STOPWATCH: {
+      if (!reminder.enabled || !reminder.startedAt) {
+        // หยุดอยู่: โชว์เวลาที่สะสมไว้ล่าสุด (accumulatedMs) ถ้ามี ไม่งั้นแสดง 0
+        const totalSeconds = Math.floor((reminder.accumulatedMs || 0) / 1000);
+        return `จับเวลา · หยุดที่ ${formatDurationClock(totalSeconds)}`;
+      }
+      // กำลังทำงาน: เวลาที่ผ่านไป = เวลาที่สะสมไว้ก่อนหน้า + เวลาตั้งแต่ startedAt ล่าสุดจนถึงตอนนี้
+      const elapsedMs = (reminder.accumulatedMs || 0) + ((nowMs ?? Date.now()) - reminder.startedAt);
+      const totalSeconds = Math.floor(elapsedMs / 1000);
+      return `จับเวลา · ${formatDurationClock(totalSeconds)}`;
     }
     case REMINDER_TYPE.INTERVAL:
     default:
       return intervalLabel(reminder);
+  }
+}
+
+// คืนค่ารายการ "นาทีของวัน" (0-1439) ที่ reminder ประเภทนี้ควรถูกปักหมุดแสดงบน timeline
+// ใช้แสดงผลบน timeline โดยไม่สนใจว่า enabled/nextDueAt ถึงกำหนดหรือยัง (โชว์ทุกประเภทเสมอเวลาเลื่อนดู)
+// - INTERVAL: ปักซ้ำทุก ๆ N นาที (จำกัดในช่วง window ถ้ามีกำหนด)
+// - WEEKLY: ปักที่เวลาเดียวของวัน (เวลาเดิมทุกสัปดาห์ที่ตรงกับ days ที่เลือก)
+// - ONCE_AT: ปักที่เวลาของวันนั้น เฉพาะกรณีเป็นวันเดียวกับวันนี้ (เพราะเป็น timeline วันเดียว)
+// - COUNTDOWN: ปักที่เวลาสิ้นสุดของการนับถอยหลัง (ถ้าอยู่ในวันเดียวกับวันนี้)
+// - STOPWATCH: จับเวลาต่อเนื่องไม่มีเวลาตายตัว จึงไม่ปักหมุดตามเวลาเช่นกัน (เหมือน EVENT_ANCHORED/ROUTINE)
+// - EVENT_ANCHORED / ROUTINE: ไม่มีเวลาตายตัวในแต่ละวัน (ขึ้นกับ event ภายนอก) จึงไม่ปักหมุดตามเวลา
+function getReminderTimeSlots(reminder, startOfTodayMs) {
+  switch (reminder.type) {
+    case REMINDER_TYPE.INTERVAL: {
+      const stepMinutes = reminder.amount * (reminder.unit === "hours" ? 60 : 1);
+      if (!stepMinutes || stepMinutes <= 0) return [];
+      const slots = [];
+      for (let m = 0; m < 1440; m += stepMinutes) {
+        if (!hasWindow(reminder) || isMinuteWithinWindow(m, reminder.windowStart, reminder.windowEnd)) {
+          slots.push(m);
+        }
+      }
+      return slots;
+    }
+    case REMINDER_TYPE.WEEKLY: {
+      if (!reminder.time) return [];
+      return [minutesFromHHMM(reminder.time)];
+    }
+    case REMINDER_TYPE.ONCE_AT: {
+      if (!reminder.atMs) return [];
+      const dayStart = new Date(reminder.atMs);
+      dayStart.setHours(0, 0, 0, 0);
+      if (dayStart.getTime() !== startOfTodayMs) return [];
+      return [minuteOfDayAt(reminder.atMs)];
+    }
+    case REMINDER_TYPE.COUNTDOWN: {
+      if (!reminder.startedAt || !reminder.durationMs) return [];
+      const endMs = reminder.startedAt + reminder.durationMs;
+      const dayStart = new Date(endMs);
+      dayStart.setHours(0, 0, 0, 0);
+      if (dayStart.getTime() !== startOfTodayMs) return [];
+      return [minuteOfDayAt(endMs)];
+    }
+    case REMINDER_TYPE.EVENT_ANCHORED:
+    case REMINDER_TYPE.ROUTINE:
+    case REMINDER_TYPE.STOPWATCH:
+    default:
+      return [];
   }
 }
 
@@ -186,6 +277,8 @@ export default function ReminderDashboard() {
   });
 
   const [editingId, setEditingId] = useState(null);
+  const [isComposerOpen, setIsComposerOpen] = useState(false); // composer เริ่มต้นแบบพับเก็บ ประหยัดพื้นที่
+  const [nowTick, setNowTick] = useState(() => Date.now()); // อัปเดตทุกวินาที เพื่อให้ countdown แสดงเวลานับถอยหลังแบบ live
 
   const tapeScrollRef = useRef(null);
   const isUserInteractingRef = useRef(false);
@@ -198,7 +291,8 @@ export default function ReminderDashboard() {
   useEffect(() => {
     const checkDue = () => {
       const now = Date.now();
-      const due = reminders.filter((r) => r.enabled && r.nextDueAt && r.nextDueAt <= now && r.type !== REMINDER_TYPE.ROUTINE);
+      setNowTick(now); // อัปเดตเวลา "ตอนนี้" ทุกวินาที ให้ countdown บนการ์ด tick แบบ live
+      const due = reminders.filter((r) => r.enabled && r.nextDueAt && r.nextDueAt <= now && r.type !== REMINDER_TYPE.ROUTINE && r.type !== REMINDER_TYPE.STOPWATCH);
       setDueReminders(due);
     };
 
@@ -222,28 +316,38 @@ export default function ReminderDashboard() {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
+    // เตรียม slot เวลาของ reminder ทุกตัวไว้ล่วงหน้า (ไม่สนใจ enabled/nextDueAt)
+    // เพื่อให้ทุกประเภทที่มีเวลาตายตัวในแต่ละวัน ถูกปักหมุดให้เห็นบน timeline เสมอเวลาเลื่อนดู
+    const reminderSlots = reminders.map((r) => ({
+      reminder: r,
+      minutes: getReminderTimeSlots(r, startOfToday)
+    }));
+
     for (let i = 0; i < totalRows; i++) {
       const startMinute = i * minutesPerRow;
       const isMajor = startMinute % 60 === 0;
       const hours = Math.floor(startMinute / 60);
       const mins = startMinute % 60;
-
-      const rowTimeMs = startOfToday + (startMinute * 60 * 1000);
-      const rowEndTimeMs = rowTimeMs + (minutesPerRow * 60 * 1000);
+      const endMinute = startMinute + minutesPerRow;
 
       const label = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 
-      const flag = reminders.find((r) => {
-        if (!r.enabled || !r.nextDueAt || r.nextDueAt === Infinity) return false;
-        return r.nextDueAt >= rowTimeMs && r.nextDueAt < rowEndTimeMs;
-      });
+      const flags = [];
+      for (const { reminder, minutes } of reminderSlots) {
+        for (const slotMinute of minutes) {
+          if (slotMinute >= startMinute && slotMinute < endMinute) {
+            flags.push(reminder);
+            break; // กันไม่ให้ reminder เดียวกันถูกนับซ้ำในแถวเดียวกัน (เช่น interval ถี่กว่า minutesPerRow)
+          }
+        }
+      }
 
       rows.push({
         key: `row-${startMinute}`,
         startMinute,
         isMajor,
         label,
-        flag
+        flags
       });
     }
 
@@ -345,11 +449,59 @@ export default function ReminderDashboard() {
     );
   };
 
+  // Start/Stop สำหรับ stopwatch โดยเฉพาะ (แยกจาก toggle() ทั่วไปเพราะ semantics ต่างกัน)
+  // - Start: enabled=true, startedAt=ตอนนี้ (นับเวลาต่อจาก accumulatedMs เดิม)
+  // - Stop: บวกเวลาที่ผ่านไปตั้งแต่ startedAt เข้ากับ accumulatedMs แล้วหยุด (enabled=false, startedAt=null)
+  //   ทำให้กด Start ใหม่ได้และเวลานับต่อจากเดิมได้ ไม่รีเซ็ตทุกครั้งที่หยุด
+  const toggleStopwatch = (reminderId) => {
+    setReminders((prev) =>
+      prev.map((r) => {
+        if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
+
+        if (!r.enabled) {
+          return { ...r, enabled: true, startedAt: Date.now() };
+        }
+
+        const elapsedSinceStart = r.startedAt ? Date.now() - r.startedAt : 0;
+        return {
+          ...r,
+          enabled: false,
+          accumulatedMs: (r.accumulatedMs || 0) + elapsedSinceStart,
+          startedAt: null
+        };
+      })
+    );
+  };
+
+  // รีเซ็ต stopwatch กลับเป็น 0 (หยุดด้วย ถ้ากำลังทำงานอยู่)
+  const resetStopwatch = (reminderId) => {
+    setReminders((prev) =>
+      prev.map((r) => {
+        if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
+        return { ...r, enabled: false, accumulatedMs: 0, startedAt: null };
+      })
+    );
+  };
+
   const toggle = (reminderId) => {
     setReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
+
         if (!r.enabled) {
+          // Countdown ประเภทเดียวที่ "เปิดใหม่" ควรหมายถึงเริ่มนับใหม่ทั้งหมด
+          // (ถ้าใช้ startedAt เดิม endMs จะเป็นอดีตไปแล้ว ทำให้ยิงแจ้งเตือนทันทีที่เปิด)
+          if (r.type === REMINDER_TYPE.COUNTDOWN) {
+            const restarted = { ...r, enabled: true, startedAt: Date.now() };
+            return { ...restarted, nextDueAt: computeNextDueAt(restarted, Date.now()) };
+          }
+
+          // Once-at ที่เวลาผ่านไปแล้ว เปิดสวิตช์กลับไม่มีประโยชน์ (จะยิงทันที) ต้องให้ผู้ใช้แก้ไขวันที่/เวลาใหม่แทน
+          if (r.type === REMINDER_TYPE.ONCE_AT && r.atMs && r.atMs <= Date.now()) {
+            alert("เวลาที่ตั้งไว้ผ่านไปแล้ว กรุณาแก้ไขวันที่และเวลาใหม่ก่อนเปิดใช้งานอีกครั้ง");
+            return r;
+          }
+
           const nextDue = computeNextDueAt(r, Date.now());
           return { ...r, enabled: true, nextDueAt: nextDue };
         }
@@ -410,6 +562,20 @@ export default function ReminderDashboard() {
       const durationMs = minutes * 60 * 1000;
       newReminder.durationMs = durationMs;
       newReminder.startedAt = Date.now();
+    } else if (draft.type === REMINDER_TYPE.STOPWATCH) {
+      if (editingId) {
+        // แก้ไข stopwatch ที่มีอยู่แล้ว (เช่น แก้แค่ชื่อ) ต้องคงเวลาที่จับไว้/สถานะ running เดิมไว้
+        // ไม่รีเซ็ตกลับเป็น 0 หรือหยุดโดยไม่ตั้งใจ
+        const existing = reminders.find((r) => r.id === editingId);
+        newReminder.accumulatedMs = existing?.accumulatedMs || 0;
+        newReminder.startedAt = existing?.startedAt || null;
+        newReminder.enabled = existing?.enabled || false;
+      } else {
+        // สร้างใหม่แบบ "หยุดอยู่ที่ 0" ให้ผู้ใช้กด Start เองทีหลัง (ไม่ auto-run ตอนสร้าง)
+        newReminder.accumulatedMs = 0;
+        newReminder.startedAt = null;
+        newReminder.enabled = false;
+      }
     }
 
     newReminder.nextDueAt = computeNextDueAt(newReminder, Date.now());
@@ -438,6 +604,7 @@ export default function ReminderDashboard() {
       afterUnit: "hours",
       routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน"
     });
+    setIsComposerOpen(false); // บันทึกเสร็จแล้วพับ composer กลับ คืนพื้นที่ให้ list
   };
 
   const deleteReminder = (reminderId) => {
@@ -445,6 +612,7 @@ export default function ReminderDashboard() {
   };
 
   const startEdit = (reminder) => {
+    setIsComposerOpen(true); // แก้ไข reminder ต้องเปิด composer ให้เห็นฟอร์มด้วย
     setEditingId(reminder.id);
     setDraft({
       title: reminder.title,
@@ -454,7 +622,7 @@ export default function ReminderDashboard() {
       windowStart: reminder.windowStart || "",
       windowEnd: reminder.windowEnd || "",
       atTime: reminder.atMs ? new Date(reminder.atMs).toTimeString().slice(0, 5) : "",
-      atDate: reminder.atMs ? new Date(reminder.atMs).toISOString().split("T")[0] : "",
+      atDate: reminder.atMs ? toLocalDateInputValue(reminder.atMs) : "",
       countdownMinutes: reminder.durationMs ? String(reminder.durationMs / 60000) : "20",
       days: reminder.days || [1, 3, 5],
       time: reminder.time || "08:00",
@@ -484,6 +652,16 @@ export default function ReminderDashboard() {
       afterUnit: "hours",
       routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน"
     });
+    setIsComposerOpen(false); // ยกเลิกแล้วพับ composer กลับ
+  };
+
+  const toggleComposer = () => {
+    if (isComposerOpen) {
+      // กำลังเปิดอยู่แล้วกดปุ่มซ้ำ = ปิด และล้าง draft/สถานะแก้ไขทิ้งไปด้วย
+      cancelEditing();
+    } else {
+      setIsComposerOpen(true);
+    }
   };
 
   const activeReminders = reminders.filter((r) => r.enabled);
@@ -499,11 +677,12 @@ export default function ReminderDashboard() {
          reminder.type === REMINDER_TYPE.EVENT_ANCHORED ? "⚓" :
          reminder.type === REMINDER_TYPE.ROUTINE ? "📋" :
          reminder.type === REMINDER_TYPE.ONCE_AT ? "1x" : 
-         reminder.type === REMINDER_TYPE.COUNTDOWN ? "⏱" : "↻"}
+         reminder.type === REMINDER_TYPE.COUNTDOWN ? "⏱" :
+         reminder.type === REMINDER_TYPE.STOPWATCH ? "⏱️" : "↻"}
       </div>
       <div className="reminder-info">
         <p className="title">{reminder.title}</p>
-        <p className="meta">{describeReminder(reminder)}</p>
+        <p className="meta">{describeReminder(reminder, nowTick)}</p>
 
         {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && (
           <button type="button" className="btn-action-small" onClick={() => triggerAnchorEvent(reminder.id)}>
@@ -517,7 +696,22 @@ export default function ReminderDashboard() {
           </button>
         )}
       </div>
-      <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => toggle(reminder.id)} aria-label="สวิตช์เปิดปิด" />
+
+      {reminder.type === REMINDER_TYPE.STOPWATCH ? (
+        // Stopwatch ใช้ปุ่ม Start/Stop (+ Reset) แทน toggle switch ทั่วไป เพราะไม่ใช่ enable/disable
+        // แบบ on-off เฉย ๆ แต่มี semantics ของการนับเวลาสะสมที่ต้องจัดการเฉพาะ
+        <div className="stopwatch-controls">
+          <button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => toggleStopwatch(reminder.id)}>
+            {reminder.enabled ? "⏸ Stop" : "▶ Start"}
+          </button>
+          <button type="button" className="icon-btn" onClick={() => resetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">
+            ↺
+          </button>
+        </div>
+      ) : (
+        <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => toggle(reminder.id)} aria-label="สวิตช์เปิดปิด" />
+      )}
+
       <div className="reminder-card-actions">
         <button type="button" className="icon-btn" onClick={() => startEdit(reminder)} title="แก้ไข">
           ✏️
@@ -764,10 +958,24 @@ export default function ReminderDashboard() {
           color: var(--g-blue);
         }
 
-        .event-chip {
+        .event-chip-group {
           position: absolute;
           left: 84px;
+          right: 8px;
           top: 3px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+        }
+
+        .event-chip-group::-webkit-scrollbar {
+          display: none;
+        }
+
+        .event-chip {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -777,10 +985,16 @@ export default function ReminderDashboard() {
           padding: 3px 10px;
           border-radius: 6px;
           white-space: nowrap;
-          max-width: 250px;
+          flex-shrink: 0;
+          max-width: 200px;
           overflow: hidden;
           text-overflow: ellipsis;
           font-weight: 500;
+        }
+
+        .event-chip.disabled {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
         }
 
         .chip-dot {
@@ -789,6 +1003,10 @@ export default function ReminderDashboard() {
           border-radius: 50%;
           background: var(--g-blue);
           flex-shrink: 0;
+        }
+
+        .event-chip.disabled .chip-dot {
+          background: var(--g-on-surface-variant);
         }
 
         .main-panel {
@@ -804,7 +1022,7 @@ export default function ReminderDashboard() {
         }
 
         .main-panel-toolbar {
-          padding: 20px 24px;
+          padding: 14px 16px;
           border-bottom: 1px solid var(--g-outline-variant);
           display: flex;
           align-items: center;
@@ -845,32 +1063,59 @@ export default function ReminderDashboard() {
           box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
 
+        .add-reminder-btn.is-open {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
+        }
+
+        .add-reminder-btn-icon {
+          display: inline-block;
+          transition: transform 0.15s;
+        }
+
+        .add-reminder-btn.is-open .add-reminder-btn-icon {
+          transform: rotate(45deg);
+        }
+
         .reminders-scroll-area {
           flex: 1;
           min-height: 0;
           overflow-y: auto;
-          padding: 20px 24px;
+          padding: 12px 16px;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 8px;
         }
 
         .section-header {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           letter-spacing: 0.8px;
           color: var(--g-on-surface-variant);
           text-transform: uppercase;
-          margin: 8px 0 0 4px;
+          margin: 4px 0 0 4px;
+          position: sticky;
+          top: 0;
+          background: var(--g-surface);
+          padding: 4px 0;
+          z-index: 1;
+        }
+
+        .empty-state {
+          font-size: 13px;
+          color: var(--g-on-surface-variant);
+          text-align: center;
+          padding: 32px 16px;
+          margin: 0;
         }
 
         .reminder-card {
           display: grid;
-          grid-template-columns: 40px 1fr auto auto;
+          grid-template-columns: 28px 1fr auto auto;
           align-items: center;
-          gap: 16px;
-          padding: 12px 16px;
-          border-radius: 12px;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 10px;
           border: 1px solid var(--g-outline-variant);
           background: var(--g-surface);
           transition: all 0.2s ease;
@@ -887,8 +1132,8 @@ export default function ReminderDashboard() {
         }
 
         .reminder-type-icon {
-          width: 36px;
-          height: 36px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           background: var(--g-background);
           color: var(--g-on-surface-variant);
@@ -896,7 +1141,8 @@ export default function ReminderDashboard() {
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          font-size: 13px;
+          font-size: 11px;
+          flex-shrink: 0;
         }
 
         .active .reminder-type-icon {
@@ -904,27 +1150,37 @@ export default function ReminderDashboard() {
           color: #202124;
         }
 
+        .reminder-info {
+          min-width: 0;
+        }
+
         .reminder-info .title {
-          font-size: 15px;
+          font-size: 13.5px;
           font-weight: 500;
-          margin: 0 0 2px 0;
+          margin: 0;
           color: var(--g-on-surface);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .reminder-info .meta {
-          font-size: 13px;
+          font-size: 12px;
           color: var(--g-on-surface-variant);
           margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .btn-action-small {
-          margin-top: 6px;
+          margin-top: 4px;
           background: var(--g-blue-light);
           color: var(--g-blue-hover);
           border: none;
-          padding: 4px 10px;
-          border-radius: 12px;
-          font-size: 12px;
+          padding: 3px 8px;
+          border-radius: 10px;
+          font-size: 11px;
           cursor: pointer;
           font-weight: 500;
         }
@@ -942,14 +1198,15 @@ export default function ReminderDashboard() {
         .day-btn.selected { background: var(--g-blue); color: white; border-color: var(--g-blue); }
 
         .toggle-switch {
-          width: 44px;
-          height: 24px;
-          border-radius: 12px;
+          width: 36px;
+          height: 20px;
+          border-radius: 10px;
           background: #bdc1c6;
           border: none;
           position: relative;
           cursor: pointer;
           transition: background 0.2s;
+          flex-shrink: 0;
         }
 
         .toggle-switch.on {
@@ -961,34 +1218,85 @@ export default function ReminderDashboard() {
           position: absolute;
           top: 3px;
           left: 3px;
-          width: 18px;
-          height: 18px;
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
           background: #ffffff;
           transition: transform 0.2s;
         }
 
         .toggle-switch.on::after {
-          transform: translateX(20px);
+          transform: translateX(16px);
+        }
+
+        .stopwatch-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .btn-stopwatch {
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 6px 12px;
+          border-radius: 14px;
+          border: none;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .btn-stopwatch.start {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .btn-stopwatch.start:hover {
+          background: #d2e3fc;
+        }
+
+        .btn-stopwatch.stop {
+          background: #fce8e6;
+          color: #c5221f;
+        }
+
+        .btn-stopwatch.stop:hover {
+          background: #fad2cf;
+        }
+
+        .form-hint {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          margin: 0 0 12px 0;
+          line-height: 1.5;
         }
 
         .reminder-card-actions {
           display: flex;
-          gap: 4px;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+
+        .reminder-card:hover .reminder-card-actions,
+        .reminder-card:focus-within .reminder-card-actions {
+          opacity: 1;
         }
 
         .icon-btn {
-          width: 32px;
-          height: 32px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           border: none;
           background: transparent;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: background 0.15s;
+          flex-shrink: 0;
         }
 
         .icon-btn:hover {
@@ -996,16 +1304,21 @@ export default function ReminderDashboard() {
         }
 
         .composer-card {
-          margin-top: auto;
           border: 1px solid var(--g-outline);
           border-radius: 12px;
-          padding: 16px;
+          padding: 14px;
           background: var(--g-background);
           flex-shrink: 0;
+          animation: composer-expand 0.15s ease;
+        }
+
+        @keyframes composer-expand {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         .form-field {
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
 
         .form-field label {
@@ -1144,12 +1457,16 @@ export default function ReminderDashboard() {
                   {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
                 </div>
 
-                {tapeRows.map(({ key, isMajor, label, flag }) => (
+                {tapeRows.map(({ key, isMajor, label, flags }) => (
                   <div key={key} className={`time-row${isMajor ? " major-hour" : ""}`} style={{ height: `${ROW_HEIGHT_PX}px` }}>
                     <span className="time-label">{label}</span>
-                    {flag && (
-                      <span className="event-chip" title={flag.title}>
-                        <span className="chip-dot" />{flag.title}
+                    {flags.length > 0 && (
+                      <span className="event-chip-group">
+                        {flags.map((r) => (
+                          <span key={r.id} className={`event-chip${r.enabled ? "" : " disabled"}`} title={`${r.title} · ${describeReminder(r, nowTick)}`}>
+                            <span className="chip-dot" />{r.title}
+                          </span>
+                        ))}
                       </span>
                     )}
                   </div>
@@ -1172,28 +1489,17 @@ export default function ReminderDashboard() {
               <h2>การแจ้งเตือนทั้งหมด</h2>
               <p className="toolbar-subtitle">{reminders.length} รายการ · กำลังทำงาน {activeReminders.length} รายการ</p>
             </div>
-            <button type="button" className="add-reminder-btn" onClick={() => document.getElementById("reminder-title")?.focus()}>
-              <span>+</span> เพิ่ม Reminder
+            {/* พื้นที่เผื่อฟีเจอร์ใหม่ในอนาคต เช่น filter chip / tab เพิ่มเติม วางต่อจากนี้ได้โดยไม่ดันความสูง toolbar */}
+            <button type="button" className={`add-reminder-btn ${isComposerOpen ? "is-open" : ""}`} onClick={toggleComposer}>
+              <span className="add-reminder-btn-icon">+</span> {isComposerOpen ? "ปิดฟอร์ม" : "เพิ่ม Reminder"}
             </button>
           </div>
 
           <div className="reminders-scroll-area">
-            {activeReminders.length > 0 && (
-              <>
-                <p className="section-header">กำลังทำงาน</p>
-                {activeReminders.map(renderReminder)}
-              </>
-            )}
-
-            {pausedReminders.length > 0 && (
-              <>
-                <p className="section-header">ปิดใช้งาน</p>
-                {pausedReminders.map(renderReminder)}
-              </>
-            )}
-
-            {/* Composer Card */}
-            <form className="composer-card" onSubmit={saveReminder}>
+            {/* Composer แบบ inline expand/collapse: พับเก็บเป็นค่าเริ่มต้นเพื่อประหยัดพื้นที่
+                เมื่อกด "เพิ่ม Reminder" หรือกด "แก้ไข" การ์ดใดการ์ดหนึ่ง จะดันลงมาแสดงแทนที่ */}
+            {isComposerOpen && (
+              <form className="composer-card" onSubmit={saveReminder}>
               <div className="form-field">
                 <label htmlFor="reminder-title">ชื่อการแจ้งเตือน</label>
                 <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="เช่น พักสายตา 5 นาที" />
@@ -1208,6 +1514,7 @@ export default function ReminderDashboard() {
                   <option value={REMINDER_TYPE.ROUTINE}>ชุดงานต่อเนื่อง (Checklist/Routine)</option>
                   <option value={REMINDER_TYPE.ONCE_AT}>เตือนครั้งเดียว ตามวันที่/เวลา (Once)</option>
                   <option value={REMINDER_TYPE.COUNTDOWN}>นับถอยหลัง (Timer)</option>
+                  <option value={REMINDER_TYPE.STOPWATCH}>จับเวลา (Stopwatch)</option>
                 </select>
               </div>
 
@@ -1298,15 +1605,36 @@ export default function ReminderDashboard() {
                 </div>
               )}
 
+              {draft.type === REMINDER_TYPE.STOPWATCH && (
+                <p className="form-hint">จับเวลานับขึ้นเรื่อย ๆ ไม่มีการแจ้งเตือน กด Start/Stop ได้จากการ์ดหลังสร้างเสร็จ</p>
+              )}
+
               <div className="composer-actions">
-                {editingId && (
-                  <button className="btn-text" type="button" onClick={cancelEditing}>ยกเลิก</button>
-                )}
+                <button className="btn-text" type="button" onClick={cancelEditing}>ยกเลิก</button>
                 <button className="btn-contained" type="submit">
                   {editingId ? "บันทึกการแก้ไข" : "สร้าง Reminder"}
                 </button>
               </div>
-            </form>
+              </form>
+            )}
+
+            {activeReminders.length > 0 && (
+              <>
+                <p className="section-header">กำลังทำงาน</p>
+                {activeReminders.map(renderReminder)}
+              </>
+            )}
+
+            {pausedReminders.length > 0 && (
+              <>
+                <p className="section-header">ปิดใช้งาน</p>
+                {pausedReminders.map(renderReminder)}
+              </>
+            )}
+
+            {reminders.length === 0 && !isComposerOpen && (
+              <p className="empty-state">ยังไม่มีการแจ้งเตือน กด "เพิ่ม Reminder" เพื่อเริ่มต้น</p>
+            )}
           </div>
         </section>
       </div>
