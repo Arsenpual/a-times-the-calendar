@@ -144,47 +144,187 @@ export default function ReminderMode() {
 
   const draggedReminderId = useRef(null);
   const [isDraggingReminder, setIsDraggingReminder] = useState(false);
-  const handleReminderDragStart = (id) => (event) => {
+  // แถวที่เมาส์กำลังลอยอยู่เหนือระหว่างลาก (startMinute ของแถวนั้น) — ใช้
+  // ไฮไลต์แถวปลายทางให้เห็นชัดว่าถ้าปล่อยตอนนี้จะไปตกที่ไหน
+  const [dragOverMinute, setDragOverMinute] = useState(null);
+
+  /**
+   * แปลงพิกัด clientY (ตำแหน่งเมาส์/นิ้วจริงบนจอ) เป็น "นาทีที่เท่าไหร่ของวัน"
+   * (0-1439) — เทียบท่าเดียวกับ gridMinutesFromClientY ใน timeline-editor.jsx
+   * แต่ต้องหักลบ tapeTrackOffset ออกด้วย เพราะ .tape-track เลื่อนตัวเองผ่าน
+   * CSS transform ตลอดเวลา (ตามเวลาปัจจุบันหรือตาม manual scroll) ต่างจาก
+   * grid ใน TimelineEditor ที่ตำแหน่งนิ่งอยู่กับที่เทียบกับ container ของมัน
+   * เสมอ — ถ้าไม่หัก offset ตรงนี้ตำแหน่งที่คำนวณได้จะเพี้ยนทุกครั้งที่ track
+   * เลื่อน (ซึ่งเลื่อนแทบทุกวินาทีตอนไม่ได้ pause)
+   */
+  const minuteFromClientY = (clientX, clientY) => {
+    const rect = tapeScrollRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    // ต้องเช็คว่าพิกัดยังอยู่ในกรอบที่มองเห็นของ .tape-scroll จริงๆ (ทั้ง X
+    // และ Y) ไม่ใช่คำนวณ+clamp ตัวเลขให้อยู่ในช่วง 0-1439 เฉยๆ — มิฉะนั้น
+    // การลากที่เริ่มจากฝั่งขวา (.reminder-freq-badge) แล้วปล่อยตอนนิ้ว/เมาส์
+    // ยังไม่เข้าเขตเทปฝั่งซ้ายเลย จะถูกตีความว่า "ปล่อยที่นาที 0 หรือ 1439"
+    // ผิดๆ แทนที่จะถือเป็นการยกเลิกลาก (ปล่อยนอกพื้นที่รับ)
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      return null;
+    }
+    const yWithinTrack = clientY - rect.top - tapeTrackOffset;
+    const minute = Math.floor((yWithinTrack / ROW_HEIGHT_PX) * minutesPerRow);
+    return Math.min(1439, Math.max(0, minute));
+  };
+
+  /**
+   * เวอร์ชัน hysteresis ของ minuteFromClientY — แก้ปัญหาไฮไลต์แถว/ค่านาที
+   * "ลวน" (กระพือสลับไปมา) ตอนซูมระดับละเอียด (เช่น 1 นาที/แถว = สูงแค่
+   * ROW_HEIGHT_PX 28px/แถว) เพราะ pointer สั่นเพียง 1-2px จากแรงสั่นของมือ/
+   * นิ้วธรรมชาติ ก็เพียงพอให้ minuteFromClientY คำนวณข้ามเส้นแบ่งแถวไปแล้ว
+   * (28px หารด้วย 1 นาที = 28px ต่อ 1 นาที บางระดับซูมยิ่งไวกว่านี้อีก)
+   *
+   * แก้ด้วยการไม่เปลี่ยนค่าแถวปัจจุบันทันทีที่คำนวณได้ค่าใหม่ — แต่เปลี่ยน
+   * ก็ต่อเมื่อพิกัด Y ขยับพ้น "โซนกันเผลอ" ของแถวปัจจุบันไปจริงๆ เท่ากับ
+   * ครึ่งหนึ่งของ ROW_HEIGHT_PX ในทิศทางนั้น (เหมือนมี snap point ตรงกลาง
+   * แถว ต้องข้ามพ้นกึ่งกลางไปยังแถวถัดไปก่อนถึงจะสลับ ไม่ใช่ข้ามเส้นขอบแถว
+   * แค่เส้นเดียวที่บางกว่ามาก) ผลคือค่านาทียังละเอียดถึงระดับนาทีเป๊ะเหมือน
+   * เดิมทุกประการ (ไม่ลดความแม่นยำ) แค่ไม่กระโดดสลับกลับไปกลับมาจากการสั่น
+   * เล็กน้อยของ pointer เท่านั้น
+   */
+  const lastStableMinuteRef = useRef(null);
+  const minuteFromClientYStable = (clientX, clientY) => {
+    const raw = minuteFromClientY(clientX, clientY);
+    if (raw === null) {
+      lastStableMinuteRef.current = null;
+      return null;
+    }
+    if (lastStableMinuteRef.current === null) {
+      lastStableMinuteRef.current = raw;
+      return raw;
+    }
+    const rect = tapeScrollRef.current?.getBoundingClientRect();
+    if (!rect) return raw;
+    // ตำแหน่ง Y (px จากบนสุดของ track) ของ "กึ่งกลาง" แถวที่ถือว่าเสถียรอยู่
+    // ตอนนี้ — ถ้า pointer ยังไม่ข้ามกึ่งกลางนี้ไปยังฝั่งแถวถัดไป ถือว่ายัง
+    // อยู่แถวเดิม ไม่เปลี่ยนค่า
+    const stableRowTopPx =
+      (lastStableMinuteRef.current / minutesPerRow) * ROW_HEIGHT_PX;
+    const pointerYWithinTrack = clientY - rect.top - tapeTrackOffset;
+    const distanceFromStableRowTop = pointerYWithinTrack - stableRowTopPx;
+    const threshold = ROW_HEIGHT_PX * 0.6; // ต้องขยับพ้นเกินครึ่งแถวเล็กน้อยถึงจะสลับ กันขอบเขตพอดีเป๊ะสั่นตรงเส้น
+    if (Math.abs(distanceFromStableRowTop) < threshold) {
+      return lastStableMinuteRef.current;
+    }
+    lastStableMinuteRef.current = raw;
+    return raw;
+  };
+
+  const reminderDragState = useRef(null); // { id, title, pointerId, fromSidebar, startX, startY, confirmed }
+  // ตำแหน่งเมาส์/นิ้วล่าสุดระหว่างลาก (พิกัดจอ) — ใช้วาด drag-ghost ที่ลอย
+  // ตามนิ้ว/เมาส์แบบ fixed-position ให้เห็นชัดว่ากำลังลากอะไรอยู่ ไม่ว่าจะ
+  // เริ่มลากจากฝั่งขวา (นอก .tape-scroll) หรือจากป้ายบนเทปเองก็ตาม
+  const [dragGhost, setDragGhost] = useState(null); // { x, y, title }
+
+  /**
+   * จุดเริ่มต้นการลาก reminder หนึ่งตัว — ใช้ร่วมกันทั้งสองจุดกำเนิด:
+   *   1) .reminder-freq-badge / .reminder-info ฝั่งขวา (fromSidebar: true)
+   *   2) .tape-flag บนเทปฝั่งซ้ายเอง (fromSidebar: false)
+   * รวมเป็น Pointer Events เดียวแทน HTML5 native drag-and-drop เดิม (ซึ่งใช้
+   * เฉพาะฝั่งขวา) เพื่อให้ทำงานเหมือนกันทุก input (เมาส์/นิ้ว/ปากกา) รวมถึง
+   * มือถือ — HTML5 DnD ไม่ยิง event ใดๆ เลยตอนแตะหน้าจอ
+   *
+   * setPointerCapture ที่ currentTarget (ธาตุต้นทาง ไม่ว่าจะอยู่ panel ไหน)
+   * ทำให้ pointermove/pointerup ทั้งหมดถูกส่งไปที่ธาตุนั้นเท่านั้น แม้นิ้ว/
+   * เมาส์จะเคลื่อนไปอยู่เหนือ DOM subtree อื่น (เช่น ลากจากฝั่งขวาข้ามไปเทป
+   * ฝั่งซ้าย) — ดังนั้น listener ของ move/up ต้องผูกไว้ที่ currentTarget
+   * เดียวกันนี้ ไม่ใช่ .tape-scroll เหมือนเดิม (จะไม่ได้รับ event เลยตอน
+   * capture อยู่ที่ธาตุอื่น)
+   */
+  const startReminderDrag = (id, title, fromSidebar = false) => (event) => {
+    if (event.button === 2) return; // right-click ไม่นับเป็นการลาก
+    event.preventDefault();
+    event.stopPropagation(); // กัน bubble ไปโดน .tape-scroll's onPointerDown (manual scroll)
+    // ยังไม่ตั้ง isDraggingReminder ที่นี่ — แค่ "กดลง" เฉยๆ ยังไม่นับเป็นการ
+    // ลาก (ดู DRAG_START_THRESHOLD_PX ด้านล่าง) ถ้าไม่รอให้ขยับเกิน threshold
+    // ก่อน แค่คลิกเฉยๆ (กดแล้วปล่อยที่เดิมโดยไม่ขยับเลย) ก็จะถูกตีความเป็น
+    // "ลากไปวางที่ตำแหน่งที่คลิก" ทันที ทำให้ reminder ถูก reschedule ไปยัง
+    // นาทีที่คลิกโดยไม่ตั้งใจทุกครั้งที่กดโดน .tape-flag/.reminder-freq-badge
+    // เฉยๆ (อาการที่ผู้ใช้เจอ: "แค่คลิกแล้ววาง ตารางก็วิ่งไปเป็นสิบชม.แล้ว")
+    reminderDragState.current = {
+      id,
+      title,
+      pointerId: event.pointerId,
+      fromSidebar,
+      startX: event.clientX,
+      startY: event.clientY,
+      confirmed: false // ยังไม่ยืนยันว่าเป็นการลากจริงจนกว่าจะขยับพ้น threshold
+    };
     draggedReminderId.current = id;
-    setIsDraggingReminder(true);
-    event.dataTransfer.effectAllowed = "move";
-    // บาง browser (โดยเฉพาะ Firefox) ต้องมี setData ให้ dataTransfer อย่าง
-    // น้อยหนึ่งค่า ไม่งั้น dragstart จะถูกยกเลิกเงียบๆ — ตัว id จริงยังอ่าน
-    // จาก ref ตอน drop อยู่ดี (เพราะต้องรองรับ minuteOfDay ที่คำนวณตอน drop
-    // ไม่ใช่ตอน dragstart) ค่านี้จึงเป็นแค่ placeholder ให้ browser พอใจ
-    event.dataTransfer.setData("text/plain", id);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  // ต้องเคลียร์ isDraggingReminder ตอนจบการลากเสมอ ไม่ว่าจะ drop สำเร็จ
-  // หรือถูกยกเลิกกลางทาง (เช่น ปล่อยเมาส์นอกพื้นที่ที่รับ drop ได้เลย) —
-  // dragend ยิงในทั้งสองกรณีนี้เสมอ ต่างจาก drop ที่ยิงเฉพาะตอนสำเร็จ
-  // เท่านั้น ถ้าใช้แค่ drop เคลียร์ ตอนลากแล้วปล่อยพลาดจะค้าง true ตลอดไป
-  // ทำให้ track หยุดขยับตาม "ตอนนี้" ถาวรโดยไม่ได้ตั้งใจ
-  const handleReminderDragEnd = () => {
-    setIsDraggingReminder(false);
+
+  // ระยะที่ต้องขยับพ้นก่อนจึงจะนับเป็น "การลาก" จริง (ไม่ใช่แค่คลิก/แตะ) —
+  // มือ/นิ้วขยับเล็กน้อยระหว่างกด-ปล่อยเป็นเรื่องปกติ ถ้า threshold เป็น 0
+  // ทุกคลิกจะกลายเป็นการลากไปวางที่ตำแหน่งเดียวกับที่กดทันที
+  const DRAG_START_THRESHOLD_PX = 6;
+
+  const moveReminderDrag = (event) => {
+    const state = reminderDragState.current;
+    if (!state) return;
+    if (!state.confirmed) {
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      if (Math.hypot(dx, dy) < DRAG_START_THRESHOLD_PX) return; // ยังไม่พ้น threshold — ยังไม่นับเป็นลาก
+      // เพิ่งขยับพ้น threshold ครั้งแรก — ยืนยันว่าเป็นการลากจริง ค่อยเปิด
+      // isDraggingReminder/ghost/ไฮไลต์แถวตอนนี้ (ไม่ใช่ตั้งแต่ pointerdown)
+      state.confirmed = true;
+      setIsDraggingReminder(true);
+      // ต้อง freeze offset ตรงนี้แบบ synchronous ทันที (ไม่ใช่รอ useEffect
+      // ที่ผูกกับ isDraggingReminder ด้านล่าง) — เพราะ useEffect รันหลัง
+      // commit/re-render เท่านั้น แต่ตัว moveReminderDrag นี้ยังทำงานต่อใน
+      // event handler เดียวกันนี้ต่อทันที (เรียก minuteFromClientYStable
+      // ด้านล่างในบรรทัดถัดๆ ไปเลย) ซึ่งจะอ่าน tapeTrackOffset จาก render
+      // ปัจจุบันที่ isDraggingReminder ยังเป็น false อยู่ (ค่ายังไม่ freeze)
+      // ทำให้เฟรมแรกหลังยืนยันลากคำนวณ minute จาก offset แบบ auto-scroll
+      // (ที่ขยับตามเวลาจริงตลอด) แทนที่จะเป็น offset แบบ freeze — พอเฟรม
+      // ถัดไป offset freeze จริงถึงมีผล ตัวเลขจะกระโดดข้ามชั่วโมงทันที
+      // เพราะ baseline สองเฟรมไม่ตรงกัน (คือสาเหตุที่ลากแค่ 1 นาทีแล้วเวลา
+      // วิ่งไปไกล) — เขียน frozenOffsetRef ตรงนี้เองก่อนจึงตัดปัญหา race
+      // condition ระหว่าง state update กับ effect timing ได้เด็ดขาด
+      frozenOffsetRef.current = clampTrackOffset(tapeAutoOffset + manualOffsetRef.current);
+      setDragGhost({ x: event.clientX, y: event.clientY, title: state.title });
+      lastStableMinuteRef.current = null;
+    }
+    setDragGhost((prev) => (prev ? { ...prev, x: event.clientX, y: event.clientY } : prev));
+    // ใช้เวอร์ชัน Stable (hysteresis) ตรงนี้แทน minuteFromClientY ตรงๆ —
+    // ระหว่างลากคือจุดที่ pointer สั่นถี่ที่สุด (ทุก pointermove) ถ้าไม่กัน
+    // การกระโดดสลับนาทีตรงนี้ แถวไฮไลต์/ป้าย preview จะกระพือให้เห็นชัดเจน
+    // โดยเฉพาะตอนซูมระดับละเอียด (1 นาที/แถว = ROW_HEIGHT_PX เพียง 28px)
+    const minute = minuteFromClientYStable(event.clientX, event.clientY);
+    // อยู่นอก .tape-scroll (เช่น ยังลากค้างอยู่ฝั่งขวา) — minute เป็น null
+    // เคลียร์ไฮไลต์แถวแทนที่จะค้างแถวเดิมไว้ผิดๆ
+    setDragOverMinute(minute);
+  };
+
+  const endReminderDrag = () => {
+    lastStableMinuteRef.current = null;
+    const state = reminderDragState.current;
+    reminderDragState.current = null;
     draggedReminderId.current = null;
-  };
-  const handleTapeMinuteDragOver = (event) => {
-    // ต้องเรียก preventDefault() แบบไม่มีเงื่อนไขเสมอ — นี่คือสัญญาณบอก
-    // browser ว่า "จุดนี้เป็นพื้นที่รับ drop ได้" ถ้าไม่เรียกใน dragover
-    // event เลย บาง browser (โดยเฉพาะ Chrome/Safari) จะไม่ยอมยิง drop
-    // event ให้เลย ต่อให้ dragstart เคยเซ็ต draggedReminderId ไว้ถูกต้อง
-    // ก็ตาม — เดิมเรียกแบบมีเงื่อนไข (if (!draggedReminderId.current)
-    // return ก่อน) ทำให้ drop ไม่เคยทำงานเลยถ้า dataTransfer ยังไม่ทันอ่าน
-    // ค่าได้ในจังหวะนั้น
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  };
-  const handleTapeMinuteDrop = (startMinute) => (event) => {
-    event.preventDefault();
-    // dataTransfer.getData คืนค่า id จริงเสมอในจังหวะ drop (ต่างจาก
-    // dragover ที่บาง browser ยังอ่านไม่ได้) — ใช้เป็นแหล่งความจริงหลัก
-    // แทน draggedReminderId ref ซึ่งอาจไม่ทันอัปเดตถ้า dragstart มาจาก
-    // แถวที่เพิ่งถูก React re-render แทนที่ node เดิมไปแล้ว
-    const id = event.dataTransfer.getData("text/plain") || draggedReminderId.current;
     setIsDraggingReminder(false);
-    draggedReminderId.current = null;
-    if (!id) return;
-    rescheduleReminderTo(id, startMinute);
+    setDragOverMinute(null);
+    setDragGhost(null);
+    // ไม่เคยขยับพ้น threshold เลย = แค่คลิก/แตะเฉยๆ ไม่ใช่การลาก — ไม่
+    // reschedule อะไรทั้งสิ้น ต่างจากเดิมที่ทุก pointerup จะ reschedule
+    // เสมอไม่ว่าจะขยับหรือไม่ (นี่คือจุดที่ทำให้แค่คลิกก็เด้งเวลาไปไกล)
+    if (!state || !state.confirmed) return;
+    const finalMinute = dragOverMinute;
+    // ปล่อยนอกเขตตาราง (finalMinute เป็น null) = ยกเลิกการลาก ไม่ reschedule
+    if (finalMinute !== null) {
+      rescheduleReminderTo(state.id, finalMinute);
+    }
   };
 
   const toggleReminder = (id) => {
@@ -461,6 +601,20 @@ export default function ReminderMode() {
     }
   }, [pomodoro.endsAt]);
 
+  // ตำแหน่งเทป ณ ขณะที่เพิ่งเข้าสถานะ "หยุดชั่วคราว" — จับภาพไว้ครั้งเดียว
+  // ตอน endsAt เปลี่ยนเป็น null แล้วใช้เป็น "ฐาน" คงที่ให้ manualOffsetRef
+  // บวกทับระหว่าง pause แทนที่จะบวกทับ tapeAutoOffset ตรงๆ ซึ่งขึ้นกับ `now`
+  // และเดินหน้าทุกวินาทีไม่ว่าจะ pause อยู่หรือไม่ — ถ้าไม่ freeze ตรงนี้
+  // เทปจะค่อยๆ ไหลเลื่อนเองต่อไปเรื่อยๆ แม้ผู้ใช้จะหยุดมันไว้ที่ตำแหน่งหนึ่ง
+  // แล้วก็ตาม (ขัดกับ intent ที่ต้องการให้ scroll ได้อิสระตอน pause)
+  const pausedBaseOffsetRef = useRef(0);
+  useEffect(() => {
+    if (!pomodoro.endsAt) {
+      pausedBaseOffsetRef.current = clampTrackOffset(tapeAutoOffset + manualOffsetRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pomodoro.endsAt]);
+
   const trackHeightPx = tapeRows.length * ROW_HEIGHT_PX; // 00:00 ถึง 24:00 เต็มความสูง
 
   // ห้ามเลื่อนออกนอกขอบเขต 00:00-24:00 เด็ดขาด — clamp ค่า offset สุดท้าย
@@ -484,8 +638,13 @@ export default function ReminderMode() {
   // auto-offset เปลี่ยน (เวลาผ่านไป) ผลรวมอาจหลุดขอบเขตได้อีกแม้
   // manualOffsetRef เองจะอยู่ในช่วงที่เคย valid ตอนคำนวณครั้งก่อน
   const clampManualOffset = (rawManualOffset) => {
-    const clampedTotal = clampTrackOffset(tapeAutoOffset + rawManualOffset);
-    return clampedTotal - tapeAutoOffset;
+    // ต้อง clamp เทียบกับ "ฐาน" เดียวกับที่ใช้ render จริง (ดู tapeTrackOffset
+    // ด้านล่าง) — ตอน pause ฐานคือ pausedBaseOffsetRef (ค่านิ่ง) ไม่ใช่
+    // tapeAutoOffset ที่ยังเดินตาม `now` ทุกวินาที มิฉะนั้นขอบเขต clamp จะ
+    // เพี้ยนไปเรื่อยๆ ตามเวลาทั้งที่ตำแหน่งบนจอไม่ได้ขยับตามเลย
+    const base = pomodoro.endsAt ? tapeAutoOffset : pausedBaseOffsetRef.current;
+    const clampedTotal = clampTrackOffset(base + rawManualOffset);
+    return clampedTotal - base;
   };
 
   const handleTapeWheel = (event) => {
@@ -523,6 +682,13 @@ export default function ReminderMode() {
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const handleTapePointerMove = (event) => {
+    // reminder drag ก่อนเสมอ — ถ้าลากเริ่มจากป้ายบนเทป (flag เป็น descendant
+    // ของ .tape-scroll นี้เอง) capture จะอยู่ที่ flag แต่ event ยัง bubble
+    // ขึ้นมาถึง handler นี้ตามปกติ จึงยังรับรู้ได้ตรงนี้ด้วย (ซ้ำกับ window
+    // listener ด้านล่างไม่เป็นไร เพราะ moveReminderDrag เป็น no-op ถ้าไม่มี
+    // reminderDragState.current) ปล่อยให้ manual-scroll logic ทำงานต่อถ้า
+    // ไม่ได้กำลังลาก reminder อยู่
+    moveReminderDrag(event);
     if (!canManualScroll || !tapeDragState.current) return;
     const delta = event.clientY - tapeDragState.current.startY;
     const next = tapeDragState.current.startOffset + delta;
@@ -530,8 +696,37 @@ export default function ReminderMode() {
     forceTapeRerender((n) => n + 1);
   };
   const handleTapePointerUp = () => {
+    endReminderDrag();
     tapeDragState.current = null;
   };
+
+  /**
+   * เมื่อลาก reminder เริ่มจากฝั่งขวา (.reminder-freq-badge/.reminder-info)
+   * setPointerCapture จะผูกอยู่ที่ธาตุต้นทางนั้น ซึ่งไม่ใช่ descendant ของ
+   * .tape-scroll เลย — pointermove/pointerup ที่เกิดขึ้นระหว่างลาก (แม้นิ้ว/
+   * เมาส์จะเลื่อนไปอยู่เหนือเทปฝั่งซ้ายแล้วก็ตาม) จะไม่ bubble ไปถึง
+   * .tape-scroll's onPointerMove/onPointerUp เลย เพราะ capture ผูกกับธาตุ
+   * ต้นทางเป็นตัวรับ event โดยตรง (target ของทุก event คือธาตุต้นทางเสมอ)
+   * — จึงต้องมี window-level listener แยกต่างหากที่ทำงานเฉพาะช่วงกำลังลาก
+   * (isDraggingReminder) เพื่อให้ minuteFromClientY/rescheduleReminderTo
+   * ทำงานได้ไม่ว่าการลากจะเริ่มจาก panel ไหนก็ตาม — นี่คือกลไกหลักที่ทำให้
+   * "ลากจากรายการฝั่งขวาไปวางบนเทป" ทำงานได้จริงด้วย pointer events เดียว
+   * (แทนที่ HTML5 native drag-and-drop เดิมซึ่งไม่รองรับการแตะหน้าจอเลย)
+   */
+  useEffect(() => {
+    if (!isDraggingReminder) return;
+    const onMove = (event) => moveReminderDrag(event);
+    const onUp = () => endReminderDrag();
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraggingReminder]);
 
   // ระหว่างกำลังลาก reminder อยู่ (isDraggingReminder) ห้าม track ขยับเลย
   // แม้แต่ตอน `now` tick ทุกวินาที — HTML5 drag-and-drop คำนวณตำแหน่ง
@@ -550,7 +745,9 @@ export default function ReminderMode() {
 
   const tapeTrackOffset = isDraggingReminder
     ? frozenOffsetRef.current
-    : clampTrackOffset(tapeAutoOffset + manualOffsetRef.current);
+    : !pomodoro.endsAt
+      ? clampTrackOffset(pausedBaseOffsetRef.current + manualOffsetRef.current)
+      : clampTrackOffset(tapeAutoOffset + manualOffsetRef.current);
 
   const renderReminder = (reminder) => {
     const remaining = reminder.enabled ? Math.max(0, reminder.nextDueAt - now) : null;
@@ -558,9 +755,7 @@ export default function ReminderMode() {
       <div className={`reminder-row${reminder.enabled ? " active" : ""}`} key={reminder.id}>
         <div
           className="reminder-freq-badge"
-          draggable
-          onDragStart={handleReminderDragStart(reminder.id)}
-          onDragEnd={handleReminderDragEnd}
+          onPointerDown={startReminderDrag(reminder.id, reminder.title, true)}
           title="ลากไปวางบนตารางเวลาซ้ายเพื่อกำหนดเวลาเตือนครั้งถัดไป"
         >
           <span className="n">{reminder.amount}</span>
@@ -568,9 +763,7 @@ export default function ReminderMode() {
         </div>
         <div
           className="reminder-info"
-          draggable
-          onDragStart={handleReminderDragStart(reminder.id)}
-          onDragEnd={handleReminderDragEnd}
+          onPointerDown={startReminderDrag(reminder.id, reminder.title, true)}
         >
           <p className="title">{reminder.title}</p>
           <p className="meta">
@@ -593,9 +786,11 @@ export default function ReminderMode() {
   };
 
   return (
-    <div className="reminder-mockup reminder-mode">
+    <div className={`reminder-mockup reminder-mode${isDraggingReminder ? " is-dragging-reminder" : ""}`}>
       <style>{`
         .reminder-mode { --rm-blue:#1557b0; --rm-border:#dadce0; --rm-text-primary:#3c4043; --rm-text-secondary:#5f6368; --rm-bg:#e8eaed; --rm-bg-muted:#fff; --rm-amber:#e8710a; --rm-amber-dark:#b85a08; --rm-amber-tint:#fdf0e3; --rm-green:#1e8e3e; --rm-green-tint:#e6f4ea; font-family:"Google Sans","Roboto",Arial,sans-serif; color:var(--rm-text-primary); background:var(--rm-bg); display:flex; flex-direction:column; flex:1; min-height:0; position:relative; }
+        .reminder-mode.is-dragging-reminder { user-select:none; -webkit-user-select:none; cursor:grabbing; }
+        .reminder-mode.is-dragging-reminder * { cursor:grabbing !important; }
         .reminder-mode .reminder-banner,.reminder-mode .reminder-alert { display:flex; align-items:center; gap:8px; padding:10px 16px; font-size:13px; font-weight:500; }
         .reminder-mode .reminder-banner { background:var(--rm-amber-tint); color:var(--rm-amber-dark); border-bottom:1px solid var(--rm-amber); }
         .reminder-mode .reminder-banner .badge { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; background:var(--rm-amber); color:#fff; padding:2px 8px; border-radius:10px; flex-shrink:0; }
@@ -632,10 +827,14 @@ export default function ReminderMode() {
         .reminder-mode .tape-now-line::before { content:"ตอนนี้"; position:absolute; left:8px; top:-9px; font-size:10px; font-weight:700; color:#fff; background:var(--rm-amber); padding:1px 6px; border-radius:8px; }
         .reminder-mode .tape-minute { position:relative; border-top:1px solid var(--rm-border); }
         .reminder-mode .tape-minute:hover { background:var(--rm-amber-tint); }
-        .reminder-mode .reminder-info { cursor:grab; }
+        .reminder-mode .tape-minute.is-drop-target { background:var(--rm-amber-tint); outline:2px solid var(--rm-amber); outline-offset:-2px; border-radius:4px; }
+        .reminder-mode .tape-drop-preview { position:absolute; right:8px; top:2px; font-size:10px; font-weight:700; color:#fff; background:var(--rm-amber); padding:1px 6px; border-radius:8px; z-index:4; pointer-events:none; }
+        .reminder-mode .reminder-info { cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
         .reminder-mode .tape-minute-label { position:absolute; left:-56px; top:-7px; width:48px; text-align:right; font-family:"Roboto Mono",monospace; font-size:11px; color:var(--rm-text-secondary); }
         .reminder-mode .tape-minute.major .tape-minute-label { font-weight:700; color:var(--rm-text-primary); }
-        .reminder-mode .tape-flag { position:absolute; left:8px; top:4px; display:flex; align-items:center; gap:6px; font-size:12px; background:var(--rm-bg-muted); border:1px solid var(--rm-amber); color:var(--rm-amber-dark); padding:3px 8px 3px 6px; border-radius:12px; white-space:nowrap; max-width:210px; overflow:hidden; text-overflow:ellipsis; cursor:grab; z-index:2; }
+        .reminder-mode .tape-flag { position:absolute; left:8px; top:4px; display:flex; align-items:center; gap:6px; font-size:12px; background:var(--rm-bg-muted); border:1px solid var(--rm-amber); color:var(--rm-amber-dark); padding:3px 8px 3px 6px; border-radius:12px; white-space:nowrap; max-width:210px; overflow:hidden; text-overflow:ellipsis; cursor:grab; z-index:2; touch-action:none; user-select:none; -webkit-user-select:none; }
+        .reminder-mode .tape-drag-ghost { position:fixed; z-index:1000; display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; background:var(--rm-amber); color:#fff; padding:5px 10px 5px 8px; border-radius:12px; white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis; pointer-events:none; transform:translate(-50%, -130%); box-shadow:0 4px 12px rgba(0,0,0,.25); }
+        .reminder-mode .tape-drag-ghost .flag-dot { background:#fff; }
         .reminder-mode .tape-flag:active { cursor:grabbing; }
         .reminder-mode .tape-flag .flag-dot { width:6px; height:6px; border-radius:50%; background:var(--rm-amber); flex-shrink:0; }
         .reminder-mode .tape-footer { margin-top:auto; padding:12px 16px; border-top:1px solid var(--rm-border); display:flex; gap:8px; }
@@ -647,7 +846,7 @@ export default function ReminderMode() {
         .reminder-mode .reminder-section-label { font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--rm-text-secondary); margin:12px 0 2px; padding:0 4px; }
         .reminder-mode .reminder-row { display:grid; grid-template-columns:44px 1fr auto auto; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--rm-border); border-radius:8px; background:var(--rm-bg-muted); }
         .reminder-mode .reminder-row.active { border-color:var(--rm-amber); background:var(--rm-amber-tint); }
-        .reminder-mode .reminder-freq-badge { font-family:"Roboto Mono",monospace; font-size:11px; font-weight:700; text-align:center; background:#e8f0fe; color:var(--rm-blue); border-radius:6px; padding:6px 2px; line-height:1.15; cursor:grab; }
+        .reminder-mode .reminder-freq-badge { font-family:"Roboto Mono",monospace; font-size:11px; font-weight:700; text-align:center; background:#e8f0fe; color:var(--rm-blue); border-radius:6px; padding:6px 2px; line-height:1.15; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
         .reminder-mode .active .reminder-freq-badge { background:var(--rm-amber); color:#fff; }
         .reminder-mode .reminder-freq-badge .n,.reminder-mode .reminder-freq-badge .u { display:block; }
         .reminder-mode .reminder-freq-badge .n { font-size:14px; }
@@ -670,6 +869,21 @@ export default function ReminderMode() {
       `}</style>
 
       {showFocusDim && <div className="focus-dim-overlay" aria-hidden="true" />}
+
+      {dragGhost && (
+        // ป้ายลอยตามนิ้ว/เมาส์ระหว่างลาก — fixed position เทียบกับ viewport
+        // (ไม่ใช่ document) เพื่อไม่ให้เพี้ยนตอนหน้าเลื่อน แสดงทั้งตอนลากจาก
+        // ป้ายบนเทปเองและตอนลากจากรายการฝั่งขวา ให้เห็นชัดว่ากำลังลาก
+        // reminder ตัวไหนอยู่ไม่ว่าจะเริ่มจากจุดไหนก็ตาม
+        <div
+          className="tape-drag-ghost"
+          style={{ left: `${dragGhost.x}px`, top: `${dragGhost.y}px` }}
+          aria-hidden="true"
+        >
+          <span className="flag-dot" />
+          {dragGhost.title}
+        </div>
+      )}
 
       <div className="reminder-banner">
         <span className="badge">Live</span>
@@ -740,26 +954,21 @@ export default function ReminderMode() {
               {tapeRows.map(({ startMinute, isMajor, label, flag }) => (
                 <div
                   key={startMinute}
-                  className={`tape-minute${isMajor ? " major" : ""}`}
+                  className={`tape-minute${isMajor ? " major" : ""}${
+                    isDraggingReminder && dragOverMinute === startMinute ? " is-drop-target" : ""
+                  }`}
                   style={{ height: `${ROW_HEIGHT_PX}px` }}
-                  onDragOver={handleTapeMinuteDragOver}
-                  onDrop={handleTapeMinuteDrop(startMinute)}
                 >
                   <span className="tape-minute-label">{label}</span>
+                  {isDraggingReminder && dragOverMinute === startMinute && (
+                    // ป้ายเวลาปลายทางแบบ real-time — บอกตรงๆ ว่าถ้าปล่อยตอนนี้
+                    // จะไปตกที่นาทีไหน ลดการเดาจากแค่การไฮไลต์แถวเฉยๆ
+                    <span className="tape-drop-preview">{label}</span>
+                  )}
                   {flag && (
                     <span
                       className="tape-flag"
-                      draggable
-                      onDragStart={(event) => {
-                        // หยุด event ไม่ให้ bubble ไปโดน onDragOver/onDrop
-                        // ของ .tape-minute ที่ครอบมันอยู่ (ตัวมันเองอยู่
-                        // ข้างในแถวเวลาที่เป็น drop-target อยู่แล้ว) —
-                        // ไม่งั้นลากป้ายนี้ออกจากตำแหน่งเดิมอาจไป trigger
-                        // dragover ของแถวตัวเองซ้อนกับของแถวปลายทางจริง
-                        event.stopPropagation();
-                        handleReminderDragStart(flag.id)(event);
-                      }}
-                      onDragEnd={handleReminderDragEnd}
+                      onPointerDown={startReminderDrag(flag.id, flag.title, false)}
                       title="ลากเพื่อย้ายเวลาเตือนของ reminder นี้"
                     >
                       <span className="flag-dot" />{flag.title}
