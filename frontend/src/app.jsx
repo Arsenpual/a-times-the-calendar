@@ -530,7 +530,15 @@ export default function App() {
     const baseDate = expandedDate || cursorDate;
     const next = new Date(baseDate);
     next.setDate(next.getDate() + direction);
-    setExpandedDate(next);
+
+    // เปลี่ยน expandedDate เฉพาะตอนมี mini-timeline เปิดอยู่แล้วเท่านั้น —
+    // ถ้ายังไม่เคยเลือกวันไหนเลย (expandedDate เป็น null) ↑/↓ ไม่ควรเปิด
+    // mini-timeline ขึ้นมาเอง มิฉะนั้นการกดลูกศรครั้งแรกหลังล็อกอิน (ก่อน
+    // คลิกเลือกวันใดๆ) จะดันไปเปิดมันขึ้นมาโดยไม่ได้ตั้งใจ ขัดกับ intent
+    // เดิมที่ isFirstCursorDateRun guard ด้านล่างตั้งใจรักษาไว้
+    if (expandedDate) {
+      setExpandedDate(next);
+    }
 
     const [currentWeekStart] = getWeekRange(cursorDate);
     const [nextWeekStart] = getWeekRange(next);
