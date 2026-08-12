@@ -25,6 +25,30 @@ const DAYS_OF_WEEK = [
   { label: "ส", value: 6 }
 ];
 
+// ตัวเลือกสีเส้นสำหรับ Timer/Stopwatch ที่กำลังทำงาน (ผู้ใช้เลือกได้ตอนสร้าง/แก้ไข)
+// เผื่อสีให้เลือกได้หลากหลายครอบคลุมทุกโทนสี (ยังเลือกสีอิสระเพิ่มเติมได้จาก color picker ในฟอร์ม)
+const LINE_COLOR_OPTIONS = [
+  { label: "เหลือง", value: "#fbbc04" },
+  { label: "เหลืองทอง", value: "#f9ab00" },
+  { label: "ส้ม", value: "#ff8c42" },
+  { label: "ส้มเข้ม", value: "#e8710a" },
+  { label: "แดง", value: "#ea4335" },
+  { label: "แดงเข้ม", value: "#c5221f" },
+  { label: "ชมพู", value: "#e91e63" },
+  { label: "ชมพูอ่อน", value: "#f06292" },
+  { label: "ม่วง", value: "#a142f4" },
+  { label: "ม่วงเข้ม", value: "#7627bb" },
+  { label: "น้ำเงิน", value: "#4285f4" },
+  { label: "น้ำเงินเข้ม", value: "#1a73e8" },
+  { label: "ฟ้าอมเขียว", value: "#00bcd4" },
+  { label: "เขียว", value: "#34a853" },
+  { label: "เขียวสด", value: "#7cb342" },
+  { label: "น้ำตาล", value: "#8d6e63" },
+  { label: "เทา", value: "#78909c" },
+  { label: "ดำ", value: "#3c4043" }
+];
+const DEFAULT_LINE_COLOR = LINE_COLOR_OPTIONS[0].value;
+
 function isOneShotType(type) {
   return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
 }
@@ -243,7 +267,73 @@ function getReminderTimeSlots(reminder, startOfTodayMs) {
   }
 }
 
+// คืนค่าช่วง "นาทีของวัน" (แบบทศนิยม ไม่ปัดเศษ) [startMinute, endMinute] สำหรับวาดเส้นสีเหลืองบาง ๆ บน timeline
+// เฉพาะ Countdown/Stopwatch ที่กำลังทำงานอยู่เท่านั้น (enabled + มี startedAt)
+// ใช้หน่วยนาทีแบบทศนิยม (ไม่ใช่ minuteOfDayAt ที่ปัดเศษเป็นจำนวนเต็ม) เพื่อให้เส้นขึ้นทันทีตั้งแต่วินาทีแรกที่กด Start
+// - STOPWATCH: เส้นเริ่มที่จุดเริ่ม (startMinute) แล้ว "ขยายยาวออกไปเรื่อย ๆ" ไปทาง "ตอนนี้" (นาทีปัจจุบัน)
+// - COUNTDOWN: เส้นเต็มความยาวทันที (จากจุดเริ่มถึงจุดสิ้นสุดที่ตั้งไว้) แล้ว "บีบเข้าหาจุดสิ้นสุดเรื่อย ๆ"
+//   คือฝั่งเริ่ม (startMinute) จะขยับเข้าหาปลาย (endMinute) ตามเวลาที่ผ่านไป จนกระทั่งบีบจนสุดที่จุดสิ้นสุด
+function minuteOfDayAtPrecise(ms) {
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000;
+}
+
+function getRunningLineSpan(reminder, nowMs, startOfTodayMs) {
+  if (reminder.type !== REMINDER_TYPE.COUNTDOWN && reminder.type !== REMINDER_TYPE.STOPWATCH) return null;
+  if (!reminder.enabled || !reminder.startedAt) return null;
+
+  const endOfTodayMs = startOfTodayMs + 24 * 60 * 60 * 1000;
+  const clampedNowMs = Math.min(Math.max(nowMs, startOfTodayMs), endOfTodayMs);
+
+  if (reminder.type === REMINDER_TYPE.STOPWATCH) {
+    // จุดเริ่มจริงของ stopwatch (clamp เป็น 00:00 ถ้าเริ่มมาจากเมื่อวาน เพราะ timeline แสดงแค่วันเดียว)
+    const startMs = Math.max(reminder.startedAt, startOfTodayMs);
+    const startMinute = minuteOfDayAtPrecise(startMs);
+    const endMinute = minuteOfDayAtPrecise(clampedNowMs);
+    if (endMinute <= startMinute) return null;
+    return { startMinute, endMinute };
+  }
+
+  // COUNTDOWN: เส้นเต็มช่วงทันที (เริ่ม → สิ้นสุดที่ตั้งไว้) แล้วฝั่ง "เริ่ม" ค่อย ๆ บีบเข้าหาฝั่ง "สิ้นสุด"
+  const dueMs = reminder.startedAt + reminder.durationMs;
+  const fixedEndMs = Math.min(dueMs, endOfTodayMs);
+  const fixedEndMinute = minuteOfDayAtPrecise(fixedEndMs);
+
+  // ฝั่งเริ่มที่บีบเข้าเรื่อย ๆ คือ "ตอนนี้" (แต่ไม่เกินจุดสิ้นสุด และไม่ก่อนจุดเริ่มตั้งต้นจริง)
+  const originalStartMs = Math.max(reminder.startedAt, startOfTodayMs);
+  const shrinkingStartMs = Math.min(Math.max(clampedNowMs, originalStartMs), fixedEndMs);
+  const shrinkingStartMinute = minuteOfDayAtPrecise(shrinkingStartMs);
+
+  if (fixedEndMinute <= shrinkingStartMinute) return null;
+  return { startMinute: shrinkingStartMinute, endMinute: fixedEndMinute };
+}
+
 const ROW_HEIGHT_PX = 32;
+
+// แยก component แถว timeline ออกมาต่างหากแล้วครอบด้วย React.memo พร้อม custom comparator
+// เพราะ parent (ReminderDashboard) re-render ทุกวินาทีจาก nowTick (ให้ countdown/stopwatch tick แบบ live)
+// ถ้าไม่แยก จะทำให้ React ต้อง reconcile แถวทั้งหมด (สูงสุด 1440 แถวที่ซูม 1 นาที/ช่อง) ทุกวินาทีโดยไม่จำเป็น ทำให้ scroll กระตุก
+// เปรียบเทียบเฉพาะ tapeRows (reference จาก useMemo เปลี่ยนเมื่อ reminders/zoom เปลี่ยนจริง ๆ) ไม่สน nowTick ที่เปลี่ยนทุกวินาที
+// ผลคือ tooltip (title) ของ event-chip อาจไม่ได้อัปเดตวินาทีต่อวินาที แต่แลกกับ scroll ที่ลื่นขึ้นมาก ซึ่งคุ้มกว่ามาก
+const TimelineRows = React.memo(
+  function TimelineRows({ tapeRows, nowTick }) {
+    return tapeRows.map(({ key, isMajor, label, flags }) => (
+      <div key={key} className={`time-row${isMajor ? " major-hour" : ""}`} style={{ height: `${ROW_HEIGHT_PX}px`, "--row-height": `${ROW_HEIGHT_PX}px` }}>
+        <span className="time-label">{label}</span>
+        {flags.length > 0 && (
+          <span className="event-chip-group">
+            {flags.map((r) => (
+              <span key={r.id} className={`event-chip${r.enabled ? "" : " disabled"}`} title={`${r.title} · ${describeReminder(r, nowTick)}`}>
+                <span className="chip-dot" />{r.title}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+    ));
+  },
+  (prevProps, nextProps) => prevProps.tapeRows === nextProps.tapeRows
+);
 
 export default function ReminderDashboard() {
   const [reminders, setReminders] = useState(() => {
@@ -273,7 +363,8 @@ export default function ReminderDashboard() {
     eventName: "",
     afterAmount: "2",
     afterUnit: "hours",
-    routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน"
+    routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
+    lineColor: DEFAULT_LINE_COLOR
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -283,6 +374,7 @@ export default function ReminderDashboard() {
   const tapeScrollRef = useRef(null);
   const isUserInteractingRef = useRef(false);
   const idleTimeoutRef = useRef(null);
+  const hasSnappedInitiallyRef = useRef(false); // true = เคย sync ตำแหน่งกับเวลาจริงแล้ว รอบต่อไปให้ไหลต่อเนื่อง ไม่สแนปซ้ำ
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
@@ -354,6 +446,30 @@ export default function ReminderDashboard() {
     return rows;
   }, [reminders, minutesPerRow, totalRows]);
 
+  // เส้นสีเหลืองบาง ๆ สำหรับ Countdown/Stopwatch ที่กำลังทำงาน
+  // คำนวณตำแหน่งเทียบกับ "ตอนนี้" (now-indicator ที่ล็อกอยู่กลาง viewport เสมอ) แทนที่จะอิงตำแหน่ง scroll ของ track
+  // เพื่อให้เส้นแสดงผลเต็มความยาวเสมอ ไม่ถูกครอบตัดโดย overflow ของ tape-scroll-container
+  // top คือระยะ px จากกึ่งกลาง viewport (ค่าลบ = อยู่เหนือกึ่งกลาง, ค่าบวก = อยู่ใต้กึ่งกลาง)
+  const runningLines = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const pxPerMinute = singleDayHeight / 1440;
+    const nowMinute = minuteOfDayAtPrecise(nowTick);
+
+    return reminders
+      .map((r) => {
+        const span = getRunningLineSpan(r, nowTick, startOfToday);
+        if (!span) return null;
+        return {
+          id: r.id,
+          top: (span.startMinute - nowMinute) * pxPerMinute,
+          height: (span.endMinute - span.startMinute) * pxPerMinute,
+          color: r.lineColor || DEFAULT_LINE_COLOR
+        };
+      })
+      .filter(Boolean);
+  }, [reminders, nowTick, singleDayHeight]);
+
   // ตำแหน่ง scrollTop ที่ต้องการ ให้ now-indicator อยู่กลาง container พอดี
   // ต้องบวก SPACER_HEIGHT_PX เข้าไปด้วย เพราะแถว 00:00 ไม่ได้เริ่มที่ scrollTop=0 อีกต่อไป
   // แต่เริ่มหลัง spacer บนไปแล้ว จึงไม่ต้อง clamp ที่ขอบเหมือนเดิม (spacer ทำหน้าที่กันชนแทน)
@@ -378,20 +494,49 @@ export default function ReminderDashboard() {
     return Math.min(Math.max(idealScrollTop, 0), maxScrollTop);
   };
 
+  // Auto-scroll Engine: ไหลต่อเนื่องด้วย deltaMs จริง (เหมือนน้ำไหล) + Drift Correction แบบนุ่มนวล
+  // อ้างอิงตามขั้นตอนวิธีแก้ไขปัญหา: คำนวณ deltaMs จาก requestAnimationFrame แล้วขยับ scrollTop ไปข้างหน้า
+  // ตามสเกลเวลาอย่างต่อเนื่อง (ไม่ใช่กระโดดสแนป) ส่วน Drift Correction แยกออกมาทำงานเฉพาะตอนคลาดเคลื่อนเกิน 5px
+  // แล้วดึงกลับแบบนุ่มนวลด้วย drift * 0.1 (ไม่ปรับพรวดพราดทุกเฟรม) กัน floating-point drift สะสมระยะยาว
   useEffect(() => {
-    const updateScroll = () => {
-      if (tapeScrollRef.current && !isUserInteractingRef.current) {
-        const targetScrollTop = calculateTargetScrollTop();
-        tapeScrollRef.current.scrollTo({
-          top: targetScrollTop,
-          behavior: "smooth"
-        });
+    let rafId;
+    let lastFrameTime = null;
+    const pxPerMs = (singleDayHeight / 1440) / 60000; // px ต่อ นาที ÷ 60000ms = px ต่อ ms
+
+    const tick = (frameTime) => {
+      if (tapeScrollRef.current) {
+        if (isUserInteractingRef.current) {
+          // ผู้ใช้กำลังลาก/ไถอยู่: ไม่ขยับเอง แต่รีเซ็ต lastFrameTime ไว้ กันไม่ให้กระโดดตอนปล่อยมือ
+          lastFrameTime = null;
+        } else if (!hasSnappedInitiallyRef.current) {
+          // ครั้งแรกหลัง mount/เปลี่ยน zoom หรือเพิ่งเลิกลากด้วยมือ: sync ตำแหน่งให้ตรงเวลาจริงก่อนหนึ่งครั้ง
+          // (คำนวณจาก wall-clock ตรง ๆ เพื่อความแม่นยำ) จากนั้นค่อยไหลต่อด้วยความเร็วคงที่ทุกเฟรม
+          tapeScrollRef.current.scrollTop = calculateTargetScrollTop();
+          hasSnappedInitiallyRef.current = true;
+          lastFrameTime = frameTime;
+        } else if (lastFrameTime !== null) {
+          const deltaMs = frameTime - lastFrameTime;
+          // ไหล scrollTop ไปข้างหน้าตามเวลาที่ผ่านไปจริงระหว่างเฟรม (ไม่ใช่ก้อนคงที่ต่อเฟรม)
+          // จึงลื่นสม่ำเสมอไม่ว่าเฟรมเรตจะแกว่งแค่ไหน และไม่มีการ "กระโดดแก้ตำแหน่ง" เป็นระยะ ๆ อีกต่อไป
+          tapeScrollRef.current.scrollTop += deltaMs * pxPerMs;
+          lastFrameTime = frameTime;
+
+          // Drift Correction: ทำงานเฉพาะตอนคลาดเคลื่อนเกิน 5px (กัน floating-point drift สะสมระยะยาว)
+          // ดึงกลับแบบนุ่มนวลทีละ 10% ของระยะที่คลาดเคลื่อน ไม่กระโดดพรวดพราดทุกเฟรม จึงไม่รู้สึกสะดุด
+          const trueTarget = calculateTargetScrollTop();
+          const drift = trueTarget - tapeScrollRef.current.scrollTop;
+          if (Math.abs(drift) > 5) {
+            tapeScrollRef.current.scrollTop += drift * 0.1;
+          }
+        } else {
+          lastFrameTime = frameTime;
+        }
       }
+      rafId = requestAnimationFrame(tick);
     };
 
-    updateScroll();
-    const intervalId = setInterval(updateScroll, 10000);
-    return () => clearInterval(intervalId);
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [minutesPerRow, singleDayHeight]);
 
   const handleUserInteraction = () => {
@@ -402,17 +547,13 @@ export default function ReminderDashboard() {
       clearTimeout(idleTimeoutRef.current);
     }
 
-    // ตั้งเวลาใหม่ 5 วินาที นับจากขยับครั้งสุดท้าย
+    // ตั้งเวลาถอยหลัง (Idle Timeout) 3 วินาที นับจากขยับครั้งสุดท้าย ตามที่ระบุในขั้นตอนวิธีแก้ไขปัญหา
     idleTimeoutRef.current = setTimeout(() => {
       isUserInteractingRef.current = false;
-      if (tapeScrollRef.current) {
-        const targetScrollTop = calculateTargetScrollTop();
-        tapeScrollRef.current.scrollTo({
-          top: targetScrollTop,
-          behavior: "smooth"
-        });
-      }
-    }, 5000);
+      // รีเซ็ตให้ rAF loop sync ตำแหน่งกับเวลาจริงอีกครั้งหนึ่งครั้งก่อน (กันคลาดเคลื่อนจากตอนลาก)
+      // แล้วค่อยกลับไปไหลต่อเนื่องด้วยความเร็วคงที่ตามปกติ ไม่ใช่กระโดดดีดทุกครั้งที่ปล่อยมือ
+      hasSnappedInitiallyRef.current = false;
+    }, 3000);
   };
 
   const scheduleNext = (reminderId) => {
@@ -562,7 +703,9 @@ export default function ReminderDashboard() {
       const durationMs = minutes * 60 * 1000;
       newReminder.durationMs = durationMs;
       newReminder.startedAt = Date.now();
+      newReminder.lineColor = draft.lineColor || DEFAULT_LINE_COLOR;
     } else if (draft.type === REMINDER_TYPE.STOPWATCH) {
+      newReminder.lineColor = draft.lineColor || DEFAULT_LINE_COLOR;
       if (editingId) {
         // แก้ไข stopwatch ที่มีอยู่แล้ว (เช่น แก้แค่ชื่อ) ต้องคงเวลาที่จับไว้/สถานะ running เดิมไว้
         // ไม่รีเซ็ตกลับเป็น 0 หรือหยุดโดยไม่ตั้งใจ
@@ -602,7 +745,8 @@ export default function ReminderDashboard() {
       eventName: "",
       afterAmount: "2",
       afterUnit: "hours",
-      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน"
+      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
+      lineColor: DEFAULT_LINE_COLOR
     });
     setIsComposerOpen(false); // บันทึกเสร็จแล้วพับ composer กลับ คืนพื้นที่ให้ list
   };
@@ -629,7 +773,8 @@ export default function ReminderDashboard() {
       eventName: reminder.eventName || "",
       afterAmount: String(reminder.afterAmount || 2),
       afterUnit: reminder.afterUnit || "hours",
-      routineSteps: reminder.steps ? reminder.steps.join(", ") : "แปรงฟัน, ยืดตัว, กินวิตามิน"
+      routineSteps: reminder.steps ? reminder.steps.join(", ") : "แปรงฟัน, ยืดตัว, กินวิตามิน",
+      lineColor: reminder.lineColor || DEFAULT_LINE_COLOR
     });
   };
 
@@ -650,7 +795,8 @@ export default function ReminderDashboard() {
       eventName: "",
       afterAmount: "2",
       afterUnit: "hours",
-      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน"
+      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
+      lineColor: DEFAULT_LINE_COLOR
     });
     setIsComposerOpen(false); // ยกเลิกแล้วพับ composer กลับ
   };
@@ -912,7 +1058,7 @@ export default function ReminderDashboard() {
           overflow-y: auto;
           overflow-x: hidden;
           position: relative;
-          scroll-behavior: smooth;
+          scroll-behavior: auto;
           -webkit-overflow-scrolling: touch;
           will-change: scroll-position;
           transform: translateZ(0);
@@ -921,6 +1067,76 @@ export default function ReminderDashboard() {
 
         .tape-track-wrapper {
           position: relative;
+        }
+
+        /* แถบสีบาง ๆ (สีเลือกได้) แสดง Countdown/Stopwatch ที่กำลังทำงาน
+           อยู่ใน timeline-viewport (จุดเดียวกับ now-indicator) ไม่ใช่ track ที่ scroll
+           จึงไม่ถูก overflow ของ tape-scroll-container ครอบตัด แสดงผลเต็มความยาวเสมอ (ตัดแค่ขอบ viewport จริง ๆ เท่านั้น)
+           กว้างเต็มพื้นที่แถว (left: 84px ถึง right: 8px ตรงกับ event-chip-group) ใช้ linear-gradient จางเข้าออก
+           ทั้งสองด้าน ให้เห็นเส้น time-row/grid ทะลุผ่านพื้นหลังได้ ไม่ทึบจนบังข้อมูล */
+        .running-timer-line {
+          position: absolute;
+          left: 84px;
+          right: 8px;
+          border-radius: 8px;
+          z-index: 4;
+          pointer-events: none;
+          background-color: var(--line-color, #fbbc04);
+          opacity: 0.22;
+          background: linear-gradient(
+            180deg,
+            transparent 0%,
+            color-mix(in srgb, var(--line-color, #fbbc04) 30%, transparent) 15%,
+            color-mix(in srgb, var(--line-color, #fbbc04) 30%, transparent) 85%,
+            transparent 100%
+          );
+          border-left: 3px solid var(--line-color, #fbbc04);
+          border-right: 3px solid var(--line-color, #fbbc04);
+        }
+
+        .color-picker-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding-top: 4px;
+        }
+
+        .color-swatch-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          padding: 0;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+          transition: transform 0.1s ease, border-color 0.1s ease;
+        }
+
+        .color-swatch-btn:hover {
+          transform: scale(1.1);
+        }
+
+        .color-swatch-btn.selected {
+          border-color: var(--g-on-surface, #202124);
+          box-shadow: 0 0 0 2px var(--g-surface, #fff), 0 0 0 4px currentColor;
+        }
+
+        .color-swatch-custom {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px dashed var(--g-outline, #dadce0);
+          background-image: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+          overflow: hidden;
+        }
+
+        .color-swatch-custom input[type="color"] {
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+          border: none;
+          padding: 0;
         }
 
         .tape-spacer {
@@ -937,6 +1153,8 @@ export default function ReminderDashboard() {
           display: flex;
           align-items: center;
           user-select: none;
+          content-visibility: auto;
+          contain-intrinsic-size: 0 var(--row-height, 32px);
         }
 
         .time-row.major-hour {
@@ -1443,6 +1661,17 @@ export default function ReminderDashboard() {
           <div className="timeline-viewport">
             <div className="now-indicator" />
 
+            {/* เส้นสีเหลืองบาง ๆ แสดง Countdown/Stopwatch ที่กำลังทำงาน
+                วางใน timeline-viewport (ไม่ใช่ track ที่ scroll) จึงไม่ถูก overflow ครอบตัด และแสดงเต็มความยาวเสมอ
+                ตำแหน่งคำนวณเทียบกับกึ่งกลาง viewport (จุดเดียวกับ now-indicator) */}
+            {runningLines.map((line) => (
+              <div
+                key={line.id}
+                className="running-timer-line"
+                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px`, "--line-color": line.color }}
+              />
+            ))}
+
             <div
               className="tape-scroll-container"
               ref={tapeScrollRef}
@@ -1452,25 +1681,12 @@ export default function ReminderDashboard() {
             >
               <div className="tape-track-wrapper">
                 {/* Spacer บน: ยืดขอบออกจากแถว 00:00 ไม่ให้ now-indicator ชนขอบ container
-                    เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
+                    เป็น slot เปิดไว้ เผื่อใส่ contentอื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
                 <div className="tape-spacer tape-spacer-top" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
                   {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
                 </div>
 
-                {tapeRows.map(({ key, isMajor, label, flags }) => (
-                  <div key={key} className={`time-row${isMajor ? " major-hour" : ""}`} style={{ height: `${ROW_HEIGHT_PX}px` }}>
-                    <span className="time-label">{label}</span>
-                    {flags.length > 0 && (
-                      <span className="event-chip-group">
-                        {flags.map((r) => (
-                          <span key={r.id} className={`event-chip${r.enabled ? "" : " disabled"}`} title={`${r.title} · ${describeReminder(r, nowTick)}`}>
-                            <span className="chip-dot" />{r.title}
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} />
 
                 {/* Spacer ล่าง: ยืดขอบออกจากแถว 24:00 ไม่ให้ now-indicator ชนขอบ container
                     เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคตเช่นกัน */}
@@ -1599,14 +1815,56 @@ export default function ReminderDashboard() {
               )}
 
               {draft.type === REMINDER_TYPE.COUNTDOWN && (
-                <div className="form-field">
-                  <label htmlFor="countdown-minutes">ระยะเวลา (นาที)</label>
-                  <input id="countdown-minutes" className="form-input" type="number" min="1" max="1440" value={draft.countdownMinutes} onChange={(e) => setDraft((prev) => ({ ...prev, countdownMinutes: e.target.value }))} />
-                </div>
+                <>
+                  <div className="form-field">
+                    <label htmlFor="countdown-minutes">ระยะเวลา (นาที)</label>
+                    <input id="countdown-minutes" className="form-input" type="number" min="1" max="1440" value={draft.countdownMinutes} onChange={(e) => setDraft((prev) => ({ ...prev, countdownMinutes: e.target.value }))} />
+                  </div>
+                  <div className="form-field">
+                    <label>สีเส้นบน Timeline</label>
+                    <div className="color-picker-group">
+                      {LINE_COLOR_OPTIONS.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          className={`color-swatch-btn ${draft.lineColor === c.value ? "selected" : ""}`}
+                          style={{ backgroundColor: c.value }}
+                          title={c.label}
+                          aria-label={c.label}
+                          onClick={() => setDraft((prev) => ({ ...prev, lineColor: c.value }))}
+                        />
+                      ))}
+                      <label className="color-swatch-btn color-swatch-custom" title="เลือกสีเอง" style={{ backgroundColor: draft.lineColor }}>
+                        <input type="color" value={draft.lineColor} onChange={(e) => setDraft((prev) => ({ ...prev, lineColor: e.target.value }))} />
+                      </label>
+                    </div>
+                  </div>
+                </>
               )}
 
               {draft.type === REMINDER_TYPE.STOPWATCH && (
-                <p className="form-hint">จับเวลานับขึ้นเรื่อย ๆ ไม่มีการแจ้งเตือน กด Start/Stop ได้จากการ์ดหลังสร้างเสร็จ</p>
+                <>
+                  <p className="form-hint">จับเวลานับขึ้นเรื่อย ๆ ไม่มีการแจ้งเตือน กด Start/Stop ได้จากการ์ดหลังสร้างเสร็จ</p>
+                  <div className="form-field">
+                    <label>สีเส้นบน Timeline</label>
+                    <div className="color-picker-group">
+                      {LINE_COLOR_OPTIONS.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          className={`color-swatch-btn ${draft.lineColor === c.value ? "selected" : ""}`}
+                          style={{ backgroundColor: c.value }}
+                          title={c.label}
+                          aria-label={c.label}
+                          onClick={() => setDraft((prev) => ({ ...prev, lineColor: c.value }))}
+                        />
+                      ))}
+                      <label className="color-swatch-btn color-swatch-custom" title="เลือกสีเอง" style={{ backgroundColor: draft.lineColor }}>
+                        <input type="color" value={draft.lineColor} onChange={(e) => setDraft((prev) => ({ ...prev, lineColor: e.target.value }))} />
+                      </label>
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="composer-actions">
