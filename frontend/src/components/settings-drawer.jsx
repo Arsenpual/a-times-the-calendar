@@ -2,12 +2,17 @@ import React, { useEffect } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../i18n.jsx";
 
 /**
- * Slide-over settings drawer, opened from the ⚙️ icon in the header
- * (next to the sign-out button). Modal-style overlay + panel from the
- * right, matching the existing .modal-overlay pattern elsewhere in the
- * app rather than introducing a new routing concept — there's no
- * dedicated "settings page", this is just another overlay on top of the
- * dashboard.
+ * Slide-over settings drawer, opened from the ⚙️ icon in the header — in
+ * dashboard mode that's next to the sign-out button; in reminder mode
+ * it's the only header-right button, since sign-out/tag-search/add-
+ * activity are dashboard-only concepts. Both buttons open this exact same
+ * component (rendered once, mode-independent, at the bottom of app.jsx)
+ * rather than each mode having its own drawer, so theme/language always
+ * stay in sync regardless of which mode was active when they were
+ * changed. Modal-style overlay + panel from the right, matching the
+ * existing .modal-overlay pattern elsewhere in the app rather than
+ * introducing a new routing concept — there's no dedicated "settings
+ * page", this is just another overlay on top of whichever mode is active.
  *
  * Holds dark mode and language, structured as a list of labeled sections
  * so more settings can be added later without restructuring — each

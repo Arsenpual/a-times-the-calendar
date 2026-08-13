@@ -160,6 +160,15 @@ router.put("/:activityId/lock", async (req, res, next) => {
     const { locked } = req.body;
     const id = normalizeId(req.params.activityId);
 
+    // สำคัญ: ปลดล็อกต้อง .delete() document ทิ้งเสมอ ห้ามเปลี่ยนเป็น
+    // .set({ locked: false }) — firestore.rules (ดู scripts/
+    // firestore-rules.test.js เคส "locked: false ไม่ถือว่า lock") เผื่อ
+    // กรณีนี้ไว้เป็น fallback เท่านั้น ไม่ใช่รูปแบบที่ตั้งใจให้เขียนจริง
+    // การ .set({ locked: false }) แทน .delete() ยังคง "ปลอดภัย" ในแง่ที่
+    // security rules ยังไม่ถือว่าล็อก แต่จะทิ้ง document เปล่าไม่มี
+    // ประโยชน์ไว้ค้างใน collection ตลอดไป (ผิดกับ pattern เดียวกันที่
+    // activityCategories/activityTags ใช้ — ลบ document เมื่อไม่มีค่าที่
+    // มีความหมายให้เก็บ)
     if (locked) {
       await lockedActivitiesCol(req.userId).doc(id).set({ locked: true });
     } else {

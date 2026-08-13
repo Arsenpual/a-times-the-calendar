@@ -116,6 +116,26 @@ function lockedActivitiesCol(userId) {
   return userDoc(userId).collection("lockedActivities");
 }
 
+// Reminder mode (Phase: initial Firebase sync — day/time/title fields
+// only, see routes/reminders.js's module comment for exactly which fields
+// this covers). Collection name is "reminder-mode" per request (not
+// "reminders") — still nested under users/{userId}/ like every other
+// collection here, NOT a top-level collection, so it stays covered by the
+// same users/{userId}/{document=**} Security Rules match and the same
+// data-isolation guarantee described in this file's module comment above.
+// A genuinely top-level reminder-mode collection would need its own
+// separate security rule (matching on a userId field inside each
+// document instead of the path itself), which reopens exactly the
+// "easy to forget a .where(userId==) filter" risk this file's nested
+// structure was chosen specifically to avoid.
+//
+// Document id = the reminder's own client-generated id (same pattern as
+// activityCategoriesCol/lockedActivitiesCol using the activity's own id
+// as the doc key — no separate id generation needed on the backend).
+function remindersCol(userId) {
+  return userDoc(userId).collection("reminder-mode");
+}
+
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
 // db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
 // start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
@@ -157,8 +177,40 @@ const DEFAULT_CATEGORIES = [
  * เขียนซ้ำ — marker เป็น field เดี่ยวบน parent doc (ไม่ใช่ query กับทั้ง
  * subcollection แบบเดิม) เพราะ transaction ของ Firestore อ่าน "document" ได้
  * เท่านั้น ไม่รองรับ query ภายใน transaction
+ *
+ * *** เพิ่มเติม (ลดภาษี read ต่อ request) ***
+ * เดิม requireAuth เรียกฟังก์ชันนี้ (และรัน transaction ข้างต้นเต็มรูปแบบ)
+ * ทุกครั้งที่ token ผ่าน ไม่ใช่แค่ตอน user ใหม่ — กลายเป็นภาษี Firestore
+ * read ถาวรที่ขยายตาม traffic ทั้งที่ marker เป็น true มานานแล้วก็ตาม ตอนนี้
+ * เพิ่ม in-memory cache ระดับ process (seededUserIds) คร่อมไว้อีกชั้น:
+ * userId ที่เคยผ่าน transaction แล้วในอายุของ process นี้จะ short-circuit
+ * กลับทันทีโดยไม่แตะ Firestore เลย — cache ไม่ persist ข้าม
+ * restart/redeploy แต่นั่นแค่เท่ากับพฤติกรรมเดิมของทุก request (ไม่ได้แย่
+ * ลงกว่าเดิม) ในขณะที่ตัด read ที่ไม่จำเป็นออกไปเกือบทั้งหมดในสภาพ
+ * การใช้งานจริงที่ process มีอายุยาวกว่าหนึ่ง request
  */
+/**
+ * In-memory cache (per Node process) ของ userId ที่รู้แล้วว่า seed เสร็จ
+ * แล้ว — ก่อนหน้านี้ ensureDefaultCategoriesForUser() รัน Firestore
+ * transaction (read+write บน marker document) ทุกครั้งที่ requireAuth
+ * เรียก ซึ่งคือ "ทุก request ที่ token ผ่าน" ตลอดไป ไม่ใช่แค่ตอน user ใหม่
+ * — เป็นภาษี read เปล่าๆ ที่ขยายตามปริมาณ traffic แม้ว่า marker จะ true
+ * มาตั้งนานแล้วก็ตาม
+ *
+ * Set นี้ทำให้ transaction รันแค่ครั้งแรกที่ userId นั้น "ถูกเห็น" ในอายุ
+ * ของ process ปัจจุบัน (ไม่ persist ข้าม redeploy/restart — แต่นั่นก็แค่
+ * เท่ากับพฤติกรรมเดิมของทุก request ตอนนี้อยู่แล้ว ไม่ได้แย่ลง) ปลอดภัย
+ * เพราะกรณีเดียวที่ cache "ผิด" (คิดว่ายังไม่ seed ทั้งที่จริง seed แล้ว
+ * จาก process อื่น/ก่อน restart) ก็แค่ไปเรียก transaction ซ้ำ ซึ่ง
+ * transaction เองก็ idempotent อยู่แล้ว (เช็ค marker ก่อนเขียนเสมอ) —
+ * ไม่มีทาง "ผิด" ในทิศทางตรงข้าม (คิดว่า seed แล้วทั้งที่ยังไม่ได้ seed)
+ * เพราะ set เข้าคีย์นี้เฉพาะหลัง transaction สำเร็จเท่านั้น
+ */
+const seededUserIds = new Set();
+
 async function ensureDefaultCategoriesForUser(userId) {
+  if (seededUserIds.has(userId)) return;
+
   const userRef = userDoc(userId);
   const col = categoriesCol(userId);
 
@@ -175,6 +227,8 @@ async function ensureDefaultCategoriesForUser(userId) {
     return true;
   });
 
+  seededUserIds.add(userId);
+
   if (seeded) {
     console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
   }
@@ -187,5 +241,6 @@ module.exports = {
   activityCategoriesCol,
   activityTagsCol,
   lockedActivitiesCol,
+  remindersCol,
   ensureDefaultCategoriesForUser
 };

@@ -18,10 +18,11 @@ const { auth, ensureDefaultCategoriesForUser } = require("../firestore-db.js");
  *
  * เรียก ensureDefaultCategoriesForUser() ทุกครั้งที่ token ถูกต้อง (ไม่ใช่
  * แค่ตอน login ครั้งแรก) เพราะ middleware นี้ไม่มีทางรู้ว่าเป็น request
- * แรกของ user คนนั้นหรือเปล่า — ฟังก์ชันนั้นเช็ค "ว่างเปล่าไหม" ก่อนเขียน
- * เองอยู่แล้ว จึงเรียกซ้ำได้โดยไม่มีผลข้างเคียงถ้า user เคย seed ไปแล้ว
- * (คงประสิทธิภาพเพราะ Firestore .limit(1).get() ถูกและเร็ว เทียบกับ
- * ความซับซ้อนของการพยายามตรวจ "request แรก" แบบอื่น)
+ * แรกของ user คนนั้นหรือเปล่า — ฟังก์ชันนั้นมี in-memory cache ระดับ process
+ * ของตัวเองอยู่แล้ว (ดู firestore-db.js) จึงเรียกซ้ำได้ทุก request โดยแทบ
+ * ไม่มีต้นทุนเพิ่มหลังครั้งแรกที่ userId นั้นถูกเห็นในอายุของ process นี้
+ * (ก่อนหน้านี้ไม่มี cache ชั้นนี้ — ทุก request รัน Firestore transaction
+ * เต็มรูปแบบแม้ user จะถูก seed ไปนานแล้วก็ตาม)
  */
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";

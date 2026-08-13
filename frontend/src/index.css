@@ -435,12 +435,18 @@ html.screen-reader-mode .tag-search-input {
 }
 
 /* Non-dashboard main content (login screen, "checking session" state,
-   reminder mockup) has no scroll container above it anymore either, now
+   reminder mode) has no scroll container above it anymore either, now
    that .app-main doesn't scroll — give these their own so they still
-   scroll on their own if taller than the viewport. */
+   scroll on their own if taller than the viewport.
+   NOTE: this selector previously read ".app-main > .reminder-mockup",
+   which never matched anything — the component's actual root element has
+   always been className="reminder-app-container" (see
+   components/reminder-mode.jsx), not "reminder-mockup". That meant this
+   flex/overflow rule silently never applied to reminder mode at all.
+   Fixed to match the real class name below. */
 .app-main > .empty-state,
 .app-main > .login-screen,
-.app-main > .reminder-mockup {
+.app-main > .reminder-app-container {
   flex: 1;
   min-height: 0;
   overflow-y: auto;

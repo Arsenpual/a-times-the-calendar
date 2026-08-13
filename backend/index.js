@@ -6,6 +6,7 @@ const { requireAuth } = require("./middleware/require-auth.js");
 const categoriesRouter = require("./routes/categories.js");
 const activityCategoriesRouter = require("./routes/activity-categories.js");
 const summaryRouter = require("./routes/summary.js");
+const remindersRouter = require("./routes/reminders.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -40,6 +41,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/categories", requireAuth, categoriesRouter);
 app.use("/api/activities", requireAuth, activityCategoriesRouter);
 app.use("/api/summary", requireAuth, summaryRouter);
+app.use("/api/reminders", requireAuth, remindersRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "ไม่พบ endpoint นี้" });

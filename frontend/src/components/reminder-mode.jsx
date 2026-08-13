@@ -1,6 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRemindersSync } from "../hooks/use-reminders-sync.js";
 
 const STORAGE_KEY = "times-reminders-v1";
+
+// ฟิลด์วัน/เวลาที่ sync ขึ้น Firebase — ต้องตรงกับ ALLOWED_FIELDS ใน
+// backend/routes/reminders.js เป๊ะๆ (ฝั่ง backend มี allow-list ของตัวเอง
+// อยู่แล้ว ตัดฟิลด์ที่ไม่อยู่ในนี้ทิ้งเงียบๆ — รายการนี้ฝั่ง frontend มีไว้
+// เพื่อความชัดเจนตอนอ่านโค้ด ไม่ใช่ security boundary จริง) ไม่รวม runtime
+// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/nextDueAt
+const SCHEDULE_FIELD_KEYS = [
+  "type", "title", "enabled", "amount", "unit", "windowStart", "windowEnd",
+  "days", "time", "atMs", "afterAmount", "afterUnit", "durationMs",
+  "lineColor", "eventName", "steps"
+];
+
+function extractScheduleFields(reminder) {
+  const fields = {};
+  for (const key of SCHEDULE_FIELD_KEYS) {
+    if (reminder[key] !== undefined) fields[key] = reminder[key];
+  }
+  return fields;
+}
 
 const ZOOM_LEVELS_MINUTES = [60, 15, 5, 1];
 const DEFAULT_ZOOM_INDEX = ZOOM_LEVELS_MINUTES.indexOf(15);
@@ -335,7 +355,7 @@ const TimelineRows = React.memo(
   (prevProps, nextProps) => prevProps.tapeRows === nextProps.tapeRows
 );
 
-export default function ReminderDashboard() {
+export default function ReminderDashboard({ firebaseUser }) {
   const [reminders, setReminders] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -344,6 +364,47 @@ export default function ReminderDashboard() {
       return DEFAULT_REMINDERS;
     }
   });
+
+  // เบื้องต้น sync แค่ฟิลด์วัน/เวลาขึ้น Firebase (ดู use-reminders-sync.js) —
+  // localStorage ยังเป็น source of truth หลักของ reminders ทั้งก้อน
+  // (รวม runtime state) ในเฟสนี้; Firebase เป็นแค่ mirror ของ schedule
+  // fields เพื่อให้กู้คืนได้ถ้า localStorage หาย/เปลี่ยนเครื่อง
+  const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
+
+  // Merge remote schedule fields เข้ากับ local state ครั้งเดียวตอนที่
+  // remoteReminders เพิ่งโหลดเสร็จ (เปลี่ยนจาก null เป็น object) — ไม่ merge
+  // ซ้ำทุกครั้งที่ remoteReminders reference เปลี่ยน (มันจะไม่เปลี่ยนอีก
+  // หลังโหลดครั้งแรกอยู่แล้วตาม useRemindersSync's design) เพื่อไม่ให้ทับ
+  // runtime state (startedAt ของ stopwatch ที่กำลังเดินอยู่ในเครื่อง) ที่
+  // Firebase ไม่มีข้อมูลนั้นเก็บไว้เลย — merge แบบ "schedule fields จาก
+  // remote ชนะ, runtime fields จาก local คงเดิม, reminder ที่มีแค่ฝั่งใด
+  // ฝั่งหนึ่งก็เก็บไว้ทั้งคู่" ไม่ใช่ overwrite ทั้งก้อน
+  const hasMergedRemoteRef = useRef(false);
+  useEffect(() => {
+    if (!remoteReminders || hasMergedRemoteRef.current) return;
+    hasMergedRemoteRef.current = true;
+    const remoteIds = Object.keys(remoteReminders);
+    if (remoteIds.length === 0) return; // ไม่มีอะไรให้ merge (ยังไม่เคย sync ขึ้นไปเลย หรือ user ใหม่)
+
+    setReminders((prevLocal) => {
+      const byId = new Map(prevLocal.map((r) => [r.id, r]));
+      for (const id of remoteIds) {
+        const remoteFields = remoteReminders[id];
+        const existingLocal = byId.get(id);
+        if (existingLocal) {
+          // มีทั้งสองฝั่ง — schedule fields จาก remote ชนะ (เผื่อแก้จาก
+          // อุปกรณ์อื่นมา), runtime fields จาก local คงเดิมไว้ (ไม่มีใน remote อยู่แล้ว)
+          byId.set(id, { ...existingLocal, ...remoteFields });
+        } else {
+          // มีแค่ฝั่ง remote (เช่น สร้างจากอุปกรณ์อื่น) — เพิ่มเข้า local
+          // โดยไม่มี runtime field ใดๆ (nextDueAt จะถูกคำนวณใหม่จาก effect
+          // ที่มีอยู่แล้วด้านล่างซึ่งรัน checkDue() ทุกวินาทีอยู่แล้ว)
+          byId.set(id, { id, ...remoteFields });
+        }
+      }
+      return Array.from(byId.values());
+    });
+  }, [remoteReminders]);
 
   const [dueReminders, setDueReminders] = useState([]);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
@@ -661,7 +722,7 @@ export default function ReminderDashboard() {
     });
   };
 
-  const saveReminder = (event) => {
+  const submitReminderForm = (event) => {
     event.preventDefault();
     if (!draft.title.trim()) return;
 
@@ -730,6 +791,11 @@ export default function ReminderDashboard() {
       setReminders((prev) => [...prev, newReminder]);
     }
 
+    // Sync schedule fields ขึ้น Firebase — immediate: true เพราะนี่คือ
+    // ตอน submit ฟอร์มจริง (กดปุ่ม "สร้าง"/"บันทึกการแก้ไข") ไม่ใช่ตอน
+    // พิมพ์ใน draft ระหว่างทาง จึงไม่ต้อง debounce
+    syncScheduleFields(newReminder.id, extractScheduleFields(newReminder), { immediate: true });
+
     setDraft({
       title: "",
       type: REMINDER_TYPE.INTERVAL,
@@ -753,6 +819,7 @@ export default function ReminderDashboard() {
 
   const deleteReminder = (reminderId) => {
     setReminders((prev) => prev.filter((r) => r.id !== reminderId));
+    deleteRemoteReminder(reminderId);
   };
 
   const startEdit = (reminder) => {
@@ -896,7 +963,20 @@ export default function ReminderDashboard() {
           --g-on-surface-variant: #5f6368;
           --g-outline: #dadce0;
           --g-outline-variant: #e8eaed;
-          
+          /* ฟิลด์เพิ่มเติมสำหรับสี hover/active ที่เดิม hardcode เป็น hex
+             ตรงๆ ในหลายจุดด้านล่าง (ไม่เคยผ่าน --g-* เลย) — ดึงมาเป็นตัวแปร
+             ตรงนี้เพื่อให้ dark-mode override block ด้านล่างจัดการได้ที่
+             จุดเดียว แทนที่จะต้องไล่แก้ hex ทีละจุดในกฎที่กระจายอยู่ทั่วไฟล์ */
+          --g-blue-light-hover: #d2e3fc;
+          --g-red-light: #fce8e6;
+          --g-red-light-border: #f5c6cb;
+          --g-red-dark: #c5221f;
+          --g-red-light-hover: #fad2cf;
+          --g-active-bg: #fef7e0;
+          --g-active-border: #fde293;
+          --g-toggle-off: #bdc1c6;
+          --g-major-hour-tint: rgba(248, 249, 250, 0.6);
+
           font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
@@ -907,14 +987,50 @@ export default function ReminderDashboard() {
           overflow: hidden;
         }
 
+        /* Dark mode — reminder mode มี custom property namespace ของตัวเอง
+           (--g-*) แยกจาก --bg/--text-primary/ฯลฯ ที่เหลือทั้งแอปใช้ (ดู
+           index.css's html[data-theme="dark"] block) เพราะ style block นี้
+           ถูกเขียนแบบ self-contained ตั้งแต่ตอนยังเป็น mockup แยกเดี่ยว —
+           แทนที่จะไล่เปลี่ยนทุก var(--g-...) ในไฟล์นี้ (700+ บรรทัด) ให้ไป
+           อ้าง --bg/--text-primary/ฯลฯ ตรงๆ ซึ่งเสี่ยง regression สูงและ
+           breaking การ preview เป็น standalone component ในอนาคต แค่ override
+           ค่าของ --g-* เองที่นี่ตาม data-theme ก็พอ — ทุกกฎที่เหลือด้านล่าง
+           ที่อ้างอิงผ่าน var(--g-...) อยู่แล้วจะเปลี่ยนตามอัตโนมัติ พาเลท
+           อ้างอิงจาก index.css's dark block (--bg: #202124, --bg-muted:
+           #2d2e30, --text-primary: #e8eaed, --text-secondary: #9aa0a6,
+           --border: #4a4d51) เพื่อให้โทนสีเข้ากับส่วนอื่นของแอป ไม่ใช่คิด
+           พาเลทใหม่แยกต่างหาก
+           สีใน semantic accent (--g-yellow, --g-red, --g-green หลัก) คงค่า
+           เดิมไว้เกือบทั้งหมด ตามหลักเดียวกับที่ index.css บอกไว้ (ยังอ่าน
+           ออกบนพื้นมืดได้อยู่แล้ว การปรับจะต้องเช็ค contrast ใหม่ทุกจุดที่
+           ใช้ ซึ่งเกินขอบเขตของรอบนี้) */
+        html[data-theme="dark"] .reminder-app-container {
+          --g-surface: #2d2e30;
+          --g-background: #202124;
+          --g-on-surface: #e8eaed;
+          --g-on-surface-variant: #9aa0a6;
+          --g-outline: #4a4d51;
+          --g-outline-variant: #35363a;
+          --g-blue-light: #1a2b47;
+          --g-blue-light-hover: #223a5e;
+          --g-red-light: #3c1c1c;
+          --g-red-light-border: #5c2b2b;
+          --g-red-dark: #f28b82;
+          --g-red-light-hover: #4a2424;
+          --g-active-bg: #3a341a;
+          --g-active-border: #5c4f22;
+          --g-toggle-off: #5f6368;
+          --g-major-hour-tint: rgba(255, 255, 255, 0.04);
+        }
+
         .due-alert-banner {
-          background: #fce8e6;
-          border-bottom: 1px solid #f5c6cb;
+          background: var(--g-red-light);
+          border-bottom: 1px solid var(--g-red-light-border);
           padding: 12px 24px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          color: #c5221f;
+          color: var(--g-red-dark);
           font-size: 14px;
           font-weight: 500;
           flex-shrink: 0;
@@ -926,9 +1042,9 @@ export default function ReminderDashboard() {
         }
 
         .btn-snooze {
-          background: #ffffff;
-          border: 1px solid #f5c6cb;
-          color: #c5221f;
+          background: var(--g-surface);
+          border: 1px solid var(--g-red-light-border);
+          color: var(--g-red-dark);
           padding: 6px 14px;
           border-radius: 18px;
           font-size: 13px;
@@ -938,7 +1054,7 @@ export default function ReminderDashboard() {
         }
 
         .btn-snooze:hover {
-          background: #fce8e6;
+          background: var(--g-red-light);
         }
 
         .dashboard-body {
@@ -1159,7 +1275,7 @@ export default function ReminderDashboard() {
 
         .time-row.major-hour {
           border-bottom-color: var(--g-outline);
-          background-color: rgba(248, 249, 250, 0.6);
+          background-color: var(--g-major-hour-tint);
         }
 
         .time-label {
@@ -1277,7 +1393,7 @@ export default function ReminderDashboard() {
         }
 
         .add-reminder-btn:hover {
-          background: #d2e3fc;
+          background: var(--g-blue-light-hover);
           box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
 
@@ -1345,8 +1461,8 @@ export default function ReminderDashboard() {
         }
 
         .reminder-card.active {
-          background: #fef7e0;
-          border-color: #fde293;
+          background: var(--g-active-bg);
+          border-color: var(--g-active-border);
         }
 
         .reminder-type-icon {
@@ -1419,7 +1535,7 @@ export default function ReminderDashboard() {
           width: 36px;
           height: 20px;
           border-radius: 10px;
-          background: #bdc1c6;
+          background: var(--g-toggle-off);
           border: none;
           position: relative;
           cursor: pointer;
@@ -1471,16 +1587,16 @@ export default function ReminderDashboard() {
         }
 
         .btn-stopwatch.start:hover {
-          background: #d2e3fc;
+          background: var(--g-blue-light-hover);
         }
 
         .btn-stopwatch.stop {
-          background: #fce8e6;
-          color: #c5221f;
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
         }
 
         .btn-stopwatch.stop:hover {
-          background: #fad2cf;
+          background: var(--g-red-light-hover);
         }
 
         .form-hint {
@@ -1715,7 +1831,7 @@ export default function ReminderDashboard() {
             {/* Composer แบบ inline expand/collapse: พับเก็บเป็นค่าเริ่มต้นเพื่อประหยัดพื้นที่
                 เมื่อกด "เพิ่ม Reminder" หรือกด "แก้ไข" การ์ดใดการ์ดหนึ่ง จะดันลงมาแสดงแทนที่ */}
             {isComposerOpen && (
-              <form className="composer-card" onSubmit={saveReminder}>
+              <form className="composer-card" onSubmit={submitReminderForm}>
               <div className="form-field">
                 <label htmlFor="reminder-title">ชื่อการแจ้งเตือน</label>
                 <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="เช่น พักสายตา 5 นาที" />

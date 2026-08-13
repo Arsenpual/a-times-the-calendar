@@ -88,6 +88,7 @@ export default function ActivityModal({
   open,
   defaultDate,
   initialActivity,
+  activities,
   categories,
   activityCategoryMap,
   activityTagMap,
@@ -274,15 +275,14 @@ export default function ActivityModal({
     }
   };
 
-  const buildActivityBody = () => {
-    const body = {
-      summary: title.trim() || "(ไม่มีชื่อ)",
-      // null (not undefined) so an update PATCH actively clears the field on
-      // Google's side when the user empties it — omitting the key entirely
-      // would leave the old value untouched instead.
-      description: notes.trim() || null
-    };
-
+  /**
+   * คำนวณ start/end เป็น Date object จริง — แยกออกมาจาก buildActivityBody()
+   * เดิม (ซึ่งยังคงเรียกฟังก์ชันนี้อยู่) เพื่อให้ validate()'s overlap check
+   * ด้านล่างใช้ start/end ชุดเดียวกัน ไม่ต้องคำนวณซ้ำสองที่ (เสี่ยง logic
+   * เพี้ยนจากกันถ้าแก้ไขจุดเดียวแล้วลืมอีกจุด — โดยเฉพาะ edge case ข้าม
+   * เที่ยงคืนด้านล่างที่ละเอียดอ่อน)
+   */
+  const computeStartEnd = () => {
     const start = combineDateAndTime(date, startTime);
     let end = combineDateAndTime(date, endTime);
     // กิจกรรมที่ข้ามเที่ยงคืน (เช่น เริ่ม 23:00 จบ 00:30) จะได้ endTime ที่
@@ -293,6 +293,19 @@ export default function ActivityModal({
     if (end <= start) {
       end = new Date(end.getTime() + 24 * 60 * 60000);
     }
+    return { start, end };
+  };
+
+  const buildActivityBody = () => {
+    const body = {
+      summary: title.trim() || "(ไม่มีชื่อ)",
+      // null (not undefined) so an update PATCH actively clears the field on
+      // Google's side when the user empties it — omitting the key entirely
+      // would leave the old value untouched instead.
+      description: notes.trim() || null
+    };
+
+    const { start, end } = computeStartEnd();
     // Google Calendar requires an explicit IANA timeZone alongside dateTime —
     // it does NOT infer it from the offset embedded in an ISO string, even
     // one ending in "Z". Using the browser's local zone keeps the event
@@ -329,6 +342,42 @@ export default function ActivityModal({
     if (repeat.mode === "custom" && repeat.end === "until" && !repeat.until) {
       return "กรุณาระบุวันที่สิ้นสุดการทำซ้ำ";
     }
+
+    // ห้ามกิจกรรมเวลาทับซ้อนกันในโหมด calendar — กิจกรรมย่อยๆ ให้ใช้โหมด
+    // reminder แทน (calendar เก็บแค่กิจกรรมสำคัญที่มีเวลาแน่นอนไม่ชนกัน)
+    // เช็คเป็นสองช่วงเวลาทับกันแบบมาตรฐาน: A ทับ B ก็ต่อเมื่อ A เริ่มก่อน B
+    // จบ และ A จบหลัง B เริ่ม (เท่ากันพอดี เช่น กิจกรรมหนึ่งจบ 10:00 อีก
+    // กิจกรรมเริ่ม 10:00 พอดี ไม่ถือว่าทับกัน — ใช้ < ไม่ใช่ <=)
+    //
+    // ข้อจำกัดที่ทราบอยู่แล้ว: `activities` ที่ส่งมาจาก app.jsx มีแค่
+    // กิจกรรมของสัปดาห์ที่กำลังโหลดอยู่ (+ วันก่อนหน้า 1 วันสำหรับ
+    // spillover indicator) ไม่ใช่ทั้งปฏิทิน — ถ้าแก้ไข `date` ในฟอร์มให้
+    // ออกนอกสัปดาห์ที่โหลดอยู่ตอนนี้ การเช็คนี้จะไม่เห็นกิจกรรมของวันนั้น
+    // เลย (เช็คผ่านเสมอ) ในทางปฏิบัติแทบไม่เกิดเพราะฟอร์มถูกเปิดจากวันที่
+    // มองเห็นอยู่แล้วเสมอ แต่ยังทฤษฎีเปิดช่องให้หลุดได้ถ้าผู้ใช้เปลี่ยนวันที่
+    // เอง — ยอมรับความเสี่ยงนี้ไว้ก่อน (ตรวจสอบทั้งปฏิทินจริงต้อง fetch
+    // เพิ่มแยกต่างหาก ซึ่งเกินขอบเขตของรอบนี้)
+    const { start: newStart, end: newEnd } = computeStartEnd();
+    const editingNormalizedId = initialActivity ? normalizeActivityId(initialActivity.id) : null;
+    const overlapping = (activities || []).find((activity) => {
+      // ข้ามตัวเองตอนแก้ไข — ไม่งั้นกิจกรรมที่กำลังแก้จะชนกับเวลาเดิมของ
+      // ตัวเองเสมอ (ก่อนบันทึกเวลาใหม่) ทำให้แก้ไขอะไรไม่ได้เลย
+      if (editingNormalizedId && normalizeActivityId(activity.id) === editingNormalizedId) {
+        return false;
+      }
+      const otherStart = activityDate(activity.start);
+      const otherEnd = activityDate(activity.end) || otherStart;
+      if (!otherStart || !otherEnd) return false;
+      return newStart < otherEnd && newEnd > otherStart;
+    });
+    if (overlapping) {
+      const otherStart = activityDate(overlapping.start);
+      const otherEnd = activityDate(overlapping.end) || otherStart;
+      return `เวลาทับซ้อนกับกิจกรรม "${overlapping.summary || "(ไม่มีชื่อ)"}" (${toTimeInputValue(
+        otherStart
+      )}–${toTimeInputValue(otherEnd)}) — ปรับเวลา หรือใช้โหมด reminder สำหรับกิจกรรมย่อย`;
+    }
+
     return null;
   };
 

@@ -5,6 +5,16 @@ const router = express.Router();
 
 const UNCATEGORIZED = { id: null, name: "ไม่ระบุหมวดหมู่", color: "#9AA0A6" };
 
+// จำกัดจำนวนกิจกรรมสูงสุดต่อ request — 1 สัปดาห์จริงของผู้ใช้ทั่วไปมีไม่กี่
+// สิบรายการ (Google Calendar API เองก็ maxResults: 250 ต่อการดึงหนึ่งครั้ง
+// ฝั่ง frontend อยู่แล้ว) ค่านี้ตั้งไว้กว้างกว่านั้นมากพอเผื่อกรณีผิดปกติ
+// จริง แต่ยังกันไม่ให้ client (บั๊กหรือเจตนาร้าย) ส่ง array มหาศาลมาบังคับ
+// ให้ loop คำนวณด้านล่างและ db.getAll() (ซึ่งยิง 1 ref ต่อ 1 activity ที่
+// unique) ทำงานหนักเกินจำเป็นแบบไม่มีขอบเขต — ไม่มี rate limiting ระดับ
+// request อยู่แล้วตอนนี้ (ดู overview.md งานค้าง) จุดนี้จึงเป็นเกราะเดียว
+// ของ endpoint นี้ตอนนี้
+const MAX_ACTIVITIES_PER_REQUEST = 2000;
+
 /**
  * Google Calendar ส่ง instance id ของ recurring event มาในรูป
  * "<baseId>_<YYYYMMDDTHHmmssZ>" เมื่อใช้ singleEvents=true — แต่
@@ -48,6 +58,11 @@ router.post("/week", async (req, res, next) => {
     const { activities } = req.body;
     if (!Array.isArray(activities)) {
       return res.status(400).json({ error: "ต้องส่ง activities เป็น array" });
+    }
+    if (activities.length > MAX_ACTIVITIES_PER_REQUEST) {
+      return res.status(400).json({
+        error: `activities เกินจำนวนสูงสุดที่รองรับ (${MAX_ACTIVITIES_PER_REQUEST} รายการ)`
+      });
     }
 
     // ดึงหมวดหมู่ทั้งหมดมาไว้ล่วงหน้า (จำนวนน้อย ไม่กี่สิบรายการ อ่านรวด
