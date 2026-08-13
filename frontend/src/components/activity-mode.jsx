@@ -49,7 +49,7 @@ function buildDayBreakdown(dayActivities, activityCategoryMap, categories) {
  * @param {(activity: object) => Promise<void>} onEditSeries
  * @param {(recurringEventId: string) => Promise<number|null>} onFetchSeriesCount
  */
-export default function AgendaView({
+export default function ActivityMode({
   anchorDate,
   activities,
   categories,

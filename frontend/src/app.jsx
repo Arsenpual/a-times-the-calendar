@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import loginGuideStep1 from "../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../public/login-guide-step3.jpg";
-import AgendaView from "./components/agenda-view.jsx";
+import ActivityMode from "./components/activity-mode.jsx";
 import TagSearchResults from "./components/tag-search-results.jsx";
 import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
 import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
@@ -20,7 +20,7 @@ import { useActivityModal } from "./hooks/use-activity-modal.js";
 import { useActivityMutations } from "./hooks/use-activity-mutations.js";
 
 // Hardcoded broadcast message shown in the scrolling ticker below the
-// header, calendar (dashboard) mode only — see AnnouncementTicker. Not
+// header, in both activity and reminder mode — see AnnouncementTicker. Not
 // dismissible and not fetched from a backend, so updating it means editing
 // this string and redeploying. Set to "" (or null) to hide the ticker
 // entirely without removing the component from the tree.
@@ -207,11 +207,11 @@ export default function App() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={mode === "dashboard"}
-                className={mode === "dashboard" ? "active" : ""}
-                onClick={() => setMode("dashboard")}
+                aria-selected={mode === "activity"}
+                className={mode === "activity" ? "active" : ""}
+                onClick={() => setMode("activity")}
               >
-                Dashboard
+                Activity
               </button>
               <button
                 type="button"
@@ -220,10 +220,10 @@ export default function App() {
                 className={mode === "reminder" ? "active" : ""}
                 onClick={() => setMode("reminder")}
               >
-                ⏱ Reminder
+                Reminder
               </button>
             </div>
-            {mode === "dashboard" && (
+            {mode === "activity" && (
               <>
                 <button className="btn btn-outline" onClick={goToday}>
                   วันนี้
@@ -249,7 +249,7 @@ export default function App() {
           </div>
 
           <div className="app-header-right">
-            {mode === "dashboard" ? (
+            {mode === "activity" ? (
               <>
                 <div className="tag-search-wrap">
                   <span className="tag-search-icon">🔍</span>
@@ -367,9 +367,9 @@ export default function App() {
             ) : (
               // Reminder mode's header-right — deliberately minimal (no tag
               // search, add-activity, or sign-out button here, since those
-              // are dashboard-only concepts) but still gets its own ⚙️
+              // are activity-mode-only concepts) but still gets its own ⚙️
               // settings button so dark mode / language can be changed
-              // without switching back to dashboard mode first. Opens the
+              // without switching back to activity mode first. Opens the
               // exact same <SettingsDrawer> rendered once at the bottom of
               // this component (mode-independent) — not a second drawer —
               // so theme/language stay perfectly in sync between modes.
@@ -387,7 +387,7 @@ export default function App() {
         </header>
       )}
 
-      {firebaseUser && mode === "dashboard" && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
+      {firebaseUser && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
 
       {/* Blocking heads-up for the Google Calendar token — covers two
           situations with the same visual treatment (dimmed backdrop +
@@ -413,8 +413,13 @@ export default function App() {
           Deliberately does NOT auto-open the Google popup from a timer —
           browsers block popups that aren't triggered by a direct click, so
           a button the person presses themselves is the only reliable way
-          to renew either way. */}
-      {firebaseUser && (tokenNearingExpiry || !calendarAccessToken) && mode === "dashboard" && (
+          to renew either way.
+
+          Shown in every mode (not just activity mode) — if the token
+          expires while the person is in reminder mode, they still need a
+          way to renew it without first switching back to activity mode,
+          since there'd otherwise be no visible path to recover access. */}
+      {firebaseUser && (tokenNearingExpiry || !calendarAccessToken) && (
         <div className="token-expiry-backdrop">
           <div
             className="token-expiry-banner"
@@ -440,7 +445,7 @@ export default function App() {
       <main className="app-main">
         {mode === "reminder" && <ReminderMode firebaseUser={firebaseUser} />}
 
-        {mode === "dashboard" && (
+        {mode === "activity" && (
           <React.Fragment>
             {!authReady && (
               <div className="empty-state">
@@ -601,7 +606,7 @@ export default function App() {
                     onEditActivity={openEditActivity}
                   />
                 ) : (
-                  <AgendaView
+                  <ActivityMode
                     anchorDate={cursorDate}
                     activities={visibleActivities}
                     categories={categories}

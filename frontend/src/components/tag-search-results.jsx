@@ -5,12 +5,12 @@ import { normalizeActivityId } from "../id-utils.js";
 
 /**
  * แสดงผลลัพธ์การค้นหาด้วย tag เป็นรายการเรียงตามวันที่ (ไม่ใช่กริด 7 วันแบบ
- * AgendaView ปกติ) เพราะผลลัพธ์อาจกระจายข้ามหลายสัปดาห์/เดือน — AgendaView
+ * ActivityMode ปกติ) เพราะผลลัพธ์อาจกระจายข้ามหลายสัปดาห์/เดือน — ActivityMode
  * ยึดติดกับสัปดาห์เดียวเสมอ (anchorDate) จึงไม่เหมาะกับกรณีนี้ ใช้ component
- * แยกต่างหากแทนที่จะดัดแปลง AgendaView ให้ซับซ้อนขึ้นโดยไม่จำเป็น
+ * แยกต่างหากแทนที่จะดัดแปลง ActivityMode ให้ซับซ้อนขึ้นโดยไม่จำเป็น
  *
  * คลิกกิจกรรมแล้วเปิด ActivityModal แก้ไขได้เหมือนปกติ (onEditActivity เดียว
- * กับที่ AgendaView ใช้อยู่)
+ * กับที่ ActivityMode ใช้อยู่)
  */
 export default function TagSearchResults({
   activities,

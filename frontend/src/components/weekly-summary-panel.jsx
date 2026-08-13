@@ -15,7 +15,7 @@ const PIE_CIRCUMFERENCE = 2 * Math.PI * PIE_RADIUS;
 /**
  * The backend's /api/summary/week response includes each category's color
  * as a snapshot taken at request time — but the frontend's own `categories`
- * state (the same one AgendaView/TimelineEditor read from) is the live
+ * state (the same one ActivityMode/TimelineEditor read from) is the live
  * source of truth and can be edited (e.g. recoloring a category) without
  * necessarily re-triggering a summary refetch. To guarantee the donut
  * chart and legend always show the exact same color as everywhere else in
@@ -79,7 +79,7 @@ function CategoryPieChart({ byCategory, categories }) {
 /**
  * Weekly stats card: totals, category breakdown (pie chart), insight, and a
  * shortcut to open the busiest day's timeline. Day selection otherwise
- * lives entirely on the AgendaView side (see app.jsx) — this panel no
+ * lives entirely on the ActivityMode side (see app.jsx) — this panel no
  * longer offers its own day strip, it only reads `expandedDate` to render
  * its busiest-day shortcut correctly.
  *

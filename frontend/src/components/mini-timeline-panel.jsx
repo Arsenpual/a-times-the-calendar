@@ -13,11 +13,11 @@ const WEEKDAY_FULL = {
 /**
  * Mini timeline: a small read-only panel of a single day's activities. This
  * is the "back face" of the flip card shared with WeeklySummaryPanel (see
- * app.jsx) — it only ever displays whichever day AgendaView selected;
+ * app.jsx) — it only ever displays whichever day ActivityMode selected;
  * picking a different day always happens from the agenda list on the
  * right, never from here.
  *
- * Editing a day's activity times/categories happens inline in AgendaView's
+ * Editing a day's activity times/categories happens inline in ActivityMode's
  * own expanded row (its ⚙ button), not here — this panel is view-only.
  *
  * @param {Date|null} expandedDate the day currently shown, or null to hide the panel

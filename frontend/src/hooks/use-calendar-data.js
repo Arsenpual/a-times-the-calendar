@@ -122,7 +122,7 @@ export function useCalendarData({ calendarAccessToken, firebaseUser, cursorDate,
           summary: activity.summary,
           start: start.toISOString(),
           end: end.toISOString(),
-          // Keep the browser-local day that AgendaView and MiniTimelinePanel
+          // Keep the browser-local day that ActivityMode and MiniTimelinePanel
           // use, rather than relying on the server's timezone for grouping.
           startDate: toDateInputValue(start)
         };

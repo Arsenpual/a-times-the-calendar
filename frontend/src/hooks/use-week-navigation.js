@@ -6,7 +6,7 @@ const THEME_STORAGE_KEY = "theme";
 /**
  * Owns cursorDate/expandedDate navigation (week + day), plus a handful of
  * small standalone UI toggles that don't warrant their own hook each:
- * dashboard/reminder mode switch, dark-mode theme (persisted), the
+ * activity/reminder mode switch, dark-mode theme (persisted), the
  * settings drawer open/close flag, and the login-guide dismiss flag.
  *
  * None of these read or write calendar data — they're purely "what is the
@@ -15,7 +15,7 @@ const THEME_STORAGE_KEY = "theme";
  * useAuth or useCalendarData do.
  */
 export function useWeekNavigation() {
-  const [mode, setMode] = useState("dashboard"); // "dashboard" = ปฏิทินปกติ, "reminder" = reminder/Pomodoro mockup
+  const [mode, setMode] = useState("activity"); // "activity" = ปฏิทินปกติ, "reminder" = reminder/Pomodoro mockup
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Shows a guide image over the login screen explaining the Google
@@ -57,7 +57,7 @@ export function useWeekNavigation() {
 
   /**
    * เปลี่ยนสัปดาห์ที่กำลังดู — เรียกจากทั้งปุ่ม ‹ › ในหัว, ปุ่มลูกศรของแถว
-   * ใน AgendaView, และ global ← → shortcut ด้านล่าง ทั้งสามทางเรียก
+   * ใน ActivityMode, และ global ← → shortcut ด้านล่าง ทั้งสามทางเรียก
    * ฟังก์ชันเดียวกันนี้เสมอเพื่อไม่ให้ logic เพี้ยนจากกัน ห่อด้วย
    * useCallback (identity คงที่) เพราะ effect ของ global shortcut ด้านล่าง
    * add/remove event listener ตาม dependency ของมันเอง
@@ -128,13 +128,13 @@ export function useWeekNavigation() {
   }, [cursorDate]);
 
   /**
-   * Global arrow-key shortcuts, independent of focus inside AgendaView.
+   * Global arrow-key shortcuts, independent of focus inside ActivityMode.
    * ←/→ navigate weeks; ↑/↓ navigate days. Skipped entirely outside
-   * dashboard mode, and while focus is inside a text input/textarea/
+   * activity mode, and while focus is inside a text input/textarea/
    * contenteditable element.
    */
   useEffect(() => {
-    if (mode !== "dashboard") return;
+    if (mode !== "activity") return;
     const handleGlobalKeyDown = (e) => {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
       const active = document.activeElement;

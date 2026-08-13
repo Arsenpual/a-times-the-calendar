@@ -204,6 +204,17 @@ export default function ActivityModal({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
 
+  // Tracks whether the person already saw and accepted the "long overnight
+  // duration" warning from validate() below — set true after the first
+  // submit that triggers it, so clicking "บันทึก" a second time (without
+  // changing date/time) goes through instead of looping on the same
+  // warning forever. Reset whenever date/start/end change, since a new
+  // time combination needs its own fresh confirmation.
+  const [overnightWarningAcknowledged, setOvernightWarningAcknowledged] = useState(false);
+  useEffect(() => {
+    setOvernightWarningAcknowledged(false);
+  }, [date, startTime, endTime]);
+
   // Escape ปิด modal ได้เหมือนคลิกนอกกรอบ (.modal-overlay's onClick={onClose}
   // ด้านล่าง) — attach ที่ document เพราะโฟกัสอาจอยู่ตรงไหนก็ได้ในฟอร์ม
   // (input, textarea, ปุ่ม) ไม่ใช่แค่ตอน modal เองมีโฟกัสตรงๆ ใส่ effect นี้
@@ -343,6 +354,18 @@ export default function ActivityModal({
       return "กรุณาระบุวันที่สิ้นสุดการทำซ้ำ";
     }
 
+    // เตือน (ไม่บล็อก) ถ้าการเลื่อน end ไปวันถัดไปแบบอัตโนมัติ (ดู
+    // computeStartEnd) ทำให้กิจกรรมยาวผิดปกติ (> 18 ชม.) — เคสนี้มักเกิด
+    // จากผู้ใช้เผลอตั้ง endTime พลาด (เช่น เท่ากับ startTime พอดี หรือ
+    // กลับ AM/PM สลับกัน) ไม่ใช่กิจกรรมข้ามคืนจริงๆ ที่ตั้งใจ เตือนไว้ก่อน
+    // บันทึกจริง ให้ผู้ใช้เช็คซ้ำแทนที่จะปล่อยให้สร้างกิจกรรม 20+ ชม. โดย
+    // ไม่รู้ตัว
+    const { start: durationStart, end: durationEnd } = computeStartEnd();
+    const durationHours = (durationEnd - durationStart) / 3600000;
+    if (durationHours > 18 && !overnightWarningAcknowledged) {
+      return `กิจกรรมนี้ยาว ${durationHours.toFixed(1)} ชั่วโมง (ข้ามเที่ยงคืนไปจบวันถัดไป) — ถ้าตั้งใจแบบนี้ กดบันทึกอีกครั้งเพื่อยืนยัน`;
+    }
+
     // ห้ามกิจกรรมเวลาทับซ้อนกันในโหมด calendar — กิจกรรมย่อยๆ ให้ใช้โหมด
     // reminder แทน (calendar เก็บแค่กิจกรรมสำคัญที่มีเวลาแน่นอนไม่ชนกัน)
     // เช็คเป็นสองช่วงเวลาทับกันแบบมาตรฐาน: A ทับ B ก็ต่อเมื่อ A เริ่มก่อน B
@@ -386,6 +409,16 @@ export default function ActivityModal({
     const validationError = validate();
     if (validationError) {
       setFormError(validationError);
+      // The long-duration warning is a confirm-to-proceed prompt, not a
+      // hard block — arm the acknowledgment flag so the *next* submit
+      // (with the same date/time) passes validate() and actually saves.
+      // Any other validation error leaves this false, so it keeps
+      // blocking normally.
+      const { start: durationStart, end: durationEnd } = computeStartEnd();
+      const durationHours = (durationEnd - durationStart) / 3600000;
+      if (durationHours > 18) {
+        setOvernightWarningAcknowledged(true);
+      }
       return;
     }
     setSaving(true);

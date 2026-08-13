@@ -31,7 +31,7 @@ function minutesToLabel(totalMinutes) {
 
 /**
  * Inline drag-editor for one day's activity times, rendered inside its
- * expanded agenda-row (see agenda-view.jsx) — not a separate panel. The
+ * expanded agenda-row (see activity-mode.jsx) — not a separate panel. The
  * grid spans the full 24-hour day so every activity is visible without
  * scrolling past hidden hours. Overlapping activities lay out side by side,
  * left to right, with the longest-duration activity in the rightmost column.

@@ -241,7 +241,7 @@ export function useActivityMutations({
   };
 
   /**
-   * Batched save for AgendaView's inline timeline-editor: applies every
+   * Batched save for ActivityMode's inline timeline-editor: applies every
    * dragged start/end change to Google Calendar at once, only when the
    * person presses "บันทึก". Locked activities are skipped outright.
    */

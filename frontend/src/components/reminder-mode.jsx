@@ -83,6 +83,43 @@ function toLocalDateInputValue(ms) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * ค่าเริ่มต้นของ draft สำหรับ composer ตอนยังไม่ได้แก้ไข reminder ใดอยู่
+ * (สร้างใหม่/ล้างฟอร์มหลังบันทึก/ยกเลิกแก้ไข) — รวมไว้ที่ฟังก์ชันเดียวแทนที่
+ * จะก็อปปี้ object literal ซ้ำ 3 จุด (initial useState, submitReminderForm's
+ * reset, cancelEditing) เพื่อไม่ให้จุดใดจุดหนึ่งลืมอัปเดตตามถ้าค่าเริ่มต้น
+ * เปลี่ยนในอนาคต
+ *
+ * atDate/atTime (ใช้กับ ONCE_AT) ตั้งเป็นวันที่/เวลาปัจจุบันของเครื่องเสมอ
+ * แทนที่จะปล่อยว่าง — ผู้ใช้ที่จะตั้งเตือนแบบ "ครั้งเดียว" ส่วนใหญ่ตั้งเวลา
+ * ใกล้ๆ ตอนนี้อยู่แล้ว (เช่น อีก 20 นาที) การมีวันที่/เวลาปัจจุบันโชว์ไว้ก่อน
+ * ให้แค่ปรับเวลาต่อจากนั้นเร็วกว่าต้องเปิด date/time picker มาเลือกเองทั้งหมด
+ * ตั้งใจคำนวณใหม่ทุกครั้งที่เรียกฟังก์ชันนี้ (ไม่ใช่ค่าคงที่ตอน module
+ * โหลด) เพื่อให้ตรงกับเวลาจริง ณ ตอนเปิด/ล้างฟอร์มเสมอ ไม่ใช่เวลาที่หน้าเว็บ
+ * ถูกโหลดครั้งแรก
+ */
+function createBlankDraft() {
+  const now = new Date();
+  return {
+    title: "",
+    type: REMINDER_TYPE.INTERVAL,
+    amount: "30",
+    unit: "minutes",
+    windowStart: "",
+    windowEnd: "",
+    atTime: now.toTimeString().slice(0, 5),
+    atDate: toLocalDateInputValue(now.getTime()),
+    countdownMinutes: "20",
+    days: [1, 3, 5],
+    time: "08:00",
+    eventName: "",
+    afterAmount: "2",
+    afterUnit: "hours",
+    routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
+    lineColor: DEFAULT_LINE_COLOR
+  };
+}
+
 const DEFAULT_REMINDERS = [
   { id: "water", type: REMINDER_TYPE.INTERVAL, title: "ดื่มน้ำ", amount: 30, unit: "minutes", enabled: true },
   { id: "stretch", type: REMINDER_TYPE.INTERVAL, title: "ยืดตัว 30 วินาที", amount: 60, unit: "minutes", enabled: true },
@@ -409,24 +446,7 @@ export default function ReminderDashboard({ firebaseUser }) {
   const [dueReminders, setDueReminders] = useState([]);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
 
-  const [draft, setDraft] = useState({
-    title: "",
-    type: REMINDER_TYPE.INTERVAL,
-    amount: "30",
-    unit: "minutes",
-    windowStart: "",
-    windowEnd: "",
-    atTime: "",
-    atDate: "",
-    countdownMinutes: "20",
-    days: [1, 3, 5],
-    time: "08:00",
-    eventName: "",
-    afterAmount: "2",
-    afterUnit: "hours",
-    routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
-    lineColor: DEFAULT_LINE_COLOR
-  });
+  const [draft, setDraft] = useState(createBlankDraft);
 
   const [editingId, setEditingId] = useState(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false); // composer เริ่มต้นแบบพับเก็บ ประหยัดพื้นที่
@@ -796,24 +816,7 @@ export default function ReminderDashboard({ firebaseUser }) {
     // พิมพ์ใน draft ระหว่างทาง จึงไม่ต้อง debounce
     syncScheduleFields(newReminder.id, extractScheduleFields(newReminder), { immediate: true });
 
-    setDraft({
-      title: "",
-      type: REMINDER_TYPE.INTERVAL,
-      amount: "30",
-      unit: "minutes",
-      windowStart: "",
-      windowEnd: "",
-      atTime: "",
-      atDate: "",
-      countdownMinutes: "20",
-      days: [1, 3, 5],
-      time: "08:00",
-      eventName: "",
-      afterAmount: "2",
-      afterUnit: "hours",
-      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
-      lineColor: DEFAULT_LINE_COLOR
-    });
+    setDraft(createBlankDraft());
     setIsComposerOpen(false); // บันทึกเสร็จแล้วพับ composer กลับ คืนพื้นที่ให้ list
   };
 
@@ -847,24 +850,7 @@ export default function ReminderDashboard({ firebaseUser }) {
 
   const cancelEditing = () => {
     setEditingId(null);
-    setDraft({
-      title: "",
-      type: REMINDER_TYPE.INTERVAL,
-      amount: "30",
-      unit: "minutes",
-      windowStart: "",
-      windowEnd: "",
-      atTime: "",
-      atDate: "",
-      countdownMinutes: "20",
-      days: [1, 3, 5],
-      time: "08:00",
-      eventName: "",
-      afterAmount: "2",
-      afterUnit: "hours",
-      routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
-      lineColor: DEFAULT_LINE_COLOR
-    });
+    setDraft(createBlankDraft());
     setIsComposerOpen(false); // ยกเลิกแล้วพับ composer กลับ
   };
 
@@ -873,6 +859,16 @@ export default function ReminderDashboard({ firebaseUser }) {
       // กำลังเปิดอยู่แล้วกดปุ่มซ้ำ = ปิด และล้าง draft/สถานะแก้ไขทิ้งไปด้วย
       cancelEditing();
     } else {
+      // เปิด composer สำหรับสร้างใหม่ (ไม่ใช่แก้ไข — กรณีแก้ไขเรียก
+      // setIsComposerOpen(true) เองแยกต่างหากพร้อม draft ของ reminder เดิม
+      // อยู่แล้ว ดู startEditingReminder) — รีเฟรช atDate/atTime ให้เป็นวัน/
+      // เวลาจริง ณ ตอนนี้เสมอ ไม่ใช่ค่าที่ค้างมาจากตอนหน้าเว็บโหลดครั้งแรก
+      // (ถ้าเปิดหน้าทิ้งไว้นานแล้วเพิ่งมาเปิด composer เวลาที่ค้างอยู่จะ
+      // เพี้ยนจากเวลาปัจจุบันจริง)
+      setDraft((prev) => {
+        const now = new Date();
+        return { ...prev, atTime: now.toTimeString().slice(0, 5), atDate: toLocalDateInputValue(now.getTime()) };
+      });
       setIsComposerOpen(true);
     }
   };
