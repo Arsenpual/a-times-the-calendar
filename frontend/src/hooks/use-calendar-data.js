@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchActivities } from "../google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../google-calendar.js";
 import {
   fetchCategories,
   fetchActivityCategoryMap,
@@ -23,12 +23,23 @@ import { getWeekRange, activityDate, toDateInputValue } from "../date-utils.js";
  * every hook (auth errors, mutation errors, and these fetch errors all
  * land in the same place).
  *
+ * Also takes setCalendarAccessToken (from useAuth) so loadActivities can
+ * clear the token when Google Calendar itself reports it's expired (401)
+ * — previously this hook only called setError(e.message) on failure,
+ * which showed the "หมดอายุ...กรุณายืนยันตัวตนอีกครั้ง" banner text but
+ * left calendarAccessToken untouched, so app.jsx's renew-token banner
+ * (gated on `!calendarAccessToken`) never appeared even though the error
+ * text told the person to re-authenticate. loadActivities runs
+ * automatically on every mount/week change, so it's the most common way
+ * an expired token was first discovered — this was the main place that
+ * inconsistency showed up in practice.
+ *
  * Exposes the raw setters (setActivityCategoryMap, etc.) alongside the
  * fetchers — useActivityMutations needs both: it does optimistic local
  * updates via the setters, then calls loadActivities() to reconcile with
  * the server after a write.
  */
-export function useCalendarData({ calendarAccessToken, firebaseUser, cursorDate, setError }) {
+export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -69,15 +80,17 @@ export function useCalendarData({ calendarAccessToken, firebaseUser, cursorDate,
       setActivities(items);
     } catch (e) {
       setError(e.message);
-      // Note: this hook does NOT clear calendarAccessToken itself on a
-      // "หมดอายุ" (expired) error — that's useAuth's state, and app.jsx
-      // wires the clear explicitly where this hook is composed, keeping
-      // the two hooks from needing to know about each other directly.
+      // Clear the token so app.jsx's renew banner (gated on
+      // `!calendarAccessToken`) actually shows up alongside this error —
+      // see this hook's module comment for why this was missing before.
+      if (isCalendarAuthExpiredError(e)) {
+        setCalendarAccessToken(null);
+      }
       throw e;
     } finally {
       setLoading(false);
     }
-  }, [calendarAccessToken, cursorDate, setError]);
+  }, [calendarAccessToken, cursorDate, setError, setCalendarAccessToken]);
 
   useEffect(() => {
     loadActivities().catch(() => {

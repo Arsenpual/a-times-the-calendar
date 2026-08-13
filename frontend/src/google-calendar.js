@@ -14,9 +14,34 @@ import {
 import { firebaseApp } from "./firebase-config.js";
 
 const EVENTS_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
+// Narrowed from the full "https://www.googleapis.com/auth/calendar" scope
+// (read/write access to every calendar the user owns, calendar list
+// management, sharing settings, etc.) down to "calendar.events" — this app
+// only ever creates/reads/updates/deletes events on the primary calendar
+// (see fetchActivities/getActivity/createActivity/updateActivity/
+// deleteActivity/fetchRecurringInstances below), it never touches calendar
+// list or sharing settings. Requesting the narrower scope reduces what an
+// attacker could do if this access token were ever exfiltrated (e.g. via
+// an XSS bug), since the token is persisted in localStorage — see
+// use-auth.js's module comment.
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 
 export const auth = getAuth(firebaseApp);
+
+/**
+ * True if `error` came from calendarRequest()'s 401 branch — i.e. the
+ * Google Calendar access token itself is dead, not just some other API
+ * error. Callers that hold setCalendarAccessToken should call this in
+ * their catch block and clear the token when it's true, so app.jsx's
+ * renew banner (gated on `!calendarAccessToken`) reliably appears
+ * whenever the error message tells the person their access expired —
+ * see calendarRequest's comment for why this exists as a `code` check
+ * instead of matching the Thai error text directly.
+ * @param {unknown} error
+ */
+export function isCalendarAuthExpiredError(error) {
+  return error?.code === "CALENDAR_TOKEN_EXPIRED";
+}
 
 /**
  * Builds a fresh GoogleAuthProvider with the Calendar scope requested, for
@@ -158,7 +183,23 @@ async function calendarRequest(accessToken, url, options = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error("สิทธิ์เข้าถึง Google Calendar หมดอายุ — กรุณายืนยันตัวตนอีกครั้ง");
+      // Tagged with a machine-readable `code` (not just Thai text) so
+      // every caller that needs to react to "the Calendar token itself is
+      // dead" — e.g. to clear calendarAccessToken and surface the renew
+      // banner in app.jsx — can check err.code === CALENDAR_TOKEN_EXPIRED
+      // instead of substring-matching the Thai error message. Substring
+      // matching on translated/localized text is fragile (breaks silently
+      // if the message wording ever changes) and was already the cause of
+      // one inconsistency: only handleSaveTimes in use-activity-mutations.js
+      // checked for this and cleared the token — every other caller
+      // (loadActivities, tag search, individual activity writes) just
+      // displayed the error text without ever clearing calendarAccessToken,
+      // so the "ยืนยันตัวตน" renew button never appeared even though the
+      // error banner said the token was expired. See isCalendarAuthError
+      // below and every place it's now used.
+      const err = new Error("สิทธิ์เข้าถึง Google Calendar หมดอายุ — กรุณายืนยันตัวตนอีกครั้ง");
+      err.code = "CALENDAR_TOKEN_EXPIRED";
+      throw err;
     }
     if (res.status === 403) {
       throw new Error("ไม่มีสิทธิ์แก้ไขปฏิทิน — ลองยืนยันตัวตนใหม่เพื่อขอสิทธิ์เขียนปฏิทิน");

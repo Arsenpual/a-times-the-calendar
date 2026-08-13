@@ -54,6 +54,15 @@ router.put("/:activityId/category", async (req, res, next) => {
     const { categoryId } = req.body;
     const id = normalizeId(req.params.activityId);
 
+    // ต้องเป็น null (เอาหมวดหมู่ออก) หรือ non-empty string (id ของหมวดหมู่)
+    // เท่านั้น — เดิมรับอะไรก็ได้ที่ !== null ตรงๆ (object, number, "",
+    // undefined) แล้วส่งเข้า .doc(categoryId) ทันที ซึ่ง Firestore SDK จะ
+    // throw TypeError ถ้า categoryId ไม่ใช่ string ทำให้ request จบด้วย 500
+    // (unhandled-ish) แทนที่จะเป็น 400 ที่บอกสาเหตุชัดเจนแบบนี้
+    if (categoryId !== null && (typeof categoryId !== "string" || categoryId.trim() === "")) {
+      return res.status(400).json({ error: "categoryId ต้องเป็น null หรือ string ที่ไม่ว่างเปล่า" });
+    }
+
     if (categoryId !== null) {
       const categoryDoc = await categoriesCol(req.userId).doc(categoryId).get();
       if (!categoryDoc.exists) {

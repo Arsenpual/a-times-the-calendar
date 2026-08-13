@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchActivities } from "../google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../google-calendar.js";
 
 /**
  * Owns tag-search state: the entered search terms, the ±3-month wide
@@ -10,9 +10,15 @@ import { fetchActivities } from "../google-calendar.js";
  * themselves.
  *
  * Takes calendarAccessToken as an input (from useAuth) rather than owning
- * it, since the fetch is simply gated on it being present.
+ * it, since the fetch is simply gated on it being present. Also takes
+ * setCalendarAccessToken so this hook can clear the token if Google
+ * Calendar reports it's expired (401) — same reasoning as
+ * useCalendarData's loadActivities; without this, searching by tag with a
+ * dead token showed the error text but never surfaced app.jsx's renew
+ * banner, same inconsistency described in google-calendar.js's
+ * isCalendarAuthExpiredError comment.
  */
-export function useTagSearch({ calendarAccessToken }) {
+export function useTagSearch({ calendarAccessToken, setCalendarAccessToken }) {
   // ค้นหากิจกรรมด้วย tag (หลายอันพร้อมกัน แบบ OR) — เก็บเป็น array ของ
   // คำค้นหา ไม่ใช่ string เดียว เพื่อรองรับหลาย tag พร้อมกัน
   const [tagSearchTerms, setTagSearchTerms] = useState([]);
@@ -52,7 +58,12 @@ export function useTagSearch({ calendarAccessToken }) {
         if (!cancelled) setTagSearchResults(items);
       })
       .catch((e) => {
-        if (!cancelled) setTagSearchError(e.message);
+        if (!cancelled) {
+          setTagSearchError(e.message);
+          if (isCalendarAuthExpiredError(e)) {
+            setCalendarAccessToken(null);
+          }
+        }
       })
       .finally(() => {
         if (!cancelled) setTagSearchLoading(false);
@@ -63,7 +74,7 @@ export function useTagSearch({ calendarAccessToken }) {
     };
     // tagSearchRefreshKey deliberately triggers a refetch on every bump
     // even though it carries no data of its own.
-  }, [tagSearchTerms, calendarAccessToken, tagSearchRefreshKey]);
+  }, [tagSearchTerms, calendarAccessToken, tagSearchRefreshKey, setCalendarAccessToken]);
 
   // เคลียร์ผลค้นหาทิ้งเมื่อไม่มีคำค้นหาเหลืออยู่แล้ว
   useEffect(() => {

@@ -3,7 +3,8 @@ import {
   createActivity,
   updateActivity,
   deleteActivity,
-  fetchRecurringInstances
+  fetchRecurringInstances,
+  isCalendarAuthExpiredError
 } from "../google-calendar.js";
 import {
   createCategory,
@@ -59,6 +60,20 @@ export function useActivityMutations({
   refreshTagSearchIfActive,
   setError
 }) {
+  /**
+   * Clears calendarAccessToken when `e` indicates the Google Calendar
+   * token itself is dead (401) — called from every write handler below
+   * that talks to Google Calendar directly, so app.jsx's renew banner
+   * (gated on `!calendarAccessToken`) reliably appears the moment any of
+   * these fail with an expired token, not just after the next
+   * loadActivities() call. Does not swallow the error — every call site
+   * rethrows immediately after, so existing local error handling (popup/
+   * modal error text) is unaffected.
+   */
+  const clearTokenIfExpired = (e) => {
+    if (isCalendarAuthExpiredError(e)) setCalendarAccessToken(null);
+  };
+
   /**
    * ห้ามกิจกรรมเวลาทับซ้อนกันในโหมด calendar — logic เดียวกันกับที่ใช้ใน
    * ActivityModal.jsx's validate() (ที่นั่นเช็คตอนสร้าง/แก้ไขผ่านฟอร์ม
@@ -184,22 +199,26 @@ export function useActivityMutations({
     if (!calendarAccessToken) return;
 
     let conflictDetected = false;
-    let savedActivity;
-    if (existingId) {
-      if (knownUpdated) {
-        try {
-          const latest = await getActivity(calendarAccessToken, existingId);
-          if (latest?.updated && latest.updated !== knownUpdated) {
-            conflictDetected = true;
-          }
-        } catch (e) {
-          // Can't verify — proceed with the save and let any real error
-          // surface from the update call itself.
+    if (existingId && knownUpdated) {
+      try {
+        const latest = await getActivity(calendarAccessToken, existingId);
+        if (latest?.updated && latest.updated !== knownUpdated) {
+          conflictDetected = true;
         }
+      } catch (e) {
+        // Can't verify — proceed with the save and let any real error
+        // surface from the update call itself.
       }
-      savedActivity = await updateActivity(calendarAccessToken, existingId, activityBody);
-    } else {
-      savedActivity = await createActivity(calendarAccessToken, activityBody);
+    }
+
+    let savedActivity;
+    try {
+      savedActivity = existingId
+        ? await updateActivity(calendarAccessToken, existingId, activityBody)
+        : await createActivity(calendarAccessToken, activityBody);
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
     }
 
     if (savedActivity?.id) {
@@ -277,7 +296,7 @@ export function useActivityMutations({
         });
       } catch (e) {
         failures.push(`${id}: ${e.message}`);
-        if (e.message.includes("หมดอายุ")) {
+        if (isCalendarAuthExpiredError(e)) {
           tokenExpired = true;
           break;
         }
@@ -322,7 +341,12 @@ export function useActivityMutations({
     if (lockedActivities[normalizedId]) {
       throw new Error("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนลบ");
     }
-    await deleteActivity(calendarAccessToken, activityId);
+    try {
+      await deleteActivity(calendarAccessToken, activityId);
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
+    }
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       delete next[normalizedId];
@@ -375,7 +399,12 @@ export function useActivityMutations({
     if (lockedInSeries.length > 0) {
       throw new Error("บางกิจกรรมในชุดนี้ถูกล็อกไว้ — ปลดล็อกทั้งหมดก่อนลบทั้งชุด");
     }
-    await deleteActivity(calendarAccessToken, recurringEventId);
+    try {
+      await deleteActivity(calendarAccessToken, recurringEventId);
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
+    }
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       for (const id of normalizedSeriesIds) delete next[id];
@@ -458,7 +487,13 @@ export function useActivityMutations({
     };
     if (activity.colorId) body.colorId = activity.colorId;
 
-    const created = await createActivity(calendarAccessToken, body);
+    let created;
+    try {
+      created = await createActivity(calendarAccessToken, body);
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
+    }
     const normalizedCreatedId = created?.id ? normalizeActivityId(created.id) : null;
 
     const existingCategoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
@@ -520,7 +555,12 @@ export function useActivityMutations({
     const body = { start: { dateTime: newStart.toISOString() }, end: { dateTime: newEnd.toISOString() } };
 
     const conflict = await checkConflict(rawId);
-    await updateActivity(calendarAccessToken, rawId, body);
+    try {
+      await updateActivity(calendarAccessToken, rawId, body);
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
+    }
     if (conflict) {
       setError("กิจกรรมนี้ถูกแก้ไขที่อื่นหลังจากโหลดข้อมูลล่าสุด — บันทึกทับข้อมูลนั้นแล้ว");
     }
@@ -543,7 +583,12 @@ export function useActivityMutations({
     }
     const activity = activities.find((a) => normalizeActivityId(a.id) === normalizedId);
     if (!activity) return;
-    await updateActivity(calendarAccessToken, activity.id, { colorId: colorId || "" });
+    try {
+      await updateActivity(calendarAccessToken, activity.id, { colorId: colorId || "" });
+    } catch (e) {
+      clearTokenIfExpired(e);
+      throw e;
+    }
     await loadActivities();
     refreshTagSearchIfActive();
   };

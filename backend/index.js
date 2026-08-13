@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 
 const { requireAuth } = require("./middleware/require-auth.js");
 const categoriesRouter = require("./routes/categories.js");
@@ -28,6 +29,24 @@ app.use(
   })
 );
 app.use(express.json());
+
+// จำกัดจำนวน request ต่อ IP ต่อ 15 นาที — เดิมไม่มี rate limiting เลยสัก
+// จุดเดียว (ระบุไว้เป็นงานค้างใน overview.md) ทำให้ user ที่ login ถูกต้อง
+// แล้ว (ผ่าน requireAuth) ยิง POST /api/categories, PUT /api/reminders/:id
+// ฯลฯ ซ้ำไม่จำกัดจำนวนได้ — ไม่ใช่ช่องทางข้อมูล user อื่นรั่ว (Firestore
+// rules + userId scoping ป้องกันอยู่แล้ว) แต่เป็นช่องทาง self-DoS/เพิ่ม
+// ค่าใช้จ่าย Firestore โดยไม่ตั้งใจหรือเจตนาร้ายก็ได้ ตั้งไว้กว้างพอสำหรับ
+// การใช้งานปกติ (ไม่บล็อกคนใช้จริง) แต่กันการยิงรัวๆ ผิดปกติ — ยังไม่ใช่
+// rate limit แบบ per-user (ต้องรู้ userId ก่อนซึ่งมาจาก requireAuth ที่ทำงาน
+// หลัง middleware นี้) แค่เป็นเกราะชั้นแรกระดับ IP ก่อน route ใดๆ ทั้งหมด
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600, // ~40 req/นาที ต่อ IP — เกินพอสำหรับการใช้งานปกติของแอปนี้
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "เรียก API ถี่เกินไป กรุณาลองใหม่อีกครั้งภายหลัง" }
+});
+app.use("/api", apiLimiter);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });

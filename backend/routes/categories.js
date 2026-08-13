@@ -14,6 +14,17 @@ function isValidColor(color) {
   return typeof color === "string" && HEX_COLOR_RE.test(color);
 }
 
+// ชื่อหมวดหมู่ต้องเป็น string ไม่ว่างเปล่า และมีเพดานความยาวชัดเจน — เดิม
+// เช็คแค่ falsy check (!name) ซึ่งยอมให้ number/object/array หลุดผ่านไปได้
+// (เช่น name: 123 → !123 เป็น false → ผ่านเงื่อนไข) แล้วเขียนลง Firestore
+// ตรงๆ โดยไม่รู้ว่าค่าจริงเป็น type อะไร ความยาวสูงสุด 60 ตัวอักษร กว้าง
+// พอสำหรับชื่อหมวดหมู่ชีวิตทั่วไปแต่กันไม่ให้ยัด string ยาวมากมาเป็น "ชื่อ"
+const NAME_MAX_LENGTH = 60;
+
+function isValidName(name) {
+  return typeof name === "string" && name.trim().length > 0 && name.length <= NAME_MAX_LENGTH;
+}
+
 // GET /api/categories — list all life areas ของ user ที่ login อยู่
 // (requireAuth แนบ req.userId ไว้ให้แล้วก่อนถึง route นี้เสมอ)
 router.get("/", async (req, res, next) => {
@@ -30,15 +41,16 @@ router.get("/", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
   try {
     const { name, color } = req.body;
-    if (!name || !color) {
-      return res.status(400).json({ error: "ต้องระบุ name และ color" });
+    if (!isValidName(name)) {
+      return res.status(400).json({ error: `name ต้องเป็น string ไม่ว่างเปล่า ยาวไม่เกิน ${NAME_MAX_LENGTH} ตัวอักษร` });
     }
     if (!isValidColor(color)) {
       return res.status(400).json({ error: "color ต้องเป็น hex สี 6 หลัก เช่น #1557B0" });
     }
     const id = randomUUID();
-    await categoriesCol(req.userId).doc(id).set({ name, color });
-    res.status(201).json({ id, name, color });
+    const trimmedName = name.trim();
+    await categoriesCol(req.userId).doc(id).set({ name: trimmedName, color });
+    res.status(201).json({ id, name: trimmedName, color });
   } catch (err) {
     next(err);
   }
@@ -49,6 +61,12 @@ router.put("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, color } = req.body;
+    // เดิมเช็คแค่ `if (name)`/`if (color)` แบบ falsy — ปล่อยผ่าน type ที่ไม่ใช่
+    // string ได้ (number, object, array ฯลฯ) ตอนนี้เช็ค type ให้ชัดเจนก่อน
+    // เขียนลง Firestore เสมอ ไม่ใช่แค่ตอน "มีค่า" ส่งมา
+    if (name !== undefined && !isValidName(name)) {
+      return res.status(400).json({ error: `name ต้องเป็น string ไม่ว่างเปล่า ยาวไม่เกิน ${NAME_MAX_LENGTH} ตัวอักษร` });
+    }
     if (color !== undefined && !isValidColor(color)) {
       return res.status(400).json({ error: "color ต้องเป็น hex สี 6 หลัก เช่น #1557B0" });
     }
@@ -60,8 +78,8 @@ router.put("/:id", async (req, res, next) => {
     }
 
     const updates = {};
-    if (name) updates.name = name;
-    if (color) updates.color = color;
+    if (name !== undefined) updates.name = name.trim();
+    if (color !== undefined) updates.color = color;
     await docRef.update(updates);
 
     const updated = await docRef.get();

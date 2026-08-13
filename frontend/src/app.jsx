@@ -97,7 +97,7 @@ export default function App() {
     closeDay
   } = nav;
 
-  const calendarData = useCalendarData({ calendarAccessToken, firebaseUser, cursorDate, setError });
+  const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError });
   const {
     activities,
     loading,
@@ -116,7 +116,7 @@ export default function App() {
     resetOnLogout
   } = calendarData;
 
-  const tagSearch = useTagSearch({ calendarAccessToken });
+  const tagSearch = useTagSearch({ calendarAccessToken, setCalendarAccessToken });
   const {
     tagSearchTerms,
     setTagSearchTerms,
