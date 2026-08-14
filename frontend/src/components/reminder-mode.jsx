@@ -396,7 +396,14 @@ export default function ReminderDashboard({ firebaseUser }) {
   const [reminders, setReminders] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_REMINDERS;
+      if (!saved) return DEFAULT_REMINDERS;
+      const parsed = JSON.parse(saved);
+      // ต้องเป็น array เท่านั้น — โค้ดทั้งไฟล์เรียก reminders.filter()/
+      // .map() ตรงๆ โดยไม่เช็คก่อนอีกที ถ้า localStorage มีค่าเพี้ยน (เช่น
+      // ถูกแก้ด้วยมือ, ค่าจาก version เก่าที่โครงสร้างต่างกัน, หรือ storage
+      // เสียหาย) จะทำให้แอปทั้งหน้า crash ตั้งแต่ initial render แทนที่จะ
+      // fallback ไปใช้ค่าเริ่มต้นอย่างปลอดภัยแบบนี้
+      return Array.isArray(parsed) ? parsed : DEFAULT_REMINDERS;
     } catch {
       return DEFAULT_REMINDERS;
     }
@@ -778,6 +785,18 @@ export default function ReminderDashboard({ firebaseUser }) {
         return;
       }
       const atMs = new Date(`${draft.atDate}T${draft.atTime}:00`).getTime();
+      // เช็คเดียวกับที่ toggle() ทำตอนเปิดสวิตช์กลับ (บรรทัดด้านบนในไฟล์นี้)
+      // — เดิมจุดสร้างใหม่ผ่านฟอร์มไม่เช็คเงื่อนไขนี้เลย ทำให้เลือกวันที่/
+      // เวลาที่ผ่านไปแล้วโดยไม่ตั้งใจได้ reminder ที่ enabled: true พร้อม
+      // nextDueAt เป็นอดีตทันที แล้วเด้ง banner "ถึงเวลาแล้ว" ทันทีที่บันทึก
+      // โดยไม่มีการเตือนล่วงหน้าเลย เช็คเฉพาะตอน "สร้างใหม่" เท่านั้น
+      // (ไม่ใช่ !editingId) — ตอนแก้ไข reminder เดิม (เช่นแค่แก้ชื่อ) ที่
+      // atDate/atTime เดิมผ่านไปแล้วอยู่ก่อนแล้วต้องยังบันทึกได้ ไม่งั้นจะ
+      // ติดล็อกแก้อะไรไม่ได้เลยจนกว่าจะเปลี่ยนวันที่ใหม่ก่อน
+      if (!editingId && atMs <= Date.now()) {
+        alert("เวลาที่เลือกผ่านไปแล้ว กรุณาเลือกวันที่และเวลาในอนาคต");
+        return;
+      }
       newReminder.atMs = atMs;
     } else if (draft.type === REMINDER_TYPE.COUNTDOWN) {
       const minutes = parseInt(draft.countdownMinutes) || 20;
