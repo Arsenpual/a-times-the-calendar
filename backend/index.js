@@ -8,6 +8,7 @@ const categoriesRouter = require("./routes/categories.js");
 const activityCategoriesRouter = require("./routes/activity-categories.js");
 const summaryRouter = require("./routes/summary.js");
 const remindersRouter = require("./routes/reminders.js");
+const reminderGroupsRouter = require("./routes/reminder-groups.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -61,6 +62,12 @@ app.use("/api/categories", requireAuth, categoriesRouter);
 app.use("/api/activities", requireAuth, activityCategoriesRouter);
 app.use("/api/summary", requireAuth, summaryRouter);
 app.use("/api/reminders", requireAuth, remindersRouter);
+// migration plan v2 เฟส 3 — Groups/Projects ของ reminder mode แยก route
+// ต่างหากจาก /api/reminders เอง (แม้จะเก็บ groupId เป็น field บน reminder
+// document ก็ตาม) เพราะ CRUD ของ "กลุ่ม" (สร้าง/แก้ไข/ลบกลุ่ม) เป็นคนละ
+// resource กับ CRUD ของ reminder เอง — ตรงกับที่ categories.js แยกจาก
+// activity-categories.js ฝั่งปฏิทินเช่นกัน
+app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "ไม่พบ endpoint นี้" });

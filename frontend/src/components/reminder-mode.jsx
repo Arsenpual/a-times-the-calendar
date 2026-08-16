@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRemindersSync } from "../hooks/use-reminders-sync.js";
+import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 
 const STORAGE_KEY = "times-reminders-v1";
 
@@ -7,11 +8,20 @@ const STORAGE_KEY = "times-reminders-v1";
 // backend/routes/reminders.js เป๊ะๆ (ฝั่ง backend มี allow-list ของตัวเอง
 // อยู่แล้ว ตัดฟิลด์ที่ไม่อยู่ในนี้ทิ้งเงียบๆ — รายการนี้ฝั่ง frontend มีไว้
 // เพื่อความชัดเจนตอนอ่านโค้ด ไม่ใช่ security boundary จริง) ไม่รวม runtime
-// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/nextDueAt
+// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/nextDueAt/
+// completedAt (เพิ่มเข้ามาเฟส 4 — migration plan v2) — ตั้งใจไม่ sync เพราะ
+// เป็น MVP ที่ยังไม่ต้องข้ามเครื่อง (ดูคำตอบเฟส 0 ข้อ 3 ที่ล็อกไว้)
 const SCHEDULE_FIELD_KEYS = [
   "type", "title", "enabled", "amount", "unit", "windowStart", "windowEnd",
   "days", "time", "atMs", "afterAmount", "afterUnit", "durationMs",
-  "lineColor", "eventName", "steps"
+  "lineColor", "eventName", "steps",
+  // migration plan v2 เฟส 3 — groupId ผูก reminder เข้ากับกลุ่ม/โปรเจกต์
+  // (one-to-one, null = ไม่มีกลุ่ม) ต้องส่งค่า null อย่างชัดเจนเสมอ (ไม่ใช่
+  // undefined) เมื่อไม่มีกลุ่ม เพื่อให้ extractScheduleFields ด้านล่างส่ง
+  // ค่านี้ขึ้น backend ทุกครั้ง — มิฉะนั้นตอนผู้ใช้เอา reminder ออกจากกลุ่ม
+  // (groupId: null) การ sync จะไม่ส่งฟิลด์นี้ไปเลย (เพราะ !== undefined
+  // เช็คไม่ผ่าน) ทำให้ backend ไม่รู้ว่าต้องเคลียร์ค่าเดิมทิ้ง
+  "groupId"
 ];
 
 function extractScheduleFields(reminder) {
@@ -34,6 +44,45 @@ const REMINDER_TYPE = {
   COUNTDOWN: "countdown",
   STOPWATCH: "stopwatch"
 };
+
+// สีประจำแต่ละประเภท reminder — ใช้เป็น border-left accent ของการ์ด +
+// พื้นหลัง icon กล่อง (ตาม reminder-dashboard-mockup.jsx, migration plan v2
+// เฟส 1.4) อ้างอิงตัวแปร CSS --g-* ที่มีอยู่แล้วในไฟล์นี้ (ไม่ผูกกับสถานะ
+// enabled/disabled ของ reminder — นั่นยังคงสื่อผ่าน .reminder-card.active
+// เดิมที่คุม background/border ทั้งใบแยกต่างหาก) --g-purple/--g-teal เป็น
+// ตัวแปรใหม่ที่เพิ่มเข้ามาคู่กับ map นี้ (ดูใน <style> ด้านล่าง) ใช้ hex
+// เดียวกับ "ม่วง"/"ฟ้าอมเขียว" ใน LINE_COLOR_OPTIONS เพื่อไม่เพิ่มโทนสีใหม่
+// เข้ามาในระบบโดยไม่จำเป็น
+const TYPE_ACCENT_COLOR = {
+  [REMINDER_TYPE.INTERVAL]: "var(--g-blue)",
+  [REMINDER_TYPE.WEEKLY]: "var(--g-green)",
+  [REMINDER_TYPE.EVENT_ANCHORED]: "var(--g-purple)",
+  [REMINDER_TYPE.ROUTINE]: "var(--g-teal)",
+  [REMINDER_TYPE.ONCE_AT]: "var(--g-red)",
+  [REMINDER_TYPE.COUNTDOWN]: "var(--g-yellow)",
+  [REMINDER_TYPE.STOPWATCH]: "var(--g-on-surface-variant)"
+};
+
+/** ตัวอักษร/สีตัวอักษรของ icon กล่องต่อประเภท — เหลือง (countdown) ใช้ตัวอักษรเข้มเพื่อ contrast ที่พอเหมาะ ประเภทอื่นใช้ขาว */
+function getTypeIconTextColor(type) {
+  return type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff";
+}
+
+// ตัวเลือก snooze บน due-banner (migration plan v2 เฟส 1.3)
+const SNOOZE_OPTIONS_MINUTES = [5, 10, 15, 30];
+
+// ตัวเลือกตัวกรองประเภทใน left nav (migration plan v2 เฟส 2) — module-level
+// เพื่อให้ใช้ label เดียวกันได้ทั้งใน nav list และหัวข้อ toolbar เมื่อกรองอยู่
+// ไม่ต้อง duplicate ข้อความ
+const TYPE_FILTER_OPTIONS = [
+  { type: REMINDER_TYPE.INTERVAL, label: "ทำซ้ำเป็นช่วง" },
+  { type: REMINDER_TYPE.WEEKLY, label: "รายสัปดาห์" },
+  { type: REMINDER_TYPE.EVENT_ANCHORED, label: "อิงเหตุการณ์" },
+  { type: REMINDER_TYPE.ROUTINE, label: "รูทีน" },
+  { type: REMINDER_TYPE.ONCE_AT, label: "ครั้งเดียว" },
+  { type: REMINDER_TYPE.COUNTDOWN, label: "นับถอยหลัง" },
+  { type: REMINDER_TYPE.STOPWATCH, label: "จับเวลา" }
+];
 
 const DAYS_OF_WEEK = [
   { label: "อา", value: 0 },
@@ -68,6 +117,12 @@ const LINE_COLOR_OPTIONS = [
   { label: "ดำ", value: "#3c4043" }
 ];
 const DEFAULT_LINE_COLOR = LINE_COLOR_OPTIONS[0].value;
+
+// Palette สำหรับกลุ่ม/โปรเจกต์ (migration plan v2 เฟส 3) — สุ่ม/วนสีให้
+// อัตโนมัติตอนสร้างกลุ่มใหม่แทนที่จะให้ผู้ใช้เลือกเอง (ลดขั้นตอนเหลือแค่
+// พิมพ์ชื่อ + Enter) หยิบมาจาก LINE_COLOR_OPTIONS ชุดย่อยที่แยกสีกันชัดเจน
+// ไม่ใช้ทั้ง 18 สีเพราะบางคู่ใกล้กันเกินไปสำหรับ list สั้นๆ แบบนี้
+const GROUP_COLOR_PALETTE = ["#4285f4", "#34a853", "#ea4335", "#f9ab00", "#a142f4", "#00bcd4", "#e91e63", "#8d6e63"];
 
 function isOneShotType(type) {
   return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
@@ -116,7 +171,8 @@ function createBlankDraft() {
     afterAmount: "2",
     afterUnit: "hours",
     routineSteps: "แปรงฟัน, ยืดตัว, กินวิตามิน",
-    lineColor: DEFAULT_LINE_COLOR
+    lineColor: DEFAULT_LINE_COLOR,
+    groupId: null // migration plan v2 เฟส 3
   };
 }
 
@@ -414,6 +470,7 @@ export default function ReminderDashboard({ firebaseUser }) {
   // (รวม runtime state) ในเฟสนี้; Firebase เป็นแค่ mirror ของ schedule
   // fields เพื่อให้กู้คืนได้ถ้า localStorage หาย/เปลี่ยนเครื่อง
   const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
+  const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
 
   // Merge remote schedule fields เข้ากับ local state ครั้งเดียวตอนที่
   // remoteReminders เพิ่งโหลดเสร็จ (เปลี่ยนจาก null เป็น object) — ไม่ merge
@@ -457,6 +514,73 @@ export default function ReminderDashboard({ firebaseUser }) {
 
   const [editingId, setEditingId] = useState(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false); // composer เริ่มต้นแบบพับเก็บ ประหยัดพื้นที่
+
+  // Tab ของรายการ reminder (migration plan v2 เฟส 1.2) — เดิมแสดง
+  // active/paused พร้อมกันทั้งคู่คั่นด้วย section header, ตอนนี้เลือกดูได้
+  // ทีละ tab แบบ mockup "completed" ยังเป็น placeholder เฉยๆ (รอ field
+  // completedAt จริงจากเฟส 4) กด disabled ไว้ก่อน
+  const [activeTab, setActiveTab] = useState("active"); // "active" | "paused" | "completed"
+
+  // ตัวกรองประเภทใน left nav (migration plan v2 เฟส 2) — null = ไม่กรอง
+  // (แสดงทุกประเภท) client-side ล้วนๆ ไม่กระทบ backend หรือ query ใด ๆ
+  const [activeTypeFilter, setActiveTypeFilter] = useState(null);
+  const toggleTypeFilter = (type) => {
+    setActiveTypeFilter((prev) => (prev === type ? null : type));
+  };
+
+  // ตัวกรองกลุ่ม/โปรเจกต์ (migration plan v2 เฟส 3) — ทำงานคู่ขนานกับ
+  // activeTypeFilter (AND กัน ถ้าเปิดทั้งคู่พร้อมกัน) client-side เช่นกัน
+  const [activeGroupFilter, setActiveGroupFilter] = useState(null);
+  const toggleGroupFilter = (groupId) => {
+    setActiveGroupFilter((prev) => (prev === groupId ? null : groupId));
+  };
+
+  // ฟอร์มสร้างกลุ่มใหม่แบบ inline ใน nav sidebar — เปิด/ปิดด้วยปุ่ม "+
+  // เพิ่มกลุ่มใหม่" เก็บแค่ชื่อ (สีสุ่ม/วนจาก GROUP_COLOR_PALETTE อัตโนมัติ
+  // ไม่ให้ผู้ใช้เลือกเอง เพื่อลดขั้นตอนเหลือแค่พิมพ์ชื่อ + Enter)
+  const [isAddingGroup, setIsAddingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const submitNewGroup = async (event) => {
+    event.preventDefault();
+    const trimmed = newGroupName.trim();
+    if (!trimmed) return;
+    const color = GROUP_COLOR_PALETTE[groups.length % GROUP_COLOR_PALETTE.length];
+    try {
+      await addGroup(trimmed, color);
+      setNewGroupName("");
+      setIsAddingGroup(false);
+    } catch {
+      // groupsError จาก hook แสดงผลอยู่แล้วใน nav sidebar — ไม่ต้องทำอะไร
+      // เพิ่มตรงนี้ แค่ไม่ปิดฟอร์มทิ้งเพื่อให้ผู้ใช้ลองใหม่ได้จากค่าที่พิมพ์ไว้เดิม
+    }
+  };
+
+  /**
+   * ลบกลุ่ม — backend เคลียร์ groupId ของ reminder ที่เคยผูกไว้เป็น null
+   * ให้แล้ว (ดู routes/reminder-groups.js) แต่ local `reminders` state ที่
+   * นี่ยังไม่รู้เรื่อง ต้อง patch เองให้ตรงกัน (useReminderGroups ไม่รู้จัก
+   * reminders state จึงทำให้ไม่ได้ — ดู hook's module comment) พร้อมเคลียร์
+   * activeGroupFilter ถ้ากำลังกรองด้วยกลุ่มที่เพิ่งถูกลบไปพอดี
+   */
+  const handleDeleteGroup = async (groupId) => {
+    try {
+      await removeGroup(groupId);
+      setReminders((prev) => prev.map((r) => (r.groupId === groupId ? { ...r, groupId: null } : r)));
+      setActiveGroupFilter((prev) => (prev === groupId ? null : prev));
+    } catch {
+      // groupsError จาก hook แสดงผลอยู่แล้ว
+    }
+  };
+
+  // เมนู "⋮" บนการ์ด (แทนปุ่ม edit/delete แยก) + เมนู snooze บน due-banner
+  // (migration plan v2 เฟส 1.3/1.4) — เก็บเป็น id เดียวต่อเมนู เพราะเปิด
+  // ได้ทีละอันในแต่ละกลุ่มเสมออยู่แล้ว ไม่ต้องเป็น Set
+  const [cardMenuOpenId, setCardMenuOpenId] = useState(null);
+  const [snoozeMenuForId, setSnoozeMenuForId] = useState(null);
+  const closeAllMenus = () => {
+    setCardMenuOpenId(null);
+    setSnoozeMenuForId(null);
+  };
   const [nowTick, setNowTick] = useState(() => Date.now()); // อัปเดตทุกวินาที เพื่อให้ countdown แสดงเวลานับถอยหลังแบบ live
 
   const tapeScrollRef = useRef(null);
@@ -472,7 +596,21 @@ export default function ReminderDashboard({ firebaseUser }) {
     const checkDue = () => {
       const now = Date.now();
       setNowTick(now); // อัปเดตเวลา "ตอนนี้" ทุกวินาที ให้ countdown บนการ์ด tick แบบ live
-      const due = reminders.filter((r) => r.enabled && r.nextDueAt && r.nextDueAt <= now && r.type !== REMINDER_TYPE.ROUTINE && r.type !== REMINDER_TYPE.STOPWATCH);
+      // migration plan v2 เฟส 4 — เพิ่มเงื่อนไข !r.completedAt กันไม่ให้
+      // reminder ที่ถูก mark "ทำเสร็จแล้ว" ไปแล้ว (ค้างอยู่ในกรณี edge case
+      // ที่ completedAt ไม่ถูกรีเซ็ต) โผล่กลับมาที่ due-banner ซ้ำอีก — ใน
+      // ทางปฏิบัติ markCompleted() ด้านล่างจะเซ็ต nextDueAt ใหม่ให้ reminder
+      // ประเภทวนซ้ำอยู่แล้วจึงไม่น่าเกิด edge case นี้บ่อย แต่เป็นเกราะกัน
+      // ไว้อีกชั้นให้สอดคล้องกับความหมายของ completedAt โดยตรง
+      const due = reminders.filter(
+        (r) =>
+          r.enabled &&
+          !r.completedAt &&
+          r.nextDueAt &&
+          r.nextDueAt <= now &&
+          r.type !== REMINDER_TYPE.ROUTINE &&
+          r.type !== REMINDER_TYPE.STOPWATCH
+      );
       setDueReminders(due);
     };
 
@@ -644,11 +782,49 @@ export default function ReminderDashboard({ firebaseUser }) {
     }, 3000);
   };
 
-  const scheduleNext = (reminderId) => {
+  /**
+   * @param {string} reminderId
+   * @param {number} [snoozeMinutes] ถ้าระบุ — เลื่อน nextDueAt ไปตามจำนวน
+   *   นาทีนี้ตรงๆ (snooze แบบกำหนดเวลาเอง, migration plan v2 เฟส 1.3) แทน
+   *   การคำนวณรอบถัดไปตาม logic ปกติของ type นั้นๆ — ใช้ได้แม้กับ one-shot
+   *   type (เดิมจะปิด enabled ไปเลยถ้าไม่ระบุ snoozeMinutes) เพราะ "เลื่อน
+   *   เตือนภายหลัง" ควรคงเปิดอยู่ต่อไม่ว่า type ไหน ไม่แก้ schedule fields
+   *   เดิม (เช่น interval ไม่ขยับ amount/unit) แค่เขียนทับ nextDueAt ครั้งเดียว
+   */
+  const scheduleNext = (reminderId, snoozeMinutes) => {
     setReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
+        if (typeof snoozeMinutes === "number") {
+          return { ...r, enabled: true, nextDueAt: Date.now() + snoozeMinutes * 60 * 1000 };
+        }
         if (isOneShotType(r.type)) return { ...r, enabled: false, nextDueAt: Infinity };
+        return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
+      })
+    );
+  };
+
+  /**
+   * "ทำเสร็จแล้ว" บน due-banner (migration plan v2 เฟส 4) — เรียกได้เฉพาะ
+   * type ที่ปรากฏใน dueReminders เท่านั้น (interval/weekly/event-anchored/
+   * once-at/countdown — checkDue() กรอง routine/stopwatch ออกไปแต่ต้นอยู่
+   * แล้ว ทั้งสอง type นี้จึงไม่มีทางถูกเรียกฟังก์ชันนี้ผ่าน due-banner):
+   *   - one-shot (once-at/countdown): completedAt = ตอนนี้, ปิด enabled,
+   *     เข้า tab "ทำเสร็จแล้ว" ถาวร — แยกจาก scheduleNext ตรงที่ scheduleNext
+   *     ไม่เคยเซ็ต completedAt เลย (ปิดเฉยๆ ไม่นับว่า "ทำเสร็จ" อย่างเป็น
+   *     ทางการ ผู้ใช้อาจแค่ปิดเพราะเปลี่ยนใจ ไม่ใช่ทำสำเร็จ)
+   *   - ประเภทวนซ้ำ (interval/weekly/event-anchored): "ทำเสร็จแล้ว" หมายถึง
+   *     จบรอบนี้แล้วเข้ารอบถัดไปทันที ไม่ค้างอยู่ tab ทำเสร็จแล้วถาวร —
+   *     completedAt จึงยังเป็น null เสมอสำหรับกลุ่มนี้ พฤติกรรมเดียวกับ
+   *     scheduleNext(id) แบบไม่ระบุ snooze
+   */
+  const markCompleted = (reminderId) => {
+    setReminders((prev) =>
+      prev.map((r) => {
+        if (r.id !== reminderId) return r;
+        if (isOneShotType(r.type)) {
+          return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity };
+        }
         return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
@@ -671,7 +847,11 @@ export default function ReminderDashboard({ firebaseUser }) {
         if (r.id !== reminderId) return r;
         const nextIdx = (r.currentIndex || 0) + 1;
         if (nextIdx >= r.steps.length) {
-          return { ...r, currentIndex: 0, enabled: false };
+          // ทำครบทุก step แล้ว — เข้า tab "ทำเสร็จแล้ว" เหมือน one-shot
+          // type (migration plan v2 เฟส 4.3) แทนที่จะแค่ enabled: false
+          // เฉยๆ แบบเดิม — ผู้ใช้ยังเปิดสวิตช์กลับเองได้ตามปกติ (toggle()
+          // จะเคลียร์ completedAt คืนเป็น null ให้ ดูฟังก์ชันนั้นด้านล่าง)
+          return { ...r, currentIndex: 0, enabled: false, completedAt: Date.now() };
         }
         return { ...r, currentIndex: nextIdx };
       })
@@ -718,10 +898,15 @@ export default function ReminderDashboard({ firebaseUser }) {
         if (r.id !== reminderId) return r;
 
         if (!r.enabled) {
+          // เปิดสวิตช์กลับ (ไม่ว่าจะเคย "ทำเสร็จแล้ว" มาก่อนหรือแค่ปิดไว้
+          // เฉยๆ) ต้องเคลียร์ completedAt กลับเป็น null เสมอ — migration
+          // plan v2 เฟส 4: reminder ที่กำลัง enabled ไม่ควรค้างอยู่ tab
+          // "ทำเสร็จแล้ว" พร้อมกัน (ทั้งสองสถานะไม่ควรจริงพร้อมกัน)
+
           // Countdown ประเภทเดียวที่ "เปิดใหม่" ควรหมายถึงเริ่มนับใหม่ทั้งหมด
           // (ถ้าใช้ startedAt เดิม endMs จะเป็นอดีตไปแล้ว ทำให้ยิงแจ้งเตือนทันทีที่เปิด)
           if (r.type === REMINDER_TYPE.COUNTDOWN) {
-            const restarted = { ...r, enabled: true, startedAt: Date.now() };
+            const restarted = { ...r, enabled: true, startedAt: Date.now(), completedAt: null };
             return { ...restarted, nextDueAt: computeNextDueAt(restarted, Date.now()) };
           }
 
@@ -732,7 +917,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           }
 
           const nextDue = computeNextDueAt(r, Date.now());
-          return { ...r, enabled: true, nextDueAt: nextDue };
+          return { ...r, enabled: true, nextDueAt: nextDue, completedAt: null };
         }
         return { ...r, enabled: false };
       })
@@ -757,7 +942,8 @@ export default function ReminderDashboard({ firebaseUser }) {
       id: editingId || `reminder-${Date.now()}`,
       title: draft.title,
       type: draft.type,
-      enabled: true
+      enabled: true,
+      groupId: draft.groupId ?? null // migration plan v2 เฟส 3
     };
 
     if (draft.type === REMINDER_TYPE.INTERVAL) {
@@ -823,6 +1009,18 @@ export default function ReminderDashboard({ firebaseUser }) {
 
     newReminder.nextDueAt = computeNextDueAt(newReminder, Date.now());
 
+    // migration plan v2 เฟส 4 — completedAt เป็น runtime field (ไม่ sync
+    // backend, ดู SCHEDULE_FIELD_KEYS) ต้องคงค่าเดิมไว้ตอนแก้ไข reminder
+    // (เช่นแค่แก้ชื่อ) ไม่ให้หลุดออกจาก tab "ทำเสร็จแล้ว" โดยไม่ตั้งใจ —
+    // เหมือน pattern ที่ accumulatedMs/startedAt ของ stopwatch ทำไว้ข้างบน
+    // reminder สร้างใหม่เริ่มต้นที่ null เสมอ (ยังไม่เคยทำเสร็จ)
+    if (editingId) {
+      const existing = reminders.find((r) => r.id === editingId);
+      newReminder.completedAt = existing?.completedAt ?? null;
+    } else {
+      newReminder.completedAt = null;
+    }
+
     if (editingId) {
       setReminders((prev) => prev.map((r) => (r.id === editingId ? { ...r, ...newReminder } : r)));
       setEditingId(null);
@@ -863,7 +1061,8 @@ export default function ReminderDashboard({ firebaseUser }) {
       afterAmount: String(reminder.afterAmount || 2),
       afterUnit: reminder.afterUnit || "hours",
       routineSteps: reminder.steps ? reminder.steps.join(", ") : "แปรงฟัน, ยืดตัว, กินวิตามิน",
-      lineColor: reminder.lineColor || DEFAULT_LINE_COLOR
+      lineColor: reminder.lineColor || DEFAULT_LINE_COLOR,
+      groupId: reminder.groupId ?? null
     });
   };
 
@@ -892,15 +1091,47 @@ export default function ReminderDashboard({ firebaseUser }) {
     }
   };
 
-  const activeReminders = reminders.filter((r) => r.enabled);
-  const pausedReminders = reminders.filter((r) => !r.enabled);
+  // Filter ตามประเภท (เฟส 2) ใช้ร่วมกันทั้ง active/paused — reminders ที่
+  // enabled/paused คำนวณจาก reminders เต็มชุดก่อน (ไม่ใช่ผลลัพธ์ที่กรอง
+  // แล้ว) เพราะ toolbar-subtitle ด้านบนยังต้องโชว์ยอดรวมทั้งหมดแยกจากที่
+  // กำลังกรองอยู่ — ตัวแปรสองชุดนี้แทน "รายการทั้งหมดของ tab นั้น" ส่วน
+  // ตัวที่ map ขึ้นจอจริงจะกรองซ้ำอีกชั้นด้วย activeTypeFilter ที่จุด render
+  //
+  // migration plan v2 เฟส 4 — เพิ่มเงื่อนไข !r.completedAt เข้า
+  // activeReminders/pausedReminders ทั้งคู่ (reminder ที่ทำเสร็จแล้วต้อง
+  // ไม่ปรากฏใน tab เดิมอีกต่อไป ย้ายไป completedReminders แทน) และเพิ่ม
+  // completedReminders เป็น tab ที่ 3
+  const activeReminders = reminders.filter((r) => r.enabled && !r.completedAt);
+  const pausedReminders = reminders.filter((r) => !r.enabled && !r.completedAt);
+  const completedReminders = reminders.filter((r) => !!r.completedAt);
+  const filterByType = (list) => (activeTypeFilter ? list.filter((r) => r.type === activeTypeFilter) : list);
+  const filterByGroup = (list) => (activeGroupFilter ? list.filter((r) => r.groupId === activeGroupFilter) : list);
+  const applyFilters = (list) => filterByGroup(filterByType(list));
+  const visibleActiveReminders = applyFilters(activeReminders);
+  const visiblePausedReminders = applyFilters(pausedReminders);
+  const visibleCompletedReminders = applyFilters(completedReminders);
+
+  /** ข้อความอธิบาย filter ที่กำลังเปิดอยู่ (ทั้งคู่พร้อมกันได้) สำหรับ empty-state — คืน "" ถ้าไม่มี filter ใดเปิดอยู่เลย */
+  const describeActiveFilters = () => {
+    const parts = [];
+    if (activeTypeFilter) parts.push(`ประเภท "${TYPE_FILTER_OPTIONS.find((o) => o.type === activeTypeFilter)?.label}"`);
+    if (activeGroupFilter) parts.push(`กลุ่ม "${groups.find((g) => g.id === activeGroupFilter)?.name}"`);
+    return parts.join(" ");
+  };
 
   const zoomOut = () => setZoomIndex(Math.max(0, zoomIndex - 1));
   const zoomIn = () => setZoomIndex(Math.min(ZOOM_LEVELS_MINUTES.length - 1, zoomIndex + 1));
 
   const renderReminder = (reminder) => (
-    <div key={reminder.id} className={`reminder-card ${reminder.enabled ? "active" : ""}`}>
-      <div className="reminder-type-icon">
+    <div
+      key={reminder.id}
+      className={`reminder-card ${reminder.enabled ? "active" : ""}`}
+      style={{ borderLeftColor: TYPE_ACCENT_COLOR[reminder.type] }}
+    >
+      <div
+        className="reminder-type-icon"
+        style={{ backgroundColor: TYPE_ACCENT_COLOR[reminder.type], color: getTypeIconTextColor(reminder.type) }}
+      >
         {reminder.type === REMINDER_TYPE.WEEKLY ? "📅" :
          reminder.type === REMINDER_TYPE.EVENT_ANCHORED ? "⚓" :
          reminder.type === REMINDER_TYPE.ROUTINE ? "📋" :
@@ -911,6 +1142,23 @@ export default function ReminderDashboard({ firebaseUser }) {
       <div className="reminder-info">
         <p className="title">{reminder.title}</p>
         <p className="meta">{describeReminder(reminder, nowTick)}</p>
+        {/* Badge "ทำเสร็จแล้ว" (migration plan v2 เฟส 4) — ทำให้การ์ดใน tab
+            "ทำเสร็จแล้ว" ดูต่างจาก "ปิดใช้งาน" เฉยๆ ชัดเจน (ทั้งคู่มี
+            enabled: false เหมือนกัน แต่ความหมายต่างกันคนละเรื่อง) กด
+            toggle-switch/stopwatch ปกติเพื่อ "เปิดใช้งานใหม่" ได้เหมือนเดิม
+            ซึ่งจะเคลียร์ completedAt ให้อัตโนมัติ (ดู toggle() function) */}
+        {reminder.completedAt && (
+          <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว</span>
+        )}
+        {reminder.groupId && groups.find((g) => g.id === reminder.groupId) && (
+          <span className="reminder-group-chip">
+            <span
+              className="reminder-group-chip-dot"
+              style={{ background: groups.find((g) => g.id === reminder.groupId).color }}
+            />
+            {groups.find((g) => g.id === reminder.groupId).name}
+          </span>
+        )}
 
         {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && (
           <button type="button" className="btn-action-small" onClick={() => triggerAnchorEvent(reminder.id)}>
@@ -940,13 +1188,38 @@ export default function ReminderDashboard({ firebaseUser }) {
         <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => toggle(reminder.id)} aria-label="สวิตช์เปิดปิด" />
       )}
 
-      <div className="reminder-card-actions">
-        <button type="button" className="icon-btn" onClick={() => startEdit(reminder)} title="แก้ไข">
-          ✏️
+      <div className={`reminder-card-actions ${cardMenuOpenId === reminder.id ? "menu-open" : ""}`}>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => setCardMenuOpenId(cardMenuOpenId === reminder.id ? null : reminder.id)}
+          title="ตัวเลือกเพิ่มเติม"
+          aria-haspopup="true"
+          aria-expanded={cardMenuOpenId === reminder.id}
+        >
+          ⋮
         </button>
-        <button type="button" className="icon-btn" onClick={() => deleteReminder(reminder.id)} title="ลบ">
-          🗑️
-        </button>
+        {cardMenuOpenId === reminder.id && (
+          <div className="card-dropdown-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => { setCardMenuOpenId(null); startEdit(reminder); }}>
+              ✏️ แก้ไข
+            </button>
+            {/* migration plan v2 เฟส 4 — mark เสร็จเองได้โดยไม่ต้องรอถึงเวลา
+                due-banner จำกัดเฉพาะ one-shot type (once-at/countdown)
+                เท่านั้น เพราะ type วนซ้ำ "ทำเสร็จแล้ว" มีความหมายเท่ากับ
+                "เตือนอีกครั้ง" อยู่แล้ว (ดู markCompleted's comment) กด
+                ก่อนถึงเวลาจริงจากตรงนี้จึงจะดูสมเหตุสมผลเฉพาะ type ที่จบ
+                แบบถาวรได้เท่านั้น ไม่แสดงถ้าทำเสร็จไปแล้ว (ป้องกันกดซ้ำ) */}
+            {isOneShotType(reminder.type) && !reminder.completedAt && (
+              <button type="button" role="menuitem" onClick={() => { setCardMenuOpenId(null); markCompleted(reminder.id); }}>
+                ✓ ทำเสร็จแล้ว
+              </button>
+            )}
+            <button type="button" role="menuitem" className="is-danger" onClick={() => { setCardMenuOpenId(null); deleteReminder(reminder.id); }}>
+              🗑️ ลบ
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -972,6 +1245,12 @@ export default function ReminderDashboard({ firebaseUser }) {
           --g-red: #ea4335;
           --g-yellow: #fbbc04;
           --g-green: #34a853;
+          /* เพิ่มเข้ามาคู่กับ TYPE_ACCENT_COLOR (migration plan v2 เฟส 1.4)
+             — hex เดียวกับ "ม่วง"/"ฟ้าอมเขียว" ใน LINE_COLOR_OPTIONS ไม่ได้
+             คิดโทนใหม่ ตามหลักเดียวกับ --g-yellow/--g-red/--g-green ข้างบน
+             ที่ไม่ปรับตาม dark mode (อ่านออกบนพื้นมืดได้อยู่แล้ว) */
+          --g-purple: #a142f4;
+          --g-teal: #00bcd4;
           --g-surface: #ffffff;
           --g-background: #f8f9fa;
           --g-on-surface: #202124;
@@ -1072,9 +1351,334 @@ export default function ReminderDashboard({ firebaseUser }) {
           background: var(--g-red-light);
         }
 
+        .due-alert-item-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        /* Backdrop โปร่งใสเต็มจอ ปิดเมนูเมื่อคลิกข้างนอก (เฟส 1.3/1.4) */
+        .dropdown-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 40;
+        }
+
+        .snooze-dropdown-wrap {
+          position: relative;
+        }
+
+        .snooze-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          z-index: 50;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 140px;
+        }
+
+        .snooze-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--g-on-surface);
+          cursor: pointer;
+        }
+
+        .snooze-menu button:hover {
+          background: var(--g-background);
+        }
+
+        .btn-mark-done {
+          background: var(--g-surface);
+          border: 1px solid var(--g-red-light-border);
+          color: var(--g-red-dark);
+          padding: 6px 14px;
+          border-radius: 18px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+
+        .btn-mark-done:hover {
+          background: var(--g-red-light);
+        }
+
+        /* Top bar — เพิ่มเข้ามาในรอบ layout-only ของ migration plan v2 เฟส 1
+           (โครง 3 คอลัมน์ + top bar) โลโก้/omnibar/ปุ่มสถิติเป็น placeholder
+           ล้วนๆ ในรอบนี้ ยังไม่ผูก logic จริง — omnibar รอเฟส 6, สถิติรอ
+           เฟส 7 ปุ่มตั้งค่าตั้งใจไม่ใส่ซ้ำที่นี่ เพราะ app.jsx render ปุ่ม
+           settings ของตัวเองอยู่แล้วเป็นปุ่มเดียวฝั่งขวาบนตอนอยู่ใน
+           reminder mode (ดู settings-drawer.jsx's module comment) */
+        .app-topbar {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 10px 24px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          background: var(--g-surface);
+          flex-shrink: 0;
+        }
+
+        .topbar-logo {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 700;
+          font-size: 16px;
+          color: var(--g-on-surface);
+          white-space: nowrap;
+        }
+
+        .topbar-logo-icon {
+          font-size: 18px;
+        }
+
+        .topbar-omnibar-wrap {
+          flex: 1;
+          max-width: 560px;
+          margin: 0 auto;
+        }
+
+        .topbar-omnibar {
+          width: 100%;
+          padding: 8px 16px;
+          border-radius: 20px;
+          border: 1px solid var(--g-outline);
+          background: var(--g-background);
+          color: var(--g-on-surface-variant);
+          font-size: 13px;
+          font-family: inherit;
+        }
+
+        .topbar-omnibar:disabled {
+          cursor: not-allowed;
+          opacity: 0.75;
+        }
+
+        .topbar-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .topbar-icon-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          font-size: 15px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .topbar-icon-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        /* Left nav — "ตัวกรองประเภท" wired จริงแล้ว (เฟส 2) filter แบบ
+           client-side, "กลุ่ม/โปรเจกต์" ยังว่างเปล่ารอเฟส 3, "ของวันนี้"
+           ยังเป็น placeholder รอระบบมุมมองในอนาคต */
+        .nav-sidebar {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+          overflow-y: auto;
+          padding: 16px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .nav-section-title {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--g-on-surface-variant);
+          margin: 0 0 6px 8px;
+        }
+
+        .nav-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface);
+          font-size: 13px;
+          font-family: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .nav-item:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .nav-item.is-active {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          font-weight: 500;
+        }
+
+        .nav-item-count {
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          background: var(--g-background);
+          border-radius: 10px;
+          padding: 1px 8px;
+        }
+
+        .nav-empty-state {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          padding: 4px 10px;
+          margin: 0 0 6px;
+        }
+
+        .nav-error-state {
+          font-size: 12px;
+          color: var(--g-red-dark);
+          padding: 4px 10px;
+          margin: 0 0 6px;
+        }
+
+        /* กลุ่ม/โปรเจกต์ ใน left nav (migration plan v2 เฟส 3) */
+        .nav-item-group-label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .nav-item-group-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .nav-item-right-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .nav-item-delete-group {
+          opacity: 0;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          padding: 2px 4px;
+          border-radius: 4px;
+          flex-shrink: 0;
+        }
+
+        .nav-item:hover .nav-item-delete-group {
+          opacity: 1;
+        }
+
+        .nav-item-delete-group:hover {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .nav-add-group-form {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 6px 10px;
+        }
+
+        .nav-add-group-input {
+          padding: 6px 10px;
+          border-radius: 8px;
+          border: 1px solid var(--g-outline);
+          background: var(--g-background);
+          color: var(--g-on-surface);
+          font-family: inherit;
+          font-size: 13px;
+        }
+
+        .nav-add-group-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        .nav-add-group-confirm {
+          background: var(--g-blue);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 5px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        .nav-add-group-cancel {
+          background: none;
+          border: none;
+          color: var(--g-on-surface-variant);
+          font-size: 12px;
+          cursor: pointer;
+          padding: 5px 8px;
+        }
+
+        /* Chip กลุ่มบนตัวการ์ด reminder เอง (เฟส 3) */
+        .reminder-group-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          margin-top: 2px;
+        }
+
+        .reminder-group-chip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        /* Badge "ทำเสร็จแล้ว" บนการ์ด (migration plan v2 เฟส 4) */
+        .reminder-completed-badge {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--g-green);
+          margin-top: 2px;
+        }
+
         .dashboard-body {
           display: grid;
-          grid-template-columns: 380px 1fr;
+          grid-template-columns: 260px 1fr 320px;
           flex: 1;
           min-height: 0;
           overflow: hidden;
@@ -1383,6 +1987,32 @@ export default function ReminderDashboard({ firebaseUser }) {
           font-size: 20px;
           font-weight: 500;
           margin: 0 0 4px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        /* Chip แสดงตัวกรองประเภทที่กำลังใช้อยู่ (migration plan v2 เฟส 2) */
+        .active-filter-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          font-size: 12px;
+          font-weight: 500;
+          padding: 3px 6px 3px 10px;
+          border-radius: 14px;
+        }
+
+        .active-filter-chip button {
+          background: none;
+          border: none;
+          color: inherit;
+          cursor: pointer;
+          font-size: 12px;
+          padding: 2px 4px;
+          line-height: 1;
         }
 
         .toolbar-subtitle {
@@ -1426,6 +2056,55 @@ export default function ReminderDashboard({ firebaseUser }) {
           transform: rotate(45deg);
         }
 
+        /* Tab bar — เพิ่มเข้ามาแทน section-header คั่นหัวข้อเดิม (migration
+           plan v2 เฟส 1.2) .section-header เดิมด้านล่างยังเก็บไว้เผื่อจุด
+           อื่นในอนาคตอ้างถึง แต่ไม่ได้ใช้ในรายการหลักแล้วตอนนี้ */
+        .tab-bar {
+          display: flex;
+          gap: 4px;
+          padding: 0 16px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          flex-shrink: 0;
+        }
+
+        .tab-btn {
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          padding: 10px 4px;
+          margin-bottom: -1px;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .tab-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        .tab-btn.is-active {
+          color: var(--g-blue);
+          border-bottom-color: var(--g-blue);
+        }
+
+        .tab-btn-count {
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          background: var(--g-background);
+          border-radius: 10px;
+          padding: 1px 7px;
+        }
+
+        .tab-btn.is-active .tab-btn-count {
+          color: var(--g-blue);
+        }
+
         .reminders-scroll-area {
           flex: 1;
           min-height: 0;
@@ -1466,6 +2145,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           padding: 8px 10px;
           border-radius: 10px;
           border: 1px solid var(--g-outline-variant);
+          border-left-width: 4px;
           background: var(--g-surface);
           transition: all 0.2s ease;
         }
@@ -1480,12 +2160,16 @@ export default function ReminderDashboard({ firebaseUser }) {
           border-color: var(--g-active-border);
         }
 
+        /* icon กล่องสี่เหลี่ยมมุมโค้ง (เดิมเป็นวงกลม) พื้นหลังคือสีประจำ
+           ประเภท (TYPE_ACCENT_COLOR, ตั้งค่าผ่าน inline style ต่อการ์ด) —
+           ไม่ผูกกับ enabled/disabled อีกต่อไป (เดิมมีกฎ .active
+           .reminder-type-icon แยกสำหรับ enabled state — เอาออกเพราะตอนนี้
+           สีสื่อ "ประเภท" เสมอ ส่วนสถานะ enabled/disabled สื่อผ่านความจาง
+           ของทั้ง icon แทน ดูกฎถัดไป) */
         .reminder-type-icon {
           width: 26px;
           height: 26px;
-          border-radius: 50%;
-          background: var(--g-background);
-          color: var(--g-on-surface-variant);
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1494,9 +2178,8 @@ export default function ReminderDashboard({ firebaseUser }) {
           flex-shrink: 0;
         }
 
-        .active .reminder-type-icon {
-          background: var(--g-yellow);
-          color: #202124;
+        .reminder-card:not(.active) .reminder-type-icon {
+          opacity: 0.55;
         }
 
         .reminder-info {
@@ -1622,6 +2305,7 @@ export default function ReminderDashboard({ firebaseUser }) {
         }
 
         .reminder-card-actions {
+          position: relative;
           display: flex;
           gap: 2px;
           opacity: 0;
@@ -1629,8 +2313,45 @@ export default function ReminderDashboard({ firebaseUser }) {
         }
 
         .reminder-card:hover .reminder-card-actions,
-        .reminder-card:focus-within .reminder-card-actions {
+        .reminder-card:focus-within .reminder-card-actions,
+        .reminder-card-actions.menu-open {
           opacity: 1;
+        }
+
+        .card-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          right: 0;
+          z-index: 50;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 110px;
+        }
+
+        .card-dropdown-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--g-on-surface);
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .card-dropdown-menu button:hover {
+          background: var(--g-background);
+        }
+
+        .card-dropdown-menu button.is-danger {
+          color: var(--g-red-dark);
         }
 
         .icon-btn {
@@ -1756,11 +2477,47 @@ export default function ReminderDashboard({ firebaseUser }) {
             grid-template-columns: 1fr;
             overflow-y: auto;
           }
+          .nav-sidebar {
+            height: auto;
+            max-height: 240px;
+          }
           .timeline-panel {
             min-height: 360px;
           }
+          .topbar-omnibar-wrap {
+            display: none;
+          }
         }
       `}</style>
+
+      {/* Top Bar — placeholder เฉยๆ ในรอบ layout-only นี้ ยังไม่ผูก logic
+          omnibar/สถิติจริง (ดูคอมเมนต์ .app-topbar ใน style ด้านบน) */}
+      <header className="app-topbar">
+        <div className="topbar-logo">
+          <span className="topbar-logo-icon" aria-hidden="true">⏰</span>
+          <span className="topbar-logo-text">ReminderOS</span>
+        </div>
+        <div className="topbar-omnibar-wrap">
+          <input
+            type="text"
+            className="topbar-omnibar"
+            placeholder="พิมพ์เพื่อสร้าง Reminder ด่วน... (เร็วๆ นี้)"
+            disabled
+            title="ฟีเจอร์นี้จะเปิดใช้งานในเฟสถัดไป"
+          />
+        </div>
+        <div className="topbar-actions">
+          <button type="button" className="topbar-icon-btn" disabled title="สถิติ (เร็วๆ นี้)">📊</button>
+        </div>
+      </header>
+
+      {/* Backdrop ปิดเมนู "⋮" การ์ด / snooze dropdown เมื่อคลิกนอกเมนู —
+          ใช้ตัวเดียวร่วมกันทั้งสองระบบเมนู (migration plan v2 เฟส 1.3/1.4)
+          เพราะเปิดได้ทีละเมนูอยู่แล้วในทางปฏิบัติ ไม่ต้อง portal/listener
+          แยกต่างหาก */}
+      {(cardMenuOpenId || snoozeMenuForId) && (
+        <div className="dropdown-backdrop" onClick={closeAllMenus} />
+      )}
 
       {/* Alert Banner */}
       {dueReminders.length > 0 && (
@@ -1768,77 +2525,209 @@ export default function ReminderDashboard({ firebaseUser }) {
           <span>🔔 ถึงเวลาแล้ว: {dueReminders.map((r) => r.title).join(", ")}</span>
           <div className="due-alert-actions">
             {dueReminders.map((r) => (
-              <button key={r.id} className="btn-snooze" onClick={() => scheduleNext(r.id)}>
-                เตือนอีกครั้ง ({r.title})
-              </button>
+              <span key={r.id} className="due-alert-item-actions">
+                <div className="snooze-dropdown-wrap">
+                  <button
+                    type="button"
+                    className="btn-snooze"
+                    onClick={() => setSnoozeMenuForId(snoozeMenuForId === r.id ? null : r.id)}
+                    aria-haspopup="true"
+                    aria-expanded={snoozeMenuForId === r.id}
+                  >
+                    เตือนอีกครั้ง ({r.title}) ▾
+                  </button>
+                  {snoozeMenuForId === r.id && (
+                    <div className="snooze-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => { scheduleNext(r.id); setSnoozeMenuForId(null); }}>
+                        ตามรอบปกติ
+                      </button>
+                      {SNOOZE_OPTIONS_MINUTES.map((m) => (
+                        <button key={m} type="button" role="menuitem" onClick={() => { scheduleNext(r.id, m); setSnoozeMenuForId(null); }}>
+                          อีก {m} นาที
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* migration plan v2 เฟส 4 — ผูก markCompleted() จริงแล้ว
+                    (เดิมเป็น placeholder disabled รอ field completedAt) */}
+                <button type="button" className="btn-mark-done" onClick={() => markCompleted(r.id)}>
+                  ✓ ทำเสร็จแล้ว
+                </button>
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Main Body Grid */}
+      {/* Main Body Grid — 3 คอลัมน์: nav ซ้าย / list กลาง / timeline ขวา
+          (เดิม 2 คอลัมน์: timeline ซ้าย / list ขวา — ย้าย timeline ไปขวาสุด
+          ตาม reminder-dashboard-mockup.jsx, migration plan v2 เฟส 1.1) */}
       <div className="dashboard-body">
-        {/* Timeline Section */}
-        <aside className="timeline-panel">
-          <div className="timeline-header">
-            <p className="timeline-title">Timeline 24 ชม.</p>
-            <div className="zoom-controls">
-              <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title="ซูมออก">−</button>
-              <span className="zoom-display">{minutesPerRow} นาที/ช่อง</span>
-              <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title="ซูมเข้า">+</button>
-            </div>
+        {/* Left Nav — "ตัวกรองประเภท" (เฟส 2) และ "กลุ่ม/โปรเจกต์" (เฟส 3)
+            wired จริงทั้งคู่แล้ว "ของวันนี้" ยังเป็น placeholder รอระบบ
+            มุมมองในอนาคต count ทุกจุดคำนวณจาก reminders/groups จริงเสมอ */}
+        <nav className="nav-sidebar">
+          <div>
+            <p className="nav-section-title">มุมมองหลัก</p>
+            <button
+              type="button"
+              className={`nav-item ${activeTypeFilter === null && activeGroupFilter === null ? "is-active" : ""}`}
+              onClick={() => {
+                setActiveTypeFilter(null);
+                setActiveGroupFilter(null);
+              }}
+            >
+              <span>ทั้งหมด</span>
+              <span className="nav-item-count">{reminders.length}</span>
+            </button>
+            <button type="button" className="nav-item" disabled title="เร็วๆ นี้: ระบบมุมมอง">
+              <span>ของวันนี้</span>
+            </button>
           </div>
 
-          <div className="timeline-viewport">
-            <div className="now-indicator" />
-
-            {/* เส้นสีเหลืองบาง ๆ แสดง Countdown/Stopwatch ที่กำลังทำงาน
-                วางใน timeline-viewport (ไม่ใช่ track ที่ scroll) จึงไม่ถูก overflow ครอบตัด และแสดงเต็มความยาวเสมอ
-                ตำแหน่งคำนวณเทียบกับกึ่งกลาง viewport (จุดเดียวกับ now-indicator) */}
-            {runningLines.map((line) => (
-              <div
-                key={line.id}
-                className="running-timer-line"
-                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px`, "--line-color": line.color }}
-              />
+          <div>
+            <p className="nav-section-title">กลุ่ม/โปรเจกต์</p>
+            {groupsError && <p className="nav-error-state">{groupsError}</p>}
+            {groups.length === 0 && !isAddingGroup && <p className="nav-empty-state">ยังไม่มีกลุ่ม</p>}
+            {groups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className={`nav-item ${activeGroupFilter === group.id ? "is-active" : ""}`}
+                onClick={() => toggleGroupFilter(group.id)}
+                aria-pressed={activeGroupFilter === group.id}
+              >
+                <span className="nav-item-group-label">
+                  <span className="nav-item-group-dot" style={{ background: group.color }} />
+                  {group.name}
+                </span>
+                <span className="nav-item-right-group">
+                  <span className="nav-item-count">{reminders.filter((r) => r.groupId === group.id).length}</span>
+                  {/* ปุ่มลบกลุ่ม — เผยออกด้วย hover เหมือน .reminder-card-actions
+                      เดิม กด e.stopPropagation กันไม่ให้ trigger toggleGroupFilter
+                      ของปุ่มแม่ไปพร้อมกัน */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="nav-item-delete-group"
+                    title="ลบกลุ่ม"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteGroup(group.id);
+                    }}
+                  >
+                    ✕
+                  </span>
+                </span>
+              </button>
             ))}
 
-            <div
-              className="tape-scroll-container"
-              ref={tapeScrollRef}
-              onScroll={handleUserInteraction}
-              onWheel={handleUserInteraction}
-              onTouchMove={handleUserInteraction}
-            >
-              <div className="tape-track-wrapper">
-                {/* Spacer บน: ยืดขอบออกจากแถว 00:00 ไม่ให้ now-indicator ชนขอบ container
-                    เป็น slot เปิดไว้ เผื่อใส่ contentอื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
-                <div className="tape-spacer tape-spacer-top" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
-                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
+            {isAddingGroup ? (
+              <form className="nav-add-group-form" onSubmit={submitNewGroup}>
+                <input
+                  type="text"
+                  className="nav-add-group-input"
+                  placeholder="ชื่อกลุ่ม"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  autoFocus
+                  maxLength={60}
+                />
+                <div className="nav-add-group-actions">
+                  <button type="submit" className="nav-add-group-confirm">เพิ่ม</button>
+                  <button
+                    type="button"
+                    className="nav-add-group-cancel"
+                    onClick={() => {
+                      setIsAddingGroup(false);
+                      setNewGroupName("");
+                    }}
+                  >
+                    ยกเลิก
+                  </button>
                 </div>
-
-                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} />
-
-                {/* Spacer ล่าง: ยืดขอบออกจากแถว 24:00 ไม่ให้ now-indicator ชนขอบ container
-                    เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคตเช่นกัน */}
-                <div className="tape-spacer tape-spacer-bottom" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
-                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-bottom" /> */}
-                </div>
-              </div>
-            </div>
+              </form>
+            ) : (
+              <button type="button" className="nav-item" onClick={() => setIsAddingGroup(true)}>
+                <span>+ เพิ่มกลุ่มใหม่</span>
+              </button>
+            )}
           </div>
-        </aside>
+
+          <div>
+            <p className="nav-section-title">ตัวกรองประเภท</p>
+            {TYPE_FILTER_OPTIONS.map(({ type, label }) => (
+              <button
+                key={type}
+                type="button"
+                className={`nav-item ${activeTypeFilter === type ? "is-active" : ""}`}
+                onClick={() => toggleTypeFilter(type)}
+                aria-pressed={activeTypeFilter === type}
+              >
+                <span>{label}</span>
+                <span className="nav-item-count">{reminders.filter((r) => r.type === type).length}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
 
         {/* Reminders Dashboard */}
         <section className="main-panel">
           <div className="main-panel-toolbar">
             <div>
-              <h2>การแจ้งเตือนทั้งหมด</h2>
-              <p className="toolbar-subtitle">{reminders.length} รายการ · กำลังทำงาน {activeReminders.length} รายการ</p>
+              <h2>
+                การแจ้งเตือนทั้งหมด
+                {activeTypeFilter && (
+                  <span className="active-filter-chip">
+                    {TYPE_FILTER_OPTIONS.find((o) => o.type === activeTypeFilter)?.label}
+                    <button type="button" onClick={() => setActiveTypeFilter(null)} aria-label="ล้างตัวกรองประเภท">✕</button>
+                  </span>
+                )}
+                {activeGroupFilter && (
+                  <span className="active-filter-chip">
+                    {groups.find((g) => g.id === activeGroupFilter)?.name}
+                    <button type="button" onClick={() => setActiveGroupFilter(null)} aria-label="ล้างตัวกรองกลุ่ม">✕</button>
+                  </span>
+                )}
+              </h2>
+              <p className="toolbar-subtitle">{reminders.length} รายการ · กำลังทำงาน {activeReminders.length} · ปิดใช้งาน {pausedReminders.length} · ทำเสร็จแล้ว {completedReminders.length}</p>
             </div>
-            {/* พื้นที่เผื่อฟีเจอร์ใหม่ในอนาคต เช่น filter chip / tab เพิ่มเติม วางต่อจากนี้ได้โดยไม่ดันความสูง toolbar */}
             <button type="button" className={`add-reminder-btn ${isComposerOpen ? "is-open" : ""}`} onClick={toggleComposer}>
               <span className="add-reminder-btn-icon">+</span> {isComposerOpen ? "ปิดฟอร์ม" : "เพิ่ม Reminder"}
+            </button>
+          </div>
+
+          {/* Tabs — แทน section header คั่นหัวข้อแบบเดิมที่โชว์ active/paused
+              พร้อมกันตลอด (migration plan v2 เฟส 1.2) "ทำเสร็จแล้ว" ผูก
+              completedAt จริงแล้ว (เฟส 4) */}
+          <div className="tab-bar" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "active"}
+              className={`tab-btn ${activeTab === "active" ? "is-active" : ""}`}
+              onClick={() => setActiveTab("active")}
+            >
+              กำลังทำงาน <span className="tab-btn-count">{visibleActiveReminders.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "paused"}
+              className={`tab-btn ${activeTab === "paused" ? "is-active" : ""}`}
+              onClick={() => setActiveTab("paused")}
+            >
+              ปิดใช้งาน <span className="tab-btn-count">{visiblePausedReminders.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "completed"}
+              className={`tab-btn ${activeTab === "completed" ? "is-active" : ""}`}
+              onClick={() => setActiveTab("completed")}
+            >
+              ทำเสร็จแล้ว <span className="tab-btn-count">{visibleCompletedReminders.length}</span>
             </button>
           </div>
 
@@ -1864,6 +2753,27 @@ export default function ReminderDashboard({ firebaseUser }) {
                   <option value={REMINDER_TYPE.STOPWATCH}>จับเวลา (Stopwatch)</option>
                 </select>
               </div>
+
+              {/* migration plan v2 เฟส 3 — เลือกกลุ่ม/โปรเจกต์ที่ reminder
+                  นี้จะผูกด้วย (optional, one-to-one) ซ่อนตัวเลือกนี้ไปเลย
+                  ถ้ายังไม่มีกลุ่มไหนถูกสร้างไว้เลย แทนที่จะโชว์ dropdown
+                  ว่างๆ ที่มีแค่ตัวเลือกเดียว ("ไม่มีกลุ่ม") ซึ่งไม่มีประโยชน์ */}
+              {groups.length > 0 && (
+                <div className="form-field">
+                  <label htmlFor="reminder-group">กลุ่ม/โปรเจกต์ (ถ้ามี)</label>
+                  <select
+                    id="reminder-group"
+                    className="form-select"
+                    value={draft.groupId ?? ""}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, groupId: e.target.value || null }))}
+                  >
+                    <option value="">ไม่มีกลุ่ม</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>{group.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {draft.type === REMINDER_TYPE.INTERVAL && (
                 <>
@@ -2007,25 +2917,106 @@ export default function ReminderDashboard({ firebaseUser }) {
               </form>
             )}
 
-            {activeReminders.length > 0 && (
-              <>
-                <p className="section-header">กำลังทำงาน</p>
-                {activeReminders.map(renderReminder)}
-              </>
-            )}
-
-            {pausedReminders.length > 0 && (
-              <>
-                <p className="section-header">ปิดใช้งาน</p>
-                {pausedReminders.map(renderReminder)}
-              </>
-            )}
-
-            {reminders.length === 0 && !isComposerOpen && (
+            {reminders.length === 0 && !isComposerOpen ? (
               <p className="empty-state">ยังไม่มีการแจ้งเตือน กด "เพิ่ม Reminder" เพื่อเริ่มต้น</p>
+            ) : (
+              <>
+                {activeTab === "active" && (
+                  visibleActiveReminders.length > 0 ? (
+                    visibleActiveReminders.map(renderReminder)
+                  ) : (
+                    !isComposerOpen && (
+                      <p className="empty-state">
+                        {describeActiveFilters()
+                          ? `ไม่มี reminder ${describeActiveFilters()} ที่กำลังทำงานอยู่`
+                          : "ยังไม่มี reminder ที่กำลังทำงานอยู่"}
+                      </p>
+                    )
+                  )
+                )}
+
+                {activeTab === "paused" && (
+                  visiblePausedReminders.length > 0 ? (
+                    visiblePausedReminders.map(renderReminder)
+                  ) : (
+                    !isComposerOpen && (
+                      <p className="empty-state">
+                        {describeActiveFilters()
+                          ? `ไม่มี reminder ${describeActiveFilters()} ที่ปิดใช้งานไว้`
+                          : "ยังไม่มี reminder ที่ปิดใช้งานไว้"}
+                      </p>
+                    )
+                  )
+                )}
+
+                {activeTab === "completed" && (
+                  visibleCompletedReminders.length > 0 ? (
+                    visibleCompletedReminders.map(renderReminder)
+                  ) : (
+                    <p className="empty-state">
+                      {describeActiveFilters()
+                        ? `ไม่มี reminder ${describeActiveFilters()} ที่ทำเสร็จแล้ว`
+                        : "ยังไม่มี reminder ที่ทำเสร็จแล้ว"}
+                    </p>
+                  )
+                )}
+              </>
             )}
           </div>
         </section>
+
+        {/* Timeline Section — ย้ายมาขวาสุด (เดิมอยู่ซ้ายสุด) เนื้อหา/logic
+            ข้างในไม่เปลี่ยนแปลงเลยจากของเดิม แค่ย้ายตำแหน่งใน DOM order
+            ให้ตรงกับ 3-column grid ใหม่เท่านั้น */}
+        <aside className="timeline-panel">
+          <div className="timeline-header">
+            <p className="timeline-title">Timeline 24 ชม.</p>
+            <div className="zoom-controls">
+              <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title="ซูมออก">−</button>
+              <span className="zoom-display">{minutesPerRow} นาที/ช่อง</span>
+              <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title="ซูมเข้า">+</button>
+            </div>
+          </div>
+
+          <div className="timeline-viewport">
+            <div className="now-indicator" />
+
+            {/* เส้นสีเหลืองบาง ๆ แสดง Countdown/Stopwatch ที่กำลังทำงาน
+                วางใน timeline-viewport (ไม่ใช่ track ที่ scroll) จึงไม่ถูก overflow ครอบตัด และแสดงเต็มความยาวเสมอ
+                ตำแหน่งคำนวณเทียบกับกึ่งกลาง viewport (จุดเดียวกับ now-indicator) */}
+            {runningLines.map((line) => (
+              <div
+                key={line.id}
+                className="running-timer-line"
+                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px`, "--line-color": line.color }}
+              />
+            ))}
+
+            <div
+              className="tape-scroll-container"
+              ref={tapeScrollRef}
+              onScroll={handleUserInteraction}
+              onWheel={handleUserInteraction}
+              onTouchMove={handleUserInteraction}
+            >
+              <div className="tape-track-wrapper">
+                {/* Spacer บน: ยืดขอบออกจากแถว 00:00 ไม่ให้ now-indicator ชนขอบ container
+                    เป็น slot เปิดไว้ เผื่อใส่ contentอื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
+                <div className="tape-spacer tape-spacer-top" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
+                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
+                </div>
+
+                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} />
+
+                {/* Spacer ล่าง: ยืดขอบออกจากแถว 24:00 ไม่ให้ now-indicator ชนขอบ container
+                    เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคตเช่นกัน */}
+                <div className="tape-spacer tape-spacer-bottom" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
+                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-bottom" /> */}
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

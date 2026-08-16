@@ -136,6 +136,18 @@ function remindersCol(userId) {
   return userDoc(userId).collection("reminder-mode");
 }
 
+// Groups/Projects สำหรับ reminder mode (migration plan v2 เฟส 3) — โครง
+// เดียวกับ categoriesCol เป๊ะๆ ({ name, color } ต่อ document, id = random
+// UUID จาก POST) เพราะความสัมพันธ์เป็น one-to-one แบบเดียวกับ category↔
+// activity (reminder หนึ่งอันผูกได้ทีละกลุ่มเดียว ผ่าน groupId field บน
+// ตัว reminder เอง ไม่ใช่ mapping แยกแบบ activityCategoriesCol — เพราะ
+// reminder document อยู่ใน remindersCol อยู่แล้ว เก็บ groupId เป็นอีก
+// schedule field หนึ่งตรงๆ ก็พอ ไม่ต้องมี join collection แยกเหมือนฝั่ง
+// calendar ที่ activity มาจาก Google Calendar ไม่ใช่ document ของเราเอง)
+function reminderGroupsCol(userId) {
+  return userDoc(userId).collection("reminderGroups");
+}
+
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
 // db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
 // start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
@@ -242,5 +254,6 @@ module.exports = {
   activityTagsCol,
   lockedActivitiesCol,
   remindersCol,
+  reminderGroupsCol,
   ensureDefaultCategoriesForUser
 };

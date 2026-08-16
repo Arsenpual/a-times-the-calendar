@@ -1,5 +1,5 @@
 const express = require("express");
-const { remindersCol } = require("../firestore-db.js");
+const { remindersCol, reminderGroupsCol } = require("../firestore-db.js");
 
 const router = express.Router();
 
@@ -11,6 +11,10 @@ const router = express.Router();
  * currentIndex (routine), lastTriggeredAt, nextDueAt — ฟิลด์เหล่านี้ยัง
  * อยู่ใน localStorage ฝั่ง frontend เหมือนเดิม ไม่ส่งขึ้น backend ในเฟสนี้
  * เพื่อไม่ให้เขียน Firestore ถี่เกินจำเป็น (เช่น stopwatch ที่ tick ทุกวินาที)
+ *
+ * migration plan v2 เฟส 3 เพิ่ม groupId เข้ามาเป็น schedule field ตัวที่
+ * 17 — ผูก reminder เข้ากับกลุ่ม/โปรเจกต์ (reminderGroupsCol) แบบ
+ * one-to-one เหมือน category↔activity ฝั่งปฏิทิน
  *
  * ALLOWED_FIELDS ด้านล่างคือ allow-list ของฟิลด์ที่ยอมรับ — ฟิลด์ไหนไม่อยู่
  * ในนี้จะถูกตัดทิ้งเงียบๆ ตอน sanitize (ไม่ error) เพื่อกันไม่ให้ client
@@ -32,7 +36,15 @@ const ALLOWED_FIELDS = [
   "durationMs",
   "lineColor",
   "eventName",
-  "steps"
+  "steps",
+  // migration plan v2 เฟส 3 — groupId ผูก reminder เข้ากับ reminderGroups
+  // (one-to-one, ดู firestore-db.js's reminderGroupsCol comment) เป็น
+  // schedule field ธรรมดาตัวหนึ่ง sync ขึ้น backend เหมือนฟิลด์อื่นทั้งหมด
+  // — โครงสร้าง (null หรือ string) ตรวจใน sanitizeReminderFields ด้านล่าง
+  // ส่วนว่า id ที่ส่งมามีกลุ่มนั้นอยู่จริงไหม ต้องเช็คแบบ async กับ
+  // Firestore จึงย้ายไปเช็คใน route handler โดยตรง (เหมือน categoryId ใน
+  // routes/activity-categories.js ทำ) ไม่ใช่ในฟังก์ชัน sync นี้
+  "groupId"
 ];
 
 const REMINDER_TYPES = [
@@ -100,6 +112,17 @@ function sanitizeReminderFields(body) {
   if (body.days !== undefined && !isValidDays(body.days)) return null;
   if (body.steps !== undefined && !isValidSteps(body.steps)) return null;
 
+  // groupId ต้องเป็น null หรือ non-empty string เท่านั้น — เช็คโครงสร้าง
+  // อย่างเดียวตรงนี้ (เหมือน categoryId ใน routes/activity-categories.js)
+  // ส่วนว่ากลุ่มนั้นมีอยู่จริงไหม เช็คแบบ async ใน route handler ด้านล่าง
+  if (
+    body.groupId !== undefined &&
+    body.groupId !== null &&
+    (typeof body.groupId !== "string" || body.groupId.trim() === "")
+  ) {
+    return null;
+  }
+
   const cleaned = {};
   for (const key of ALLOWED_FIELDS) {
     if (body[key] !== undefined) cleaned[key] = body[key];
@@ -136,6 +159,18 @@ router.put("/:reminderId", async (req, res, next) => {
         error: "ต้องระบุ type (หนึ่งใน " + REMINDER_TYPES.join(", ") + ") และ title ที่ไม่ว่างเปล่า"
       });
     }
+
+    // ถ้าส่ง groupId มาเป็น string (ไม่ใช่ null) ต้องมีกลุ่มนั้นอยู่จริงก่อน
+    // ยอมบันทึก — เหมือน categoryId ใน routes/activity-categories.js ทุก
+    // ประการ กัน reminder ผูกกับ groupId ที่ไม่มีอยู่จริง (เช่น กลุ่มถูกลบ
+    // ไปแล้วจากอุปกรณ์อื่นพอดี แต่ client เครื่องนี้ยังไม่รู้)
+    if (cleaned.groupId) {
+      const groupDoc = await reminderGroupsCol(req.userId).doc(cleaned.groupId).get();
+      if (!groupDoc.exists) {
+        return res.status(400).json({ error: "ไม่พบกลุ่มที่ระบุ" });
+      }
+    }
+
     const { reminderId } = req.params;
     await remindersCol(req.userId).doc(reminderId).set(cleaned);
     res.json({ id: reminderId, ...cleaned });
