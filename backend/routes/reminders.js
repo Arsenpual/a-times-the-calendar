@@ -76,10 +76,11 @@ function isValidStringField(value, maxLength = MAX_STRING_FIELD_LENGTH) {
   return typeof value === "string" && value.length <= maxLength;
 }
 
-/** ตรวจ "days" — ต้องเป็น array ของ string สั้นๆ ไม่เกิน 7 รายการ */
+/** ตรวจ "days" — วันใน JavaScript Date.getDay() คือจำนวนเต็ม 0 (อาทิตย์)
+ * ถึง 6 (เสาร์), ไม่เกิน 7 รายการ และห้ามซ้ำ */
 function isValidDays(days) {
   if (!Array.isArray(days) || days.length > MAX_DAYS) return false;
-  return days.every((d) => isValidStringField(d, 20));
+  return days.every((day) => Number.isInteger(day) && day >= 0 && day <= 6) && new Set(days).size === days.length;
 }
 
 /**
