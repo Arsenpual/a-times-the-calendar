@@ -65,21 +65,19 @@ function snapToNextWindowStart(ms, windowStart, windowEnd) {
 function computeNextDueAt(reminder, from) {
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
-      if (!reminder.days || reminder.days.length === 0 || !reminder.time) return Infinity;
-      const targetMin = minutesFromHHMM(reminder.time);
-      const targetHour = Math.floor(targetMin / 60);
-      const targetMinute = targetMin % 60;
+      const times = (reminder.times?.length ? reminder.times : [reminder.time]).filter(Boolean).sort();
+      if (!reminder.days || reminder.days.length === 0 || times.length === 0) return Infinity;
 
       const baseDate = new Date(from);
 
       for (let i = 0; i < 8; i++) {
         const candidate = new Date(baseDate);
         candidate.setDate(baseDate.getDate() + i);
-        candidate.setHours(targetHour, targetMinute, 0, 0);
-
-        const dayOfWeek = candidate.getDay();
-        if (reminder.days.includes(dayOfWeek) && candidate.getTime() > from) {
-          return candidate.getTime();
+        if (!reminder.days.includes(candidate.getDay())) continue;
+        for (const time of times) {
+          const targetMin = minutesFromHHMM(time);
+          candidate.setHours(Math.floor(targetMin / 60), targetMin % 60, 0, 0);
+          if (candidate.getTime() > from) return candidate.getTime();
         }
       }
       return Infinity;

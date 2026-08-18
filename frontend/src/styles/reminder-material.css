@@ -63,14 +63,40 @@
 
 .reminder-app-container .nav-sidebar {
   padding: var(--md-ref-spacing-5) var(--md-ref-spacing-3);
+  gap: 22px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset -1px 0 var(--g-outline-variant);
+}
+
+.reminder-app-container .nav-sidebar > div {
+  position: relative;
+}
+
+.reminder-app-container .nav-sidebar > div + div::before {
+  content: "";
+  position: absolute;
+  top: -11px;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--g-outline-variant);
+}
+
+.reminder-app-container .nav-section-title {
+  margin: 0 0 8px 12px;
+  color: var(--g-on-surface-variant);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
 }
 
 .reminder-app-container .nav-item {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: var(--md-ref-radius-pill);
-  margin-block: 2px;
-  padding-inline: var(--md-ref-spacing-4);
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  margin-block: 3px;
+  padding-inline: 16px 12px;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .reminder-app-container .nav-item:not(:disabled):hover {
@@ -78,9 +104,38 @@
 }
 
 .reminder-app-container .nav-item.is-active {
-  background: var(--g-blue-light);
+  background: color-mix(in srgb, var(--g-blue) 16%, var(--g-surface));
   color: var(--g-blue-hover);
   font-weight: 700;
+  box-shadow: inset 4px 0 var(--g-blue);
+}
+
+.reminder-app-container .nav-item-count {
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--g-on-surface) 7%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.reminder-app-container .nav-item.is-active .nav-item-count {
+  background: color-mix(in srgb, var(--g-blue) 17%, transparent);
+  color: var(--g-blue-hover);
+}
+
+.reminder-app-container .nav-item-group-dot {
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.reminder-app-container .nav-empty-state {
+  margin: 4px 12px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--g-background);
+  color: var(--g-on-surface-variant);
+  font-size: 12px;
 }
 
 .reminder-app-container .main-panel-toolbar {
@@ -190,6 +245,12 @@
   box-shadow: var(--md-ref-elevation-2);
 }
 
+.reminder-app-container .composer-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(32, 33, 36, .34); }
+.reminder-app-container .composer-card { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--g-surface); box-shadow: var(--md-ref-elevation-2); }
+.reminder-app-container .weekly-time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.reminder-app-container .weekly-time-row .form-input { flex: 1; }
+.reminder-app-container .weekly-add-time { margin-top: 2px; }
+
 /* Google Calendar activities share this 24-hour track with reminders. The
    layer never changes the track's measured height, so scrolling and the
    fixed "now" indicator remain stable at every zoom level. */
@@ -245,32 +306,6 @@
 .reminder-app-container .calendar-timeline-block-title {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.reminder-app-container .activity-timer-line {
-  position: absolute;
-  left: 84px;
-  right: 8px;
-  z-index: 4;
-  min-height: 2px;
-  border-radius: 8px;
-  pointer-events: none;
-  opacity: 0.56;
-}
-
-/* ก่อนเริ่ม: แถบฟ้ายุบเข้าหา now-indicator; ระหว่างกิจกรรม: แถบเขียว
-   ยาวออกจากจุดเริ่มมาถึง now-indicator เหมือน stopwatch เดิม. */
-.reminder-app-container .activity-timer-line.upcoming {
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--timeline-countdown-color) 38%, transparent), transparent);
-  border-left: 3px solid var(--timeline-countdown-color);
-  border-right: 3px solid var(--timeline-countdown-color);
-}
-
-.reminder-app-container .activity-timer-line.active {
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--timeline-activity-timer-color) 40%, transparent), transparent);
-  border-left: 3px solid var(--timeline-activity-timer-color);
-  border-right: 3px solid var(--timeline-activity-timer-color);
-  opacity: 0.78;
 }
 
 /* Reminder ที่ตั้งเวลาไว้ยังต้องอ่านและกดได้แม้อยู่ช่วงเดียวกับ activity. */

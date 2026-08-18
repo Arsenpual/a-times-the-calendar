@@ -5,6 +5,7 @@ import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { getReminderFeatureFlags, logReminderEvent } from "../reminder-telemetry.js";
 import { parseReminderQuickInput } from "../reminder-quick-parse.js";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
+import AutoShrinkText from "./auto-shrink-text.jsx";
 import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../reminder-stats.js";
 import { activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
@@ -32,7 +33,7 @@ const STORAGE_KEY = "times-reminders-v1";
 // ฝั่ง Cloud Function ต้องอ่านมันได้แม้ผู้ใช้ปิดแท็บอยู่
 const SCHEDULE_FIELD_KEYS = [
   "type", "title", "enabled", "amount", "unit", "windowStart", "windowEnd",
-  "days", "time", "atMs", "afterAmount", "afterUnit", "durationMs",
+  "days", "time", "times", "atMs", "afterAmount", "afterUnit", "durationMs",
   "lineColor", "eventName", "steps",
   // migration plan v2 เฟส 3 — groupId ผูก reminder เข้ากับกลุ่ม/โปรเจกต์
   // (one-to-one, null = ไม่มีกลุ่ม) ต้องส่งค่า null อย่างชัดเจนเสมอ (ไม่ใช่
@@ -186,6 +187,7 @@ function createBlankDraft() {
     countdownMinutes: "20",
     days: [1, 3, 5],
     time: "08:00",
+    times: ["08:00"],
     eventName: "",
     afterAmount: "2",
     afterUnit: "hours",
@@ -281,7 +283,7 @@ function describeReminder(reminder, nowMs) {
 // คืนค่ารายการ "นาทีของวัน" (0-1439) ที่ reminder ประเภทนี้ควรถูกปักหมุดแสดงบน timeline
 // ใช้แสดงผลบน timeline โดยไม่สนใจว่า enabled/nextDueAt ถึงกำหนดหรือยัง (โชว์ทุกประเภทเสมอเวลาเลื่อนดู)
 // - INTERVAL: ปักซ้ำทุก ๆ N นาที (จำกัดในช่วง window ถ้ามีกำหนด)
-// - WEEKLY: ปักที่เวลาเดียวของวัน (เวลาเดิมทุกสัปดาห์ที่ตรงกับ days ที่เลือก)
+// - WEEKLY: ปักทุกเวลาที่ตั้งไว้ของวันนั้น
 // - ONCE_AT: ปักที่เวลาของวันนั้น เฉพาะกรณีเป็นวันเดียวกับวันนี้ (เพราะเป็น timeline วันเดียว)
 // - COUNTDOWN: ปักที่เวลาสิ้นสุดของการนับถอยหลัง (ถ้าอยู่ในวันเดียวกับวันนี้)
 // - STOPWATCH: จับเวลาต่อเนื่องไม่มีเวลาตายตัว จึงไม่ปักหมุดตามเวลาเช่นกัน (เหมือน EVENT_ANCHORED/ROUTINE)
@@ -300,8 +302,7 @@ function getReminderTimeSlots(reminder, startOfTodayMs) {
       return slots;
     }
     case REMINDER_TYPE.WEEKLY: {
-      if (!reminder.time) return [];
-      return [minutesFromHHMM(reminder.time)];
+      return (reminder.times?.length ? reminder.times : [reminder.time]).filter(Boolean).map(minutesFromHHMM);
     }
     case REMINDER_TYPE.ONCE_AT: {
       if (!reminder.atMs) return [];
@@ -589,43 +590,28 @@ export default function ReminderDashboard({
           isActive,
           isUpcoming,
           elapsedSeconds,
-          countdownSeconds
+          countdownSeconds,
+          remainingSeconds: Math.max(0, Math.ceil((actualEndMs - nowTick) / 1000))
         };
       })
       .filter(Boolean);
   }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX]);
 
-  // now-indicator คือแกนกลางของเอฟเฟกต์เวลา: เลือก Activity ถัดไปเพียงตัว
-  // เดียวเป็นแถบฟ้านับถอยหลัง (จาก now ไปจุดเริ่ม) และทุก Activity ที่กำลัง
-  // ทำเป็นแถบเขียวนับเวลาที่ผ่านไป (จากจุดเริ่มมาถึง now). จึงยังให้ความรู้สึก
-  // แบบ countdown/stopwatch เดิมโดยไม่ต้องสร้าง Reminder timer แยก.
-  const activityTimelineLines = useMemo(() => {
-    const pxPerMinute = singleDayHeight / 1440;
-    const activeLines = calendarTimelineBlocks
-      .filter((block) => block.isActive)
-      .map((block) => ({
-        id: `activity-active-${block.id}`,
-        title: block.title,
-        state: "active",
-        top: ((block.actualStartMs - nowTick) / 60000) * pxPerMinute,
-        height: ((nowTick - block.actualStartMs) / 60000) * pxPerMinute,
-        label: `จับเวลา ${formatDurationClock(block.elapsedSeconds)}`
-      }));
-
+  // แทนแถบสี countdown/stopwatch เดิมด้วยข้อความบน now-indicator โดยตรง:
+  // ถ้ามีกิจกรรมกำลังทำให้ความสำคัญกับเวลาที่เหลือก่อนจบ; ถ้าไม่มีจึงแสดง
+  // เวลาที่เหลือก่อนถึงกิจกรรมถัดไป.
+  const activityNowStatus = useMemo(() => {
+    const active = calendarTimelineBlocks.find((block) => block.isActive);
+    if (active) {
+      return { title: active.title, text: `จะจบใน ${formatDurationClock(active.remainingSeconds)}`, color: active.color };
+    }
     const next = calendarTimelineBlocks
       .filter((block) => block.isUpcoming)
       .sort((a, b) => a.actualStartMs - b.actualStartMs)[0];
-    if (!next) return activeLines;
-
-    return [...activeLines, {
-      id: `activity-upcoming-${next.id}`,
-      title: next.title,
-      state: "upcoming",
-      top: 0,
-      height: ((next.actualStartMs - nowTick) / 60000) * pxPerMinute,
-      label: `เริ่มใน ${formatDurationClock(next.countdownSeconds)}`
-    }];
-  }, [calendarTimelineBlocks, nowTick, singleDayHeight]);
+    return next
+      ? { title: next.title, text: `จะถึงใน ${formatDurationClock(next.countdownSeconds)}`, color: next.color }
+      : null;
+  }, [calendarTimelineBlocks]);
 
   // ตำแหน่ง scrollTop ที่ต้องการ ให้ now-indicator อยู่กลาง container พอดี
   // ต้องบวก SPACER_HEIGHT_PX เข้าไปด้วย เพราะแถว 00:00 ไม่ได้เริ่มที่ scrollTop=0 อีกต่อไป
@@ -895,7 +881,8 @@ export default function ReminderDashboard({
       }
     } else if (draft.type === REMINDER_TYPE.WEEKLY) {
       newReminder.days = draft.days;
-      newReminder.time = draft.time;
+      newReminder.times = [...new Set((draft.times || [draft.time]).filter(Boolean))].sort();
+      newReminder.time = newReminder.times[0] || "08:00";
     } else if (draft.type === REMINDER_TYPE.EVENT_ANCHORED) {
       newReminder.eventName = draft.eventName || "เหตุการณ์หลัก";
       newReminder.afterAmount = parseInt(draft.afterAmount) || 1;
@@ -1041,6 +1028,7 @@ export default function ReminderDashboard({
       countdownMinutes: reminder.durationMs ? String(reminder.durationMs / 60000) : "20",
       days: reminder.days || [1, 3, 5],
       time: reminder.time || "08:00",
+      times: reminder.times?.length ? reminder.times : [reminder.time || "08:00"],
       eventName: reminder.eventName || "",
       afterAmount: String(reminder.afterAmount || 2),
       afterUnit: reminder.afterUnit || "hours",
@@ -1212,9 +1200,7 @@ export default function ReminderDashboard({
     <div
       className="reminder-app-container"
       style={{
-        "--timeline-now-color": timelineColors?.nowIndicator || "#ea4335",
-        "--timeline-countdown-color": timelineColors?.countdown || "#1a73e8",
-        "--timeline-activity-timer-color": timelineColors?.activityTimer || "#34a853"
+        "--timeline-now-color": timelineColors?.nowIndicator || "#ea4335"
       }}
     >
       <style>{`
@@ -1858,6 +1844,43 @@ export default function ReminderDashboard({
           height: 10px;
           border-radius: 50%;
           background: var(--timeline-now-color);
+        }
+
+        .timeline-activity-status {
+          position: absolute;
+          left: 50%;
+          top: 12px;
+          transform: translateX(-50%);
+          z-index: 20;
+          display: inline-flex;
+          align-items: baseline;
+          gap: 6px;
+          max-width: calc(100% - 32px);
+          padding: 7px 12px;
+          border-radius: 999px;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline-variant);
+          border-left: 4px solid var(--timeline-status-color);
+          box-shadow: 0 3px 10px rgba(60, 64, 67, 0.22);
+          color: var(--timeline-status-color);
+          font-size: 12px;
+          line-height: 1.2;
+          pointer-events: none;
+        }
+
+        .timeline-activity-status-title {
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 700;
+        }
+
+        .timeline-activity-status strong {
+          flex-shrink: 0;
+          color: var(--timeline-status-color);
+          font-variant-numeric: tabular-nums;
         }
 
         .tape-scroll-container {
@@ -2828,7 +2851,8 @@ export default function ReminderDashboard({
             {/* Composer แบบ inline expand/collapse: พับเก็บเป็นค่าเริ่มต้นเพื่อประหยัดพื้นที่
                 เมื่อกด "เพิ่ม Reminder" หรือกด "แก้ไข" การ์ดใดการ์ดหนึ่ง จะดันลงมาแสดงแทนที่ */}
             {isComposerOpen && (
-              <form className="composer-card" onSubmit={submitReminderForm}>
+              <div className="composer-backdrop" onMouseDown={cancelEditing}>
+              <form className="composer-card" onMouseDown={(event) => event.stopPropagation()} onSubmit={submitReminderForm}>
               <div className="form-field">
                 <label htmlFor="reminder-title">ชื่อการแจ้งเตือน</label>
                 <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="เช่น พักสายตา 5 นาที" />
@@ -2904,7 +2928,13 @@ export default function ReminderDashboard({
                   </div>
                   <div className="form-field">
                     <label>เวลาแจ้งเตือน</label>
-                    <input className="form-input" type="time" value={draft.time} onChange={(e) => setDraft((prev) => ({ ...prev, time: e.target.value }))} />
+                    {(draft.times || [draft.time]).map((time, index) => (
+                      <div className="weekly-time-row" key={`${time}-${index}`}>
+                        <input className="form-input" type="time" value={time} onChange={(event) => setDraft((prev) => ({ ...prev, times: prev.times.map((value, itemIndex) => itemIndex === index ? event.target.value : value) }))} />
+                        <button type="button" className="icon-btn" disabled={draft.times.length === 1} onClick={() => setDraft((prev) => ({ ...prev, times: prev.times.filter((_, itemIndex) => itemIndex !== index) }))}>✕</button>
+                      </div>
+                    ))}
+                    <button type="button" className="btn-text weekly-add-time" onClick={() => setDraft((prev) => ({ ...prev, times: [...prev.times, "12:00"] }))}>+ เพิ่มเวลา</button>
                   </div>
                 </>
               )}
@@ -3008,6 +3038,7 @@ export default function ReminderDashboard({
                 </button>
               </div>
               </form>
+              </div>
             )}
 
             {reminders.length === 0 && !isComposerOpen ? (
@@ -3072,16 +3103,21 @@ export default function ReminderDashboard({
           </div>
 
           <div className="timeline-viewport">
-            <div className="now-indicator" />
-
-            {activityTimelineLines.map((line) => (
+            {activityNowStatus && (
               <div
-                key={line.id}
-                className={`activity-timer-line ${line.state}`}
-                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px` }}
-                title={`${line.title} · ${line.label}`}
-              />
-            ))}
+                className="timeline-activity-status"
+                title={activityNowStatus.title}
+                style={{ "--timeline-status-color": activityNowStatus.color.border }}
+              >
+                  <AutoShrinkText
+                    text={activityNowStatus.title}
+                    minScale={0.5}
+                    className="timeline-activity-status-title"
+                  />
+                  <strong>{activityNowStatus.text}</strong>
+              </div>
+            )}
+            <div className="now-indicator" />
 
             <div
               className="tape-scroll-container"

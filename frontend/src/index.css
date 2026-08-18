@@ -2449,6 +2449,18 @@ html.screen-reader-mode .tag-search-input {
   background: white;
 }
 
+/* Native form controls otherwise keep the browser's white surface in dark
+   mode, making ActivityModal's fields visually inconsistent and hard to
+   read. Apply the app semantic tokens to every editable control here. */
+html[data-theme="dark"] .modal-field :is(input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea),
+html[data-theme="dark"] .field-title input,
+html[data-theme="dark"] .new-category-name-input {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border-color: var(--border);
+  color-scheme: dark;
+}
+
 .modal-field-row {
   display: flex;
   gap: 12px;

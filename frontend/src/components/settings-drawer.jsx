@@ -29,7 +29,7 @@ import { useLanguage, SUPPORTED_LANGUAGES } from "../i18n.jsx";
  * @param {() => void} onClose
  * @param {"light"|"dark"} theme current theme
  * @param {(theme: "light"|"dark") => void} onThemeChange
- * @param {{nowIndicator:string,countdown:string,activityTimer:string}} reminderTimelineColors
+ * @param {{nowIndicator:string}} reminderTimelineColors
  * @param {(partial: object) => void} onReminderTimelineColorsChange
  */
 export default function SettingsDrawer({
@@ -123,11 +123,7 @@ export default function SettingsDrawer({
           <section className="settings-section">
             <h3 className="settings-section-title">สี Timeline Reminder</h3>
             <div className="settings-color-list">
-              {[
-                ["nowIndicator", "เส้นเวลาปัจจุบัน", "เส้น now-indicator กลาง Timeline"],
-                ["countdown", "เวลานับถอยหลัง", "แถบฟ้าก่อนเริ่ม Activity"],
-                ["activityTimer", "ตัวจับเวลาอัตโนมัติ", "แถบเขียวระหว่าง Activity"]
-              ].map(([key, title, description]) => (
+              {[["nowIndicator", "เส้นเวลาปัจจุบัน", "เส้น now-indicator และข้อความสถานะกลาง Timeline"]].map(([key, title, description]) => (
                 <label className="settings-color-row" key={key}>
                   <span className="settings-row-label">
                     <span className="settings-row-title">{title}</span>

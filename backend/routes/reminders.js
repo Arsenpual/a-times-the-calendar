@@ -30,6 +30,7 @@ const ALLOWED_FIELDS = [
   "windowEnd",
   "days",
   "time",
+  "times",
   "atMs",
   "afterAmount",
   "afterUnit",
@@ -69,6 +70,7 @@ const REMINDER_TYPES = [
 // หรือเจตนาร้ายก็ได้ — เพดานด้านล่างกันเฉพาะกรณีสุดโต่งนี้ ไม่ใช่ validation
 // ทางธุรกิจแบบเต็มรูป (ยังไม่เช็ค field ย่อยภายใน step object แต่ละอัน)
 const MAX_DAYS = 7; // ไม่มีทางเกิน 7 วันต่อสัปดาห์อยู่แล้วโดยธรรมชาติ
+const MAX_WEEKLY_TIMES = 12;
 const MAX_STEPS = 50; // routine หนึ่งชุดไม่ควรมีมากกว่านี้ในทางปฏิบัติ
 const MAX_STEP_JSON_LENGTH = 20000; // กันแต่ละ step object ใหญ่ผิดปกติ (เช่น title ยาวเป็นหมื่นตัวอักษร)
 const MAX_STRING_FIELD_LENGTH = 200; // เพดานความยาวสำหรับ string field ทั่วไป (title, eventName, unit, lineColor, afterUnit)
@@ -82,6 +84,12 @@ function isValidStringField(value, maxLength = MAX_STRING_FIELD_LENGTH) {
 function isValidDays(days) {
   if (!Array.isArray(days) || days.length > MAX_DAYS) return false;
   return days.every((day) => Number.isInteger(day) && day >= 0 && day <= 6) && new Set(days).size === days.length;
+}
+
+function isValidWeeklyTimes(times) {
+  return Array.isArray(times) && times.length > 0 && times.length <= MAX_WEEKLY_TIMES &&
+    times.every((time) => typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) &&
+    new Set(times).size === times.length;
 }
 
 /**
@@ -115,6 +123,7 @@ function sanitizeReminderFields(body) {
   }
 
   if (body.days !== undefined && !isValidDays(body.days)) return null;
+  if (body.times !== undefined && !isValidWeeklyTimes(body.times)) return null;
   if (body.steps !== undefined && !isValidSteps(body.steps)) return null;
 
   // null = reminder นี้ไม่มี due-date ที่ scheduler ต้องตรวจ (routine,

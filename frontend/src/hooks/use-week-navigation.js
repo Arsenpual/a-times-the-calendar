@@ -4,9 +4,7 @@ import { getWeekRange } from "../date-utils.js";
 const THEME_STORAGE_KEY = "theme";
 const REMINDER_TIMELINE_COLORS_STORAGE_KEY = "reminder-timeline-colors";
 const DEFAULT_REMINDER_TIMELINE_COLORS = {
-  nowIndicator: "#ea4335",
-  countdown: "#1a73e8",
-  activityTimer: "#34a853"
+  nowIndicator: "#ea4335"
 };
 
 function loadReminderTimelineColors() {
@@ -15,9 +13,7 @@ function loadReminderTimelineColors() {
     if (!saved || typeof saved !== "object") return DEFAULT_REMINDER_TIMELINE_COLORS;
     const isColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
     return {
-      nowIndicator: isColor(saved.nowIndicator) ? saved.nowIndicator : DEFAULT_REMINDER_TIMELINE_COLORS.nowIndicator,
-      countdown: isColor(saved.countdown) ? saved.countdown : DEFAULT_REMINDER_TIMELINE_COLORS.countdown,
-      activityTimer: isColor(saved.activityTimer) ? saved.activityTimer : DEFAULT_REMINDER_TIMELINE_COLORS.activityTimer
+      nowIndicator: isColor(saved.nowIndicator) ? saved.nowIndicator : DEFAULT_REMINDER_TIMELINE_COLORS.nowIndicator
     };
   } catch {
     return DEFAULT_REMINDER_TIMELINE_COLORS;
