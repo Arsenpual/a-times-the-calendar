@@ -1398,19 +1398,32 @@ export default function ReminderDashboard({
         }
 
         .btn-mark-done {
-          background: var(--g-surface);
-          border: 1px solid var(--g-red-light-border);
-          color: var(--g-red-dark);
-          padding: 6px 14px;
-          border-radius: 18px;
+          background: #1e8e3e;
+          border: 1px solid #188038;
+          color: #fff;
+          padding: 7px 16px;
+          border-radius: 20px;
           font-size: 13px;
-          font-weight: 500;
+          font-weight: 700;
           cursor: pointer;
-          transition: background 0.15s;
+          box-shadow: 0 2px 5px rgba(24, 128, 56, 0.30);
+          transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         }
 
         .btn-mark-done:hover {
-          background: var(--g-red-light);
+          background: #188038;
+          box-shadow: 0 3px 8px rgba(24, 128, 56, 0.38);
+          transform: translateY(-1px);
+        }
+
+        .btn-mark-done:focus-visible {
+          outline: 3px solid color-mix(in srgb, #1e8e3e 38%, transparent);
+          outline-offset: 2px;
+        }
+
+        .btn-mark-done:active {
+          transform: translateY(0);
+          box-shadow: 0 1px 3px rgba(24, 128, 56, 0.30);
         }
 
         /* Top bar — เพิ่มเข้ามาในรอบ layout-only ของ migration plan v2 เฟส 1
