@@ -2,6 +2,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getWeekRange } from "../date-utils.js";
 
 const THEME_STORAGE_KEY = "theme";
+const REMINDER_TIMELINE_COLORS_STORAGE_KEY = "reminder-timeline-colors";
+const DEFAULT_REMINDER_TIMELINE_COLORS = {
+  nowIndicator: "#ea4335",
+  countdown: "#1a73e8",
+  activityTimer: "#34a853"
+};
+
+function loadReminderTimelineColors() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(REMINDER_TIMELINE_COLORS_STORAGE_KEY));
+    if (!saved || typeof saved !== "object") return DEFAULT_REMINDER_TIMELINE_COLORS;
+    const isColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    return {
+      nowIndicator: isColor(saved.nowIndicator) ? saved.nowIndicator : DEFAULT_REMINDER_TIMELINE_COLORS.nowIndicator,
+      countdown: isColor(saved.countdown) ? saved.countdown : DEFAULT_REMINDER_TIMELINE_COLORS.countdown,
+      activityTimer: isColor(saved.activityTimer) ? saved.activityTimer : DEFAULT_REMINDER_TIMELINE_COLORS.activityTimer
+    };
+  } catch {
+    return DEFAULT_REMINDER_TIMELINE_COLORS;
+  }
+}
 
 /**
  * Owns cursorDate/expandedDate navigation (week + day), plus a handful of
@@ -51,6 +72,21 @@ export function useWeekNavigation() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // สีของเอฟเฟกต์เวลาใน Reminder Timeline เป็น preference ฝั่งเครื่อง:
+  // ไม่เกี่ยวกับข้อมูล Activity/Reminder จึงไม่ควร sync ขึ้น Calendar หรือ Firebase.
+  const [reminderTimelineColors, setReminderTimelineColorsState] = useState(loadReminderTimelineColors);
+  const setReminderTimelineColors = useCallback((partialColors) => {
+    setReminderTimelineColorsState((previous) => {
+      const next = { ...previous, ...partialColors };
+      try {
+        window.localStorage.setItem(REMINDER_TIMELINE_COLORS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // localStorage ไม่พร้อมใช้: เปลี่ยนสีใน session ปัจจุบันได้ตามปกติ
+      }
+      return next;
+    });
+  }, []);
 
   const [cursorDate, setCursorDate] = useState(new Date());
   const [expandedDate, setExpandedDate] = useState(null);
@@ -164,6 +200,8 @@ export function useWeekNavigation() {
     setShowLoginGuide,
     theme,
     setTheme,
+    reminderTimelineColors,
+    setReminderTimelineColors,
     cursorDate,
     expandedDate,
     navigateWeek,

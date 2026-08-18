@@ -90,10 +90,14 @@ export default function TimelineEditor({
 }) {
   const [draftTimes, setDraftTimes] = useState({}); // activityId -> { start: Date, end: Date }
   const [saving, setSaving] = useState(false);
+  const [overlapError, setOverlapError] = useState(null);
   const [dragState, setDragState] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { activityId, x, y }
   const [isFullscreen, setIsFullscreen] = useState(false);
   const gridRef = useRef(null);
+  const dragAnimationFrameRef = useRef(null);
+  const pendingDragPreviewRef = useRef(null);
+  const dragStartLayoutRef = useRef(null);
 
   const timedActivities = activities.filter((activity) => activity.start?.dateTime);
 
@@ -123,7 +127,42 @@ export default function TimelineEditor({
 
   const hasChanges = Object.keys(draftTimes).length > 0;
 
+  // Timeline Editor มีไว้จัดกิจกรรมหลักให้เป็นช่วงเวลาที่ไม่ชนกัน ส่วนงาน
+  // ย่อย/สิ่งที่ทำควบคู่กันให้ใช้ Reminder Mode แทน. เปรียบเทียบ Date จริง
+  // (ไม่ใช่แค่นาทีในวัน) เพื่อให้กิจกรรมข้ามเที่ยงคืนและ incoming spillover
+  // ถูกตรวจด้วยกติกาเดียวกันด้วย.
+  const findOverlap = (activityId, candidateTimes) => {
+    const candidateStart = candidateTimes.start?.getTime();
+    const candidateEnd = candidateTimes.end?.getTime();
+    if (!Number.isFinite(candidateStart) || !Number.isFinite(candidateEnd) || candidateEnd <= candidateStart) return null;
+
+    const otherTimedActivity = timedActivities.find((activity) => {
+      if (activity.id === activityId) return false;
+      const times = getTimes(activity);
+      return candidateStart < times.end.getTime() && candidateEnd > times.start.getTime();
+    });
+    if (otherTimedActivity) return otherTimedActivity.summary || "กิจกรรมอื่น";
+
+    const incoming = incomingSpillover.find(({ activity, start, end }) =>
+      activity.id !== activityId && candidateStart < end.getTime() && candidateEnd > start.getTime()
+    );
+    return incoming ? (incoming.activity.summary || "กิจกรรมที่ต่อเนื่องจากเมื่อคืน") : null;
+  };
+
+  const validateDraftTimes = () => {
+    for (const [activityId, times] of Object.entries(draftTimes)) {
+      const overlappingTitle = findOverlap(activityId, times);
+      if (overlappingTitle) return `เวลาซ้อนกับ “${overlappingTitle}” — งานย่อยให้สร้างใน Reminder Mode แทน`;
+    }
+    return null;
+  };
+
   const saveEditing = async () => {
+    const validationError = validateDraftTimes();
+    if (validationError) {
+      setOverlapError(validationError);
+      return;
+    }
     const changes = Object.entries(draftTimes).map(([id, times]) => ({
       id,
       start: times.start,
@@ -156,6 +195,10 @@ export default function TimelineEditor({
     e.preventDefault();
     setContextMenu(null);
     const times = getTimes(activity);
+    // ตรึงคอลัมน์ของงานอื่นไว้ตลอด gesture นี้: ถ้าปล่อยให้คำนวณ overlap
+    // layout ทุก pixel ที่เลื่อน บล็อกจะสลับคอลัมน์/เปลี่ยนความกว้างทันที
+    // ที่แตะงานข้างเคียงจนดูเหมือนดีดออกไป.
+    dragStartLayoutRef.current = overlapLayout;
     setDragState({
       activityId: activity.id,
       mode,
@@ -209,10 +252,51 @@ export default function TimelineEditor({
     const start = new Date(base.getTime() + nextStart * 60000);
     const end = new Date(base.getTime() + nextEnd * 60000);
 
-    setDraftTimes((prev) => ({ ...prev, [dragState.activityId]: { start, end } }));
+    // อนุญาตให้ลาก "ผ่าน" ช่วงที่ซ้อนกันได้ เพื่อจัดลำดับ/ย้ายข้ามกิจกรรม
+    // อื่นอย่างลื่นไหล แต่แจ้งเตือนทันทีและ saveEditing จะกันการบันทึกไว้
+    // จนกว่าจะจัดช่วงเวลาให้ไม่ชนกัน.
+    const overlappingTitle = findOverlap(dragState.activityId, { start, end });
+    // Pointer events เกิดถี่กว่า refresh rate ของจอได้มาก การ setState ทุก
+    // event ทำให้ทั้งกริด 24 ชั่วโมงคำนวณ layout ใหม่ถี่เกินจำเป็นและเกิด
+    // อาการกระตุก จึงรวม update เหลืออย่างมากหนึ่งครั้งต่อ animation frame.
+    pendingDragPreviewRef.current = {
+      activityId: dragState.activityId,
+      times: { start, end },
+      overlapError: overlappingTitle
+        ? `เวลาซ้อนกับ “${overlappingTitle}” — จัดเวลาให้ไม่ทับกันก่อนบันทึก หรือย้ายงานย่อยไป Reminder Mode`
+        : null
+    };
+    if (dragAnimationFrameRef.current !== null) return;
+    dragAnimationFrameRef.current = requestAnimationFrame(() => {
+      dragAnimationFrameRef.current = null;
+      const preview = pendingDragPreviewRef.current;
+      pendingDragPreviewRef.current = null;
+      if (!preview) return;
+      setOverlapError(preview.overlapError);
+      setDraftTimes((prev) => ({ ...prev, [preview.activityId]: preview.times }));
+    });
   };
 
-  const endDrag = () => setDragState(null);
+  const endDrag = () => {
+    // Commit preview ล่าสุดทันทีถ้า pointer ถูกปล่อยระหว่างที่ rAF ยังไม่รัน
+    // เพื่อไม่ให้ตำแหน่งสุดท้ายหล่นหายหนึ่ง frame.
+    if (dragAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(dragAnimationFrameRef.current);
+      dragAnimationFrameRef.current = null;
+      const preview = pendingDragPreviewRef.current;
+      pendingDragPreviewRef.current = null;
+      if (preview) {
+        setOverlapError(preview.overlapError);
+        setDraftTimes((prev) => ({ ...prev, [preview.activityId]: preview.times }));
+      }
+    }
+    dragStartLayoutRef.current = null;
+    setDragState(null);
+  };
+
+  useEffect(() => () => {
+    if (dragAnimationFrameRef.current !== null) cancelAnimationFrame(dragAnimationFrameRef.current);
+  }, []);
 
   const openContextMenu = (e, activityId) => {
     e.preventDefault();
@@ -274,7 +358,9 @@ export default function TimelineEditor({
   const contextActivity = contextMenu ? timedActivities.find((activity) => activity.id === contextMenu.activityId) : null;
   const contextLocked = contextActivity ? isLocked(contextActivity.id) : false;
 
-  const overlapLayout = layoutOverlaps([
+  const overlapLayout = dragState && dragStartLayoutRef.current
+    ? dragStartLayoutRef.current
+    : layoutOverlaps([
     ...timedActivities.map((activity) => {
       const { start, end } = getTimes(activity);
       const startMin = minutesOfDay(start);
@@ -291,13 +377,16 @@ export default function TimelineEditor({
       startMin: 0,
       endMin: Math.max(SNAP_MINUTES, spilloverEndMin)
     }))
-  ]);
+    ]);
+  // ระหว่างลากใช้ layout ตอนเริ่ม gesture สำหรับงานที่ไม่ได้ถูกโฟกัส จึงไม่
+  // คำนวณใหม่หรือทำให้กริด reflow. บล็อกที่โฟกัสถูกบังคับเป็นซ้ายสุดด้านล่าง.
 
   return (
     <div className={`timeline-editor${isFullscreen ? " is-fullscreen" : ""}`}>
       <div className="timeline-editor-header">
         <p className="timeline-editor-hint">
-          ลากเพื่อย้าย หรือดึงขอบบน/ล่างเพื่อปรับเวลา — คลิกขวาที่แถบกิจกรรมเพื่อตั้งค่า
+          ลากเพื่อย้าย หรือดึงขอบบน/ล่างเพื่อปรับเวลา — เวลา Activity ต้องไม่ซ้อนกัน
+          — คลิกขวาที่แถบกิจกรรมเพื่อตั้งค่า
           — กด "บันทึก" เพื่อ sync กลับ Google Calendar
         </p>
         <button
@@ -320,6 +409,12 @@ export default function TimelineEditor({
         >
           {isFullscreen ? "⤡" : "⤢"}
         </button>
+      </div>
+
+      {/* จองพื้นที่ alert ไว้ตลอด: ถ้า mount/unmount เฉพาะตอนเวลาชนกัน
+          กริดจะถูกดันลง/เด้งกลับใต้ pointer และทำให้ตำแหน่งลากสั่น */}
+      <div className="timeline-editor-status" aria-live="polite">
+        {overlapError && <p className="timeline-editor-error" role="alert">{overlapError}</p>}
       </div>
 
       {timedActivities.length === 0 && incomingSpillover.length === 0 ? (
@@ -345,7 +440,7 @@ export default function TimelineEditor({
               </div>
             ))}
 
-            <div className="day-timeline-events-layer">
+            <div className={`day-timeline-events-layer${dragState ? " is-direct-dragging" : ""}`}>
               {incomingSpillover.map(({ activity, spilloverEndMin }) => {
                 const height = (spilloverEndMin / 60) * EDIT_HOUR_HEIGHT;
                 const color = getDisplayColor(activity, activityCategoryMap, categories);
@@ -400,7 +495,10 @@ export default function TimelineEditor({
                 const color = getDisplayColor(activity, activityCategoryMap, categories);
                 const isDragging = dragState?.activityId === activity.id;
                 const locked = isLocked(activity.id);
-                const { column, columns } = overlapLayout[activity.id] || { column: 0, columns: 1 };
+                const layout = isDragging
+                  ? { column: 0, columns: 1 }
+                  : (overlapLayout[activity.id] || { column: 0, columns: 1 });
+                const { column, columns } = layout;
                 const widthPercent = 100 / columns;
                 const leftPercent = column * widthPercent;
                 // Uses the real (un-wrapped) end time, not endMin above — so

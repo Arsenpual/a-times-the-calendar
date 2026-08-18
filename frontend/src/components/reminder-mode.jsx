@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useRemindersSync } from "../hooks/use-reminders-sync.js";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 import { usePushNotifications } from "../hooks/use-push-notifications.js";
+import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { getReminderFeatureFlags, logReminderEvent } from "../reminder-telemetry.js";
+import { parseReminderQuickInput } from "../reminder-quick-parse.js";
+import ReminderStatsPanel from "./reminder-stats-panel.jsx";
+import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../reminder-stats.js";
+import { activityDate } from "../date-utils.js";
+import { getDisplayColor } from "../activity-colors.js";
+import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
   isOneShotType,
@@ -35,6 +41,9 @@ const SCHEDULE_FIELD_KEYS = [
   // (groupId: null) การ sync จะไม่ส่งฟิลด์นี้ไปเลย (เพราะ !== undefined
   // เช็คไม่ผ่าน) ทำให้ backend ไม่รู้ว่าต้องเคลียร์ค่าเดิมทิ้ง
   "groupId",
+  // 1:1 link กับ Google Calendar activity; Activity เป็นเจ้าของ title/เวลา
+  // ร่วม ส่วน reminder เก็บกติกาการแจ้งเตือนของตัวเอง
+  "activityId",
   "nextDueAt"
 ];
 
@@ -317,47 +326,6 @@ function getReminderTimeSlots(reminder, startOfTodayMs) {
   }
 }
 
-// คืนค่าช่วง "นาทีของวัน" (แบบทศนิยม ไม่ปัดเศษ) [startMinute, endMinute] สำหรับวาดเส้นสีเหลืองบาง ๆ บน timeline
-// เฉพาะ Countdown/Stopwatch ที่กำลังทำงานอยู่เท่านั้น (enabled + มี startedAt)
-// ใช้หน่วยนาทีแบบทศนิยม (ไม่ใช่ minuteOfDayAt ที่ปัดเศษเป็นจำนวนเต็ม) เพื่อให้เส้นขึ้นทันทีตั้งแต่วินาทีแรกที่กด Start
-// - STOPWATCH: เส้นเริ่มที่จุดเริ่ม (startMinute) แล้ว "ขยายยาวออกไปเรื่อย ๆ" ไปทาง "ตอนนี้" (นาทีปัจจุบัน)
-// - COUNTDOWN: เส้นเต็มความยาวทันที (จากจุดเริ่มถึงจุดสิ้นสุดที่ตั้งไว้) แล้ว "บีบเข้าหาจุดสิ้นสุดเรื่อย ๆ"
-//   คือฝั่งเริ่ม (startMinute) จะขยับเข้าหาปลาย (endMinute) ตามเวลาที่ผ่านไป จนกระทั่งบีบจนสุดที่จุดสิ้นสุด
-function minuteOfDayAtPrecise(ms) {
-  const d = new Date(ms);
-  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000;
-}
-
-function getRunningLineSpan(reminder, nowMs, startOfTodayMs) {
-  if (reminder.type !== REMINDER_TYPE.COUNTDOWN && reminder.type !== REMINDER_TYPE.STOPWATCH) return null;
-  if (!reminder.enabled || !reminder.startedAt) return null;
-
-  const endOfTodayMs = startOfTodayMs + 24 * 60 * 60 * 1000;
-  const clampedNowMs = Math.min(Math.max(nowMs, startOfTodayMs), endOfTodayMs);
-
-  if (reminder.type === REMINDER_TYPE.STOPWATCH) {
-    // จุดเริ่มจริงของ stopwatch (clamp เป็น 00:00 ถ้าเริ่มมาจากเมื่อวาน เพราะ timeline แสดงแค่วันเดียว)
-    const startMs = Math.max(reminder.startedAt, startOfTodayMs);
-    const startMinute = minuteOfDayAtPrecise(startMs);
-    const endMinute = minuteOfDayAtPrecise(clampedNowMs);
-    if (endMinute <= startMinute) return null;
-    return { startMinute, endMinute };
-  }
-
-  // COUNTDOWN: เส้นเต็มช่วงทันที (เริ่ม → สิ้นสุดที่ตั้งไว้) แล้วฝั่ง "เริ่ม" ค่อย ๆ บีบเข้าหาฝั่ง "สิ้นสุด"
-  const dueMs = reminder.startedAt + reminder.durationMs;
-  const fixedEndMs = Math.min(dueMs, endOfTodayMs);
-  const fixedEndMinute = minuteOfDayAtPrecise(fixedEndMs);
-
-  // ฝั่งเริ่มที่บีบเข้าเรื่อย ๆ คือ "ตอนนี้" (แต่ไม่เกินจุดสิ้นสุด และไม่ก่อนจุดเริ่มตั้งต้นจริง)
-  const originalStartMs = Math.max(reminder.startedAt, startOfTodayMs);
-  const shrinkingStartMs = Math.min(Math.max(clampedNowMs, originalStartMs), fixedEndMs);
-  const shrinkingStartMinute = minuteOfDayAtPrecise(shrinkingStartMs);
-
-  if (fixedEndMinute <= shrinkingStartMinute) return null;
-  return { startMinute: shrinkingStartMinute, endMinute: fixedEndMinute };
-}
-
 const ROW_HEIGHT_PX = 32;
 
 // แยก component แถว timeline ออกมาต่างหากแล้วครอบด้วย React.memo พร้อม custom comparator
@@ -385,28 +353,20 @@ const TimelineRows = React.memo(
   (prevProps, nextProps) => prevProps.tapeRows === nextProps.tapeRows
 );
 
-export default function ReminderDashboard({ firebaseUser }) {
-  const [reminders, setReminders] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return DEFAULT_REMINDERS;
-      const parsed = JSON.parse(saved);
-      // ต้องเป็น array เท่านั้น — โค้ดทั้งไฟล์เรียก reminders.filter()/
-      // .map() ตรงๆ โดยไม่เช็คก่อนอีกที ถ้า localStorage มีค่าเพี้ยน (เช่น
-      // ถูกแก้ด้วยมือ, ค่าจาก version เก่าที่โครงสร้างต่างกัน, หรือ storage
-      // เสียหาย) จะทำให้แอปทั้งหน้า crash ตั้งแต่ initial render แทนที่จะ
-      // fallback ไปใช้ค่าเริ่มต้นอย่างปลอดภัยแบบนี้
-      return Array.isArray(parsed) ? parsed : DEFAULT_REMINDERS;
-    } catch {
-      return DEFAULT_REMINDERS;
-    }
+export default function ReminderDashboard({
+  firebaseUser,
+  activities = [],
+  categories = [],
+  activityCategoryMap = {},
+  onEditActivity,
+  timelineColors
+}) {
+  const { reminders, setReminders, syncScheduleFields, deleteRemoteReminder } = useReminderStore({
+    firebaseUser,
+    storageKey: STORAGE_KEY,
+    defaultReminders: DEFAULT_REMINDERS,
+    extractScheduleFields
   });
-
-  // เบื้องต้น sync แค่ฟิลด์วัน/เวลาขึ้น Firebase (ดู use-reminders-sync.js) —
-  // localStorage ยังเป็น source of truth หลักของ reminders ทั้งก้อน
-  // (รวม runtime state) ในเฟสนี้; Firebase เป็นแค่ mirror ของ schedule
-  // fields เพื่อให้กู้คืนได้ถ้า localStorage หาย/เปลี่ยนเครื่อง
-  const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
   const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
   const {
     permission: pushPermission,
@@ -416,75 +376,27 @@ export default function ReminderDashboard({ firebaseUser }) {
     disableNotifications
   } = usePushNotifications({ firebaseUser });
 
-  // Merge remote schedule fields เข้ากับ local state ครั้งเดียวตอนที่
-  // remoteReminders เพิ่งโหลดเสร็จ (เปลี่ยนจาก null เป็น object) — ไม่ merge
-  // ซ้ำทุกครั้งที่ remoteReminders reference เปลี่ยน (มันจะไม่เปลี่ยนอีก
-  // หลังโหลดครั้งแรกอยู่แล้วตาม useRemindersSync's design) เพื่อไม่ให้ทับ
-  // runtime state (startedAt ของ stopwatch ที่กำลังเดินอยู่ในเครื่อง) ที่
-  // Firebase ไม่มีข้อมูลนั้นเก็บไว้เลย — merge แบบ "schedule fields จาก
-  // remote ชนะ, runtime fields จาก local คงเดิม, reminder ที่มีแค่ฝั่งใด
-  // ฝั่งหนึ่งก็เก็บไว้ทั้งคู่" ไม่ใช่ overwrite ทั้งก้อน
-  const hasMergedRemoteRef = useRef(false);
-  useEffect(() => {
-    if (!remoteReminders || hasMergedRemoteRef.current) return;
-    hasMergedRemoteRef.current = true;
-    const remoteIds = Object.keys(remoteReminders);
-    if (remoteIds.length === 0) return; // ไม่มีอะไรให้ merge (ยังไม่เคย sync ขึ้นไปเลย หรือ user ใหม่)
-
-    setReminders((prevLocal) => {
-      const byId = new Map(prevLocal.map((r) => [r.id, r]));
-      for (const id of remoteIds) {
-        const remoteFields = remoteReminders[id];
-        const existingLocal = byId.get(id);
-        if (existingLocal) {
-          // มีทั้งสองฝั่ง — schedule fields จาก remote ชนะ (เผื่อแก้จาก
-          // อุปกรณ์อื่นมา), runtime fields จาก local คงเดิมไว้ (ไม่มีใน remote อยู่แล้ว)
-          byId.set(id, { ...existingLocal, ...remoteFields });
-        } else {
-          // มีแค่ฝั่ง remote (เช่น สร้างจากอุปกรณ์อื่น) — เพิ่มเข้า local
-          // โดยไม่มี runtime field ใดๆ (nextDueAt จะถูกคำนวณใหม่จาก effect
-          // ที่มีอยู่แล้วด้านล่างซึ่งรัน checkDue() ทุกวินาทีอยู่แล้ว)
-          byId.set(id, { id, ...remoteFields });
-        }
-      }
-      return Array.from(byId.values());
-    });
-  }, [remoteReminders]);
-
-  // เฟส 5: nextDueAt ต้อง mirror ไป Firestore ทุกครั้งที่สถานะ reminder
-  // เปลี่ยน เพื่อให้ Cloud Scheduler ทำงานได้แม้ไม่มีแท็บเปิดอยู่. รอให้
-  // remote โหลดและ merge ก่อนเสมอ มิฉะนั้น localStorage เก่าอาจทับข้อมูลจาก
-  // เครื่องอื่นก่อนจะได้อ่าน. useRemindersSync debounce ต่อ id ให้อยู่แล้ว.
-  const lastSyncedScheduleRef = useRef(new Map());
-  const syncedUserIdRef = useRef(null);
-  useEffect(() => {
-    if (!firebaseUser || remoteReminders === null) return;
-    if (syncedUserIdRef.current !== firebaseUser.uid) {
-      lastSyncedScheduleRef.current.clear();
-      syncedUserIdRef.current = firebaseUser.uid;
-    }
-    const presentIds = new Set();
-    for (const reminder of reminders) {
-      const fields = extractScheduleFields(reminder);
-      const snapshot = JSON.stringify(fields);
-      presentIds.add(reminder.id);
-      if (lastSyncedScheduleRef.current.get(reminder.id) !== snapshot) {
-        lastSyncedScheduleRef.current.set(reminder.id, snapshot);
-        syncScheduleFields(reminder.id, fields);
-      }
-    }
-    for (const id of lastSyncedScheduleRef.current.keys()) {
-      if (!presentIds.has(id)) lastSyncedScheduleRef.current.delete(id);
-    }
-  }, [firebaseUser, remoteReminders, reminders, syncScheduleFields]);
-
   const [dueReminders, setDueReminders] = useState([]);
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
+  const [omnibarInput, setOmnibarInput] = useState("");
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [statsEvents, setStatsEvents] = useState(loadReminderStats);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
 
   useEffect(() => {
     getReminderFeatureFlags().then(({ omnibarEnabled: enabled }) => setOmnibarEnabled(enabled));
   }, []);
+
+  const omnibarPreview = useMemo(() => parseReminderQuickInput(omnibarInput), [omnibarInput]);
+  const reminderStats = useMemo(() => buildReminderStats(reminders, statsEvents), [reminders, statsEvents]);
+
+  useEffect(() => {
+    saveReminderStats(statsEvents);
+  }, [statsEvents]);
+
+  const recordStatsEvent = (type, payload) => {
+    setStatsEvents((previous) => appendReminderStat(previous, type, payload));
+  };
 
   const [draft, setDraft] = useState(createBlankDraft);
 
@@ -565,10 +477,6 @@ export default function ReminderDashboard({ firebaseUser }) {
   const hasSnappedInitiallyRef = useRef(false); // true = เคย sync ตำแหน่งกับเวลาจริงแล้ว รอบต่อไปให้ไหลต่อเนื่อง ไม่สแนปซ้ำ
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
-  }, [reminders]);
-
-  useEffect(() => {
     const checkDue = () => {
       const now = Date.now();
       setNowTick(now); // อัปเดตเวลา "ตอนนี้" ทุกวินาที ให้ countdown บนการ์ด tick แบบ live
@@ -638,29 +546,86 @@ export default function ReminderDashboard({ firebaseUser }) {
     return rows;
   }, [reminders, minutesPerRow, totalRows]);
 
-  // เส้นสีเหลืองบาง ๆ สำหรับ Countdown/Stopwatch ที่กำลังทำงาน
-  // คำนวณตำแหน่งเทียบกับ "ตอนนี้" (now-indicator ที่ล็อกอยู่กลาง viewport เสมอ) แทนที่จะอิงตำแหน่ง scroll ของ track
-  // เพื่อให้เส้นแสดงผลเต็มความยาวเสมอ ไม่ถูกครอบตัดโดย overflow ของ tape-scroll-container
-  // top คือระยะ px จากกึ่งกลาง viewport (ค่าลบ = อยู่เหนือกึ่งกลาง, ค่าบวก = อยู่ใต้กึ่งกลาง)
-  const runningLines = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const pxPerMinute = singleDayHeight / 1440;
-    const nowMinute = minuteOfDayAtPrecise(nowTick);
+  // Activity Mode และ Reminder Mode ใช้ข้อมูล Google Calendar ชุดเดียวกัน:
+  // timeline นี้จึงแสดงเฉพาะกิจกรรมที่ทับกับ "วันนี้" และคำนวณตำแหน่งจาก
+  // เวลาเริ่ม/จบจริง (รองรับกิจกรรมข้ามเที่ยงคืนด้วย) โดยไม่สร้างสำเนาข้อมูล
+  // activity ไว้ใน reminder store อีกชุดหนึ่ง
+  const calendarTimelineBlocks = useMemo(() => {
+    const dayStart = new Date(nowTick);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
+    const pixelsPerMinute = ROW_HEIGHT_PX / minutesPerRow;
 
-    return reminders
-      .map((r) => {
-        const span = getRunningLineSpan(r, nowTick, startOfToday);
-        if (!span) return null;
+    return activities
+      .map((activity) => {
+        const start = activityDate(activity.start);
+        if (!start || Number.isNaN(start.getTime())) return null;
+
+        const parsedEnd = activityDate(activity.end);
+        const end = parsedEnd && !Number.isNaN(parsedEnd.getTime())
+          ? parsedEnd
+          : new Date(start.getTime() + 30 * 60 * 1000);
+        const actualStartMs = start.getTime();
+        const actualEndMs = Math.max(end.getTime(), actualStartMs + 60 * 1000);
+        const startMs = Math.max(actualStartMs, dayStartMs);
+        const endMs = Math.min(actualEndMs, dayEndMs);
+        if (endMs <= dayStartMs || startMs >= dayEndMs || endMs <= startMs) return null;
+
+        const color = getDisplayColor(activity, activityCategoryMap, categories);
+        const isActive = nowTick >= actualStartMs && nowTick < actualEndMs;
+        const isUpcoming = nowTick < actualStartMs;
+        const elapsedSeconds = Math.max(0, Math.floor((nowTick - actualStartMs) / 1000));
+        const countdownSeconds = Math.max(0, Math.ceil((actualStartMs - nowTick) / 1000));
         return {
-          id: r.id,
-          top: (span.startMinute - nowMinute) * pxPerMinute,
-          height: (span.endMinute - span.startMinute) * pxPerMinute,
-          color: r.lineColor || DEFAULT_LINE_COLOR
+          id: activity.id,
+          activity,
+          title: activity.summary || "(ไม่มีชื่อกิจกรรม)",
+          top: SPACER_HEIGHT_PX + ((startMs - dayStartMs) / 60000) * pixelsPerMinute,
+          height: Math.max(22, ((endMs - startMs) / 60000) * pixelsPerMinute),
+          color,
+          actualStartMs,
+          actualEndMs,
+          isActive,
+          isUpcoming,
+          elapsedSeconds,
+          countdownSeconds
         };
       })
       .filter(Boolean);
-  }, [reminders, nowTick, singleDayHeight]);
+  }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX]);
+
+  // now-indicator คือแกนกลางของเอฟเฟกต์เวลา: เลือก Activity ถัดไปเพียงตัว
+  // เดียวเป็นแถบฟ้านับถอยหลัง (จาก now ไปจุดเริ่ม) และทุก Activity ที่กำลัง
+  // ทำเป็นแถบเขียวนับเวลาที่ผ่านไป (จากจุดเริ่มมาถึง now). จึงยังให้ความรู้สึก
+  // แบบ countdown/stopwatch เดิมโดยไม่ต้องสร้าง Reminder timer แยก.
+  const activityTimelineLines = useMemo(() => {
+    const pxPerMinute = singleDayHeight / 1440;
+    const activeLines = calendarTimelineBlocks
+      .filter((block) => block.isActive)
+      .map((block) => ({
+        id: `activity-active-${block.id}`,
+        title: block.title,
+        state: "active",
+        top: ((block.actualStartMs - nowTick) / 60000) * pxPerMinute,
+        height: ((nowTick - block.actualStartMs) / 60000) * pxPerMinute,
+        label: `จับเวลา ${formatDurationClock(block.elapsedSeconds)}`
+      }));
+
+    const next = calendarTimelineBlocks
+      .filter((block) => block.isUpcoming)
+      .sort((a, b) => a.actualStartMs - b.actualStartMs)[0];
+    if (!next) return activeLines;
+
+    return [...activeLines, {
+      id: `activity-upcoming-${next.id}`,
+      title: next.title,
+      state: "upcoming",
+      top: 0,
+      height: ((next.actualStartMs - nowTick) / 60000) * pxPerMinute,
+      label: `เริ่มใน ${formatDurationClock(next.countdownSeconds)}`
+    }];
+  }, [calendarTimelineBlocks, nowTick, singleDayHeight]);
 
   // ตำแหน่ง scrollTop ที่ต้องการ ให้ now-indicator อยู่กลาง container พอดี
   // ต้องบวก SPACER_HEIGHT_PX เข้าไปด้วย เพราะแถว 00:00 ไม่ได้เริ่มที่ scrollTop=0 อีกต่อไป
@@ -763,6 +728,7 @@ export default function ReminderDashboard({ firebaseUser }) {
         if (r.id !== reminderId) return r;
         if (typeof snoozeMinutes === "number") {
           logReminderEvent("reminder_snoozed", { reminder_type: r.type, snooze_minutes: snoozeMinutes });
+          recordStatsEvent("snoozed", { title: r.title, reminderType: r.type, minutes: snoozeMinutes });
           return { ...r, enabled: true, nextDueAt: Date.now() + snoozeMinutes * 60 * 1000 };
         }
         if (isOneShotType(r.type)) return { ...r, enabled: false, nextDueAt: Infinity };
@@ -791,9 +757,11 @@ export default function ReminderDashboard({ firebaseUser }) {
         if (r.id !== reminderId) return r;
         if (isOneShotType(r.type)) {
           logReminderEvent("reminder_completed", { reminder_type: r.type });
+          recordStatsEvent("completed", { title: r.title, reminderType: r.type });
           return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity };
         }
         logReminderEvent("reminder_completed", { reminder_type: r.type });
+        recordStatsEvent("completed", { title: r.title, reminderType: r.type });
         return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
@@ -821,6 +789,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           // เฉยๆ แบบเดิม — ผู้ใช้ยังเปิดสวิตช์กลับเองได้ตามปกติ (toggle()
           // จะเคลียร์ completedAt คืนเป็น null ให้ ดูฟังก์ชันนั้นด้านล่าง)
           logReminderEvent("reminder_completed", { reminder_type: r.type });
+          recordStatsEvent("completed", { title: r.title, reminderType: r.type });
           return { ...r, currentIndex: 0, enabled: false, completedAt: Date.now() };
         }
         return { ...r, currentIndex: nextIdx };
@@ -842,6 +811,7 @@ export default function ReminderDashboard({ firebaseUser }) {
         }
 
         const elapsedSinceStart = r.startedAt ? Date.now() - r.startedAt : 0;
+        recordStatsEvent("stopwatch-session", { title: r.title, durationMs: elapsedSinceStart });
         return {
           ...r,
           enabled: false,
@@ -1008,6 +978,49 @@ export default function ReminderDashboard({ firebaseUser }) {
     setIsComposerOpen(false); // บันทึกเสร็จแล้วพับ composer กลับ คืนพื้นที่ให้ list
   };
 
+  // Phase 6: คำสั่งที่ parser เข้าใจจะสร้าง reminder ทันที; คำสั่งที่ยังไม่
+  // เข้าใจจะไม่เดาเอง แต่เปิด composer พร้อมข้อความเดิมให้ผู้ใช้ตรวจต่อ.
+  const submitOmnibar = () => {
+    const title = omnibarInput.trim();
+    if (!title) return;
+
+    if (!omnibarPreview.matched) {
+      setEditingId(null);
+      setDraft({ ...createBlankDraft(), title });
+      setIsComposerOpen(true);
+      return;
+    }
+
+    const parsed = omnibarPreview.reminder;
+    const now = Date.now();
+    const reminder = {
+      id: `reminder-${now}`,
+      title: parsed.title,
+      type: parsed.type,
+      enabled: true,
+      groupId: null,
+      completedAt: null
+    };
+
+    if (parsed.type === REMINDER_TYPE.INTERVAL) {
+      reminder.amount = parsed.amount;
+      reminder.unit = parsed.unit;
+    } else if (parsed.type === REMINDER_TYPE.WEEKLY) {
+      reminder.days = parsed.days;
+      reminder.time = parsed.time;
+    } else if (parsed.type === REMINDER_TYPE.COUNTDOWN) {
+      reminder.durationMs = parsed.minutes * 60 * 1000;
+      reminder.startedAt = now;
+      reminder.lineColor = DEFAULT_LINE_COLOR;
+    }
+
+    reminder.nextDueAt = computeNextDueAt(reminder, now);
+    setReminders((prev) => [...prev, reminder]);
+    syncScheduleFields(reminder.id, extractScheduleFields(reminder), { immediate: true });
+    logReminderEvent("reminder_created", { reminder_type: reminder.type, creation_method: "omnibar" });
+    setOmnibarInput("");
+  };
+
   const deleteReminder = (reminderId) => {
     setReminders((prev) => prev.filter((r) => r.id !== reminderId));
     deleteRemoteReminder(reminderId);
@@ -1096,7 +1109,7 @@ export default function ReminderDashboard({ firebaseUser }) {
   const renderReminder = (reminder) => (
     <div
       key={reminder.id}
-      className={`reminder-card ${reminder.enabled ? "active" : ""}`}
+      className={`reminder-card ${reminder.enabled ? "active" : ""}${cardMenuOpenId === reminder.id ? " menu-open" : ""}`}
       style={{ borderLeftColor: TYPE_ACCENT_COLOR[reminder.type] }}
     >
       <div
@@ -1196,7 +1209,14 @@ export default function ReminderDashboard({ firebaseUser }) {
   );
 
   return (
-    <div className="reminder-app-container">
+    <div
+      className="reminder-app-container"
+      style={{
+        "--timeline-now-color": timelineColors?.nowIndicator || "#ea4335",
+        "--timeline-countdown-color": timelineColors?.countdown || "#1a73e8",
+        "--timeline-activity-timer-color": timelineColors?.activityTimer || "#34a853"
+      }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&family=Roboto+Mono:wght@500&display=swap');
 
@@ -1419,6 +1439,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           flex: 1;
           max-width: 560px;
           margin: 0 auto;
+          position: relative;
         }
 
         .topbar-omnibar {
@@ -1435,6 +1456,42 @@ export default function ReminderDashboard({ firebaseUser }) {
         .topbar-omnibar:disabled {
           cursor: not-allowed;
           opacity: 0.75;
+        }
+
+        .omnibar-preview {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 8px 10px 8px 14px;
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          background: var(--g-surface);
+          color: var(--g-on-surface-variant);
+          box-shadow: 0 5px 14px rgba(60, 64, 67, 0.18);
+          font-size: 12px;
+        }
+
+        .omnibar-preview.is-matched {
+          border-color: var(--g-blue);
+          color: var(--g-on-surface);
+        }
+
+        .omnibar-preview button {
+          flex-shrink: 0;
+          border: 0;
+          border-radius: 7px;
+          padding: 5px 9px;
+          background: var(--g-blue);
+          color: #fff;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 600;
         }
 
         .topbar-actions {
@@ -1466,6 +1523,45 @@ export default function ReminderDashboard({ firebaseUser }) {
           background: var(--g-blue-light);
           color: var(--g-blue);
         }
+
+        .reminder-stats-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          background: rgba(32, 33, 36, 0.34);
+        }
+
+        .reminder-stats-panel {
+          width: min(520px, 100%);
+          padding: 22px;
+          border-radius: 16px;
+          background: var(--g-surface);
+          box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+          color: var(--g-on-surface);
+        }
+
+        .reminder-stats-panel header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 18px;
+        }
+
+        .reminder-stats-panel header p { margin: 0; font-size: 18px; font-weight: 700; }
+        .reminder-stats-panel header span, .reminder-stats-note { color: var(--g-on-surface-variant); font-size: 12px; }
+        .reminder-stats-panel header button { border: 0; background: none; font-size: 25px; line-height: 1; cursor: pointer; color: var(--g-on-surface-variant); }
+        .reminder-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+        .reminder-stats-grid article { display: grid; gap: 3px; padding: 12px 8px; border-radius: 10px; background: var(--g-background); text-align: center; }
+        .reminder-stats-grid strong { font-size: 22px; color: var(--g-blue); }
+        .reminder-stats-grid span { color: var(--g-on-surface-variant); font-size: 11px; }
+        .reminder-stats-details { margin: 18px 0; }
+        .reminder-stats-details div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--g-outline-variant); font-size: 13px; }
+        .reminder-stats-details dt { color: var(--g-on-surface-variant); }
+        .reminder-stats-details dd { margin: 0; text-align: right; font-weight: 600; }
+        .reminder-stats-note { margin: 0; line-height: 1.45; }
 
         /* Left nav — "ตัวกรองประเภท" wired จริงแล้ว (เฟส 2) filter แบบ
            client-side, "กลุ่ม/โปรเจกต์" ยังว่างเปล่ารอเฟส 3, "ของวันนี้"
@@ -1748,7 +1844,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           top: 50%;
           transform: translateY(-50%);
           height: 2px;
-          background: var(--g-red);
+          background: var(--timeline-now-color);
           z-index: 15;
           pointer-events: none;
         }
@@ -1761,7 +1857,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           width: 10px;
           height: 10px;
           border-radius: 50%;
-          background: var(--g-red);
+          background: var(--timeline-now-color);
         }
 
         .tape-scroll-container {
@@ -1778,31 +1874,6 @@ export default function ReminderDashboard({ firebaseUser }) {
 
         .tape-track-wrapper {
           position: relative;
-        }
-
-        /* แถบสีบาง ๆ (สีเลือกได้) แสดง Countdown/Stopwatch ที่กำลังทำงาน
-           อยู่ใน timeline-viewport (จุดเดียวกับ now-indicator) ไม่ใช่ track ที่ scroll
-           จึงไม่ถูก overflow ของ tape-scroll-container ครอบตัด แสดงผลเต็มความยาวเสมอ (ตัดแค่ขอบ viewport จริง ๆ เท่านั้น)
-           กว้างเต็มพื้นที่แถว (left: 84px ถึง right: 8px ตรงกับ event-chip-group) ใช้ linear-gradient จางเข้าออก
-           ทั้งสองด้าน ให้เห็นเส้น time-row/grid ทะลุผ่านพื้นหลังได้ ไม่ทึบจนบังข้อมูล */
-        .running-timer-line {
-          position: absolute;
-          left: 84px;
-          right: 8px;
-          border-radius: 8px;
-          z-index: 4;
-          pointer-events: none;
-          background-color: var(--line-color, #fbbc04);
-          opacity: 0.22;
-          background: linear-gradient(
-            180deg,
-            transparent 0%,
-            color-mix(in srgb, var(--line-color, #fbbc04) 30%, transparent) 15%,
-            color-mix(in srgb, var(--line-color, #fbbc04) 30%, transparent) 85%,
-            transparent 100%
-          );
-          border-left: 3px solid var(--line-color, #fbbc04);
-          border-right: 3px solid var(--line-color, #fbbc04);
         }
 
         .color-picker-group {
@@ -2136,6 +2207,14 @@ export default function ReminderDashboard({ firebaseUser }) {
           border-color: var(--g-active-border);
         }
 
+        /* dropdown-backdrop เป็น fixed layer (z-index: 40) สำหรับปิดเมนู
+           เมื่อคลิกด้านนอก. การ์ดที่เปิดเมนูต้องยกทั้ง stacking context
+           ขึ้นเหนือมัน มิฉะนั้น backdrop จะดักคลิกปุ่ม แก้ไข/ลบ ทั้งหมด. */
+        .reminder-card.menu-open {
+          position: relative;
+          z-index: 45;
+        }
+
         /* icon กล่องสี่เหลี่ยมมุมโค้ง (เดิมเป็นวงกลม) พื้นหลังคือสีประจำ
            ประเภท (TYPE_ACCENT_COLOR, ตั้งค่าผ่าน inline style ต่อการ์ด) —
            ไม่ผูกกับ enabled/disabled อีกต่อไป (เดิมมีกฎ .active
@@ -2466,8 +2545,7 @@ export default function ReminderDashboard({ firebaseUser }) {
         }
       `}</style>
 
-      {/* Top Bar — placeholder เฉยๆ ในรอบ layout-only นี้ ยังไม่ผูก logic
-          omnibar/สถิติจริง (ดูคอมเมนต์ .app-topbar ใน style ด้านบน) */}
+      {/* Top Bar — Omnibar แบบ rule-based (Phase 6); สถิติยังรอ Phase 7 */}
       <header className="app-topbar">
         <div className="topbar-logo">
           <span className="topbar-logo-icon" aria-hidden="true">⏰</span>
@@ -2477,10 +2555,24 @@ export default function ReminderDashboard({ firebaseUser }) {
           <input
             type="text"
             className="topbar-omnibar"
-            placeholder="พิมพ์เพื่อสร้าง Reminder ด่วน... (เร็วๆ นี้)"
-            disabled
-            title={omnibarEnabled ? "Remote Config พร้อมเปิด Omnibar เมื่อ parser เฟส 6 เสร็จ" : "Omnibar ยังไม่เปิดใช้ใน Remote Config"}
+            value={omnibarInput}
+            onChange={(event) => setOmnibarInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submitOmnibar();
+              }
+            }}
+            placeholder="เช่น เตือนพักสายตาทุก20นาที"
+            disabled={!omnibarEnabled}
+            title={omnibarEnabled ? "พิมพ์แล้วกด Enter เพื่อสร้าง Reminder" : "Omnibar ยังไม่เปิดใช้ใน Remote Config"}
           />
+          {omnibarEnabled && omnibarInput.trim() && (
+            <div className={`omnibar-preview ${omnibarPreview.matched ? "is-matched" : ""}`}>
+              <span>{omnibarPreview.matched ? `→ ${omnibarPreview.description}` : "ไม่เข้าใจรูปแบบนี้ — จะเปิดฟอร์มให้ตรวจเอง"}</span>
+              <button type="button" onClick={submitOmnibar}>{omnibarPreview.matched ? "สร้าง" : "เปิดฟอร์ม"}</button>
+            </div>
+          )}
         </div>
         <div className="topbar-actions">
           {/* migration plan v2 เฟส 5 — ปุ่มเปิด/ปิด push notification จริง
@@ -2506,9 +2598,11 @@ export default function ReminderDashboard({ firebaseUser }) {
           >
             {pushPermission === "granted" ? "🔔" : "🔕"}
           </button>
-          <button type="button" className="topbar-icon-btn" disabled title="สถิติ (เร็วๆ นี้)">📊</button>
+          <button type="button" className="topbar-icon-btn" onClick={() => setIsStatsOpen(true)} title="ดูสถิติ Reminder">📊</button>
         </div>
       </header>
+
+      <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => setIsStatsOpen(false)} stats={reminderStats} />
 
       {/* Backdrop ปิดเมนู "⋮" การ์ด / snooze dropdown เมื่อคลิกนอกเมนู —
           ใช้ตัวเดียวร่วมกันทั้งสองระบบเมนู (migration plan v2 เฟส 1.3/1.4)
@@ -2980,14 +3074,12 @@ export default function ReminderDashboard({ firebaseUser }) {
           <div className="timeline-viewport">
             <div className="now-indicator" />
 
-            {/* เส้นสีเหลืองบาง ๆ แสดง Countdown/Stopwatch ที่กำลังทำงาน
-                วางใน timeline-viewport (ไม่ใช่ track ที่ scroll) จึงไม่ถูก overflow ครอบตัด และแสดงเต็มความยาวเสมอ
-                ตำแหน่งคำนวณเทียบกับกึ่งกลาง viewport (จุดเดียวกับ now-indicator) */}
-            {runningLines.map((line) => (
+            {activityTimelineLines.map((line) => (
               <div
                 key={line.id}
-                className="running-timer-line"
-                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px`, "--line-color": line.color }}
+                className={`activity-timer-line ${line.state}`}
+                style={{ top: `calc(50% + ${line.top}px)`, height: `${line.height}px` }}
+                title={`${line.title} · ${line.label}`}
               />
             ))}
 
@@ -3006,6 +3098,26 @@ export default function ReminderDashboard({ firebaseUser }) {
                 </div>
 
                 <TimelineRows tapeRows={tapeRows} nowTick={nowTick} />
+
+                <div className="calendar-timeline-layer" aria-label="กิจกรรมในปฏิทินของวันนี้">
+                  {calendarTimelineBlocks.map((block) => (
+                    <button
+                      key={block.id}
+                      type="button"
+                      className={`calendar-timeline-block${block.isActive ? " is-current" : ""}`}
+                      style={{
+                        top: `${block.top}px`,
+                        height: `${block.height}px`,
+                        "--calendar-activity-border": block.color.border,
+                        "--calendar-activity-bg": block.color.bg
+                      }}
+                      onClick={() => onEditActivity?.(block.activity)}
+                      title={`แก้ไขกิจกรรม: ${block.title}`}
+                    >
+                      <span className="calendar-timeline-block-title">{block.title}</span>
+                    </button>
+                  ))}
+                </div>
 
                 {/* Spacer ล่าง: ยืดขอบออกจากแถว 24:00 ไม่ให้ now-indicator ชนขอบ container
                     เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคตเช่นกัน */}

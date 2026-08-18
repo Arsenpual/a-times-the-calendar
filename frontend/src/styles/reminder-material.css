@@ -1,0 +1,287 @@
+/* Material-inspired foundation for ReminderOS. Legacy component CSS remains
+   during the staged migration; these selectors intentionally use the app root
+   to override it without changing behaviour or markup. */
+.reminder-app-container {
+  /* Material 3 semantic color roles (mapped to the existing app palette). */
+  --md-sys-color-primary: var(--g-blue);
+  --md-sys-color-on-primary: #fff;
+  --md-sys-color-primary-container: var(--g-blue-light);
+  --md-sys-color-on-primary-container: var(--g-blue-hover);
+  --md-sys-color-surface: var(--g-surface);
+  --md-sys-color-surface-container: var(--g-background);
+  --md-sys-color-on-surface: var(--g-on-surface);
+  --md-sys-color-on-surface-variant: var(--g-on-surface-variant);
+  --md-sys-color-outline: var(--g-outline);
+  --md-ref-spacing-1: 4px;
+  --md-ref-spacing-2: 8px;
+  --md-ref-spacing-3: 12px;
+  --md-ref-spacing-4: 16px;
+  --md-ref-spacing-5: 24px;
+  --md-ref-radius-card: 16px;
+  --md-ref-radius-control: 12px;
+  --md-ref-radius-pill: 999px;
+  --md-ref-elevation-1: 0 1px 2px rgba(60, 64, 67, 0.16), 0 1px 3px rgba(60, 64, 67, 0.08);
+  --md-ref-elevation-2: 0 5px 14px rgba(60, 64, 67, 0.18), 0 2px 5px rgba(60, 64, 67, 0.12);
+  --md-ref-state-hover: color-mix(in srgb, var(--g-blue) 8%, transparent);
+  --md-ref-state-focus: color-mix(in srgb, var(--g-blue) 18%, transparent);
+}
+
+.reminder-app-container :is(button, input, select, textarea) {
+  font: inherit;
+}
+
+.reminder-app-container :is(button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--md-ref-state-focus);
+  outline-offset: 2px;
+}
+
+.reminder-app-container .app-topbar {
+  min-height: 64px;
+  padding: var(--md-ref-spacing-3) var(--md-ref-spacing-5);
+  box-shadow: var(--md-ref-elevation-1);
+}
+
+.reminder-app-container .topbar-omnibar {
+  min-height: 42px;
+  padding-inline: 20px;
+  border-radius: var(--md-ref-radius-pill);
+  transition: background-color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.reminder-app-container .topbar-omnibar:not(:disabled):hover,
+.reminder-app-container .topbar-omnibar:not(:disabled):focus {
+  background: color-mix(in srgb, var(--g-blue-light) 44%, var(--g-background));
+  border-color: var(--g-blue);
+  box-shadow: 0 0 0 4px var(--md-ref-state-hover);
+}
+
+.reminder-app-container .nav-sidebar,
+.reminder-app-container .main-panel,
+.reminder-app-container .timeline-panel {
+  background: var(--g-surface);
+}
+
+.reminder-app-container .nav-sidebar {
+  padding: var(--md-ref-spacing-5) var(--md-ref-spacing-3);
+}
+
+.reminder-app-container .nav-item {
+  min-height: 40px;
+  border-radius: var(--md-ref-radius-pill);
+  margin-block: 2px;
+  padding-inline: var(--md-ref-spacing-4);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.reminder-app-container .nav-item:not(:disabled):hover {
+  background: var(--md-ref-state-hover);
+}
+
+.reminder-app-container .nav-item.is-active {
+  background: var(--g-blue-light);
+  color: var(--g-blue-hover);
+  font-weight: 700;
+}
+
+.reminder-app-container .main-panel-toolbar {
+  padding: var(--md-ref-spacing-5);
+}
+
+.reminder-app-container .main-panel-toolbar h2 {
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.reminder-app-container .add-reminder-btn,
+.reminder-app-container .btn-contained {
+  min-height: 40px;
+  padding-inline: 20px;
+  border-radius: var(--md-ref-radius-pill);
+  box-shadow: var(--md-ref-elevation-1);
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.reminder-app-container .add-reminder-btn:hover,
+.reminder-app-container .btn-contained:hover {
+  box-shadow: var(--md-ref-elevation-2);
+  transform: translateY(-1px);
+}
+
+.reminder-app-container .tab-btn {
+  border-radius: var(--md-ref-radius-pill);
+  margin: 3px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.reminder-app-container .tab-btn:not(.is-active):hover {
+  background: var(--md-ref-state-hover);
+}
+
+.reminder-app-container .composer-card,
+.reminder-app-container .reminder-card {
+  border-radius: var(--md-ref-radius-card);
+  box-shadow: var(--md-ref-elevation-1);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.reminder-app-container .reminder-card:hover,
+.reminder-app-container .reminder-card:focus-within {
+  box-shadow: var(--md-ref-elevation-2);
+  transform: translateY(-1px);
+}
+
+.reminder-app-container .composer-card :is(input, select, textarea) {
+  border-radius: var(--md-ref-radius-control);
+}
+
+.reminder-app-container :is(.composer-card, .nav-add-group-form) :is(input, select, textarea) {
+  min-height: 40px;
+  border-color: var(--md-sys-color-outline);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.reminder-app-container :is(.composer-card, .nav-add-group-form) :is(input, select, textarea):hover {
+  border-color: var(--md-sys-color-on-surface-variant);
+}
+
+.reminder-app-container :is(.composer-card, .nav-add-group-form) :is(input, select, textarea):focus {
+  border-color: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 3px var(--md-ref-state-hover);
+}
+
+.reminder-app-container .btn-text {
+  min-height: 40px;
+  border-radius: var(--md-ref-radius-pill);
+  padding-inline: 16px;
+  color: var(--md-sys-color-primary);
+}
+
+.reminder-app-container .btn-text:hover,
+.reminder-app-container .topbar-icon-btn:hover {
+  background: var(--md-ref-state-hover);
+}
+
+.reminder-app-container .btn-mark-done {
+  min-height: 36px;
+  border-radius: var(--md-ref-radius-pill);
+}
+
+.reminder-app-container .due-alert-banner {
+  padding: 10px var(--md-ref-spacing-5);
+  box-shadow: var(--md-ref-elevation-1);
+}
+
+.reminder-app-container .timeline-panel {
+  box-shadow: inset 1px 0 var(--g-outline-variant);
+}
+
+.reminder-app-container .event-chip,
+.reminder-app-container .active-filter-chip,
+.reminder-app-container .group-chip {
+  border-radius: var(--md-ref-radius-pill);
+}
+
+.reminder-app-container :is(.time-label, .timeline-title, .tape-minute-label, .tape-big-clock, .stopwatch-time) {
+  font-variant-numeric: tabular-nums;
+}
+
+.reminder-app-container .reminder-stats-panel {
+  border-radius: 24px;
+  box-shadow: var(--md-ref-elevation-2);
+}
+
+/* Google Calendar activities share this 24-hour track with reminders. The
+   layer never changes the track's measured height, so scrolling and the
+   fixed "now" indicator remain stable at every zoom level. */
+.reminder-app-container .calendar-timeline-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.reminder-app-container .calendar-timeline-block {
+  position: absolute;
+  left: 84px;
+  right: 8px;
+  display: flex;
+  align-items: flex-start;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: 0;
+  border-left: 4px solid var(--calendar-activity-border);
+  border-radius: 8px;
+  background: var(--calendar-activity-bg);
+  color: var(--g-on-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+  pointer-events: auto;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--calendar-activity-border) 30%, transparent);
+  transition: filter 160ms ease, box-shadow 160ms ease;
+}
+
+.reminder-app-container .calendar-timeline-block:hover,
+.reminder-app-container .calendar-timeline-block:focus-visible {
+  filter: brightness(0.96);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--calendar-activity-border) 28%, transparent);
+}
+
+/* เมื่อเส้น now-indicator อยู่ในช่วงของ Activity ให้พื้นกิจกรรมถอยไปเป็น
+   บริบท เพื่อให้เส้นเวลา, reminder chip และ automatic timer อ่านเด่นกว่า. */
+.reminder-app-container .calendar-timeline-block.is-current {
+  opacity: 0.34;
+  filter: saturate(0.62);
+}
+
+.reminder-app-container .calendar-timeline-block.is-current:hover,
+.reminder-app-container .calendar-timeline-block.is-current:focus-visible {
+  opacity: 0.72;
+}
+
+.reminder-app-container .calendar-timeline-block-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reminder-app-container .activity-timer-line {
+  position: absolute;
+  left: 84px;
+  right: 8px;
+  z-index: 4;
+  min-height: 2px;
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0.56;
+}
+
+/* ก่อนเริ่ม: แถบฟ้ายุบเข้าหา now-indicator; ระหว่างกิจกรรม: แถบเขียว
+   ยาวออกจากจุดเริ่มมาถึง now-indicator เหมือน stopwatch เดิม. */
+.reminder-app-container .activity-timer-line.upcoming {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--timeline-countdown-color) 38%, transparent), transparent);
+  border-left: 3px solid var(--timeline-countdown-color);
+  border-right: 3px solid var(--timeline-countdown-color);
+}
+
+.reminder-app-container .activity-timer-line.active {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--timeline-activity-timer-color) 40%, transparent), transparent);
+  border-left: 3px solid var(--timeline-activity-timer-color);
+  border-right: 3px solid var(--timeline-activity-timer-color);
+  opacity: 0.78;
+}
+
+/* Reminder ที่ตั้งเวลาไว้ยังต้องอ่านและกดได้แม้อยู่ช่วงเดียวกับ activity. */
+.reminder-app-container .event-chip-group {
+  z-index: 6;
+}
+
+@media (max-width: 900px) {
+  .reminder-app-container .app-topbar,
+  .reminder-app-container .main-panel-toolbar,
+  .reminder-app-container .due-alert-banner {
+    padding-inline: var(--md-ref-spacing-4);
+  }
+}

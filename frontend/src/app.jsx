@@ -88,6 +88,8 @@ export default function App() {
     setShowLoginGuide,
     theme,
     setTheme,
+    reminderTimelineColors,
+    setReminderTimelineColors,
     cursorDate,
     expandedDate,
     navigateWeek,
@@ -443,7 +445,16 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {mode === "reminder" && <ReminderMode firebaseUser={firebaseUser} />}
+        {mode === "reminder" && (
+          <ReminderMode
+            firebaseUser={firebaseUser}
+            activities={activities}
+            categories={categories}
+            activityCategoryMap={activityCategoryMap}
+            onEditActivity={openEditActivity}
+            timelineColors={reminderTimelineColors}
+          />
+        )}
 
         {mode === "activity" && (
           <React.Fragment>
@@ -668,6 +679,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         theme={theme}
         onThemeChange={setTheme}
+        reminderTimelineColors={reminderTimelineColors}
+        onReminderTimelineColorsChange={setReminderTimelineColors}
       />
     </div>
   );

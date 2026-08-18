@@ -20,12 +20,12 @@ export function logReminderEvent(name, params = {}) {
 
 // Remote Config มี default ปลอดภัย เพื่อ rollout Omnibar โดยไม่ต้อง redeploy.
 export async function getReminderFeatureFlags() {
-  const defaults = { omnibarEnabled: false };
+  const defaults = { omnibarEnabled: true };
   try {
     const { getRemoteConfig, fetchAndActivate, getValue } = await import("firebase/remote-config");
     const remoteConfig = getRemoteConfig(firebaseApp);
     remoteConfig.settings.minimumFetchIntervalMillis = import.meta.env.DEV ? 60_000 : 3_600_000;
-    remoteConfig.defaultConfig = { reminder_omnibar_enabled: "false" };
+    remoteConfig.defaultConfig = { reminder_omnibar_enabled: "true" };
     await fetchAndActivate(remoteConfig);
     return { omnibarEnabled: getValue(remoteConfig, "reminder_omnibar_enabled").asBoolean() };
   } catch {

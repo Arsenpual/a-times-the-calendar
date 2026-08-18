@@ -1560,6 +1560,23 @@ html.screen-reader-mode .tag-search-input {
   line-height: 1.5;
 }
 
+.timeline-editor-error {
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--red) 10%, var(--bg-muted));
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.timeline-editor-status {
+  /* ความสูงเท่ากับ alert หนึ่งบรรทัดโดยประมาณ เพื่อให้ grid ไม่ขยับเมื่อ
+     สถานะ overlap เปลี่ยนผ่านจุดที่เวลาชนกันแบบพอดี */
+  min-height: 48px;
+}
+
 .day-timeline-scroll-edit {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1604,6 +1621,13 @@ html.screen-reader-mode .tag-search-input {
   right: 6px;
 }
 
+/* Direct drag: ขณะ pointer ถูกกดค้าง บล็อกที่โฟกัสทับผ่านบล็อกอื่นโดยตรง
+   และไม่ให้ browser transition ค่า layout ใด ๆ. การจัดคอลัมน์ใหม่เกิดหลัง
+   pointerup เท่านั้น (logic ใน TimelineEditor) จึงไม่เกิดภาพ overlap เด้ง. */
+.day-timeline-events-layer.is-direct-dragging .day-timeline-editable-event {
+  transition: none !important;
+}
+
 .day-timeline-editable-event {
   position: absolute;
   border-left: 3px solid;
@@ -1621,7 +1645,11 @@ html.screen-reader-mode .tag-search-input {
 .day-timeline-editable-event.is-dragging {
   cursor: grabbing;
   box-shadow: 0 2px 8px rgba(32, 33, 36, 0.25);
-  z-index: 2;
+  z-index: 3;
+  /* ยกเฉพาะบล็อกที่กำลังลากขึ้นเป็น compositor layer ลด repaint ของ
+     กริด/กิจกรรมอื่นระหว่างเปลี่ยน top, height, left และ width ต่อเนื่อง */
+  will-change: top, height, left, width;
+  transform: translateZ(0);
 }
 
 .day-timeline-editable-event.is-changed {
@@ -2257,6 +2285,31 @@ html.screen-reader-mode .tag-search-input {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+.settings-color-list {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.settings-color-input {
+  width: 42px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  cursor: pointer;
 }
 
 /* Toggle switch — built from scratch (no <input type="checkbox"> styled

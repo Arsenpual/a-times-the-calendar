@@ -45,6 +45,7 @@ const ALLOWED_FIELDS = [
   // Firestore จึงย้ายไปเช็คใน route handler โดยตรง (เหมือน categoryId ใน
   // routes/activity-categories.js ทำ) ไม่ใช่ในฟังก์ชัน sync นี้
   "groupId",
+  "activityId",
   // เฟส 5: Cloud Scheduler ต้อง query reminder ที่ถึงกำหนดได้โดยไม่พึ่ง
   // localStorage ของ browser จึง mirror due-date นี้เป็นข้อยกเว้น
   "nextDueAt"
@@ -129,6 +130,14 @@ function sanitizeReminderFields(body) {
     body.groupId !== undefined &&
     body.groupId !== null &&
     (typeof body.groupId !== "string" || body.groupId.trim() === "")
+  ) {
+    return null;
+  }
+
+  if (
+    body.activityId !== undefined &&
+    body.activityId !== null &&
+    (typeof body.activityId !== "string" || body.activityId.trim() === "" || body.activityId.length > 500)
   ) {
     return null;
   }

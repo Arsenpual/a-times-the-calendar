@@ -1,5 +1,13 @@
 # Session Summary — TIMES THE CALENDAR: Backend/Frontend Scan + Reminder Mode Redesign
 
+## สถานะล่าสุด (18 สิงหาคม 2569)
+
+- **Phase 5 Push notification:** โค้ด FCM, token API, Firestore index และ Cloud Function scheduler พร้อมแล้ว แต่ยังไม่ได้ deploy เพราะ Firebase project ยังอยู่ Spark plan; ต้องอัปเกรดเป็น Blaze แล้วรัน `firebase deploy --only firestore:indexes,functions` จึงจะทดสอบ Push ตอนปิดแท็บได้
+- **Phase 6 Omnibar:** rule-based parser, preview และ fallback เปิด composer ทำแล้ว; **AI fallback ยังรอ** การเลือก provider, API key และ backend endpoint/rate limit
+- **Phase 7 Statistics:** มี panel สถิติใน Reminder Mode จากข้อมูลจริงใน localStorage ของอุปกรณ์นี้; Firebase Analytics ยังเก็บ event เพื่อใช้ดูภาพรวมข้ามอุปกรณ์ใน Console
+- **Activity ↔ Reminder integration:** ตัดสินใจใช้แบบ 1:1; `activityId` บน reminder เป็น link key, Activity เป็น source of truth ของ title/เวลา
+- **หมายเหตุ Remote Config:** ตั้ง `reminder_omnibar_enabled` เป็น `true` แล้ว Publish เมื่อพร้อมเปิดใช้งาน Omnibar บน production
+
 **วันที่:** 15 สิงหาคม 2569 (อัปเดตล่าสุด — เฟส 1-4 เสร็จสมบูรณ์, เฟส 5 วางโครงไว้บางส่วน — Cloud Function ยัง deploy ไม่ได้)
 **จุดประสงค์:** สรุป session นี้เพื่อกลับมาทำต่อได้สะดวก — ครอบคลุมการสแกนโค้ดทั้ง stack, การเปลี่ยนแปลงที่พบ, เอกสารเจาะลึก reminder mode, แผนพัฒนา layout ใหม่ (v2), และความคืบหน้าการ implement จริง
 
