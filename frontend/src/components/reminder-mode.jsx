@@ -335,16 +335,22 @@ const ROW_HEIGHT_PX = 32;
 // เปรียบเทียบเฉพาะ tapeRows (reference จาก useMemo เปลี่ยนเมื่อ reminders/zoom เปลี่ยนจริง ๆ) ไม่สน nowTick ที่เปลี่ยนทุกวินาที
 // ผลคือ tooltip (title) ของ event-chip อาจไม่ได้อัปเดตวินาทีต่อวินาที แต่แลกกับ scroll ที่ลื่นขึ้นมาก ซึ่งคุ้มกว่ามาก
 const TimelineRows = React.memo(
-  function TimelineRows({ tapeRows, nowTick }) {
+  function TimelineRows({ tapeRows, nowTick, onEditReminder }) {
     return tapeRows.map(({ key, isMajor, label, flags }) => (
       <div key={key} className={`time-row${isMajor ? " major-hour" : ""}`} style={{ height: `${ROW_HEIGHT_PX}px`, "--row-height": `${ROW_HEIGHT_PX}px` }}>
         <span className="time-label">{label}</span>
         {flags.length > 0 && (
           <span className="event-chip-group">
             {flags.map((r) => (
-              <span key={r.id} className={`event-chip${r.enabled ? "" : " disabled"}`} title={`${r.title} · ${describeReminder(r, nowTick)}`}>
+              <button
+                key={r.id}
+                type="button"
+                className={`event-chip${r.enabled ? "" : " disabled"}`}
+                title={`แก้ไข: ${r.title} · ${describeReminder(r, nowTick)}`}
+                onClick={() => onEditReminder(r)}
+              >
                 <span className="chip-dot" />{r.title}
-              </span>
+              </button>
             ))}
           </span>
         )}
@@ -546,6 +552,14 @@ export default function ReminderDashboard({
 
     return rows;
   }, [reminders, minutesPerRow, totalRows]);
+
+  // ให้ track กว้างตามจำนวน reminder ที่อยู่เวลาเดียวกัน เพื่อให้ผู้ใช้
+  // เลื่อนดูทุก chip ทางแนวนอนได้ แทนการซ่อนรายการส่วนเกินในแต่ละแถว.
+  const maxConcurrentReminderChips = useMemo(
+    () => Math.max(1, ...tapeRows.map((row) => row.flags.length)),
+    [tapeRows]
+  );
+  const timelineTrackMinWidth = 84 + (maxConcurrentReminderChips * 204) + 8;
 
   // Activity Mode และ Reminder Mode ใช้ข้อมูล Google Calendar ชุดเดียวกัน:
   // timeline นี้จึงแสดงเฉพาะกิจกรรมที่ทับกับ "วันนี้" และคำนวณตำแหน่งจาก
@@ -1011,6 +1025,14 @@ export default function ReminderDashboard({
   const deleteReminder = (reminderId) => {
     setReminders((prev) => prev.filter((r) => r.id !== reminderId));
     deleteRemoteReminder(reminderId);
+  };
+
+  const deleteEditingReminder = () => {
+    if (!editingId) return;
+    const reminder = reminders.find((item) => item.id === editingId);
+    if (!window.confirm(`ลบ reminder “${reminder?.title || "รายการนี้"}” ใช่หรือไม่?`)) return;
+    deleteReminder(editingId);
+    cancelEditing();
   };
 
   const startEdit = (reminder) => {
@@ -1885,8 +1907,7 @@ export default function ReminderDashboard({
 
         .tape-scroll-container {
           height: 100%;
-          overflow-y: auto;
-          overflow-x: hidden;
+          overflow: auto;
           position: relative;
           scroll-behavior: auto;
           -webkit-overflow-scrolling: touch;
@@ -1897,6 +1918,7 @@ export default function ReminderDashboard({
 
         .tape-track-wrapper {
           position: relative;
+          min-width: 100%;
         }
 
         .color-picker-group {
@@ -1989,16 +2011,11 @@ export default function ReminderDashboard({
           display: flex;
           align-items: center;
           gap: 4px;
-          overflow-x: auto;
-          overflow-y: hidden;
-          scrollbar-width: none;
-        }
-
-        .event-chip-group::-webkit-scrollbar {
-          display: none;
+          overflow: visible;
         }
 
         .event-chip {
+          border: 0;
           display: flex;
           align-items: center;
           gap: 6px;
@@ -2013,6 +2030,16 @@ export default function ReminderDashboard({
           overflow: hidden;
           text-overflow: ellipsis;
           font-weight: 500;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+        }
+
+        .event-chip:hover,
+        .event-chip:focus-visible {
+          filter: brightness(0.95);
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
         }
 
         .event-chip.disabled {
@@ -2533,6 +2560,15 @@ export default function ReminderDashboard({
           background: var(--g-blue-light);
         }
 
+        .btn-text.btn-delete-reminder,
+        .btn-text.btn-delete-reminder:hover {
+          color: var(--g-red-dark);
+        }
+
+        .btn-text.btn-delete-reminder:hover {
+          background: var(--g-red-light);
+        }
+
         .btn-contained {
           background: var(--g-blue);
           border: none;
@@ -3032,6 +3068,9 @@ export default function ReminderDashboard({
               )}
 
               <div className="composer-actions">
+                {editingId && (
+                  <button className="btn-text btn-delete-reminder" type="button" onClick={deleteEditingReminder}>ลบ Reminder</button>
+                )}
                 <button className="btn-text" type="button" onClick={cancelEditing}>ยกเลิก</button>
                 <button className="btn-contained" type="submit">
                   {editingId ? "บันทึกการแก้ไข" : "สร้าง Reminder"}
@@ -3126,14 +3165,17 @@ export default function ReminderDashboard({
               onWheel={handleUserInteraction}
               onTouchMove={handleUserInteraction}
             >
-              <div className="tape-track-wrapper">
+              <div
+                className="tape-track-wrapper"
+                style={{ minWidth: `max(100%, ${timelineTrackMinWidth}px)` }}
+              >
                 {/* Spacer บน: ยืดขอบออกจากแถว 00:00 ไม่ให้ now-indicator ชนขอบ container
                     เป็น slot เปิดไว้ เผื่อใส่ contentอื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
                 <div className="tape-spacer tape-spacer-top" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
                   {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
                 </div>
 
-                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} />
+                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} onEditReminder={startEdit} />
 
                 <div className="calendar-timeline-layer" aria-label="กิจกรรมในปฏิทินของวันนี้">
                   {calendarTimelineBlocks.map((block) => (

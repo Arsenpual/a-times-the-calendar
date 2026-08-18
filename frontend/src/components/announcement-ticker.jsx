@@ -95,7 +95,6 @@ export default function AnnouncementTicker({ message }) {
     >
       <div
         className="announcement-ticker-track"
-        style={{ animationDuration: `${durationMs || 1}ms` }}
         // Restarting the CSS animation each time it becomes visible again
         // needs a fresh element instance — otherwise the browser just
         // resumes/no-ops since the animation already technically
@@ -110,7 +109,10 @@ export default function AnnouncementTicker({ message }) {
         // in most browsers — remounting via this key sidesteps that.
         key={`${visible}-${durationMs !== null}`}
       >
-        <span className="announcement-ticker-item">
+        <span
+          className="announcement-ticker-item"
+          style={{ animationDuration: `${durationMs || 1}ms` }}
+        >
           {/* The outer .announcement-ticker-item carries the off-screen
               starting offset (padding-left: 100%, see CSS) — measuring
               *that* element's width would include the padding itself,
