@@ -1,34 +1,5 @@
-# Dependencies
+package.json
+package-lock.json
+firestore-debug.log
+firebase-debug.log
 node_modules/
-backend/node_modules/
-frontend/node_modules/
-
-# Environment variables (มี secret เช่น Google Client ID)
-.env
-backend/.env
-frontend/.env
-
-# Backend data store
-backend/data/db.json
-
-# Frontend build output
-frontend/dist/
-
-# Logs
-*.log
-npm-debug.log*
-
-# OS / editor junk
-.DS_Store
-Thumbs.db
-.vscode/
-
-secret/
-
-z-data-document/
-
-z-project-document/
-
-backend/backend.md
-
-frontend/frontend.md
