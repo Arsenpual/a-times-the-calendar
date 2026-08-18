@@ -9,6 +9,7 @@ const activityCategoriesRouter = require("./routes/activity-categories.js");
 const summaryRouter = require("./routes/summary.js");
 const remindersRouter = require("./routes/reminders.js");
 const reminderGroupsRouter = require("./routes/reminder-groups.js");
+const fcmTokensRouter = require("./routes/fcm-tokens.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -68,6 +69,7 @@ app.use("/api/reminders", requireAuth, remindersRouter);
 // resource กับ CRUD ของ reminder เอง — ตรงกับที่ categories.js แยกจาก
 // activity-categories.js ฝั่งปฏิทินเช่นกัน
 app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
+app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "ไม่พบ endpoint นี้" });

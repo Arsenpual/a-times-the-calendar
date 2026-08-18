@@ -1,11 +1,11 @@
 # Session Summary — TIMES THE CALENDAR: Backend/Frontend Scan + Reminder Mode Redesign
 
-**วันที่:** 15 สิงหาคม 2569 (อัปเดตล่าสุด — เฟส 1, 2, 3, 4 ของ migration plan v2 เสร็จแล้ว)
+**วันที่:** 15 สิงหาคม 2569 (อัปเดตล่าสุด — เฟส 1-4 เสร็จสมบูรณ์, เฟส 5 วางโครงไว้บางส่วน — Cloud Function ยัง deploy ไม่ได้)
 **จุดประสงค์:** สรุป session นี้เพื่อกลับมาทำต่อได้สะดวก — ครอบคลุมการสแกนโค้ดทั้ง stack, การเปลี่ยนแปลงที่พบ, เอกสารเจาะลึก reminder mode, แผนพัฒนา layout ใหม่ (v2), และความคืบหน้าการ implement จริง
 
 ## ⏭️ กลับมาทำต่อ เริ่มจากตรงนี้
 
-**สถานะปัจจุบัน:** เฟส 0, 1, 2, 3, 4 เสร็จหมดแล้ว → **พร้อมเริ่มเฟส 5 (Firebase Tier 1: FCM + Cloud Functions)** ตามลำดับที่แผน v2 แนะนำ (0→1→2→4→3→5→6→7)
+**สถานะปัจจุบัน:** เฟส 0-4 เสร็จสมบูรณ์ + เฟส 5 วางโครงไว้แล้วบางส่วน (ดูหัวข้อ 4.8) → **งานถัดไปคือ deploy จริง** (ต้องมี Firebase project + Firebase CLI ซึ่งไม่มีในสภาพแวดล้อมนี้) หรือถ้ายังไม่พร้อม deploy จะข้ามไปเริ่มเฟส 6 (Omnibar) ก่อนก็ได้ตามความสำคัญทางธุรกิจ
 
 **⚠️ ไฟล์โค้ดที่แก้ไขจริงอยู่ที่ไหน — สำคัญมาก อ่านก่อนเริ่มงานถัดไป:**
 
@@ -13,19 +13,26 @@
 
 | ไฟล์ | Path บน container | สถานะ present |
 |---|---|---|
-| `reminder-mode.jsx` | `/home/claude/frontend/src/components/reminder-mode.jsx` | ⚠️ ต้องเช็คว่า present ล่าสุดหรือยัง |
-| `use-reminder-groups.js` (ใหม่ เฟส 3) | `/home/claude/frontend/src/hooks/use-reminder-groups.js` | ⚠️ ยังไม่เคย present |
-| `api.js` (แก้ไข เฟส 3) | `/home/claude/frontend/src/api.js` | ⚠️ ยังไม่เคย present |
-| `firestore-db.js` (แก้ไข เฟส 3) | `/home/claude/backend/firestore-db.js` | ⚠️ ยังไม่เคย present |
-| `index.js` (แก้ไข เฟส 3) | `/home/claude/backend/index.js` | ⚠️ ยังไม่เคย present |
-| `routes/reminders.js` (แก้ไข เฟส 3) | `/home/claude/backend/routes/reminders.js` | ⚠️ ยังไม่เคย present |
-| `routes/reminder-groups.js` (ใหม่ เฟส 3) | `/home/claude/backend/routes/reminder-groups.js` | ⚠️ ยังไม่เคย present |
+| `reminder-mode.jsx` | `/home/claude/frontend/src/components/reminder-mode.jsx` | ✅ present แล้ว (เฟส 5) |
+| `reminder-due-logic.js` (ใหม่ เฟส 5) | `/home/claude/frontend/src/reminder-due-logic.js` | ✅ present แล้ว (เฟส 5) |
+| `use-push-notifications.js` (ใหม่ เฟส 5) | `/home/claude/frontend/src/hooks/use-push-notifications.js` | ✅ present แล้ว (เฟส 5) |
+| `use-reminder-groups.js` (เฟส 3) | `/home/claude/frontend/src/hooks/use-reminder-groups.js` | ✅ present แล้ว |
+| `api.js` (เฟส 3+5) | `/home/claude/frontend/src/api.js` | ✅ present แล้ว |
+| `firebase-messaging-sw.js` (ใหม่ เฟส 5, scaffold) | `/home/claude/frontend/public/firebase-messaging-sw.js` | ✅ present แล้ว (เฟส 5) |
+| `firestore-db.js` (เฟส 3+5) | `/home/claude/backend/firestore-db.js` | ✅ present แล้ว (เฟส 5) |
+| `index.js` (เฟส 3+5) | `/home/claude/backend/index.js` | ✅ present แล้ว (เฟส 5) |
+| `routes/reminders.js` (เฟส 3) | `/home/claude/backend/routes/reminders.js` | ✅ present แล้ว |
+| `routes/reminder-groups.js` (เฟส 3) | `/home/claude/backend/routes/reminder-groups.js` | ✅ present แล้ว |
+| `routes/fcm-tokens.js` (ใหม่ เฟส 5) | `/home/claude/backend/routes/fcm-tokens.js` | ✅ present แล้ว (เฟส 5) |
+| `functions/index.js` (ใหม่ เฟส 5, scaffold **ยัง deploy ไม่ได้**) | `/home/claude/functions/index.js` | ✅ present แล้ว (เฟส 5) |
+| `functions/reminder-due-logic.js` (ใหม่ เฟส 5, scaffold) | `/home/claude/functions/reminder-due-logic.js` | ✅ present แล้ว (เฟส 5) |
+| `functions/package.json`/`README.md`/`.gitignore` (เฟส 5, scaffold) | `/home/claude/functions/` | ✅ present แล้ว (เฟส 5) |
 
 **แผนที่ใช้งานจริง:** `reminder-mode-migration-plan-v2.md` (ไฟล์ `reminder-mode-migration-plan.md` เดิม/v1 **ถูกแทนที่แล้ว** — ใช้ v2 เท่านั้น)
 
 **ไฟล์ที่สร้างไว้แล้วใน session นี้ (เรียงตามลำดับที่ควรอ่าน):**
 1. `session-summary.md` — ไฟล์นี้ อ่านก่อนเป็นอันดับแรก
-2. `reminder-mode-deep-dive.md` — เอกสารเจาะลึกโค้ด `reminder-mode.jsx` **ก่อนแก้ไขเฟส 1-4** — ใช้เป็น reference สถาปัตยกรรมเดิม (หลาย class name/comment ในนี้ไม่ตรงกับโค้ดล่าสุดแล้ว — ดูหัวข้อ 4.6/4.7 ด้านล่างสำหรับของที่เปลี่ยน)
+2. `reminder-mode-deep-dive.md` — เอกสารเจาะลึกโค้ด `reminder-mode.jsx` **ก่อนแก้ไขเฟส 1-5** — ใช้เป็น reference สถาปัตยกรรมเดิม (หลาย class name/comment ในนี้ไม่ตรงกับโค้ดล่าสุดแล้ว — ดูหัวข้อ 4.6/4.7/4.8 ด้านล่างสำหรับของที่เปลี่ยน)
 3. `reminder-mode-migration-plan-v2.md` — แผนพัฒนาที่ใช้งานจริง (7 เฟส + เฟส 0 ที่ล็อกแล้ว)
 4. ~~`reminder-mode-migration-plan.md`~~ — v1 เดิม ถูกแทนที่โดย v2 แล้ว ไม่ต้องอ้างอิงอีก
 
@@ -218,6 +225,46 @@ a-times-the-calendar/
 
 ---
 
+## 4.8. เฟส 5 — Firebase Tier 1 (วางโครงไว้แล้วบางส่วน, Cloud Function ยัง deploy ไม่ได้)
+
+ผู้ใช้ขอให้ "วางโครงไว้ก่อน" เพราะ Cloud Function deploy ไม่ได้ในสภาพแวดล้อมนี้ (ไม่มี Firebase CLI/credentials/network) — แบ่งงานเป็นส่วนที่ **ทดสอบได้จริง** (ทำและทดสอบแล้ว) กับส่วนที่ **เขียนโครงไว้ก่อน** (deploy/ทดสอบเต็มรูปแบบไม่ได้ในนี้)
+
+### ทดสอบได้จริง — ทำและยืนยันแล้ว
+
+**Prerequisite: Shared due-logic module**
+- สร้าง `frontend/src/reminder-due-logic.js` (ESM) — ย้าย `REMINDER_TYPE`, `isOneShotType`, `intervalMs`, `hasWindow`, `minuteOfDayAt`, `minutesFromHHMM`, `isMinuteWithinWindow`, `snapToNextWindowStart`, `computeNextDueAt` ออกจาก `reminder-mode.jsx` มาไว้ที่นี่ + เพิ่ม `isReminderDue()` ใหม่ (รวมเงื่อนไข due-checking ทั้งหมดไว้จุดเดียว)
+- `reminder-mode.jsx` แก้ให้ import จากไฟล์นี้แทนการนิยามซ้ำในตัวเอง — **regression test ผ่านครบ** (weekly/window-interval/toggle ทุก code path ที่ย้ายมา)
+
+**Backend: FCM token storage**
+- `firestore-db.js`: เพิ่ม `fcmTokensCol(userId)` — ใช้ตัว FCM token เองเป็น doc id (upsert อัตโนมัติ)
+- Route ใหม่ `routes/fcm-tokens.js`: `POST`/`DELETE`/`GET` — **ทดสอบ functional ผ่าน 12/12 เคส** (รวม upsert, validation, idempotent delete)
+- `index.js`: mount `/api/fcm-tokens`
+
+**Frontend: Permission + registration wiring**
+- Hook ใหม่ `use-push-notifications.js`: จัดการ browser permission state (`unsupported`/`default`/`granted`/`denied`), เรียก `Notification.requestPermission()`, ลงทะเบียน/ยกเลิก FCM token กับ backend — **ไม่ auto-request ตอน mount** (ต้องรอผู้ใช้กดเอง ตามที่แผนกำหนด)
+- `api.js`: เพิ่ม `registerFcmToken`/`unregisterFcmToken`
+- `reminder-mode.jsx`: เพิ่มปุ่มกระดิ่ง 🔔/🔕 ใน topbar เรียก hook นี้
+- **ทดสอบผ่าน Playwright จริง** ด้วย browser permission API จริง (ไม่ mock) — พบว่า Chromium headless บน `file://` origin คืนค่า `Notification.permission` เป็น `"denied"` เสมอ (ข้อจำกัดของเบราว์เซอร์ ไม่ใช่บั๊ก) ยืนยันว่า component แสดงผล UI ถูกต้องตาม state นี้ — state `default`/`granted` จริงต้องทดสอบบน `https://` กับ user จริงเท่านั้น
+
+**Cloud Function scaffold — logic ทดสอบผ่าน mock แล้ว (ยังไม่เคยรันบน Firebase จริง)**
+- `functions/reminder-due-logic.js`: สำเนา CommonJS ของไฟล์ ESM ต้นฉบับ — **parity test ผ่าน 18/18 เคส** (ยืนยันว่าสองไฟล์คำนวณตรงกันเป๊ะ ณ ตอนนี้)
+- `functions/index.js`: `checkDueReminders` scheduled function — query reminder ที่ due ทุก user ผ่าน Firestore, ส่ง FCM push, อัปเดต `nextDueAt`/`lastNotifiedAt`, ลบ dead token อัตโนมัติ — **ทดสอบ business logic ผ่าน mock ของ firebase-admin/firebase-functions ทั้งคู่ 14/14 เคส** (ครอบคลุม due/not-due/completed/routine-stopwatch-excluded/one-shot-vs-recurring/dead-token-cleanup/no-token-user)
+
+**การตัดสินใจใหม่ที่ scaffold นี้ทำเอง (แผนเดิมไม่ได้ระบุไว้ ควรทบทวนก่อน deploy):**
+- **Renotify guard**: เพิ่ม field ใหม่ `lastNotifiedAt` เทียบกับ `nextDueAt` — ถ้าเคยแจ้งรอบนี้ไปแล้วไม่ส่งซ้ำ (กัน spam ทุก 1 นาทีถ้าไม่มีใครเปิดแอปมา acknowledge) รายละเอียด/ทางเลือกอื่นที่เป็นไปได้อยู่ใน `functions/README.md`
+
+### เขียนโครงไว้ก่อน — deploy/ทดสอบเต็มรูปแบบไม่ได้ในสภาพแวดล้อมนี้
+
+- `frontend/public/firebase-messaging-sw.js` — Service Worker scaffold รับ background push, ยังมี Firebase config เป็น `"TODO_ใส่ค่าจริงตอน_deploy"` ทั้งหมด (ต้องเติมค่าจริงจาก Firebase Console)
+- `functions/package.json` — ยังไม่เคย `npm install` จริง (ไม่มี network ให้ดึง `firebase-admin`/`firebase-functions`)
+- Firestore collection group index สำหรับ `reminder-mode` + `enabled` — ยังไม่เคยสร้างจริง (ต้องทำผ่าน Firebase Console ตอน deploy)
+- `VITE_FIREBASE_VAPID_KEY` env var — ยังไม่มีค่าจริง (ต้องหาได้จาก Firebase Console > Cloud Messaging)
+- ดู `functions/README.md` สำหรับ checklist ครบก่อน deploy จริง (6 ข้อ) และรายละเอียดสิ่งที่ทดสอบไปแล้ว/ยังไม่ได้ทดสอบ
+
+**สรุป: เฟส 5 ยัง "ไม่เสร็จ" ตามความหมายของแผน** (deploy จริงใช้งานได้) — แต่ **โครงสร้างครบ + logic ที่ทดสอบได้ในสภาพแวดล้อมนี้ทั้งหมดผ่านการทดสอบแล้ว** งานที่เหลือคือการ deploy จริงซึ่งต้องทำนอก session นี้ (ต้องมี Firebase CLI + project จริง)
+
+---
+
 ## 4.5. Firebase Services ที่จะนำมาใช้ (ตัดสินใจแล้ว)
 
 **Tier ที่เลือก: Tier 1** (ผูกกับ Firebase project เดิมโดยตรง ไม่ต้องตั้ง billing/credential แยก)
@@ -260,11 +307,11 @@ a-times-the-calendar/
 | 2 | Filter ตามประเภท | ต่ำ | ❌ | ✅ **เสร็จแล้ว** (ดูหัวข้อ 4.6) |
 | 3 | Groups/Projects (one-to-one + sync) | กลาง-สูง | ✅ | ✅ **เสร็จแล้ว** (ดูหัวข้อ 4.7) |
 | 4 | สถานะ "ทำเสร็จแล้ว" (`completedAt`) | กลาง | ❌ (runtime field) | ✅ **เสร็จแล้ว** (ดูหัวข้อ 4.7) |
-| 5 | **Firebase Tier 1: FCM + Cloud Functions + Analytics/Remote Config** | กลาง-สูง | ✅ (Cloud Functions ใหม่) | ⏭️ **พร้อมเริ่มถัดไป** |
+| 5 | **Firebase Tier 1: FCM + Cloud Functions + Analytics/Remote Config** | กลาง-สูง | ✅ (Cloud Functions ใหม่) | 🟡 **โครงพร้อม, logic ทดสอบผ่าน mock ครบ — ยัง deploy จริงไม่ได้** (ดูหัวข้อ 4.8) |
 | 6 | Omnibar (rule-based → AI fallback) | สูง | ⚠️ ถ้ามี AI fallback | ยังไม่เริ่ม |
 | 7 | หน้าสถิติ (ใช้ Analytics จากเฟส 5) | ต่ำ-กลาง | ✅ query อ่านอย่างเดียว | ยังไม่เริ่ม |
 
-**ลำดับแนะนำ:** 0(เสร็จ) → 1(เสร็จ) → 2(เสร็จ) → 4(เสร็จ) → 3(เสร็จ) → **5** → 6 → 7
+**ลำดับแนะนำ:** 0(เสร็จ) → 1(เสร็จ) → 2(เสร็จ) → 4(เสร็จ) → 3(เสร็จ) → 5(โครงพร้อม รอ deploy) → **6** → 7
 
 ### คำตอบเฟส 0 (ล็อกแล้ว — ใช้เป็น reference ตอนเขียนโค้ดจริง)
 1. **Groups**: one-to-one ต่อ reminder ตาม pattern `categories`/`activityCategoryMap` ฝั่ง calendar — ลบกลุ่มแล้ว fallback เป็น "ไม่มีกลุ่ม" ไม่ลบ reminder ทิ้ง
@@ -284,14 +331,16 @@ a-times-the-calendar/
 
 ## 7. งานที่ยังไม่ได้ทำ (ต่อยอดได้)
 
-**ลำดับความสำคัญสูงสุดตอนนี้:** เริ่มเฟส 5 (Firebase Tier 1) — จุดเริ่มต้นที่ดีที่สุดคือทำ prerequisite ก่อน: ตัดสินใจว่าจะ duplicate `computeNextDueAt()` เป็น Cloud Function แยก (แนะนำในแผน) หรือ sync `nextDueAt` ขึ้น Firestore ถี่ๆ แทน แล้วค่อย setup FCM + Service Worker ฝั่ง frontend
-
-**⚠️ ก่อนเริ่มงานถัดไป ต้อง present ไฟล์โค้ดทั้ง 7 ไฟล์ที่ระบุไว้ในตารางหัวข้อ "⏭️ กลับมาทำต่อ" ด้านบนให้ผู้ใช้ก่อน** — ยังไม่เคย present ออกไปเลยสักไฟล์ตลอด session นี้ ถ้า container reset งานเฟส 1-4 ทั้งหมดจะหายไปด้วย
+**ลำดับความสำคัญสูงสุดตอนนี้:** เฟส 5 มีโครงครบและ logic ทดสอบผ่าน mock หมดแล้ว — งานที่เหลือคือ **deploy จริง** ซึ่งต้องทำนอก session นี้ (ต้องมี Firebase CLI + project จริง) ดู checklist 6 ข้อใน `functions/README.md` ก่อนเริ่ม ถ้ายังไม่พร้อม deploy ให้ข้ามไปเริ่มเฟส 6 (Omnibar) ก่อนได้ตามความสำคัญทางธุรกิจ
 
 **งานค้างอื่นๆ:**
 - ยังไม่ได้อ่าน: `data-model.md`, `DEPLOY.md`, `project-planer01.md`, `firestore.rules`, `scripts/firestore-rules.test.js`, `package.json` ทั้งสองฝั่ง
-- ยังไม่ได้อัปเดต `Frontend.md`/`Backend.md` ให้ตรงกับโค้ดจริงปัจจุบัน (ทั้งสองไฟล์เก่ากว่าโค้ดที่สแกนไปแล้ว — ตอนนี้ยิ่งห่างจากของจริงมากขึ้นไปอีกหลังเฟส 1-4)
-- ยังไม่ได้ดู `data-model.md` เพื่อยืนยันว่า schema ที่เพิ่มเข้าไปจริงแล้ว (`reminderGroups` collection, `groupId`/`completedAt` fields) สอดคล้องกับ data model ที่มีอยู่แล้วของทั้งระบบหรือไม่
+- ยังไม่ได้อัปเดต `Frontend.md`/`Backend.md` ให้ตรงกับโค้ดจริงปัจจุบัน (ทั้งสองไฟล์เก่ากว่าโค้ดที่สแกนไปแล้ว — ตอนนี้ยิ่งห่างจากของจริงมากขึ้นไปอีกหลังเฟส 1-5)
+- ยังไม่ได้ดู `data-model.md` เพื่อยืนยันว่า schema ที่เพิ่มเข้าไปจริงแล้ว (`reminderGroups`/`fcmTokens` collections, `groupId`/`completedAt`/`lastNotifiedAt` fields) สอดคล้องกับ data model ที่มีอยู่แล้วของทั้งระบบหรือไม่
 - เฟส 6.3 (AI fallback ของ Omnibar) ยังไม่เลือก provider จริง (Gemini เป็นแค่ตัวเลือกหนึ่งใน Tier 2 ที่ยังไม่ได้ตัดสินใจ)
-- `reminder-mode-deep-dive.md` เขียนขึ้นก่อนเฟส 1-4 ทั้งหมด — ไม่ตรงกับโค้ดปัจจุบันในหลายจุดแล้ว (layout 2→3 คอลัมน์, class name เปลี่ยนความหมาย, ไม่มี groups/completedAt เลยในเอกสารเดิม) — ใช้หัวข้อ 4.6/4.7 ในไฟล์นี้เป็นตัวอัปเดตแทน ยังไม่ได้แก้ตัวเอกสารเจาะลึกเอง
-- Backend test harness (in-memory Firestore mock + Express shim) ที่สร้างขึ้นเพื่อทดสอบเฟส 3 อยู่ที่ `/home/claude/backend-test/` — เป็นเครื่องมือทดสอบเท่านั้น ไม่ใช่ส่วนหนึ่งของโปรเจกต์จริง ไม่ต้อง present แต่มีประโยชน์ถ้าต้องทดสอบ backend เพิ่มเติมในเฟสถัดไป (โดยเฉพาะเฟส 5 ที่จะมี Cloud Function ใหม่)
+- `reminder-mode-deep-dive.md` เขียนขึ้นก่อนเฟส 1-5 ทั้งหมด — ไม่ตรงกับโค้ดปัจจุบันในหลายจุดแล้ว (layout 2→3 คอลัมน์, class name เปลี่ยนความหมาย, ไม่มี groups/completedAt/push-notification เลยในเอกสารเดิม) — ใช้หัวข้อ 4.6/4.7/4.8 ในไฟล์นี้เป็นตัวอัปเดตแทน ยังไม่ได้แก้ตัวเอกสารเจาะลึกเอง
+- **การตัดสินใจที่ยังไม่ได้ทบทวนกับผู้ใช้:** renotify guard policy ที่ scaffold เฟส 5 เลือกเอง ("แจ้งครั้งเดียวต่อรอบ" — ดูรายละเอียด/ทางเลือกอื่นใน `functions/README.md`) ควรคุยกับผู้ใช้ก่อน deploy จริงว่าตรงกับพฤติกรรมที่ต้องการหรือไม่
+- Test harness ที่สร้างขึ้นเพื่อทดสอบเฟส 3/5 (ไม่ใช่ส่วนหนึ่งของโปรเจกต์จริง ไม่ต้อง present แต่มีประโยชน์ถ้าต้องทดสอบเพิ่มเติม):
+  - `/home/claude/backend-test/` — Express shim + Firestore mock สำหรับทดสอบ backend routes (reminder-groups, reminders, fcm-tokens)
+  - `/home/claude/functions-test/` — mock ของ firebase-admin/firebase-functions สำหรับทดสอบ Cloud Function logic
+  - `/home/claude/preview3/` — bundle + Playwright scripts สำหรับทดสอบ UI ทั้งหมดตั้งแต่เฟส 1

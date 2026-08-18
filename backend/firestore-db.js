@@ -148,6 +148,18 @@ function reminderGroupsCol(userId) {
   return userDoc(userId).collection("reminderGroups");
 }
 
+// FCM device tokens (migration plan v2 เฟส 5) — หนึ่ง user มีได้หลาย token
+// พร้อมกัน (คนละอุปกรณ์/เบราว์เซอร์) จึงเป็น collection ไม่ใช่ field เดียว
+// บน user document เก็บ { token, createdAt, userAgent } ต่อ document, id
+// ของ document คือตัว FCM token เอง (ใช้ token เป็น doc id ตรงๆ ผ่าน
+// encodeURIComponent เพราะ Firestore ไม่อนุญาต "/" ใน doc id ซึ่ง FCM
+// token อาจมีได้) — ใช้ token เป็น id ทำให้ "ลงทะเบียนซ้ำ token เดิม" เป็น
+// upsert อัตโนมัติแทนที่จะสร้างซ้ำเรื่อยๆ ทุกครั้งที่ผู้ใช้เปิดแอปในเครื่อง
+// เดิม (FCM token ของเบราว์เซอร์หนึ่งๆ มักไม่เปลี่ยนบ่อย)
+function fcmTokensCol(userId) {
+  return userDoc(userId).collection("fcmTokens");
+}
+
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
 // db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
 // start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
@@ -255,5 +267,6 @@ module.exports = {
   lockedActivitiesCol,
   remindersCol,
   reminderGroupsCol,
+  fcmTokensCol,
   ensureDefaultCategoriesForUser
 };

@@ -8,7 +8,7 @@ const router = express.Router();
  * ฟิลด์ที่นิยาม "เมื่อไหร่ควรเตือน" (ตั้งครั้งเดียวตอนสร้าง/แก้ไขผ่านฟอร์ม)
  * ไม่รวม runtime state ที่เปลี่ยนทุกวินาที/ทุกครั้งที่ trigger เช่น
  * startedAt (นาฬิกา countdown/stopwatch ที่กำลังนับ), accumulatedMs,
- * currentIndex (routine), lastTriggeredAt, nextDueAt — ฟิลด์เหล่านี้ยัง
+ * currentIndex (routine), lastTriggeredAt — ฟิลด์เหล่านี้ยัง
  * อยู่ใน localStorage ฝั่ง frontend เหมือนเดิม ไม่ส่งขึ้น backend ในเฟสนี้
  * เพื่อไม่ให้เขียน Firestore ถี่เกินจำเป็น (เช่น stopwatch ที่ tick ทุกวินาที)
  *
@@ -44,7 +44,10 @@ const ALLOWED_FIELDS = [
   // ส่วนว่า id ที่ส่งมามีกลุ่มนั้นอยู่จริงไหม ต้องเช็คแบบ async กับ
   // Firestore จึงย้ายไปเช็คใน route handler โดยตรง (เหมือน categoryId ใน
   // routes/activity-categories.js ทำ) ไม่ใช่ในฟังก์ชัน sync นี้
-  "groupId"
+  "groupId",
+  // เฟส 5: Cloud Scheduler ต้อง query reminder ที่ถึงกำหนดได้โดยไม่พึ่ง
+  // localStorage ของ browser จึง mirror due-date นี้เป็นข้อยกเว้น
+  "nextDueAt"
 ];
 
 const REMINDER_TYPES = [
@@ -111,6 +114,12 @@ function sanitizeReminderFields(body) {
 
   if (body.days !== undefined && !isValidDays(body.days)) return null;
   if (body.steps !== undefined && !isValidSteps(body.steps)) return null;
+
+  // null = reminder นี้ไม่มี due-date ที่ scheduler ต้องตรวจ (routine,
+  // stopwatch หรือ event-anchored ที่ยังไม่ trigger); ตัวเลขต้องเป็น
+  // timestamp ที่ finite เท่านั้น เพื่อกัน NaN/Infinity เข้า Firestore.
+  if (body.nextDueAt !== undefined && body.nextDueAt !== null &&
+    (typeof body.nextDueAt !== "number" || !Number.isFinite(body.nextDueAt))) return null;
 
   // groupId ต้องเป็น null หรือ non-empty string เท่านั้น — เช็คโครงสร้าง
   // อย่างเดียวตรงนี้ (เหมือน categoryId ใน routes/activity-categories.js)

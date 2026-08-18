@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRemindersSync } from "../hooks/use-reminders-sync.js";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
+import { usePushNotifications } from "../hooks/use-push-notifications.js";
+import { getReminderFeatureFlags, logReminderEvent } from "../reminder-telemetry.js";
+import {
+  REMINDER_TYPE,
+  isOneShotType,
+  intervalMs,
+  hasWindow,
+  minuteOfDayAt,
+  minutesFromHHMM,
+  isMinuteWithinWindow,
+  computeNextDueAt,
+  isReminderDue
+} from "../reminder-due-logic.js";
 
 const STORAGE_KEY = "times-reminders-v1";
 
@@ -8,9 +21,9 @@ const STORAGE_KEY = "times-reminders-v1";
 // backend/routes/reminders.js เป๊ะๆ (ฝั่ง backend มี allow-list ของตัวเอง
 // อยู่แล้ว ตัดฟิลด์ที่ไม่อยู่ในนี้ทิ้งเงียบๆ — รายการนี้ฝั่ง frontend มีไว้
 // เพื่อความชัดเจนตอนอ่านโค้ด ไม่ใช่ security boundary จริง) ไม่รวม runtime
-// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/nextDueAt/
-// completedAt (เพิ่มเข้ามาเฟส 4 — migration plan v2) — ตั้งใจไม่ sync เพราะ
-// เป็น MVP ที่ยังไม่ต้องข้ามเครื่อง (ดูคำตอบเฟส 0 ข้อ 3 ที่ล็อกไว้)
+// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/completedAt
+// (เพิ่มเข้ามาเฟส 4) — nextDueAt เป็นข้อยกเว้นในเฟส 5 เพราะ scheduler
+// ฝั่ง Cloud Function ต้องอ่านมันได้แม้ผู้ใช้ปิดแท็บอยู่
 const SCHEDULE_FIELD_KEYS = [
   "type", "title", "enabled", "amount", "unit", "windowStart", "windowEnd",
   "days", "time", "atMs", "afterAmount", "afterUnit", "durationMs",
@@ -21,13 +34,19 @@ const SCHEDULE_FIELD_KEYS = [
   // ค่านี้ขึ้น backend ทุกครั้ง — มิฉะนั้นตอนผู้ใช้เอา reminder ออกจากกลุ่ม
   // (groupId: null) การ sync จะไม่ส่งฟิลด์นี้ไปเลย (เพราะ !== undefined
   // เช็คไม่ผ่าน) ทำให้ backend ไม่รู้ว่าต้องเคลียร์ค่าเดิมทิ้ง
-  "groupId"
+  "groupId",
+  "nextDueAt"
 ];
 
 function extractScheduleFields(reminder) {
   const fields = {};
   for (const key of SCHEDULE_FIELD_KEYS) {
-    if (reminder[key] !== undefined) fields[key] = reminder[key];
+    if (reminder[key] !== undefined) {
+      // Firestore ไม่ควรเก็บ Infinity: มันไม่มีความหมายว่า "ครบกำหนด" และ
+      // query <= now จะไม่ต้องพบมันอยู่แล้ว ใช้ null แทนสถานะไม่มี due-date
+      // (event ที่ยังไม่ trigger, routine, stopwatch, one-shot ที่จบแล้ว)
+      fields[key] = key === "nextDueAt" && !Number.isFinite(reminder[key]) ? null : reminder[key];
+    }
   }
   return fields;
 }
@@ -35,15 +54,8 @@ function extractScheduleFields(reminder) {
 const ZOOM_LEVELS_MINUTES = [60, 15, 5, 1];
 const DEFAULT_ZOOM_INDEX = ZOOM_LEVELS_MINUTES.indexOf(15);
 
-const REMINDER_TYPE = {
-  INTERVAL: "interval",
-  WEEKLY: "weekly",
-  EVENT_ANCHORED: "event-anchored",
-  ROUTINE: "routine",
-  ONCE_AT: "once-at",
-  COUNTDOWN: "countdown",
-  STOPWATCH: "stopwatch"
-};
+// REMINDER_TYPE ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2
+// เฟส 5, import ไว้ด้านบนของไฟล์) — ดูคอมเมนต์ในไฟล์นั้นสำหรับเหตุผล
 
 // สีประจำแต่ละประเภท reminder — ใช้เป็น border-left accent ของการ์ด +
 // พื้นหลัง icon กล่อง (ตาม reminder-dashboard-mockup.jsx, migration plan v2
@@ -124,9 +136,7 @@ const DEFAULT_LINE_COLOR = LINE_COLOR_OPTIONS[0].value;
 // ไม่ใช้ทั้ง 18 สีเพราะบางคู่ใกล้กันเกินไปสำหรับ list สั้นๆ แบบนี้
 const GROUP_COLOR_PALETTE = ["#4285f4", "#34a853", "#ea4335", "#f9ab00", "#a142f4", "#00bcd4", "#e91e63", "#8d6e63"];
 
-function isOneShotType(type) {
-  return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
-}
+// isOneShotType ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2 เฟส 5)
 
 // แปลง timestamp เป็น "YYYY-MM-DD" ตามเวลาท้องถิ่นของเครื่อง (ไม่ใช้ toISOString() เพราะแปลงเป็น UTC
 // ทำให้วันที่เพี้ยนได้เมื่อเวลาใกล้เที่ยงคืนในโซนเวลาที่ต่างจาก UTC เช่น ไทย +7)
@@ -182,9 +192,7 @@ const DEFAULT_REMINDERS = [
   { id: "eyes", type: REMINDER_TYPE.INTERVAL, title: "พักสายตา มองไกล 20 ฟุต", amount: 20, unit: "minutes", enabled: true }
 ];
 
-function intervalMs(reminder) {
-  return reminder.amount * (reminder.unit === "hours" ? 60 * 60 * 1000 : 60 * 1000);
-}
+// intervalMs ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2 เฟส 5)
 
 function intervalLabel(reminder) {
   const unit = reminder.unit === "hours" ? "ชั่วโมง" : "นาที";
@@ -192,9 +200,7 @@ function intervalLabel(reminder) {
   return hasWindow(reminder) ? `${base} (${reminder.windowStart}-${reminder.windowEnd})` : base;
 }
 
-function hasWindow(reminder) {
-  return Boolean(reminder.windowStart && reminder.windowEnd);
-}
+// hasWindow ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2 เฟส 5)
 
 // จัดรูปแบบวินาทีทั้งหมดเป็น "mm:ss" หรือ "h:mm:ss" ถ้าเกิน 1 ชั่วโมง ใช้ร่วมกันทั้ง stopwatch และ countdown
 function formatDurationClock(totalSeconds) {
@@ -207,80 +213,11 @@ function formatDurationClock(totalSeconds) {
   return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
-function minuteOfDayAt(ms) {
-  const d = new Date(ms);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
-function minutesFromHHMM(hhmm) {
-  if (!hhmm) return 0;
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function isMinuteWithinWindow(minuteOfDay, windowStart, windowEnd) {
-  const start = minutesFromHHMM(windowStart);
-  const end = minutesFromHHMM(windowEnd);
-  if (start === end) return true;
-  if (start < end) return minuteOfDay >= start && minuteOfDay < end;
-  return minuteOfDay >= start || minuteOfDay < end;
-}
-
-function snapToNextWindowStart(ms, windowStart, windowEnd) {
-  const minuteOfDay = minuteOfDayAt(ms);
-  if (isMinuteWithinWindow(minuteOfDay, windowStart, windowEnd)) return ms;
-  const start = minutesFromHHMM(windowStart);
-  const dayStart = new Date(ms);
-  dayStart.setHours(0, 0, 0, 0);
-  let candidate = dayStart.getTime() + start * 60000;
-  if (candidate < ms) candidate += 24 * 60 * 60 * 1000;
-  return candidate;
-}
-
-function computeNextDueAt(reminder, from) {
-  switch (reminder.type) {
-    case REMINDER_TYPE.WEEKLY: {
-      if (!reminder.days || reminder.days.length === 0 || !reminder.time) return Infinity;
-      const targetMin = minutesFromHHMM(reminder.time);
-      const targetHour = Math.floor(targetMin / 60);
-      const targetMinute = targetMin % 60;
-      
-      const baseDate = new Date(from);
-      
-      for (let i = 0; i < 8; i++) {
-        const candidate = new Date(baseDate);
-        candidate.setDate(baseDate.getDate() + i);
-        candidate.setHours(targetHour, targetMinute, 0, 0);
-
-        const dayOfWeek = candidate.getDay();
-        if (reminder.days.includes(dayOfWeek) && candidate.getTime() > from) {
-          return candidate.getTime();
-        }
-      }
-      return Infinity;
-    }
-    case REMINDER_TYPE.EVENT_ANCHORED: {
-      if (!reminder.lastTriggeredAt) return Infinity;
-      const ms = reminder.afterAmount * (reminder.afterUnit === "hours" ? 3600000 : 60000);
-      return reminder.lastTriggeredAt + ms;
-    }
-    case REMINDER_TYPE.ROUTINE: {
-      return from;
-    }
-    case REMINDER_TYPE.ONCE_AT:
-      return reminder.atMs;
-    case REMINDER_TYPE.COUNTDOWN:
-      return reminder.startedAt + reminder.durationMs;
-    case REMINDER_TYPE.STOPWATCH:
-      // Stopwatch จับเวลาอย่างเดียว ไม่มีแจ้งเตือน จึงไม่มี "ถึงกำหนด" ตลอดไป
-      return Infinity;
-    case REMINDER_TYPE.INTERVAL:
-    default: {
-      const next = from + intervalMs(reminder);
-      return hasWindow(reminder) ? snapToNextWindowStart(next, reminder.windowStart, reminder.windowEnd) : next;
-    }
-  }
-}
+// minuteOfDayAt/minutesFromHHMM/isMinuteWithinWindow/snapToNextWindowStart/
+// computeNextDueAt ทั้งหมดย้ายไป ../reminder-due-logic.js แล้ว (migration
+// plan v2 เฟส 5, import ไว้ด้านบนของไฟล์) — เป็น prerequisite ของ FCM
+// scheduler ฝั่ง Cloud Function ที่ต้องคำนวณ due-date ตรงกับ client เป๊ะๆ
+// ดูคอมเมนต์ท้ายไฟล์นั้นสำหรับรายละเอียด
 
 function describeReminder(reminder, nowMs) {
   switch (reminder.type) {
@@ -471,6 +408,13 @@ export default function ReminderDashboard({ firebaseUser }) {
   // fields เพื่อให้กู้คืนได้ถ้า localStorage หาย/เปลี่ยนเครื่อง
   const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
   const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
+  const {
+    permission: pushPermission,
+    error: pushError,
+    isRequesting: isPushRequesting,
+    requestPermission: requestPushPermission,
+    disableNotifications
+  } = usePushNotifications({ firebaseUser });
 
   // Merge remote schedule fields เข้ากับ local state ครั้งเดียวตอนที่
   // remoteReminders เพิ่งโหลดเสร็จ (เปลี่ยนจาก null เป็น object) — ไม่ merge
@@ -507,8 +451,40 @@ export default function ReminderDashboard({ firebaseUser }) {
     });
   }, [remoteReminders]);
 
+  // เฟส 5: nextDueAt ต้อง mirror ไป Firestore ทุกครั้งที่สถานะ reminder
+  // เปลี่ยน เพื่อให้ Cloud Scheduler ทำงานได้แม้ไม่มีแท็บเปิดอยู่. รอให้
+  // remote โหลดและ merge ก่อนเสมอ มิฉะนั้น localStorage เก่าอาจทับข้อมูลจาก
+  // เครื่องอื่นก่อนจะได้อ่าน. useRemindersSync debounce ต่อ id ให้อยู่แล้ว.
+  const lastSyncedScheduleRef = useRef(new Map());
+  const syncedUserIdRef = useRef(null);
+  useEffect(() => {
+    if (!firebaseUser || remoteReminders === null) return;
+    if (syncedUserIdRef.current !== firebaseUser.uid) {
+      lastSyncedScheduleRef.current.clear();
+      syncedUserIdRef.current = firebaseUser.uid;
+    }
+    const presentIds = new Set();
+    for (const reminder of reminders) {
+      const fields = extractScheduleFields(reminder);
+      const snapshot = JSON.stringify(fields);
+      presentIds.add(reminder.id);
+      if (lastSyncedScheduleRef.current.get(reminder.id) !== snapshot) {
+        lastSyncedScheduleRef.current.set(reminder.id, snapshot);
+        syncScheduleFields(reminder.id, fields);
+      }
+    }
+    for (const id of lastSyncedScheduleRef.current.keys()) {
+      if (!presentIds.has(id)) lastSyncedScheduleRef.current.delete(id);
+    }
+  }, [firebaseUser, remoteReminders, reminders, syncScheduleFields]);
+
   const [dueReminders, setDueReminders] = useState([]);
+  const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
+
+  useEffect(() => {
+    getReminderFeatureFlags().then(({ omnibarEnabled: enabled }) => setOmnibarEnabled(enabled));
+  }, []);
 
   const [draft, setDraft] = useState(createBlankDraft);
 
@@ -596,21 +572,11 @@ export default function ReminderDashboard({ firebaseUser }) {
     const checkDue = () => {
       const now = Date.now();
       setNowTick(now); // อัปเดตเวลา "ตอนนี้" ทุกวินาที ให้ countdown บนการ์ด tick แบบ live
-      // migration plan v2 เฟส 4 — เพิ่มเงื่อนไข !r.completedAt กันไม่ให้
-      // reminder ที่ถูก mark "ทำเสร็จแล้ว" ไปแล้ว (ค้างอยู่ในกรณี edge case
-      // ที่ completedAt ไม่ถูกรีเซ็ต) โผล่กลับมาที่ due-banner ซ้ำอีก — ใน
-      // ทางปฏิบัติ markCompleted() ด้านล่างจะเซ็ต nextDueAt ใหม่ให้ reminder
-      // ประเภทวนซ้ำอยู่แล้วจึงไม่น่าเกิด edge case นี้บ่อย แต่เป็นเกราะกัน
-      // ไว้อีกชั้นให้สอดคล้องกับความหมายของ completedAt โดยตรง
-      const due = reminders.filter(
-        (r) =>
-          r.enabled &&
-          !r.completedAt &&
-          r.nextDueAt &&
-          r.nextDueAt <= now &&
-          r.type !== REMINDER_TYPE.ROUTINE &&
-          r.type !== REMINDER_TYPE.STOPWATCH
-      );
+      // migration plan v2 เฟส 5 — ใช้ isReminderDue() จาก ../reminder-due-logic.js
+      // แทนการเขียนเงื่อนไข filter เองตรงนี้ (เดิมเฟส 4 เขียนไว้ตรงนี้) เพื่อ
+      // ให้เงื่อนไข "ถึงกำหนดหรือยัง" มีจุดเดียวที่ Cloud Function (เฟส 5)
+      // เรียกใช้ตรงกันได้เป๊ะๆ ในอนาคต ไม่ต้องคัดลอกเงื่อนไข if ซ้ำอีกที่
+      const due = reminders.filter((r) => isReminderDue(r, now));
       setDueReminders(due);
     };
 
@@ -796,6 +762,7 @@ export default function ReminderDashboard({ firebaseUser }) {
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (typeof snoozeMinutes === "number") {
+          logReminderEvent("reminder_snoozed", { reminder_type: r.type, snooze_minutes: snoozeMinutes });
           return { ...r, enabled: true, nextDueAt: Date.now() + snoozeMinutes * 60 * 1000 };
         }
         if (isOneShotType(r.type)) return { ...r, enabled: false, nextDueAt: Infinity };
@@ -823,8 +790,10 @@ export default function ReminderDashboard({ firebaseUser }) {
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (isOneShotType(r.type)) {
+          logReminderEvent("reminder_completed", { reminder_type: r.type });
           return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity };
         }
+        logReminderEvent("reminder_completed", { reminder_type: r.type });
         return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
@@ -851,6 +820,7 @@ export default function ReminderDashboard({ firebaseUser }) {
           // type (migration plan v2 เฟส 4.3) แทนที่จะแค่ enabled: false
           // เฉยๆ แบบเดิม — ผู้ใช้ยังเปิดสวิตช์กลับเองได้ตามปกติ (toggle()
           // จะเคลียร์ completedAt คืนเป็น null ให้ ดูฟังก์ชันนั้นด้านล่าง)
+          logReminderEvent("reminder_completed", { reminder_type: r.type });
           return { ...r, currentIndex: 0, enabled: false, completedAt: Date.now() };
         }
         return { ...r, currentIndex: nextIdx };
@@ -1026,6 +996,7 @@ export default function ReminderDashboard({ firebaseUser }) {
       setEditingId(null);
     } else {
       setReminders((prev) => [...prev, newReminder]);
+      logReminderEvent("reminder_created", { reminder_type: newReminder.type });
     }
 
     // Sync schedule fields ขึ้น Firebase — immediate: true เพราะนี่คือ
@@ -1489,6 +1460,11 @@ export default function ReminderDashboard({ firebaseUser }) {
         .topbar-icon-btn:disabled {
           opacity: 0.4;
           cursor: not-allowed;
+        }
+
+        .topbar-icon-btn.is-active {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
         }
 
         /* Left nav — "ตัวกรองประเภท" wired จริงแล้ว (เฟส 2) filter แบบ
@@ -2503,10 +2479,33 @@ export default function ReminderDashboard({ firebaseUser }) {
             className="topbar-omnibar"
             placeholder="พิมพ์เพื่อสร้าง Reminder ด่วน... (เร็วๆ นี้)"
             disabled
-            title="ฟีเจอร์นี้จะเปิดใช้งานในเฟสถัดไป"
+            title={omnibarEnabled ? "Remote Config พร้อมเปิด Omnibar เมื่อ parser เฟส 6 เสร็จ" : "Omnibar ยังไม่เปิดใช้ใน Remote Config"}
           />
         </div>
         <div className="topbar-actions">
+          {/* migration plan v2 เฟส 5 — ปุ่มเปิด/ปิด push notification จริง
+              (ทดสอบได้แค่ permission flow + เรียก backend — getToken()
+              จริงต้องมี VITE_FIREBASE_VAPID_KEY ที่ยังไม่ตั้งค่าไว้ในสภาพ
+              แวดล้อมนี้ กดแล้วจะเห็น error อธิบายตรงๆ แทนที่จะพังเงียบๆ) */}
+          <button
+            type="button"
+            className={`topbar-icon-btn ${pushPermission === "granted" ? "is-active" : ""}`}
+            disabled={pushPermission === "unsupported" || pushPermission === "denied" || isPushRequesting}
+            onClick={() => (pushPermission === "granted" ? disableNotifications() : requestPushPermission())}
+            title={
+              pushError
+                ? `เกิดข้อผิดพลาด: ${pushError}`
+                : pushPermission === "unsupported"
+                ? "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ Push"
+                : pushPermission === "denied"
+                ? "การแจ้งเตือนถูกปิดไว้ — เปิดใหม่ได้ในตั้งค่าเบราว์เซอร์"
+                : pushPermission === "granted"
+                ? "ปิดการแจ้งเตือน"
+                : "เปิดการแจ้งเตือน (รับได้แม้ปิดแท็บ)"
+            }
+          >
+            {pushPermission === "granted" ? "🔔" : "🔕"}
+          </button>
           <button type="button" className="topbar-icon-btn" disabled title="สถิติ (เร็วๆ นี้)">📊</button>
         </div>
       </header>

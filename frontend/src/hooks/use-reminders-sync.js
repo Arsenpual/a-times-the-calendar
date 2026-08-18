@@ -5,7 +5,7 @@ import { fetchReminders, saveReminder, deleteReminderRemote } from "../api.js";
  * เบื้องต้น sync แค่ "วัน/เวลา" ของ reminder เข้า Firebase — ดู
  * routes/reminders.js ฝั่ง backend สำหรับรายชื่อฟิลด์ที่ถือว่าเป็น
  * schedule field เทียบกับ runtime field (startedAt, accumulatedMs,
- * currentIndex, lastTriggeredAt, nextDueAt) ที่ยังอยู่ localStorage
+ * currentIndex, lastTriggeredAt) ที่ยังอยู่ localStorage
  * อย่างเดียว ไม่ส่งขึ้น backend ในเฟสนี้
  *
  * ออกแบบเป็น hook แยกต่างหาก ไม่ผูกกับ localStorage โดยตรง — ตัว
