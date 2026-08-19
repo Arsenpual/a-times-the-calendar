@@ -611,7 +611,47 @@ export default function ReminderDashboard({
       .filter(Boolean);
   }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX]);
 
-  // แทนแถบสี countdown/stopwatch เดิมด้วยข้อความบน now-indicator โดยตรง:
+  // แถบสีของ Timer/Stopwatch เป็นคนละ layer กับ now-indicator และ Activity:
+  // countdown แสดงช่วงเริ่มจนถึงเวลาสิ้นสุด, stopwatch แสดงช่วงเริ่มจนถึง
+  // เวลาปัจจุบันเท่านั้น จึงไม่ไปเปลี่ยนความหมายของเส้น now-indicator เลย.
+  const runningReminderSpans = useMemo(() => {
+    const dayStart = new Date(nowTick);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
+    const pixelsPerMinute = ROW_HEIGHT_PX / minutesPerRow;
+
+    return reminders.flatMap((reminder) => {
+      if (!reminder.enabled || !reminder.startedAt) return [];
+      const isCountdown = reminder.type === REMINDER_TYPE.COUNTDOWN;
+      const isStopwatch = reminder.type === REMINDER_TYPE.STOPWATCH;
+      if (!isCountdown && !isStopwatch) return [];
+
+      const actualEndMs = isCountdown
+        ? reminder.startedAt + (reminder.durationMs || 0)
+        : nowTick;
+      if (actualEndMs <= reminder.startedAt || actualEndMs <= dayStartMs || reminder.startedAt >= dayEndMs) return [];
+
+      // Timer ต้องหดเข้าหาเวลาจบ: จุดเริ่มของแถบจึงตาม nowTick เสมอ
+      // ขณะที่ Stopwatch ยืดจากจุดเริ่มมาหา nowTick.
+      const startMs = Math.max(
+        isCountdown ? nowTick : reminder.startedAt,
+        dayStartMs
+      );
+      const endMs = Math.min(actualEndMs, dayEndMs);
+      if (endMs <= startMs) return [];
+      return [{
+        id: reminder.id,
+        title: reminder.title,
+        type: reminder.type,
+        top: SPACER_HEIGHT_PX + ((startMs - dayStartMs) / 60000) * pixelsPerMinute,
+        height: Math.max(4, ((endMs - startMs) / 60000) * pixelsPerMinute),
+        color: reminder.lineColor || DEFAULT_LINE_COLOR
+      }];
+    });
+  }, [reminders, nowTick, minutesPerRow, SPACER_HEIGHT_PX]);
+
+  // ข้อความบน now-indicator สงวนไว้ให้สถานะของ Activity เท่านั้น:
   // ถ้ามีกิจกรรมกำลังทำให้ความสำคัญกับเวลาที่เหลือก่อนจบ; ถ้าไม่มีจึงแสดง
   // เวลาที่เหลือก่อนถึงกิจกรรมถัดไป.
   const activityNowStatus = useMemo(() => {
@@ -3189,6 +3229,17 @@ export default function ReminderDashboard({
                 </div>
 
                 <TimelineRows tapeRows={tapeRows} nowTick={nowTick} onEditReminder={startEdit} />
+
+                <div className="running-reminder-layer" aria-label="Timer และ Stopwatch ที่กำลังทำงาน">
+                  {runningReminderSpans.map((span) => (
+                    <div
+                      key={span.id}
+                      className={`running-reminder-span is-${span.type}`}
+                      style={{ top: `${span.top}px`, height: `${span.height}px`, "--running-reminder-color": span.color }}
+                      title={`${span.type === REMINDER_TYPE.COUNTDOWN ? "Timer" : "Stopwatch"}: ${span.title}`}
+                    />
+                  ))}
+                </div>
 
                 <div className="calendar-timeline-layer" aria-label="กิจกรรมในปฏิทินของวันนี้">
                   {calendarTimelineBlocks.map((block) => (

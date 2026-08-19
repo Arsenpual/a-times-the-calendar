@@ -1,11 +1,11 @@
 # `reminder-mode.jsx` — เจาะลึก
 
 **Path:** `frontend/src/components/reminder-mode.jsx`
-**ขนาด:** ~2,970 บรรทัด (เกือบทั้งหมดอยู่ในไฟล์เดียว รวม CSS แบบ inline `<style>`)
+**ขนาด:** ~3,225 บรรทัด (เกือบทั้งหมดอยู่ในไฟล์เดียว รวม CSS แบบ inline `<style>`)
 **Component export:** `ReminderDashboard` (default export — แต่ import เข้า `app.jsx` ในชื่อ `ReminderMode`)
-**สถานะ:** ผ่าน migration plan v2 เฟส 1-4 ครบสมบูรณ์ (layout ใหม่ 3 คอลัมน์, filter, groups, completed status) + เฟส 5 (push notification) วางโครงไว้แล้ว ทดสอบ logic ผ่าน mock ครบ — **ยังไม่เคย deploy Cloud Function จริง** (ดูหัวข้อ 11)
+**สถานะ:** เฟส 1-4 เสร็จแล้ว (layout, filter, groups, completed), เฟส 5 มี client/backend/Cloud Function scaffold แต่ยังต้อง deploy และตั้งค่า Firebase/Blaze เพื่อให้ push ทำงานจริง, เฟส 6 มี omnibar แบบ rule-based, และเฟส 7 มีหน้าสถิติจากข้อมูล local event แล้ว
 
-> 📄 เอกสารนี้เป็นเวอร์ชันอัปเดตหลังเฟส 1-5 — ถ้าเจอ class name หรือโครงสร้างที่ไม่ตรงกับโค้ดจริง ให้ยึดโค้ดจริงเป็นหลัก เอกสารนี้อาจตามหลังได้ถ้ามีการแก้ไขเพิ่มเติมหลังจากเขียนฉบับนี้
+> 📄 เอกสารนี้อัปเดตตามโค้ด ณ วันที่ 19 สิงหาคม 2026 — หากมีความต่าง ให้ยึดโค้ดจริงเป็นหลัก
 
 ---
 
@@ -13,13 +13,13 @@
 
 โหมดที่สองของแอป (สลับกับโหมด "activity"/ปฏิทินหลัก ผ่าน `mode` state ใน `use-week-navigation.js`) — เป็น**แดชบอร์ดแจ้งเตือนแบบ standalone** ("ReminderOS") ที่มี:
 
-1. **Top bar** — โลโก้, ช่อง omnibar (placeholder รอเฟส 6), ปุ่มกระดิ่งเปิด/ปิด push notification (เฟส 5), ปุ่มสถิติ (placeholder รอเฟส 7)
+1. **Top bar** — โลโก้, omnibar สร้าง reminder แบบ rule-based, ปุ่มกระดิ่งเปิด/ปิด push notification และปุ่มเปิดสถิติ
 2. **Left nav (คอลัมน์ซ้าย)** — มุมมองหลัก, กลุ่ม/โปรเจกต์ (เฟส 3), ตัวกรองตามประเภท (เฟส 2)
 3. **Main panel (คอลัมน์กลาง)** — toolbar, composer, tabs 3 อัน (กำลังทำงาน/ปิดใช้งาน/ทำเสร็จแล้ว — เฟส 4), รายการการ์ด reminder
-4. **Timeline panel (คอลัมน์ขวา)** — 24 ชั่วโมงแนวตั้ง เลื่อนไหลตามเวลาจริงแบบต่อเนื่อง
-5. **Due Alert Banner** ด้านบนสุด — โผล่มาเมื่อมี reminder ถึงกำหนด พร้อม snooze dropdown + ปุ่มทำเสร็จแล้ว
+4. **Timeline panel (คอลัมน์ขวา)** — 24 ชั่วโมงแนวตั้ง, แสดง reminder และ Activity จากปฏิทินชุดเดียวกับ Activity Mode, เลื่อนไหลตามเวลาจริงแบบต่อเนื่อง
+5. **Due Alert Banner** ด้านบนสุด — โผล่มาเมื่อมี reminder ถึงกำหนด พร้อม snooze dropdown + ปุ่มสีเขียว “ทำเสร็จแล้ว”
 
-ข้อมูล reminder ทั้งก้อน (รวม runtime state) เก็บใน **`localStorage`** เป็น source of truth หลัก — Firebase backend (ผ่าน `use-reminders-sync.js`) เป็นแค่ **mirror ของ schedule fields เท่านั้น** กลุ่ม/โปรเจกต์ (เฟส 3) เป็นข้อยกเว้น — sync ทันทีขึ้น backend เสมอ ไม่มี local-first layer
+ข้อมูล reminder ทั้งก้อน (รวม runtime state) เก็บใน **`localStorage`** เป็น source of truth หลัก — Firebase backend (ผ่าน `use-reminders-sync.js`) mirror เฉพาะ schedule fields; `nextDueAt` เป็นข้อยกเว้นที่ mirror เพื่อให้ Cloud Function ใช้ได้เมื่อปิดแท็บ ส่วนกลุ่ม/โปรเจกต์ sync ทันทีขึ้น backend ไม่มี local-first layer
 
 ---
 
@@ -30,19 +30,19 @@
 | Type | ความหมาย | ฟิลด์เฉพาะ | มี "ครบกำหนด" ไหม |
 |---|---|---|---|
 | `interval` | วนซ้ำทุก N นาที/ชั่วโมง | `amount`, `unit`, `windowStart`/`windowEnd` (optional) | ✅ |
-| `weekly` | เกิดซ้ำตามวันในสัปดาห์ที่เลือก | `days[]` (0-6), `time` ("HH:mm") | ✅ |
+| `weekly` | เกิดซ้ำตามวันในสัปดาห์ที่เลือก | `days[]` (0-6), `times[]` ("HH:mm", 1–12 เวลา), `time` legacy fallback | ✅ |
 | `event-anchored` | นับถอยจาก "เหตุการณ์" ที่ผู้ใช้กดเริ่มเอง | `eventName`, `afterAmount`, `afterUnit`, `lastTriggeredAt` | ✅ (หลังกดเริ่มเหตุการณ์) |
 | `routine` | ชุดขั้นตอนต่อเนื่อง (checklist) | `steps[]`, `currentIndex` | ❌ (ไม่มีเวลาตายตัว) |
 | `once-at` | เตือนครั้งเดียวตามวันที่/เวลาที่ระบุ | `atMs` | ✅ ครั้งเดียว |
 | `countdown` | นับถอยหลัง (Timer) | `startedAt`, `durationMs`, `lineColor` | ✅ |
 | `stopwatch` | จับเวลานับขึ้น ไม่มีการแจ้งเตือน | `accumulatedMs`, `startedAt`, `lineColor` | ❌ |
 
-**ฟิลด์ร่วมทุกประเภท:** `id`, `title`, `type`, `enabled`, `groupId` (เฟส 3), `completedAt` (เฟส 4), `nextDueAt`
+**ฟิลด์ร่วมทุกประเภท:** `id`, `title`, `type`, `enabled`, `groupId`, `completedAt`, `nextDueAt`; `activityId` เป็น schedule field ที่สำรองไว้สำหรับการเชื่อม Activity แบบ one-to-one
 
 ### ฟิลด์ Schedule vs Runtime
 
-- **Schedule fields** (17 ตัว, กำหนดใน `SCHEDULE_FIELD_KEYS`): `type, title, enabled, amount, unit, windowStart, windowEnd, days, time, atMs, afterAmount, afterUnit, durationMs, lineColor, eventName, steps, groupId` — sync ขึ้น Firebase ผ่าน `syncScheduleFields()`, ต้องตรงกับ `ALLOWED_FIELDS` ใน backend `routes/reminders.js` เป๊ะๆ (`groupId` เพิ่มเข้ามาเฟส 3 — ต้อง default เป็น `null` อย่างชัดเจนเสมอ ไม่ใช่ `undefined` มิฉะนั้นการ "เอา reminder ออกจากกลุ่ม" จะไม่ sync)
-- **Runtime fields** (ไม่ sync เลย): `startedAt`, `accumulatedMs`, `currentIndex`, `lastTriggeredAt`, `nextDueAt`, `completedAt` (เฟส 4) — อยู่ localStorage อย่างเดียว
+- **Schedule fields** (19 ตัว, กำหนดใน `SCHEDULE_FIELD_KEYS`): `type, title, enabled, amount, unit, windowStart, windowEnd, days, time, times, atMs, afterAmount, afterUnit, durationMs, lineColor, eventName, steps, groupId, activityId, nextDueAt` — sync ขึ้น Firebase ผ่าน `syncScheduleFields()` และต้องตรงกับ `ALLOWED_FIELDS` ใน backend `routes/reminders.js` เป๊ะๆ; `groupId` ต้องส่ง `null` อย่างชัดเจนเมื่อเอาออกจากกลุ่ม และ `nextDueAt` ที่เป็น `Infinity` ถูกแปลงเป็น `null` ก่อนส่ง
+- **Runtime fields** (ไม่ sync): `startedAt`, `accumulatedMs`, `currentIndex`, `lastTriggeredAt`, `completedAt` — อยู่ localStorage อย่างเดียว
 
 ### Groups/Projects (เฟส 3) — one-to-one
 
@@ -63,7 +63,7 @@
 
 ### `computeNextDueAt(reminder, from)` (import จาก `../reminder-due-logic.js`)
 - **`interval`**: `from + intervalMs` → snap เข้า window ถ้ามี
-- **`weekly`**: loop 8 วัน หาวันแรกที่ตรงกับ `days[]`
+- **`weekly`**: loop 8 วัน แล้วตรวจทุกค่าใน `times[]` (เรียงเวลา) ของวันที่ตรงกับ `days[]`; fallback ไป `time` สำหรับข้อมูลเก่า
 - **`event-anchored`**: `Infinity` ถ้ายังไม่เคย trigger, `lastTriggeredAt + afterAmount` ถ้าเคยแล้ว
 - **`routine`**: คืน `from` ตรงๆ
 - **`once-at`**: คืน `atMs`
@@ -111,11 +111,16 @@ const checkDue = () => {
 
 ---
 
-## 5. Auto-Scroll Engine: Timeline ที่ "ไหล" ตามเวลาจริง
+## 5. Timeline 24 ชั่วโมง: Auto-scroll, Activity และรายการซ้อนกัน
 
-Logic ไม่เปลี่ยนแปลงจากเดิมเลย — แค่ `<aside className="timeline-panel">` **ย้ายจากคอลัมน์ซ้ายไปขวาสุด** (layout 3 คอลัมน์ เฟส 1.1)
+`<aside className="timeline-panel">` อยู่คอลัมน์ขวาสุด และใช้ข้อมูลเวลาเดียวกันทั้งสองโหมด
 
-**หลักการ:** `requestAnimationFrame` loop + drift correction (ดึงกลับ 10% ถ้าคลาดเกิน 5px) + user interaction override (หยุด 3 วินาที) + spacer 240px กันขอบ + `React.memo` บน `TimelineRows` — **Zoom**: `ZOOM_LEVELS_MINUTES = [60, 15, 5, 1]` เริ่มที่ 15
+**หลักการ auto-scroll:** `requestAnimationFrame` loop + drift correction (ดึงกลับ 10% ถ้าคลาดเกิน 5px) + user interaction override (หยุด 3 วินาที) + spacer 240px กันขอบ + `React.memo` บน `TimelineRows` — **Zoom**: `ZOOM_LEVELS_MINUTES = [60, 15, 5, 1]` เริ่มที่ 15
+
+- **Activity overlay:** รับ `activities`, `categories`, `activityCategoryMap` จาก `app.jsx` แล้ววาด Activity ที่ทับกับวันนี้บน track เดียวกัน; คลิก Activity เพื่อเปิดตัวแก้ไข Activity
+- **now-indicator:** เมื่อกำลังอยู่ใน Activity จะทำ Activity นั้นจางลง แล้วแสดงชื่อสีเดียวกับ Activity พร้อม “จะจบใน …”; ถ้ายังไม่ถึง Activity ถัดไป แสดง “จะถึงใน …” แทน โดยไม่มีแถบ countdown/stopwatch สีอัตโนมัติ
+- **Reminder chip:** คลิกซ้ายบน chip เพื่อเปิด popup แก้ไข reminder โดยตรง
+- **กรณี reminder ซ้อนเวลาเดียวกัน:** track ขยายความกว้างตามจำนวน chip และ container มี horizontal scrollbar เดียวเพื่อเลื่อนดูทุก chip; ไม่ซ่อน overflow ภายในแถวอีกต่อไป
 
 ---
 
@@ -140,11 +145,13 @@ Logic ไม่เปลี่ยนแปลงจากเดิมเลย �
 
 ## 7. Composer (ฟอร์มสร้าง/แก้ไข)
 
-- **Inline expand/collapse** — พับเก็บเป็นค่าเริ่มต้น
+- **Modal popup** — เปิดบน backdrop เพื่อไม่ให้ฟอร์มดันหรือบัง layout ของรายการ; คลิกพื้นหลังหรือ “ยกเลิก” เพื่อปิด
 - Field เปลี่ยนไปตาม `draft.type`
+- **Weekly Days:** เพิ่มเวลาได้หลายค่าในวันเดียวกัน (`times[]`) และลบแต่ละเวลาได้ โดยอย่างน้อยต้องเหลือ 1 เวลา
 - **Dropdown เลือกกลุ่ม** (เฟส 3) — แสดงเฉพาะเมื่อมีกลุ่มอย่างน้อย 1 กลุ่มแล้ว
 - Validation เฉพาะตอนสร้างใหม่: `once-at` ต้องเป็นอนาคต — ไม่ตรวจตอนแก้ไข
 - `stopwatch`/`completedAt`: คงค่าเดิมไว้ตอนแก้ไข ไม่รีเซ็ต
+- ขณะแก้ไข มีปุ่ม **ลบ Reminder** พร้อมกล่องยืนยันก่อนลบ; การลบเรียกทั้ง local state และ `deleteRemoteReminder()`
 
 ---
 
@@ -152,7 +159,7 @@ Logic ไม่เปลี่ยนแปลงจากเดิมเลย �
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ Top bar: โลโก้ / omnibar (placeholder) / 🔔 push / 📊 (placeholder) │
+│ Top bar: โลโก้ / omnibar / 🔔 push / 📊 สถิติ                      │
 ├──────────────┬──────────────────────────────┬────────────────────┤
 │ 🔔 Due Alert Banner (snooze dropdown + ทำเสร็จแล้ว)                  │
 ├──────────────┼──────────────────────────────┼────────────────────┤
@@ -160,8 +167,8 @@ Logic ไม่เปลี่ยนแปลงจากเดิมเลย �
 │ 260px        │  Tabs: กำลังทำงาน/ปิดใช้งาน/   │  320px             │
 │              │        ทำเสร็จแล้ว             │  (ย้ายมาขวา เฟส 1) │
 │ มุมมองหลัก    │                                │                    │
-│ กลุ่ม/โปรเจกต์ │  [Composer — ถ้าเปิดอยู่]        │  now-indicator +   │
-│ (เฟส 3)       │                                │  running-timer     │
+│ กลุ่ม/โปรเจกต์ │  [Composer popup — ถ้าเปิดอยู่]  │  now-indicator +   │
+│ (เฟส 3)       │                                │  Activity status   │
 │              │  [reminder card] × N           │                    │
 │ ตัวกรองประเภท  │  (icon สี่เหลี่ยม + border-left │                    │
 │ (เฟส 2)       │   สีตามประเภท + group chip     │                    │
@@ -173,18 +180,20 @@ Logic ไม่เปลี่ยนแปลงจากเดิมเลย �
 
 **Filter** (เฟส 2+3): `activeTypeFilter` + `activeGroupFilter` รวมกันแบบ AND — filter chip โชว์บน toolbar พร้อมปุ่ม ✕ ล้างแยกแต่ละตัว, tab count ปรับตาม filter ที่เปิดอยู่, toolbar-subtitle ยังคงยอดรวมทั้งหมดเสมอ
 
-**CSS namespace**: ยังใช้ `--g-*` custom properties แยกจาก `--bg`/`--text-primary` ของแอปหลัก — dark mode ทำงานถูกต้องโดยไม่ต้องเพิ่ม override
+**CSS namespace:** ยังใช้ `--g-*` custom properties ใน inline style ร่วมกับ Material overrides ที่ `frontend/src/styles/reminder-material.css`; dark mode ทำงานผ่านตัวแปรชุดนี้ และ scrollbar ของคอลัมน์/Timeline ถูกทำให้เล็กลง
+
+**Announcement ticker:** `app.jsx` render `AnnouncementTicker` เหนือเนื้อหาทั้ง Activity/Reminder Mode เมื่อ login แล้ว ข้อความวิ่งขวา→ซ้ายรอบเดียว, ถูกกลืนค่อย ๆ ที่ขอบซ้ายจนตัวสุดท้ายออกจากพื้นที่ แล้วซ่อน 5 นาทีก่อนเริ่มรอบใหม่
 
 ---
 
 ## 9. Push Notifications (เฟส 5)
 
-⚠️ **สถานะ: วางโครงไว้แล้ว โค้ด+backend ทดสอบผ่าน mock ครบ — Cloud Function ยัง deploy จริงไม่ได้**
+⚠️ **สถานะ: โครง client/backend/Cloud Function มีแล้ว แต่ push จริงยังไม่ complete จนกว่าจะ deploy Cloud Function และตั้งค่า Firebase ที่จำเป็น**
 
 - ปุ่มกระดิ่ง 🔔/🔕 ใน topbar — ไม่ auto-request permission ตอน mount
 - `permission` state: `"unsupported"` | `"default"` | `"granted"` | `"denied"`
 - กด "เปิด" → `Notification.requestPermission()` → ถ้า granted → `getToken()` จาก Firebase Messaging SDK (ต้องมี `VITE_FIREBASE_VAPID_KEY`) → ส่ง token ไป backend (`registerFcmToken`)
-- Service worker scaffold: `frontend/public/firebase-messaging-sw.js` — ยังมี `"TODO_ใส่ค่าจริงตอน_deploy"` ทุกฟิลด์
+- Service worker: `frontend/public/firebase-messaging-sw.js` ต้องมีค่า Firebase config จริงก่อน deploy
 - Backend: `routes/fcm-tokens.js` + `fcmTokensCol` — ใช้ token เองเป็น doc id (upsert อัตโนมัติ) — ทดสอบผ่าน functional test 12/12 เคส
 - Cloud Function: `functions/index.js`'s `checkDueReminders` — scheduled ทุก 1 นาที, ส่ง FCM push, อัปเดต `nextDueAt`/`lastNotifiedAt` — ทดสอบ business logic ผ่าน mock 14/14 เคส
 
@@ -201,10 +210,12 @@ Logic ไม่เปลี่ยนแปลงจากเดิมเลย �
 ## 11. จุดที่ควรระวังเวลาแก้ไขต่อ
 
 1. **ชื่อไฟล์ใกล้เคียงกันมาก**: `activity-modal.jsx` vs `activity-mode.jsx` vs `reminder-mode.jsx`
-2. **SCHEDULE_FIELD_KEYS ต้องตรงกับ backend เป๊ะๆ**: ตอนนี้มี 17 ฟิลด์ (เพิ่ม `groupId` เฟส 3) — ต้องแก้ `ALLOWED_FIELDS` ใน `backend/routes/reminders.js` คู่กันเสมอ
-3. **ไม่มี push notification ตอนปิดแท็บ**: จนกว่าจะ deploy Cloud Function จริง — due-banner ในหน้ายังทำงานปกติตอนเปิดแท็บอยู่
+2. **SCHEDULE_FIELD_KEYS ต้องตรงกับ backend เป๊ะๆ**: ตอนนี้มี 19 ฟิลด์ (รวม `times`, `activityId`, `nextDueAt`) — ต้องแก้ `ALLOWED_FIELDS` ใน `backend/routes/reminders.js` คู่กันเสมอ
+3. **ไม่มี push notification ตอนปิดแท็บจนกว่าจะ deploy Cloud Function จริง**: due-banner ในหน้ายังทำงานปกติตอนเปิดแท็บอยู่
 4. **localStorage เป็น single point of failure ของ runtime state**: ล้าง cache → หาย stopwatch/routine progress/event trigger/`completedAt` ทั้งหมด
 5. **`routine` type ไม่มี auto-repeat**: ทำครบ step แล้ว `enabled: false` + `completedAt` (เฟส 4) ต้องเปิดสวิตช์เองใหม่
 6. **⚠️ ใหม่ (เฟส 5): มีสองที่ที่ต้องคำนวณ due-logic ตรงกัน** — `frontend/src/reminder-due-logic.js` (ESM, ต้นฉบับ) กับ `functions/reminder-due-logic.js` (CommonJS, สำเนา) — แก้ไฟล์หนึ่ง **ต้องแก้อีกไฟล์ตามทันที** มิฉะนั้น client กับ server จะเห็นเวลา "ถึงกำหนด" ไม่ตรงกัน
 7. **Renotify guard policy ยังไม่ได้ทบทวนกับทีม**: `lastNotifiedAt` field ใหม่ในเฟส 5 เลือกนโยบาย "แจ้งครั้งเดียวต่อรอบ" เอง — ควรคุยก่อน deploy จริง (ทางเลือกอื่น: renotify ซ้ำทุก N นาที, escalate หลัง M ครั้ง) — รายละเอียดใน `functions/README.md`
 8. **Groups เป็น one-to-one เท่านั้น**: reminder ผูกได้ทีละ 1 กลุ่ม ไม่รองรับหลายกลุ่มพร้อมกัน
+9. **Weekly data เก่า:** ต้องรองรับทั้ง `time` เดิมและ `times[]` ใหม่ในทุกจุดที่คำนวณ due/วาด timeline; backend จำกัด `times[]` ไม่เกิน 12 ค่าและห้ามซ้ำ
+10. **Timeline ซ้อนกัน:** ความกว้างขั้นต่ำของ track คำนวณจากจำนวน reminder ใน slot เดียวกัน; หากเปลี่ยนขนาด chip หรือพื้นที่ label ให้ปรับสูตร `timelineTrackMinWidth` ควบคู่กัน
