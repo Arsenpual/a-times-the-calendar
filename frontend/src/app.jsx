@@ -200,7 +200,7 @@ export default function App() {
 
 
   return (
-    <div className="app">
+    <div className={`app app--${mode}`}>
       {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
@@ -580,7 +580,7 @@ export default function App() {
             )}
 
             {firebaseUser && calendarAccessToken && (
-              <div className="dashboard">
+              <div className="dashboard activity-dashboard">
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">

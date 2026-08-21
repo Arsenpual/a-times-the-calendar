@@ -224,6 +224,11 @@ function formatDurationClock(totalSeconds) {
   return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
+function formatDigitalClock(timestamp) {
+  const date = new Date(timestamp);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+}
+
 // minuteOfDayAt/minutesFromHHMM/isMinuteWithinWindow/snapToNextWindowStart/
 // computeNextDueAt ทั้งหมดย้ายไป ../reminder-due-logic.js แล้ว (migration
 // plan v2 เฟส 5, import ไว้ด้านบนของไฟล์) — เป็น prerequisite ของ FCM
@@ -1921,6 +1926,26 @@ export default function ReminderDashboard({
           background: var(--timeline-now-color);
         }
 
+        .now-indicator-clock {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          padding: 3px 6px;
+          border-radius: 4px;
+          background: var(--g-surface);
+          border: 1px solid color-mix(in srgb, var(--timeline-now-color) 48%, var(--g-outline-variant));
+          color: var(--timeline-now-color);
+          font-family: 'Roboto Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          letter-spacing: .02em;
+          font-variant-numeric: tabular-nums;
+          box-shadow: 0 1px 3px rgba(60, 64, 67, .18);
+          white-space: nowrap;
+        }
+
         .timeline-activity-status {
           position: absolute;
           left: 50%;
@@ -3209,7 +3234,9 @@ export default function ReminderDashboard({
                   <strong>{activityNowStatus.text}</strong>
               </div>
             )}
-            <div className="now-indicator" />
+            <div className="now-indicator" aria-label={`เวลาปัจจุบัน ${formatDigitalClock(nowTick)}`}>
+              <span className="now-indicator-clock">{formatDigitalClock(nowTick)}</span>
+            </div>
 
             <div
               className="tape-scroll-container"
