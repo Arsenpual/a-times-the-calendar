@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { activityDate, formatTime, isSameDay } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { getIncomingSpillover } from "../timeline-layout.js";
@@ -29,11 +29,34 @@ export default function MiniTimelinePanel({
   activityCategoryMap,
   expandedDate,
   onClose,
-  onEditActivity
+  onEditActivity,
+  userId
 }) {
+  const archiveStorageKey = `times-activity-archive:${userId || "guest"}`;
+  const readArchivedIds = () => {
+    try {
+      const archive = JSON.parse(window.localStorage.getItem(archiveStorageKey) || "[]");
+      return new Set(Array.isArray(archive) ? archive.map((item) => item.calendarId).filter(Boolean) : []);
+    } catch {
+      return new Set();
+    }
+  };
+  const [archivedIds, setArchivedIds] = useState(readArchivedIds);
+
+  useEffect(() => {
+    setArchivedIds(readArchivedIds());
+    const handleArchiveChange = (event) => {
+      if (event.detail?.userId === userId) setArchivedIds(readArchivedIds());
+    };
+    window.addEventListener("times-activity-archive-changed", handleArchiveChange);
+    return () => window.removeEventListener("times-activity-archive-changed", handleArchiveChange);
+  }, [archiveStorageKey, userId]);
+
   if (!expandedDate) return null;
 
-  const timedActivities = activities
+  const visibleActivities = activities.filter((activity) => !archivedIds.has(activity.id));
+
+  const timedActivities = visibleActivities
     .filter((activity) => {
       const start = activityDate(activity.start);
       return start && isSameDay(start, expandedDate);
@@ -44,7 +67,7 @@ export default function MiniTimelinePanel({
   // shown as a single dimmed entry at the top of the list, separate from
   // timedActivities (which stays keyed strictly off each activity's own
   // start date, so this never inflates the day's own activity count).
-  const incomingSpillover = activities
+  const incomingSpillover = visibleActivities
     .filter((activity) => activity.start?.dateTime)
     .map((activity) => {
       const start = activityDate(activity.start);

@@ -49,6 +49,7 @@ export function useActivityMutations({
   calendarAccessToken,
   setCalendarAccessToken,
   activities,
+  setActivities,
   activityCategoryMap,
   setActivityCategoryMap,
   activityTagMap,
@@ -348,6 +349,9 @@ export function useActivityMutations({
       clearTokenIfExpired(e);
       throw e;
     }
+    // Optimistic removal prevents a deleted block lingering while Calendar's
+    // subsequent list request is in flight (or briefly eventually-consistent).
+    setActivities((previous) => previous.filter((activity) => normalizeActivityId(activity.id) !== normalizedId));
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       delete next[normalizedId];
@@ -406,6 +410,7 @@ export function useActivityMutations({
       clearTokenIfExpired(e);
       throw e;
     }
+    setActivities((previous) => previous.filter((activity) => activity.recurringEventId !== recurringEventId && activity.id !== recurringEventId));
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       for (const id of normalizedSeriesIds) delete next[id];

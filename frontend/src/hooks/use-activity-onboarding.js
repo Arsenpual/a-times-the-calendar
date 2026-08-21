@@ -37,7 +37,7 @@ function buildSamples(weekStart) {
  * Calendar: a new account may have granted read access but not write access,
  * and onboarding must still explain the timeline without a permission error.
  */
-export function useActivityOnboarding({ mode, firebaseUser, categories, cursorDate }) {
+export function useActivityOnboarding({ mode, firebaseUser, categories, cursorDate, activities = [] }) {
   const [samples, setSamples] = useState([]);
 
   useEffect(() => {
@@ -63,6 +63,26 @@ export function useActivityOnboarding({ mode, firebaseUser, categories, cursorDa
       ? record.samples
       : buildSamples(getWeekRange(cursorDate)[0]);
 
+    // A record written by the earlier network-based onboarding already
+    // represents an attempted real Calendar seed. Do not layer local samples
+    // over it and make those old/deleted entries appear to survive deletion.
+    const shouldDismiss = Boolean(record?.dismissedAt || record?.createdIds || record?.categorizedIds || activities.length > 0);
+    if (shouldDismiss) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify({
+          version: ONBOARDING_VERSION,
+          createdAt: record?.createdAt || new Date().toISOString(),
+          samples: nextSamples,
+          completedAt: record?.completedAt || new Date().toISOString(),
+          dismissedAt: record?.dismissedAt || new Date().toISOString()
+        }));
+      } catch {
+        // No persistence available; still avoid mixing tutorial data with real data this session.
+      }
+      setSamples([]);
+      return;
+    }
+
     try {
       window.localStorage.setItem(key, JSON.stringify({
         version: ONBOARDING_VERSION,
@@ -74,7 +94,7 @@ export function useActivityOnboarding({ mode, firebaseUser, categories, cursorDa
       // Keep rendering the examples for this session even if storage is off.
     }
     setSamples(nextSamples);
-  }, [mode, firebaseUser?.uid, firebaseUser?.metadata?.creationTime, categories, cursorDate]);
+  }, [mode, firebaseUser?.uid, firebaseUser?.metadata?.creationTime, categories, cursorDate, activities]);
 
   const onboardingActivities = useMemo(() => samples.map((sample, index) => ({
     id: `local-onboarding-${firebaseUser?.uid || "guest"}-${index}`,

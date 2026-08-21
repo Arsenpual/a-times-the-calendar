@@ -111,6 +111,7 @@ export default function ActivityModeWeekSpine({
     if (!archiveHydrated) return;
     try {
       window.localStorage.setItem(archiveStorageKey, JSON.stringify(activityArchive));
+      window.dispatchEvent(new CustomEvent("times-activity-archive-changed", { detail: { userId } }));
     } catch {
       // Storage may be unavailable; keep the in-memory archive usable.
     }

@@ -147,6 +147,7 @@ function MainApp() {
   const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError });
   const {
     activities,
+    setActivities,
     loading,
     categories,
     setCategories,
@@ -197,6 +198,7 @@ function MainApp() {
     calendarAccessToken,
     setCalendarAccessToken,
     activities,
+    setActivities,
     activityCategoryMap,
     setActivityCategoryMap,
     activityTagMap,
@@ -227,7 +229,8 @@ function MainApp() {
     mode,
     firebaseUser,
     categories,
-    cursorDate
+    cursorDate,
+    activities
   });
 
   // handleLogout composes both hooks' own cleanup — useAuth only knows
@@ -701,6 +704,7 @@ function MainApp() {
                         activities={activities}
                         categories={categories}
                         activityCategoryMap={activityCategoryMap}
+                        userId={firebaseUser.uid}
                         expandedDate={expandedDate}
                         onClose={closeDay}
                         onEditActivity={openEditActivity}
