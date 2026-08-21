@@ -257,6 +257,7 @@ export function useActivityMutations({
 
     await loadActivities();
     refreshTagSearchIfActive();
+    return savedActivity;
   };
 
   /**

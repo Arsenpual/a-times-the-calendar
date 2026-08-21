@@ -1,17 +1,21 @@
 const STORAGE_KEY = "times-reminder-stats-v1";
 const MAX_EVENTS = 500;
 
-export function loadReminderStats() {
+function storageKey(userId) {
+  return `${STORAGE_KEY}:${userId || "guest"}`;
+}
+
+export function loadReminderStats(userId) {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const saved = JSON.parse(localStorage.getItem(storageKey(userId)) || "[]");
     return Array.isArray(saved) ? saved : [];
   } catch {
     return [];
   }
 }
 
-export function saveReminderStats(events) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-MAX_EVENTS)));
+export function saveReminderStats(events, userId) {
+  localStorage.setItem(storageKey(userId), JSON.stringify(events.slice(-MAX_EVENTS)));
 }
 
 export function appendReminderStat(events, type, payload = {}) {

@@ -1,60 +1,54 @@
-# `activity-mode.jsx` — เจาะลึก
+# Activity Mode — เจาะลึก
 
-**หน้าหลัก:** `frontend/src/components/activity-mode.jsx`  
-**Component:** `ActivityMode`  
-**หน้าที่:** มุมมองปฏิทินรายสัปดาห์สำหรับจัด “กิจกรรมหลัก” ที่มีช่วงเวลาแน่นอน โดยข้อมูลกิจกรรมจริงอยู่ใน Google Calendar
+**หน้าจอหลัก:** `frontend/src/components/activity-mode-week-spine.jsx`  
+**จุดประกอบระบบ:** `frontend/src/app.jsx`  
+**แหล่งข้อมูลกิจกรรม:** Google Calendar  
+**อัปเดตตามโค้ด:** 21 สิงหาคม 2026
 
-> เอกสารนี้อธิบายตามโค้ดปัจจุบัน ณ วันที่ 19 สิงหาคม 2026 หากเอกสารต่างจากโค้ด ให้ยึดโค้ดเป็นหลัก
+> เอกสารนี้อธิบาย Activity Mode รุ่น Week Spine ปัจจุบัน ไม่ใช่ Agenda รุ่นเดิม หากเอกสารต่างจากโค้ด ให้ยึดโค้ดจริงเป็นหลัก
 
 ---
 
-## 1. ภาพรวมและขอบเขต
+## 1. ภาพรวม
 
-Activity Mode คือโหมดปฏิทินหลักของ T.i.M.E.S. ใช้สำหรับวางแผนกิจกรรมที่มีเวลาเริ่ม–สิ้นสุดชัดเจน เช่น ประชุม, อ่านหนังสือ, ออกกำลังกาย หรือช่วงทำงานลึก
-
-แอปแยกหน้าที่กับ Reminder Mode ชัดเจน:
+Activity Mode คือปฏิทินหลักของ T.i.M.E.S. สำหรับ **กิจกรรมหลักที่มีช่วงเวลาแน่นอน** เช่น ประชุม, เรียน, เดินทาง หรือ deep work ข้อมูลกิจกรรมจริงเป็น Google Calendar event จึงสร้าง แก้ ย้าย หรือลบได้จากแอปและ sync กลับ Calendar โดยตรง
 
 | เรื่อง | Activity Mode | Reminder Mode |
 |---|---|---|
-| หน่วยข้อมูลหลัก | Google Calendar event | reminder ใน localStorage/Firebase mirror |
-| เหมาะกับ | งานหลักที่ครองช่วงเวลา | งานย่อย, รอบเตือน, routine, timer |
-| เวลาเหลื่อมกัน | ลากผ่านได้ชั่วคราว แต่ **ห้ามบันทึก** หากทับกัน | รองรับ reminder หลายรายการเวลาเดียวกัน |
-| การแสดงผล | Agenda รายสัปดาห์ + timeline editor | Dashboard + timeline 24 ชั่วโมง |
+| หน่วยข้อมูล | Google Calendar event | reminder ใน localStorage/Firebase mirror |
+| เหมาะกับ | เวลาเป็นช่วงใหญ่บนปฏิทิน | งานย่อย, interval, routine, timer |
+| UI หลัก | Week Spine 7 วัน, 00:00–24:00 | Dashboard + reminder timeline |
+| เวลา overlap | แสดง/ลากทับชั่วคราวได้ แต่ save ปกติไม่ได้ | รองรับหลาย reminder เวลาเดียวกัน |
 
-Activity Mode ไม่ทำสำเนา event ไปเก็บใน reminder store การเชื่อมที่มีอยู่คือ Reminder Mode รับ `activities` ชุดเดียวกันมาแสดงเป็น Activity overlay บน timeline เท่านั้น
+Reminder Mode รับ Activity ชุดเดียวกันไปแสดงบน timeline ของตนเอง แต่ Activity Mode ไม่เป็น owner ของ reminder runtime state
 
 ---
 
-## 2. แผนผังองค์ประกอบ
+## 2. โครงสร้างระบบ
 
 ```text
 app.jsx
-├─ useWeekNavigation        → mode, cursorDate, expandedDate, keyboard navigation
-├─ useCalendarData          → อ่าน Calendar + category/tag/lock/summary
-├─ useActivityModal         → เปิด/ปิด ActivityModal
-├─ useActivityMutations     → เขียน Google Calendar + backend metadata
-└─ Activity Mode (เมื่อ mode === "activity")
-   ├─ WeeklySummaryPanel
-   ├─ MiniTimelinePanel (แทน summary เมื่อเลือกวัน)
-   └─ ActivityMode
-      ├─ agenda row × 7 วัน
-      ├─ ปุ่มเปิด mini timeline
-      ├─ ปุ่มเพิ่มกิจกรรม
-      └─ TimelineEditor (เฉพาะแถวที่กด ⚙)
+├─ useAuth                  Firebase user + Google token
+├─ useWeekNavigation        mode, cursorDate, keyboard navigation
+├─ useCalendarData          activities + metadata + summary
+├─ useActivityModal         lifecycle ของ modal
+├─ useActivityMutations     ทุก mutation
+└─ ActivityModeWeekSpine
+   ├─ timeline 7 วัน
+   ├─ ActivityPopup (คลิกขวา)
+   ├─ detail section ใต้ timeline
+   └─ activity archive
 
-ActivityModal → สร้าง/แก้ไข/ลบ event
-ActivityPopup → เมนูคลิกขวาใน TimelineEditor
+ActivityModal               ฟอร์มสร้าง/แก้ไข
 ```
 
-`app.jsx` ใส่ class `app--activity` และ `activity-dashboard` เพื่อ scope งานตกแต่ง Material Design 3 ให้กระทบเฉพาะ Activity Mode ไม่ไปทับ Reminder Mode
+`app.jsx` เป็น composition root ที่ส่ง state และ handler จาก hooks ลง component แทนการเก็บ business rule ไว้ในหน้าจอเดียว
 
 ---
 
-## 3. ข้อมูลและแหล่งความจริง
+## 3. ข้อมูลและ source of truth
 
-### 3.1 Activity
-
-Google Calendar เป็น source of truth ของ event เช่น:
+### 3.1 Google Calendar event
 
 ```js
 {
@@ -64,218 +58,211 @@ Google Calendar เป็น source of truth ของ event เช่น:
   start: { dateTime }, // หรือ date สำหรับ all-day
   end: { dateTime },
   colorId,
+  recurrence,
   recurringEventId
 }
 ```
 
-`activityDate()` ใน `date-utils.js` ใช้แปลงรูปแบบ `start`/`end` ให้เป็น `Date` อย่างปลอดภัยก่อนคำนวณเวลาเสมอ
+`activityDate()` ใน `date-utils.js` แปลง start/end ให้เป็น `Date` อย่างปลอดภัยก่อนคำนวณ Event แบบ all-day ถูกแยกจาก timed event และไม่วาดเป็น block บนเวลา 24 ชั่วโมง
 
 ### 3.2 Metadata ของแอป
 
-ข้อมูลต่อไปนี้ไม่ได้เป็น field ปกติของ Google Calendar จึงเก็บผ่าน backend ของแอป โดยใช้ `normalizeActivityId()` เป็น key:
+Google Calendar ไม่มี category, tag และ lock ของโปรเจกต์ จึงเก็บผ่าน backend โดยใช้ `normalizeActivityId()` เป็น key
 
-| ข้อมูล | State | หน้าที่ |
+| ข้อมูล | โครงสร้าง | ความหมาย |
 |---|---|---|
-| Categories | `categories[]` | หมวดชีวิตและสี |
-| Category mapping | `activityCategoryMap` | `activityId → categoryId` |
-| Tags | `activityTagMap` | `activityId → string[]` |
-| Lock | `lockedActivities` | `activityId → boolean` |
+| Categories | `categories[]` | ชื่อและสีหมวดชีวิต |
+| Category map | `activityCategoryMap[id]` | category เดียวของ event |
+| Tag map | `activityTagMap[id]` | tags หลายค่า |
+| Lock map | `lockedActivities[id]` | ห้ามแก้ ย้าย หรือลบ |
 
-สีที่เห็นบน UI เลือกผ่าน `getDisplayColor(activity, activityCategoryMap, categories)` ตามลำดับความสำคัญของสี activity/category/default
+สีบน UI มาจาก `getDisplayColor()` โดยสี category มีความสำคัญเหนือสี event แบบ custom
 
-### 3.3 Weekly summary
+### 3.3 Activity archive
 
-`useCalendarData` ส่งรายการในสัปดาห์ปัจจุบันไป `fetchWeeklySummary()` เพื่อคำนวณสรุป แยกกิจกรรมที่เริ่มก่อนสัปดาห์ออกก่อน เพราะรายการจากวันก่อนหน้าใช้เพียงวาด overnight spillover ใน timeline
+คลังเป็น local-only เก็บใน:
+
+```text
+times-activity-archive:<firebaseUser.uid>
+```
+
+รายการเก็บ `archiveId`, `calendarId`, `title`, `start`, `end`, `categoryId`, `tags`, `color`, `archivedAt` และ `isDraft`
+
+- เก็บเข้าคลังไม่ลบ Calendar event แต่ซ่อนจาก Week Spine ด้วย `archivedCalendarIds`
+- category และ tag ถูกคัดลอกมาพร้อมรายการ
+- ส่งกลับ Timeline จะ create/update Calendar event ตามข้อมูลในคลัง แล้วลบรายการออกจาก archive
+- draft ที่ยังไม่มี `calendarId` สร้าง Calendar event ได้เมื่อชื่อและวัน/เวลาครบ
+
+### 3.4 First-time Activity onboarding
+
+บัญชีที่สร้างหลังเปิดใช้ onboarding และเข้าสู่ Activity Mode ครั้งแรก จะได้รับกิจกรรมตัวอย่าง 10 รายการในสัปดาห์ปัจจุบัน รายการไม่ทับกันและกระจายครบหมวด default: งาน, ส่วนตัว, สุขภาพ และครอบครัว
+
+Hook `use-activity-onboarding.js` รอให้ categories เริ่มต้นโหลดครบก่อน แล้วบันทึก blueprint ลง localStorage key `times-activity-onboarding:<uid>:v1` และส่งรายการในรูป local preview ไปวาดบน Week Spine โดย **ไม่เขียน Google Calendar** จึงใช้ได้แม้ผู้ใช้ยังไม่มีสิทธิ์เขียนปฏิทิน คลิกตัวอย่างจะเปิดฟอร์มเพิ่มกิจกรรมจริงพร้อมชื่อและช่วงเวลาของตัวอย่างนั้น
 
 ---
 
-## 4. การอ่านข้อมูล: `useCalendarData`
+## 4. Week Spine
 
-Hook นี้เป็นเจ้าของข้อมูลอ่านทั้งหมด แต่ไม่ทำ mutation:
+Week Spine เป็น timeline แนวตั้ง 7 วัน แสดง 00:00–24:00
 
-- `loadActivities()` ดึง Google Calendar ตามช่วงสัปดาห์ที่เลือก โดยเริ่ม fetch ก่อนวันแรก 1 วัน เพื่อรองรับกิจกรรมข้ามเที่ยงคืน
-- โหลด categories, category map, tag map และ lock map หลัง Firebase login
-- รีเฟรช weekly summary เมื่อ activities, category map หรือสัปดาห์เปลี่ยน
-- หาก Google Calendar ส่ง error สิทธิ์หมดอายุ จะเคลียร์ calendar token เพื่อให้ UI เปิดทางยืนยันตัวตนใหม่
-- `resetOnLogout()` ล้าง state ที่ hook นี้เป็นเจ้าของทั้งหมด
+- `getWeekRange(anchorDate)` ระบุสัปดาห์ที่แสดง
+- `buildWeekSpineData()` ใน `week-spine-data.js` แปลง event เป็น segments
+- event ข้ามเที่ยงคืนถูกแบ่งตามวัน แต่ใช้ `calendarId` เดิม
+- `layoutOverlaps()` วางรายการที่ซ้อนกันแบบหลาย lane
+- grid มีเส้นทุก 1 ชั่วโมง และ drag snap ที่ 15 นาที
+- วันนี้มีจุดเน้นสีน้ำเงินแบบไม่รก
 
-ช่วงข้อมูลที่แสดงใน Agenda ใช้ `getWeekRange(cursorDate)` และ ActivityMode จัด event ลงวันตาม **วันเริ่มต้น** ของ event
+### กิจกรรมข้ามคืน
+
+segment ที่ต่อมาจากวันก่อนหรือไปวันถัดไปเป็น `is-continuation`: สีจาง, ขอบซ้าย dashed, opacity ต่ำ เพื่อไม่แย่งความเด่นจากงานที่เริ่มในวันนั้น
+
+### ชื่อใน timeline
+
+`AutoShrinkText` ใช้ขนาดพื้นฐาน 12px และย่อได้ต่ำสุด 75% เฉพาะเมื่อพื้นที่คอลัมน์ไม่พอ ชื่อเต็มยังอยู่ใน tooltip
+
+### Navigation
+
+- ArrowLeft/ArrowRight เปลี่ยนสัปดาห์
+- ArrowUp/ArrowDown เลื่อนวัน โดยไม่ขึ้นกับ focus
+- ปุ่มเปลี่ยนสัปดาห์ซ่อนที่ขอบซ้าย/ขวาและปรากฏเมื่อ pointer เข้าใกล้
+- `focusDate()` ใช้พา user ไปยังวัน/สัปดาห์ของกิจกรรมที่เพิ่งส่งจากคลัง
 
 ---
 
-## 5. การนำทางสัปดาห์และคีย์บอร์ด
+## 5. การสร้าง แก้ไข และลาก
 
-`useWeekNavigation` เป็นเจ้าของ state เหล่านี้:
+### ActivityModal
 
-| State | ความหมาย |
+ไฟล์: `frontend/src/components/activity-modal.jsx`
+
+รองรับชื่อ, วัน/เวลาเริ่มและจบ, category, tags, สี event, recurrence และ notes โดยวัน+เวลาใช้ `datetime-local` หนึ่งช่องต่อหนึ่งค่า
+
+Logic เวลาแบ่งเป็นสามกรณี:
+
+1. **เปิดจากคลังที่ข้อมูลเวลาไม่ครบ** — ช่องที่ขาดเป็นกรอบแดง; เลือกวัน/เวลาเริ่มแล้วตั้งเวลาจบ +1 ชั่วโมง
+2. **เพิ่มกิจกรรมใหม่** — เปลี่ยนวัน/เวลาเริ่มแล้วตั้งเวลาจบ +1 ชั่วโมง
+3. **แก้ไขกิจกรรมเดิม** — ไม่เปลี่ยนเวลาจบอัตโนมัติ ยกเว้นผู้ใช้ล้างทั้งวัน/เวลาเริ่มและจบ แล้วเริ่มกำหนดใหม่
+
+Escape หรือคลิก backdrop ปิด modal ได้ Event ที่ lock อยู่เปิดแก้ไขไม่ได้
+
+### Interaction บน Week Spine
+
+- คลิกซ้าย block: แก้ activity เดียว
+- คลิกขวา: เปิด `ActivityPopup`
+- drag block: ย้ายเวลา
+- drag handle ล่าง: ปรับเวลาจบ
+- ลากพื้นที่ว่าง: สร้างช่วงเวลาใหม่และเปิด modal
+
+block ที่กำลังลากอยู่ด้านหน้า และลด animation ตอนชนกันเพื่อลดอาการกระตุก
+
+---
+
+## 6. Overlap policy
+
+กิจกรรมปกติไม่ควรถูกบันทึกด้วยเวลาทับกัน แต่ UI ให้ลากผ่านรายการอื่นได้ชั่วคราว
+
+```text
+ลาก/resize → แสดงตำแหน่งใหม่และสถานะชน
+         → ปล่อย pointer
+            ├─ ไม่ชน: handleSaveTimes() เขียน Calendar
+            └─ ชน: ไม่บันทึก และแสดง floating warning
+```
+
+นิยาม overlap คือ `start < otherEnd && end > otherStart` ดังนั้นงานหนึ่งจบ 10:00 และอีกงานเริ่ม 10:00 ไม่ถือว่าชน
+
+ตรวจสองชั้น:
+
+1. `findOverlap()` ใน Week Spine เพื่อ feedback ระหว่าง interaction
+2. `findOverlappingActivity()` ใน `use-activity-mutations.js` ก่อน `handleSaveTimes()` ส่ง API
+
+### ข้อยกเว้น: ส่งจากคลัง
+
+การส่งจากคลังสามารถ create/update และแสดงบน Timeline ได้แม้เวลาชนกัน เพื่อให้ผู้ใช้ลากปรับทีหลัง:
+
+- ต้องมีชื่อ, วัน/เวลาเริ่ม และวัน/เวลาจบ
+- ข้อมูลไม่ครบ → เปิด modal พร้อมกรอบแดงที่ช่องจำเป็น
+- ข้อมูลครบ → เขียน Calendar, พาไปวัน/สัปดาห์นั้น, เอาออกจากคลัง
+- ถ้าชน → เตือนหลังส่ง ไม่บล็อกการส่ง
+- การ drag save หลังจากนั้นกลับไปใช้กฎ overlap ปกติ
+
+---
+
+## 7. Detail, popup และ archive UI
+
+`week-spine-detail` อยู่เต็มความกว้างใต้ timeline เพื่อไม่ให้ข้อมูลถูกบีบใน card
+
+- คลิกซ้าย detail: เปิด modal แก้ไข
+- คลิกขวา detail/timeline: เปิด `ActivityPopup`
+- warning เช่น lock หรือ overlap ใช้ `.error-banner` แบบ floating จึงไม่ดัน layout
+
+แถวใน archive มีชื่อ, tags, วัน/เวลาเริ่ม, วัน/เวลาจบ, category และ action:
+
+| ปุ่ม | หน้าที่ |
 |---|---|
-| `mode` | `activity` หรือ `reminder` |
-| `cursorDate` | จุดอ้างอิงของสัปดาห์ที่กำลังแสดง |
-| `expandedDate` | วันที่กำลังเปิด Mini Timeline หรือ `null` |
-| `theme` | light/dark ที่ persist ใน localStorage |
+| `✎` สีฟ้า | แก้ไขเต็มรูปแบบ |
+| `↗` สีเขียว | ส่งไป Timeline |
+| `🗑` สีแดง | ลบออกจากคลัง |
 
-- ◀/▶ และ ArrowLeft/ArrowRight เปลี่ยนสัปดาห์
-- ▲/▼ และ ArrowUp/ArrowDown เลื่อนวัน โดยไม่พึ่ง focus ของแถว
-- shortcut ถูกปิดเมื่ออยู่ Reminder Mode หรือกำลังพิมพ์ใน `input`, `textarea`, `contenteditable`
-- เปลี่ยนสัปดาห์แล้ว `ActivityMode` ปิด TimelineEditor ที่เปิดอยู่ เพื่อลดความเสี่ยงบันทึก draft ไปยังสัปดาห์ผิด
-- `expandedDate` จะถูกล้างหากไม่อยู่ในสัปดาห์ใหม่
+ปุ่ม `✕` ข้างวัน/เวลาล้างค่าและแสดง `-- --`; category มีจุดสีและล้างค่าได้
 
 ---
 
-## 6. Agenda รายสัปดาห์: `ActivityMode`
+## 8. Mutation และการ sync
 
-Component นี้สร้าง 7 `agenda-row` จากวันเริ่มสัปดาห์
-
-แต่ละแถวมี:
-
-1. **Day badge** — ชื่อวัน/เลขวันที่; วันนี้ใช้ primary color
-2. **Day bar** — สัดส่วนเวลา activity แยกตามสี category (`buildDayBreakdown`) และจำนวนกิจกรรม
-3. **ปุ่ม ⚙** — เปิด TimelineEditor แบบ inline สำหรับวันนั้น
-4. **ปุ่มเพิ่มกิจกรรม** — เปิด ActivityModal พร้อมวันที่แถวนั้น และเวลา ณ ตอนกด
-
-คลิกแถวหรือกด Enter/Space เลือกวันให้ MiniTimelinePanel แสดง ในขณะที่ editor state (`editingDay`) แยกจาก `expandedDate` โดยตั้งใจ: เปิด editor ได้โดยไม่จำเป็นต้องเปิด mini timeline
-
----
-
-## 7. TimelineEditor: แก้เวลาบน 24 ชั่วโมง
-
-ไฟล์: `frontend/src/components/timeline-editor.jsx`
-
-### พฤติกรรมหลัก
-
-- แสดง 00:00–24:00 เต็มวัน, `EDIT_HOUR_HEIGHT = 52px`
-- snap ทุก `SNAP_MINUTES` (มาจาก `timeline-layout.js`)
-- ลากทั้ง block เพื่อย้ายเวลา และลากขอบเพื่อปรับ start/end
-- จำกัดการลากให้ duration ใหม่ไม่เกิน 12 ชั่วโมง (`MAX_DURATION_MINUTES`) แต่ event ที่ยาวกว่านั้นอยู่แล้วจะไม่ถูกตัด
-- รองรับลากจบข้ามเที่ยงคืนและแสดง spillover จากคืนก่อนหน้า
-- กิจกรรมที่ lock อยู่ลาก/ย่อขยาย/ลบไม่ได้
-
-### Overlap policy
-
-ระหว่างลาก UI อนุญาตให้ block ผ่านหรือทับ activity อื่นได้ เพื่อให้จัดตำแหน่งง่ายและไม่กระตุก แต่จะแสดงข้อความเตือนทันที
-
-เมื่อกดบันทึก `validateDraftTimes()` จะตรวจ event ที่แก้ทุกตัวกับ event อื่นและ incoming spillover อีกครั้ง ถ้าทับกันจะไม่เรียก API บันทึก เวลา event หลักจึงไม่ทับกันในข้อมูลจริง งานย่อยที่ทำคู่กันควรไปอยู่ Reminder Mode
-
-`layoutOverlaps()` ใช้วาง block ที่ทับกันชั่วคราวเป็นหลายคอลัมน์ และระหว่าง gesture จะตรึง layout เดิม + coalesce pointer update ด้วย `requestAnimationFrame` เพื่อลดอาการกระตุก
-
-### Context menu
-
-คลิกขวาบน activity เปิด `ActivityPopup` ณ ตำแหน่งเมาส์ ใช้ทำงานเช่น:
-
-- เปิด ActivityModal เพื่อแก้ไขรายละเอียด
-- ตั้ง/ล้าง category และ custom color
-- lock/unlock
-- ทำสำเนา
-- ย้ายไปวันอื่น
-- ลบครั้งเดียว หรือแก้ไข/ลบทั้ง recurring series
-- export ภาพ timeline ของวัน
-
-คลิกขวาบนพื้นที่ว่างไม่เดา activity ที่ใกล้ที่สุด เพื่อไม่ให้เกิดการแก้ผิดรายการ
-
-### การบันทึกเวลา
-
-TimelineEditor เก็บ `draftTimes` ไว้ใน memory เท่านั้น จนกด “บันทึก” จึงเรียก `onSaveTimes(changes)` แบบ batch; กด cancel จะทิ้ง draft ทั้งหมด
-
----
-
-## 8. ActivityModal: สร้างและแก้ไข
-
-ไฟล์: `activity-modal.jsx`, state การเปิดอยู่ใน `use-activity-modal.js`
-
-ฟอร์มรองรับ:
-
-- ชื่อ, วันที่, เวลาเริ่ม/จบ
-- category (สร้าง/ลบ category จากฟอร์มได้)
-- tags หลายค่า
-- สี event ของ Google Calendar
-- recurrence แบบไม่ซ้ำ/ตามกติกาที่กำหนด
-- notes/description แบบพับได้
-- ลบ event เมื่ออยู่ edit mode
-
-Validation สำคัญ:
-
-- ชื่อต้องไม่ว่าง และเวลา end ต้องมากกว่า start
-- หาก duration เกิน 18 ชั่วโมง ต้องกดบันทึกซ้ำเพื่อยืนยันการข้ามเที่ยงคืนที่ยาวผิดปกติ
-- Escape และคลิก backdrop ปิด modal ได้
-- event ที่ lock อยู่เปิด edit modal ไม่ได้
-
-`useActivityModal` รองรับการเปิด 3 แบบ: create, edit occurrence, และ edit recurring series โดยแบบ series ต้องโหลด master event จาก Google Calendar เพิ่มก่อน
-
----
-
-## 9. การเขียนข้อมูล: `useActivityMutations`
-
-Hook นี้รวม mutation ไป Google Calendar และ backend metadata พร้อม optimistic state ที่จำเป็น
+ไฟล์: `frontend/src/hooks/use-activity-mutations.js`
 
 | Handler | หน้าที่ |
 |---|---|
-| `handleSaveActivity` | สร้างหรือแก้ event, recurrence, category, tags, color |
-| `handleSaveTimes` | batch update เวลา หลังตรวจ lock/overlap/conflict |
-| `handleDeleteActivity` | ลบ occurrence แล้ว cleanup metadata/lock ที่เกี่ยวข้อง |
-| `handleDeleteSeries` | ลบ recurring series และ cleanup ทุก occurrence ที่โหลดอยู่ |
-| `handleDuplicateActivity` | สร้างสำเนาเวลาเดิม พร้อม category/tag แต่ไม่ copy lock |
-| `handleMoveActivityToDay` | ย้ายวันโดยรักษาเวลาในวันและ duration |
-| `handleSetActivityColor` | ตั้งหรือเคลียร์ `colorId` ของ Google Calendar |
-| `handleAssignCategory` | บันทึก mapping category |
-| `handleToggleLock` | บันทึก lock state |
+| `handleSaveActivity` | create/update event, recurrence, category, tags, color |
+| `handleSaveTimes` | update เวลาแบบ batch หลังตรวจ lock/overlap |
+| `handleDeleteActivity` | ลบ occurrence และ cleanup metadata |
+| `handleDeleteSeries` | ลบ recurring series |
+| `handleDuplicateActivity` | สร้างสำเนาพร้อม category/tag แต่ไม่ copy lock |
+| `handleMoveActivityToDay` | ย้ายวันโดยรักษา duration |
+| `handleAssignCategory` | sync category mapping |
+| `handleToggleLock` | sync lock state |
 
-ก่อน update/delete ระบบตรวจ lock เสมอ และหลายจุดเรียก `checkConflict()` เพื่อแจ้งว่าข้อมูลถูกแก้จากที่อื่นหลังโหลดแล้ว แม้ปัจจุบันจะเลือกบันทึกทับข้อมูลล่าสุดตามนโยบายของแอป
-
-หลัง mutation สำเร็จ จะเรียก `loadActivities()` และ refresh tag search เพื่อ reconcile จากข้อมูลจริง
+หลัง mutation สำเร็จต้องเรียก `loadActivities()` เพื่อ reconcile จาก Google Calendar หาก token หมดอายุ ระบบเคลียร์ token เพื่อเปิด flow ยืนยันสิทธิ์ใหม่
 
 ---
 
-## 10. Search, Summary และ Mini Timeline
+## 9. Layout และ fullscreen
 
-- **Tag search:** `TagSearchResults` แทน Agenda ชั่วคราวเมื่อมี tag query; รองรับหลาย tag และค้นหาข้ามช่วงสัปดาห์
-- **WeeklySummaryPanel:** สรุปจำนวนกิจกรรม, สัดส่วน category และวันที่หนาแน่นที่สุด; คลิกผลลัพธ์เพื่อเปิดวัน
-- **MiniTimelinePanel:** แสดงเมื่อ `expandedDate` มีค่า และใช้ข้อมูลเดียวกับ Agenda; activity ข้ามวันแสดง spillover ตามเวลาจริง
+Activity dashboard scroll ได้เอง เมื่อ scroll ลงเล็กน้อยจะเข้าสู่ reading mode และซ่อน `app-header` เพื่อเพิ่มพื้นที่อ่าน detail/archive
 
----
+Account menu อยู่มุมขวาบน เปิดเป็น floating layer สำหรับ Settings และ Sign out
 
-## 11. Design System: Material Design 3
-
-Activity Mode ถูก scope ด้วย `.app--activity` และ `.activity-dashboard` ใน `index.css`
-
-- ใช้ tonal surfaces (`surface`, `surface-low`, `surface-container`, `surface-high`) แทนเงาหนัก
-- primary `#0b57d0`, primary container `#d3e3fd`
-- ปุ่ม action มุม pill, card/timeline radius 16px, modal radius 28px
-- ใช้ typography น้ำหนัก 400 สำหรับ title และ 500 สำหรับป้าย/ปุ่ม
-- dark mode มี M3 surface token ชุดแยก
-- focus ring ของ input ใช้ primary color เพื่อให้ใช้คีย์บอร์ดได้ชัดเจน
-
-สไตล์ Reminder Mode ไม่ถูกแก้โดย selector ชุดนี้
+Timeline fullscreen ใช้ component state (`timelineFullscreen`) ไม่ใช่ native browser Fullscreen API จึงยังใช้ warning, popup และ re-auth UI เดิมได้
 
 ---
 
-## 12. ข้อควรระวังเมื่อต่อยอด
+## 10. จุดที่ควรระวังเมื่อต่อยอด
 
-1. **ห้ามแก้ Google Calendar event โดยไม่ reload/reconcile:** `loadActivities()` หลัง mutation สำคัญต่อความสอดคล้องของ UI
-2. **อย่าสับสน event time กับ date-only event:** TimelineEditor ใช้เฉพาะ `start.dateTime`; all-day event ต้องรองรับต่างหาก
-3. **overlap ต้องตรวจสองชั้น:** UI ระหว่างลากและ `handleSaveTimes` ก่อนส่ง API
-4. **normalize id ทุกครั้งก่อน metadata:** category/tag/lock map ใช้ normalized ID ไม่ใช่ raw Google id เสมอ
-5. **กิจกรรมข้ามเที่ยงคืน:** อย่าตัดช่วง fetch วันก่อนหน้า และอย่าใช้แค่ minute-of-day โดยไม่เทียบ `Date` จริง
-6. **lock เป็น business rule:** ต้องตรวจทั้ง UI และ mutation เพราะผู้ใช้สามารถเรียก handler จากทางอื่นได้
-7. **recurring series:** การแก้ occurrence กับ master มีผลต่างกัน; ใช้ `recurringEventId` และ fetch master ก่อนแก้ทั้งชุด
-8. **Token หมดอายุ:** Google Calendar error ที่เข้าเกณฑ์ต้องเคลียร์ token เพื่อเปิด flow login ใหม่
-9. **Material scope:** UI ใหม่ของ Activity Mode ควรใช้ `.app--activity` / `.activity-dashboard` ต่อไป เพื่อไม่ทำให้ Reminder Mode เปลี่ยนโดยไม่ตั้งใจ
+1. หลังเขียน Calendar ต้อง reconcile ด้วย `loadActivities()`
+2. Metadata ใช้ normalized ID เสมอ
+3. อย่าขยายข้อยกเว้น archive restore ไปยัง drag save ปกติโดยไม่ทบทวน rule
+4. event ข้ามคืนต้องคำนวณจาก `Date` จริง ไม่ใช่แค่ชั่วโมง/นาที
+5. archive เป็น local-only; ล้าง localStorage แล้วคลังหาย
+6. lock ต้องเช็กทั้ง UI และ mutation handler
+7. recurring occurrence กับ master series เป็นคนละระดับ ต้องใช้ `recurringEventId` ให้ถูกบริบท
+8. warning ใหม่ควรเป็น floating layer เพื่อไม่กระทบ layout
+9. CSS เฉพาะ Activity ควร scope ใต้ `.app--activity` / `.activity-dashboard`
 
 ---
 
-## 13. ไฟล์ที่เกี่ยวข้อง
+## 11. ไฟล์สำคัญ
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `frontend/src/app.jsx` | ประกอบ state/hook และส่ง props ให้ทุก component |
-| `frontend/src/components/activity-mode.jsx` | Agenda รายสัปดาห์ 7 วัน |
-| `frontend/src/components/timeline-editor.jsx` | ลาก/ปรับเวลา/ตรวจ overlap/context menu |
-| `frontend/src/components/activity-modal.jsx` | ฟอร์มสร้าง/แก้ไข activity |
-| `frontend/src/components/activity-popup.jsx` | เมนูคลิกขวาบน timeline |
-| `frontend/src/components/weekly-summary-panel.jsx` | สรุปสัปดาห์ |
-| `frontend/src/components/mini-timeline-panel.jsx` | Timeline แบบย่อของวันที่เลือก |
-| `frontend/src/hooks/use-week-navigation.js` | mode, week/day navigation, theme |
+| `frontend/src/app.jsx` | ประกอบ state/hook และส่ง props |
+| `frontend/src/components/activity-mode-week-spine.jsx` | Week Spine, drag, detail, archive |
+| `frontend/src/components/activity-modal.jsx` | ฟอร์ม create/edit และ validation |
+| `frontend/src/components/activity-popup.jsx` | เมนูคลิกขวา |
+| `frontend/src/components/auto-shrink-text.jsx` | ลดขนาดชื่ออย่างมีขอบเขต |
+| `frontend/src/week-spine-data.js` | แปลง event เป็น daily segments |
+| `frontend/src/timeline-layout.js` | snap, overlap lanes, spillover |
+| `frontend/src/hooks/use-week-navigation.js` | mode, navigation, focusDate |
 | `frontend/src/hooks/use-calendar-data.js` | โหลด Calendar และ metadata |
 | `frontend/src/hooks/use-activity-modal.js` | modal lifecycle |
-| `frontend/src/hooks/use-activity-mutations.js` | mutation ทั้งหมด |
-| `frontend/src/timeline-layout.js` | snap, overlap layout, spillover calculation |
-| `frontend/src/index.css` | CSS หลักและ Material 3 scope ของ Activity Mode |
+| `frontend/src/hooks/use-activity-mutations.js` | ทุก mutation |
+| `frontend/src/index.css` | Week Spine, modal, archive และ styling |

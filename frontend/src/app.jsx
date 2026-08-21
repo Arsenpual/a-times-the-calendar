@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import loginGuideStep1 from "../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../public/login-guide-step3.jpg";
-import ActivityMode from "./components/activity-mode.jsx";
+import ActivityModeWeekSpine from "./components/activity-mode-week-spine.jsx";
 import TagSearchResults from "./components/tag-search-results.jsx";
 import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
 import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
@@ -18,6 +18,15 @@ import { useCalendarData } from "./hooks/use-calendar-data.js";
 import { useTagSearch } from "./hooks/use-tag-search.js";
 import { useActivityModal } from "./hooks/use-activity-modal.js";
 import { useActivityMutations } from "./hooks/use-activity-mutations.js";
+import { useActivityOnboarding } from "./hooks/use-activity-onboarding.js";
+import ActivityModeMockupPreview from "./components/activity-mode-mockup-preview.jsx";
+
+const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/activity-mode-*-mockup.jsx", { eager: true }))
+  .map(([path, module]) => {
+    const id = (path.split("/").pop() || "mockup.jsx").replace(/\.jsx$/, "");
+    return { id, label: id.replace(/^activity-mode-/, "").replace(/-mockup$/, "").replace(/-/g, " "), Component: module.default };
+  })
+  .filter((mockup) => typeof mockup.Component === "function");
 
 // Hardcoded broadcast message shown in the scrolling ticker below the
 // header, in both activity and reminder mode — see AnnouncementTicker. Not
@@ -38,6 +47,12 @@ const LOGIN_GUIDE_STEPS = [
   { number: 2, image: loginGuideStep2, text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
   { number: 3, image: loginGuideStep3, text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
 ];
+
+export default function App() {
+  return new URLSearchParams(window.location.search).has("activity-mode-mockup")
+    ? <ActivityModeMockupPreview mockups={ACTIVITY_MODE_MOCKUPS} />
+    : <MainApp />;
+}
 
 /**
  * State/effects previously all lived directly in this component (~1650
@@ -60,7 +75,22 @@ const LOGIN_GUIDE_STEPS = [
  * prop-drilling. App.jsx's job is now purely to wire these hooks together
  * and render.
  */
-export default function App() {
+function MainApp() {
+  const [isActivityReading, setIsActivityReading] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  useEffect(() => {
+    const openMockupMode = (event) => {
+      const target = event.target;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable || !event.ctrlKey || !event.altKey || event.code !== "KeyW") return;
+      event.preventDefault();
+      const url = new URL(window.location.href);
+      url.searchParams.set("activity-mode-mockup", "1");
+      window.open(url.toString(), "times-activity-mode-mockups", `popup=yes,width=${window.screen.availWidth},height=${window.screen.availHeight}`)?.focus();
+    };
+    window.addEventListener("keydown", openMockupMode);
+    return () => window.removeEventListener("keydown", openMockupMode);
+  }, []);
   const auth = useAuth();
   const {
     firebaseUser,
@@ -77,6 +107,20 @@ export default function App() {
     handleReauthCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const dismissIfOutsideToast = (event) => {
+      if (event.target instanceof Element && event.target.closest(".error-banner")) return;
+      setError(null);
+    };
+    document.addEventListener("pointerdown", dismissIfOutsideToast, true);
+    document.addEventListener("focusin", dismissIfOutsideToast, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissIfOutsideToast, true);
+      document.removeEventListener("focusin", dismissIfOutsideToast, true);
+    };
+  }, [error, setError]);
 
   const nav = useWeekNavigation();
   const {
@@ -95,6 +139,7 @@ export default function App() {
     navigateWeek,
     navigateDay,
     goToday,
+    focusDate,
     openDay,
     closeDay
   } = nav;
@@ -135,10 +180,15 @@ export default function App() {
   const {
     modalOpen,
     modalDefaultDate,
+    modalDefaultEnd,
+    modalDefaultTitle,
+    modalInitialWarning,
+    modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
     openAddActivity,
     openEditActivity,
+    openEditActivityById,
     closeModal,
     handleEditSeries
   } = activityModal;
@@ -173,11 +223,29 @@ export default function App() {
     handleSetActivityColor
   } = mutations;
 
+  const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
+    mode,
+    firebaseUser,
+    categories,
+    cursorDate
+  });
+
   // handleLogout composes both hooks' own cleanup — useAuth only knows
   // how to sign out of Firebase, useCalendarData only knows how to clear
   // the data it owns; neither hook has a reference to the other, so this
   // composition has to happen here.
   const handleLogout = async () => {
+    // Reset the shell first so Reminder Mode unmounts immediately (stopping
+    // its due-checking/timer effects) rather than leaving its local UI on
+    // screen while Firebase finishes the asynchronous sign-out.
+    setAccountMenuOpen(false);
+    setSettingsOpen(false);
+    setIsActivityReading(false);
+    setMode("activity");
+    closeModal();
+    closeDay();
+    setTagSearchTerms([]);
+    setTagSearchDraft("");
     await authHandleLogout();
     resetOnLogout();
   };
@@ -189,18 +257,52 @@ export default function App() {
    * activities ของสัปดาห์ปัจจุบัน เพื่อให้เห็นผลลัพธ์ข้ามสัปดาห์ได้
    */
   const visibleActivities = useMemo(() => {
-    if (tagSearchTerms.length === 0) return activities;
+    if (tagSearchTerms.length === 0) return [...activities, ...onboardingActivities];
     const queries = tagSearchTerms.map((t) => t.toLowerCase());
     return tagSearchResults.filter((activity) => {
       const tags = activityTagMap[normalizeActivityId(activity.id)] || [];
       const lowerTags = tags.map((t) => t.toLowerCase());
       return queries.some((q) => lowerTags.some((tag) => tag.includes(q)));
     });
-  }, [activities, activityTagMap, tagSearchTerms, tagSearchResults]);
+  }, [activities, activityTagMap, tagSearchTerms, tagSearchResults, onboardingActivities]);
+  const displayedActivityCategoryMap = useMemo(
+    () => ({ ...activityCategoryMap, ...onboardingCategoryMap }),
+    [activityCategoryMap, onboardingCategoryMap]
+  );
 
+
+  useEffect(() => {
+    if (mode !== "activity") setIsActivityReading(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const closeAccountMenu = (event) => {
+      if (!(event.target instanceof Node) || !accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeAccountMenu, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeAccountMenu, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountMenuOpen]);
+
+  const handleActivityDashboardScroll = (event) => {
+    const dashboard = event.currentTarget;
+    // A small downward scroll is enough to enter reading mode. The separate
+    // return threshold prevents the header from flickering as it collapses.
+    setIsActivityReading((reading) => reading
+      ? dashboard.scrollTop > 4
+      : dashboard.scrollTop >= 12
+    );
+  };
 
   return (
-    <div className={`app app--${mode}`}>
+    <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
       {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
@@ -310,18 +412,6 @@ export default function App() {
                 >
                   + เพิ่มกิจกรรม
                 </button>
-                <button className="btn btn-outline" onClick={handleLogout}>
-                  ออกจากระบบ
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon settings-open-btn"
-                  onClick={() => setSettingsOpen(true)}
-                  aria-label="เปิดการตั้งค่า"
-                  title="การตั้งค่า"
-                >
-                  ⚙️
-                </button>
                 {/* 🧪 DEV TEST BUTTON — เดิมไม่มี guard ใดๆ ทำให้ปุ่มนี้ขึ้น
                     ในโปรดักชันจริงด้วย ตอนนี้ห่อด้วย import.meta.env.DEV
                     (Vite inject ให้เป็น false เสมอใน build production —
@@ -366,25 +456,38 @@ export default function App() {
                   </button>
                 )}
               </>
-            ) : (
-              // Reminder mode's header-right — deliberately minimal (no tag
-              // search, add-activity, or sign-out button here, since those
-              // are activity-mode-only concepts) but still gets its own ⚙️
-              // settings button so dark mode / language can be changed
-              // without switching back to activity mode first. Opens the
-              // exact same <SettingsDrawer> rendered once at the bottom of
-              // this component (mode-independent) — not a second drawer —
-              // so theme/language stay perfectly in sync between modes.
+            ) : null}
+            <div className="account-menu-wrap" ref={accountMenuRef}>
               <button
                 type="button"
-                className="btn-icon settings-open-btn"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="เปิดการตั้งค่า"
-                title="การตั้งค่า"
+                className="account-menu-trigger"
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                aria-label="เปิดเมนูบัญชีผู้ใช้"
+                aria-expanded={accountMenuOpen}
+                aria-haspopup="menu"
               >
-                ⚙️
+                {firebaseUser.photoURL
+                  ? <img src={firebaseUser.photoURL} alt="" referrerPolicy="no-referrer" />
+                  : <span className="account-menu-avatar-fallback" aria-hidden="true">{(firebaseUser.displayName || firebaseUser.email || "U").trim().charAt(0).toUpperCase()}</span>}
               </button>
-            )}
+              {accountMenuOpen && (
+                <div className="account-menu" role="menu">
+                  <div className="account-menu-identity">
+                    {firebaseUser.photoURL
+                      ? <img src={firebaseUser.photoURL} alt="" referrerPolicy="no-referrer" />
+                      : <span className="account-menu-avatar-fallback" aria-hidden="true">{(firebaseUser.displayName || firebaseUser.email || "U").trim().charAt(0).toUpperCase()}</span>}
+                    <div>
+                      {firebaseUser.displayName && <strong>{firebaseUser.displayName}</strong>}
+                      <span>{firebaseUser.email || "ไม่พบอีเมลบัญชี"}</span>
+                    </div>
+                  </div>
+                  <div className="account-menu-actions">
+                    <button type="button" role="menuitem" onClick={() => { setSettingsOpen(true); setAccountMenuOpen(false); }}>⚙️ การตั้งค่า</button>
+                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setAccountMenuOpen(false); handleLogout(); }}>ออกจากระบบ</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
       )}
@@ -445,7 +548,7 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {mode === "reminder" && (
+        {firebaseUser && mode === "reminder" && (
           <ReminderMode
             firebaseUser={firebaseUser}
             activities={activities}
@@ -580,7 +683,7 @@ export default function App() {
             )}
 
             {firebaseUser && calendarAccessToken && (
-              <div className="dashboard activity-dashboard">
+              <div className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
@@ -617,19 +720,28 @@ export default function App() {
                     onEditActivity={openEditActivity}
                   />
                 ) : (
-                  <ActivityMode
+                  <ActivityModeWeekSpine
                     anchorDate={cursorDate}
                     activities={visibleActivities}
                     categories={categories}
-                    activityCategoryMap={activityCategoryMap}
+                    activityCategoryMap={displayedActivityCategoryMap}
                     activityTagMap={activityTagMap}
-                    expandedDate={expandedDate}
                     onAddActivity={openAddActivity}
                     onSelectDay={openDay}
-                    onAssignCategory={handleAssignCategory}
                     onEditActivity={openEditActivity}
                     onSaveTimes={handleSaveTimes}
+                    onRestoreArchivedActivity={async ({ calendarId, title, start, end, categoryId, tags }) => handleSaveActivity({
+                      activityBody: {
+                        summary: title,
+                        start: { dateTime: start.toISOString() },
+                        end: { dateTime: end.toISOString() }
+                      },
+                      categoryId,
+                      tags,
+                      existingId: calendarId || undefined
+                    })}
                     lockedActivities={lockedActivities}
+                    onAssignCategory={handleAssignCategory}
                     onToggleLock={handleToggleLock}
                     onDeleteActivity={handleDeleteActivity}
                     onDeleteSeries={handleDeleteSeries}
@@ -638,6 +750,13 @@ export default function App() {
                     onSetActivityColor={handleSetActivityColor}
                     onEditSeries={handleEditSeries}
                     onFetchSeriesCount={handleFetchSeriesCount}
+                    onNavigateWeek={navigateWeek}
+                    onFocusArchiveTimeline={focusDate}
+                    onOpenArchiveDraft={(item, warning = "") => openAddActivity(item.start ? new Date(item.start) : new Date(cursorDate), { preserveTime: Boolean(item.start), end: item.end || null, title: item.title, warning, missingFields: [!item.start && "start", !item.end && "end"].filter(Boolean) })}
+                    onEditArchivedActivity={openEditActivityById}
+                    userId={firebaseUser.uid}
+                    tokenNearingExpiry={tokenNearingExpiry}
+                    onReauthCalendar={handleReauthCalendar}
                   />
                 )}
               </div>
@@ -658,9 +777,13 @@ export default function App() {
         // ของครั้งแรกสุดที่เปิดฟอร์มค้างอยู่เสมอ (เดิม key ตอนสร้างใหม่เป็น
         // ค่าคงที่ "new" เฉยๆ ไม่ผูกกับ modalDefaultDate เลย จึงไม่ remount
         // เมื่อกดปุ่มเพิ่มกิจกรรมของวันอื่น)
-        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}`}
+        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}-${modalDefaultTitle}-${modalInitialWarning}`}
         open={modalOpen}
         defaultDate={modalDefaultDate}
+        defaultEnd={modalDefaultEnd}
+        defaultTitle={modalDefaultTitle}
+        initialWarning={modalInitialWarning}
+        missingFields={modalMissingFields}
         initialActivity={modalEditingActivity}
         isSeries={modalEditingAsSeries}
         activities={activities}
@@ -682,6 +805,7 @@ export default function App() {
         reminderTimelineColors={reminderTimelineColors}
         onReminderTimelineColorsChange={setReminderTimelineColors}
       />
+
     </div>
   );
 }

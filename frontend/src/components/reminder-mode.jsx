@@ -373,9 +373,12 @@ export default function ReminderDashboard({
   onEditActivity,
   timelineColors
 }) {
+  // Runtime reminder state belongs to a person, not to this browser. The
+  // previous shared key exposed the prior account's reminders after logout.
+  const userStorageKey = `${STORAGE_KEY}:${firebaseUser?.uid || "guest"}`;
   const { reminders, setReminders, syncScheduleFields, deleteRemoteReminder } = useReminderStore({
     firebaseUser,
-    storageKey: STORAGE_KEY,
+    storageKey: userStorageKey,
     defaultReminders: DEFAULT_REMINDERS,
     extractScheduleFields
   });
@@ -392,7 +395,7 @@ export default function ReminderDashboard({
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [omnibarInput, setOmnibarInput] = useState("");
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [statsEvents, setStatsEvents] = useState(loadReminderStats);
+  const [statsEvents, setStatsEvents] = useState(() => loadReminderStats(firebaseUser?.uid));
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
 
   useEffect(() => {
@@ -403,8 +406,8 @@ export default function ReminderDashboard({
   const reminderStats = useMemo(() => buildReminderStats(reminders, statsEvents), [reminders, statsEvents]);
 
   useEffect(() => {
-    saveReminderStats(statsEvents);
-  }, [statsEvents]);
+    saveReminderStats(statsEvents, firebaseUser?.uid);
+  }, [statsEvents, firebaseUser?.uid]);
 
   const recordStatsEvent = (type, payload) => {
     setStatsEvents((previous) => appendReminderStat(previous, type, payload));

@@ -50,7 +50,8 @@ export default function ActivityPopup({
   onDuplicate,
   onMoveToDay,
   onSetColor,
-  onFetchSeriesCount
+  onFetchSeriesCount,
+  onArchive
 }) {
   const [mode, setMode] = useState("menu");
   const [busyAction, setBusyAction] = useState(null);
@@ -449,6 +450,14 @@ export default function ActivityPopup({
             >
               <span className="quick-btn-icon">{locked ? "🔓" : "🔒"}</span>
               <span className="quick-btn-label">{locked ? "ปลดล็อก" : "ล็อก"}</span>
+            </button>
+            <button
+              type="button" className="quick-btn"
+              onClick={() => { onArchive?.(); onClose?.(); }}
+              title="เก็บสำเนากิจกรรมนี้ไว้ในคลัง"
+            >
+              <span className="quick-btn-icon">▣</span>
+              <span className="quick-btn-label">เก็บเข้าคลัง</span>
             </button>
             {/* ลบ: recurring → ถามก่อน, ปกติ → confirm โดยตรง */}
             <button

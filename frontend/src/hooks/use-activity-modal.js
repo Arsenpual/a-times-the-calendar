@@ -17,6 +17,10 @@ import { normalizeActivityId } from "../id-utils.js";
 export function useActivityModal({ calendarAccessToken, lockedActivities, setError }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDefaultDate, setModalDefaultDate] = useState(null);
+  const [modalDefaultEnd, setModalDefaultEnd] = useState(null);
+  const [modalDefaultTitle, setModalDefaultTitle] = useState("");
+  const [modalInitialWarning, setModalInitialWarning] = useState("");
+  const [modalMissingFields, setModalMissingFields] = useState([]);
   const [modalEditingActivity, setModalEditingActivity] = useState(null);
   const [modalEditingAsSeries, setModalEditingAsSeries] = useState(false);
 
@@ -26,17 +30,17 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
    * time always comes from `new Date()` at the moment the button is
    * pressed, so a new activity defaults to "now" instead of midnight.
    */
-  const openAddActivity = useCallback((day) => {
+  const openAddActivity = useCallback((day, { preserveTime = false, end = null, title = "", warning = "", missingFields = [] } = {}) => {
     const now = new Date();
     const base = day || now;
-    const combined = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      now.getHours(),
-      now.getMinutes()
-    );
+    const combined = preserveTime
+      ? new Date(base)
+      : new Date(base.getFullYear(), base.getMonth(), base.getDate(), now.getHours(), now.getMinutes());
     setModalDefaultDate(combined);
+    setModalDefaultEnd(end ? new Date(end) : null);
+    setModalDefaultTitle(title);
+    setModalInitialWarning(warning);
+    setModalMissingFields(missingFields);
     setModalEditingActivity(null);
     setModalEditingAsSeries(false);
     setModalOpen(true);
@@ -49,6 +53,10 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         return;
       }
       setModalDefaultDate(null);
+      setModalDefaultEnd(null);
+      setModalDefaultTitle("");
+      setModalInitialWarning("");
+      setModalMissingFields([]);
       setModalEditingActivity(activity);
       setModalEditingAsSeries(false);
       setModalOpen(true);
@@ -56,10 +64,35 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     [lockedActivities, setError]
   );
 
+  const openEditActivityById = useCallback(async (activityId) => {
+    if (!calendarAccessToken || !activityId) return;
+    try {
+      const activity = await getActivity(calendarAccessToken, activityId);
+      if (lockedActivities[normalizeActivityId(activity.id)]) {
+        setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
+        return;
+      }
+      setModalDefaultDate(null);
+      setModalDefaultEnd(null);
+      setModalDefaultTitle("");
+      setModalInitialWarning("");
+      setModalMissingFields([]);
+      setModalEditingActivity(activity);
+      setModalEditingAsSeries(false);
+      setModalOpen(true);
+    } catch (error) {
+      setError("ไม่สามารถโหลดกิจกรรมสำหรับแก้ไขได้: " + error.message);
+    }
+  }, [calendarAccessToken, lockedActivities, setError]);
+
   const closeModal = useCallback(() => {
     setModalOpen(false);
     setModalEditingActivity(null);
     setModalDefaultDate(null);
+    setModalDefaultEnd(null);
+    setModalDefaultTitle("");
+    setModalInitialWarning("");
+    setModalMissingFields([]);
     setModalEditingAsSeries(false);
   }, []);
 
@@ -78,6 +111,10 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       try {
         const masterEvent = await getActivity(calendarAccessToken, activity.recurringEventId);
         setModalDefaultDate(null);
+        setModalDefaultEnd(null);
+        setModalDefaultTitle("");
+        setModalInitialWarning("");
+        setModalMissingFields([]);
         setModalEditingActivity(masterEvent);
         setModalEditingAsSeries(true);
         setModalOpen(true);
@@ -91,10 +128,15 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
   return {
     modalOpen,
     modalDefaultDate,
+    modalDefaultEnd,
+    modalDefaultTitle,
+    modalInitialWarning,
+    modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
     openAddActivity,
     openEditActivity,
+    openEditActivityById,
     closeModal,
     handleEditSeries
   };

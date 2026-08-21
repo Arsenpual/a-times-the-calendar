@@ -81,12 +81,17 @@ const CATEGORY_COLOR_SWATCHES = [
  * parent can detect that case and show a warning after saving, rather than
  * blocking the save with a confirm dialog.
  *
- * @param {Date} defaultDate day to prefill when creating a brand-new activity
+ * @param {Date} defaultDate day/time to prefill when creating a brand-new activity
+ * @param {Date|null} defaultEnd optional snapped end time for a newly created activity
  * @param {object|null} initialActivity existing Google Calendar activity when editing, null when creating
  */
 export default function ActivityModal({
   open,
   defaultDate,
+  defaultEnd,
+  defaultTitle = "",
+  initialWarning = "",
+  missingFields = [],
   initialActivity,
   activities,
   categories,
@@ -103,12 +108,16 @@ export default function ActivityModal({
   const initialStart = initialActivity ? activityDate(initialActivity.start) : defaultDate || new Date();
   const initialEnd = initialActivity
     ? activityDate(initialActivity.end)
-    : new Date((defaultDate || new Date()).getTime() + 60 * 60000);
+    : defaultEnd || new Date((defaultDate || new Date()).getTime() + 60 * 60000);
 
-  const [title, setTitle] = useState(initialActivity?.summary || "");
-  const [date, setDate] = useState(toDateInputValue(initialStart));
-  const [startTime, setStartTime] = useState(toTimeInputValue(initialStart));
-  const [endTime, setEndTime] = useState(toTimeInputValue(initialEnd));
+  const [title, setTitle] = useState(initialActivity?.summary || defaultTitle);
+  // When the modal was opened from an incomplete archive entry, leave the
+  // missing value genuinely blank (rather than silently filling "now") so
+  // the red required-field treatment points at the real missing data.
+  const [date, setDate] = useState(missingFields.includes("start") ? "" : toDateInputValue(initialStart));
+  const [endDate, setEndDate] = useState(missingFields.includes("end") ? "" : toDateInputValue(initialEnd));
+  const [startTime, setStartTime] = useState(missingFields.includes("start") ? "" : toTimeInputValue(initialStart));
+  const [endTime, setEndTime] = useState(missingFields.includes("end") ? "" : toTimeInputValue(initialEnd));
 
   const [categoryId, setCategoryId] = useState(
     (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || ""
@@ -202,7 +211,44 @@ export default function ActivityModal({
   const [notes, setNotes] = useState(initialActivity?.description || "");
 
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState(null);
+  const [formError, setFormError] = useState(initialWarning || null);
+  const [remainingRequiredFields, setRemainingRequiredFields] = useState(missingFields);
+  // Editing an existing event must never unexpectedly rewrite its end time.
+  // This only becomes true after that editor has deliberately cleared both
+  // date/time values, which turns it into a fresh time assignment.
+  const [editingTimesCleared, setEditingTimesCleared] = useState(false);
+
+  const dateTimeValue = (dateValue, timeValue) => dateValue && timeValue ? `${dateValue}T${timeValue}` : "";
+  const updateDateTime = (kind, value) => {
+    const [nextDate = "", nextTime = ""] = value.split("T");
+    const shouldAutoSetEnd = !isEditing || missingFields.length > 0 || editingTimesCleared;
+    if (kind === "start") {
+      setDate(nextDate);
+      setStartTime(nextTime);
+      if (value && shouldAutoSetEnd) {
+        const start = new Date(value);
+        if (!Number.isNaN(start.getTime())) {
+          const end = new Date(start.getTime() + 60 * 60 * 1000);
+          setEndDate(toDateInputValue(end));
+          setEndTime(toTimeInputValue(end));
+          setRemainingRequiredFields((current) => current.filter((field) => field !== "end"));
+          setEditingTimesCleared(false);
+        }
+      }
+    } else {
+      setEndDate(nextDate);
+      setEndTime(nextTime);
+    }
+    setRemainingRequiredFields((current) => current.filter((field) => field !== kind));
+    if (!value) {
+      const otherIsEmpty = kind === "start"
+        ? !endDate && !endTime
+        : !date && !startTime;
+      if (otherIsEmpty) setEditingTimesCleared(true);
+    }
+  };
+  const startMissing = remainingRequiredFields.includes("start");
+  const endMissing = remainingRequiredFields.includes("end");
 
   // Tracks whether the person already saw and accepted the "long overnight
   // duration" warning from validate() below — set true after the first
@@ -213,7 +259,7 @@ export default function ActivityModal({
   const [overnightWarningAcknowledged, setOvernightWarningAcknowledged] = useState(false);
   useEffect(() => {
     setOvernightWarningAcknowledged(false);
-  }, [date, startTime, endTime]);
+  }, [date, endDate, startTime, endTime]);
 
   // Escape ปิด modal ได้เหมือนคลิกนอกกรอบ (.modal-overlay's onClick={onClose}
   // ด้านล่าง) — attach ที่ document เพราะโฟกัสอาจอยู่ตรงไหนก็ได้ในฟอร์ม
@@ -295,13 +341,13 @@ export default function ActivityModal({
    */
   const computeStartEnd = () => {
     const start = combineDateAndTime(date, startTime);
-    let end = combineDateAndTime(date, endTime);
+    let end = combineDateAndTime(endDate, endTime);
     // กิจกรรมที่ข้ามเที่ยงคืน (เช่น เริ่ม 23:00 จบ 00:30) จะได้ endTime ที่
     // "น้อยกว่า" startTime เมื่อเทียบเป็นเวลาในวันเดียวกัน — เลื่อน end ไป
     // วันถัดไปแทนที่จะปล่อยให้ end <= start กลายเป็นช่วงเวลาติดลบ/ผิดพลาด
     // ที่ Google Calendar อาจปฏิเสธหรือตีความผิดไปเงียบๆ (ดู validate() ที่
     // อนุญาต endTime <= startTime ไว้แล้วเพื่อรองรับกรณีนี้โดยเฉพาะ)
-    if (end <= start) {
+    if (end <= start && endDate === date) {
       end = new Date(end.getTime() + 24 * 60 * 60000);
     }
     return { start, end };
@@ -342,6 +388,7 @@ export default function ActivityModal({
   };
 
   const validate = () => {
+    if (endDate < date) return "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม";
     // endTime <= startTime (เทียบ string "HH:mm") ไม่ใช่ error เสมอไป —
     // ตีความว่าเป็นกิจกรรมข้ามเที่ยงคืน (เช่น 23:00 - 00:30) แล้วเลื่อน
     // end ไปวันถัดไปให้ตอน buildActivityBody() แทนที่จะบล็อกไม่ให้บันทึก
@@ -467,6 +514,7 @@ export default function ActivityModal({
             ✕
           </button>
         </div>
+        {initialWarning && <div className="modal-initial-warning" role="alert"><strong>ต้องกรอกข้อมูลเพิ่มเติม</strong><span>{initialWarning}</span></div>}
 
         <form onSubmit={handleSubmit} className="modal-form">
           <label className="modal-field field-title">
@@ -481,30 +529,16 @@ export default function ActivityModal({
           </label>
 
           <div className="modal-field-row">
-            <label className="modal-field">
-              <span className="field-label">วันที่</span>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <label className={`modal-field${startMissing ? " is-required-missing" : ""}`}>
+              <span className="field-label">วันและเวลาเริ่ม</span>
+              <input type="datetime-local" value={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />
             </label>
-            <label className="modal-field">
-              <span className="field-label">เวลาเริ่ม</span>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
-              />
-            </label>
-            <label className="modal-field">
-              <span className="field-label">เวลาสิ้นสุด</span>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-              />
+            <label className={`modal-field${endMissing ? " is-required-missing" : ""}`}>
+              <span className="field-label">วันและเวลาสิ้นสุด</span>
+              <input type="datetime-local" value={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />
             </label>
           </div>
-          {endTime <= startTime && (
+          {endDate === date && endTime <= startTime && (
             <p className="modal-hint">
               ⏰ เวลาสิ้นสุดอยู่ก่อนเวลาเริ่ม — ระบบจะถือว่ากิจกรรมนี้จบในวันถัดไป (ข้ามเที่ยงคืน)
             </p>
