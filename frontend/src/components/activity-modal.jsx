@@ -491,7 +491,11 @@ export default function ActivityModal({
 
   const handleDelete = async () => {
     if (!initialActivity) return;
-    if (!window.confirm(`ลบกิจกรรม "${initialActivity.summary || "(ไม่มีชื่อ)"}" ใช่ไหม?`)) return;
+    const isRecurringOccurrence = Boolean(initialActivity.recurringEventId);
+    const confirmation = isRecurringOccurrence
+      ? `ลบเฉพาะครั้งนี้ของ “${initialActivity.summary || "(ไม่มีชื่อ)"}” ใช่ไหม? ครั้งอื่นในชุดทำซ้ำจะไม่ถูกลบ`
+      : `ลบกิจกรรม “${initialActivity.summary || "(ไม่มีชื่อ)"}” ใช่ไหม?`;
+    if (!window.confirm(confirmation)) return;
     setSaving(true);
     setFormError(null);
     try {
@@ -885,7 +889,7 @@ export default function ActivityModal({
                 onClick={handleDelete}
                 disabled={saving}
               >
-                ลบ
+                {initialActivity.recurringEventId ? "ลบครั้งนี้" : "ลบ"}
               </button>
             )}
             <div className="modal-actions-right">

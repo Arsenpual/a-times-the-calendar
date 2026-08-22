@@ -89,11 +89,15 @@ export function useActivityMutations({
    * @param {Date} newEnd
    * @returns {object|null} กิจกรรมที่ทับซ้อนกัน (ตัวแรกที่เจอ) หรือ null ถ้าไม่มี
    */
-  const findOverlappingActivity = (excludeId, newStart, newEnd) => {
+  const findOverlappingActivity = (excludeId, newStart, newEnd, excludedActivityIds = null, timeOverrides = null) => {
     return activities.find((activity) => {
-      if (normalizeActivityId(activity.id) === excludeId) return false;
-      const otherStart = activityDate(activity.start);
-      const otherEnd = activityDate(activity.end) || otherStart;
+      // Multiple selected blocks can be moved in one operation. Compare each
+      // destination only with activities outside that moving batch; otherwise
+      // every selected neighbour incorrectly blocks the save.
+      if (normalizeActivityId(activity.id) === excludeId || excludedActivityIds?.has(activity.id)) return false;
+      const override = timeOverrides?.get(activity.id);
+      const otherStart = override?.start || activityDate(activity.start);
+      const otherEnd = override?.end || activityDate(activity.end) || otherStart;
       if (!otherStart || !otherEnd) return false;
       return newStart < otherEnd && newEnd > otherStart;
     });
@@ -197,7 +201,7 @@ export function useActivityMutations({
    * policy.
    */
   const handleSaveActivity = async ({ activityBody, categoryId, tags, existingId, knownUpdated }) => {
-    if (!calendarAccessToken) return;
+    if (!calendarAccessToken) return false;
 
     let conflictDetected = false;
     if (existingId && knownUpdated) {
@@ -267,12 +271,14 @@ export function useActivityMutations({
    * person presses "บันทึก". Locked activities are skipped outright.
    */
   const handleSaveTimes = async (changes) => {
-    if (!calendarAccessToken || changes.length === 0) return;
+    if (!calendarAccessToken) return false;
+    if (changes.length === 0) return true;
     const failures = [];
     let anySkippedLocked = false;
     let anySkippedOverlap = false;
     let anyConflicts = false;
     let tokenExpired = false;
+    const movingActivityIds = new Set(changes.map(({ id }) => id));
     for (const { id, start, end } of changes) {
       const normalizedId = normalizeActivityId(id);
       if (lockedActivities[normalizedId]) {
@@ -280,12 +286,9 @@ export function useActivityMutations({
         continue;
       }
       // เช็คทับซ้อนก่อนบันทึกเวลาใหม่ — เทียบกับ `activities` ที่โหลดไว้
-      // (รวมกิจกรรมอื่นที่ยังไม่ถูกลากในรอบนี้ด้วย) ไม่รวมเวลาที่กำลังลาก
-      // ของกิจกรรมอื่นใน `changes` ชุดเดียวกันที่ยังไม่ถูก save จริง — เคส
-      // ลากสองกิจกรรมพร้อมกันให้มาชนกันในรอบเดียวยังหลุดผ่านได้ (เกิดยาก
-      // ในทางปฏิบัติเพราะ UI ลากได้ทีละกิจกรรม) แต่ยอมรับความเสี่ยงนี้ไว้
-      // ก่อนแทนที่จะเพิ่มความซับซ้อนของการจำลอง state ระหว่าง batch
-      if (findOverlappingActivity(normalizedId, start, end)) {
+      // สมาชิกใน batch เดียวกันย้ายด้วย delta เดียวกัน จึงไม่ควรกีดขวาง
+      // กันเอง แต่กิจกรรมที่ไม่ได้เลือกยังเป็นข้อห้ามตามปกติ.
+      if (findOverlappingActivity(normalizedId, start, end, movingActivityIds)) {
         anySkippedOverlap = true;
         continue;
       }
@@ -307,7 +310,7 @@ export function useActivityMutations({
     if (tokenExpired) {
       setCalendarAccessToken(null);
       setError("สิทธิ์เข้าถึง Google Calendar หมดอายุระหว่างบันทึก — กรุณายืนยันตัวตนอีกครั้งแล้วลองอีกครั้ง");
-      return;
+      return false;
     }
     if (failures.length > 0) {
       setError(`ปรับเวลาบางกิจกรรมไม่สำเร็จ — ${failures.join(", ")}`);
@@ -324,6 +327,7 @@ export function useActivityMutations({
     }
     await loadActivities();
     refreshTagSearchIfActive();
+    return failures.length === 0 && !anySkippedLocked && !anySkippedOverlap;
   };
 
   /** นับจำนวน instances ของ recurring series สำหรับ ActivityPopup */
@@ -339,6 +343,13 @@ export function useActivityMutations({
 
   const handleDeleteActivity = async (activityId) => {
     if (!calendarAccessToken) return;
+    const deletedActivity = activities.find((activity) => activity.id === activityId);
+    // Categories/tags/locks are stored under the normalized master id. An
+    // occurrence is only a cancellation exception in Google Calendar, so it
+    // must never erase metadata shared by the remaining occurrences.
+    const isRecurringOccurrence = Boolean(
+      deletedActivity?.recurringEventId && deletedActivity.id !== deletedActivity.recurringEventId
+    );
     const normalizedId = normalizeActivityId(activityId);
     if (lockedActivities[normalizedId]) {
       throw new Error("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนลบ");
@@ -351,39 +362,41 @@ export function useActivityMutations({
     }
     // Optimistic removal prevents a deleted block lingering while Calendar's
     // subsequent list request is in flight (or briefly eventually-consistent).
-    setActivities((previous) => previous.filter((activity) => normalizeActivityId(activity.id) !== normalizedId));
-    setActivityCategoryMap((prev) => {
-      const next = { ...prev };
-      delete next[normalizedId];
-      return next;
-    });
-    try {
-      await assignActivityCategory(normalizedId, null);
-    } catch (e) {
-      // Non-fatal — the activity itself is already gone from Google Calendar.
-    }
-    setActivityTagMap((prev) => {
-      const next = { ...prev };
-      delete next[normalizedId];
-      return next;
-    });
-    try {
-      await setActivityTags(normalizedId, []);
-    } catch (e) {
-      // Non-fatal — the activity itself is already gone from Google Calendar.
-    }
-    // Clean up any leftover lock doc too — see handleDeleteSeries below for
-    // the same reasoning in the series case.
-    setLockedActivities((prev) => {
-      if (!prev[normalizedId]) return prev;
-      const next = { ...prev };
-      delete next[normalizedId];
-      return next;
-    });
-    try {
-      await setActivityLocked(normalizedId, false);
-    } catch (e) {
-      // Non-fatal — the activity itself is already gone from Google Calendar.
+    setActivities((previous) => previous.filter((activity) => activity.id !== activityId));
+    if (!isRecurringOccurrence) {
+      setActivityCategoryMap((prev) => {
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+      try {
+        await assignActivityCategory(normalizedId, null);
+      } catch (e) {
+        // Non-fatal — the activity itself is already gone from Google Calendar.
+      }
+      setActivityTagMap((prev) => {
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+      try {
+        await setActivityTags(normalizedId, []);
+      } catch (e) {
+        // Non-fatal — the activity itself is already gone from Google Calendar.
+      }
+      // Clean up any leftover lock doc too — see handleDeleteSeries below for
+      // the same reasoning in the series case.
+      setLockedActivities((prev) => {
+        if (!prev[normalizedId]) return prev;
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+      try {
+        await setActivityLocked(normalizedId, false);
+      } catch (e) {
+        // Non-fatal — the activity itself is already gone from Google Calendar.
+      }
     }
     await loadActivities();
     refreshTagSearchIfActive();
@@ -531,31 +544,35 @@ export function useActivityMutations({
    * @param {string} activityId
    * @param {string} dateStr "YYYY-MM-DD"
    */
-  const handleMoveActivityToDay = async (activityId, dateStr) => {
-    if (!calendarAccessToken) return;
+  const handleMoveActivityToDay = async (activityId, dateStr, savedTimeChanges = []) => {
+    if (!calendarAccessToken) return false;
     const normalizedId = normalizeActivityId(activityId);
     if (lockedActivities[normalizedId]) {
       setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนย้ายวัน");
-      return;
+      return false;
     }
-    const activity = activities.find((a) => normalizeActivityId(a.id) === normalizedId);
-    if (!activity) return;
+    const activity = activities.find((a) => a.id === activityId) || activities.find((a) => normalizeActivityId(a.id) === normalizedId);
+    if (!activity) return false;
     const rawId = activity.id;
 
     const [y, m, d] = dateStr.split("-").map(Number);
 
-    const oldStart = activityDate(activity.start);
-    const oldEnd = activityDate(activity.end);
+    // The caller may have just flushed local timeline changes. React state
+    // refreshes asynchronously, so use that just-saved snapshot here too.
+    const savedTimes = new Map(savedTimeChanges.map(({ id, start, end }) => [id, { start: new Date(start), end: new Date(end) }]));
+    const savedCurrentTime = savedTimes.get(rawId);
+    const oldStart = savedCurrentTime?.start || activityDate(activity.start);
+    const oldEnd = savedCurrentTime?.end || activityDate(activity.end);
     const durationMs = oldEnd - oldStart;
     const newStart = new Date(y, m - 1, d, oldStart.getHours(), oldStart.getMinutes(), oldStart.getSeconds());
     const newEnd = new Date(newStart.getTime() + durationMs);
 
-    const overlapping = findOverlappingActivity(normalizedId, newStart, newEnd);
+    const overlapping = findOverlappingActivity(normalizedId, newStart, newEnd, null, savedTimes);
     if (overlapping) {
       setError(
         `ย้ายไม่สำเร็จ — เวลาจะทับซ้อนกับกิจกรรม "${overlapping.summary || "(ไม่มีชื่อ)"}" ในวันนั้น`
       );
-      return;
+      return false;
     }
 
     const body = { start: { dateTime: newStart.toISOString() }, end: { dateTime: newEnd.toISOString() } };
@@ -572,6 +589,7 @@ export function useActivityMutations({
     }
     await loadActivities();
     refreshTagSearchIfActive();
+    return true;
   };
 
   /**

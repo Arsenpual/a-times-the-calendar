@@ -65,6 +65,12 @@ export default function ActivityModeWeekSpine({
   const [dragged, setDragged] = useState(null);
   const [interactionWarning, setInteractionWarning] = useState("");
   const [contextMenu, setContextMenu] = useState(null);
+  // Selection is intentionally separate from timeline manipulation: it is a
+  // collection for bulk deletion, not a modifier for moving/resizing blocks.
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedActivityIds, setSelectedActivityIds] = useState(() => new Set());
+  const [pendingTimeChanges, setPendingTimeChanges] = useState(() => new Map());
+  const [isSavingTimeChanges, setIsSavingTimeChanges] = useState(false);
   const dragStartedAt = useRef(null);
   const shouldSuppressBlockClick = useRef(false);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
@@ -83,9 +89,18 @@ export default function ActivityModeWeekSpine({
     return day;
   }), [weekStart]);
 
+  const timelineActivities = useMemo(() => activities.map((activity) => {
+    const pending = pendingTimeChanges.get(activity.id);
+    if (!pending) return activity;
+    return {
+      ...activity,
+      start: { ...activity.start, dateTime: pending.start.toISOString() },
+      end: { ...activity.end, dateTime: pending.end.toISOString() }
+    };
+  }), [activities, pendingTimeChanges]);
   const { timedSegments, allDayActivities } = useMemo(
-    () => buildWeekSpineData({ activities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities }),
-    [activities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities]
+    () => buildWeekSpineData({ activities: timelineActivities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities }),
+    [timelineActivities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities]
   );
   const archivedCalendarIds = useMemo(
     () => new Set(activityArchive.map((item) => item.calendarId).filter(Boolean)),
@@ -274,6 +289,31 @@ export default function ActivityModeWeekSpine({
     return () => window.clearTimeout(timeout);
   }, [interactionWarning]);
 
+  // Folder-like selection: Ctrl/Cmd-click toggles an item without opening
+  // its editor. Delete removes the selected items after one explicit
+  // confirmation; Escape exits selection mode without changing activities.
+  useEffect(() => {
+    const handleSelectionKeys = (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.matches("input, textarea, select") || target.isContentEditable)) return;
+      if (event.key === "Escape" && selectedActivityIds.size) {
+        setSelectedActivityIds(new Set());
+        setIsSelectionMode(false);
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedActivityIds.size) {
+        event.preventDefault();
+        if (!window.confirm(`ลบกิจกรรมที่เลือก ${selectedActivityIds.size} รายการใช่ไหม?`)) return;
+        const ids = [...selectedActivityIds];
+        setSelectedActivityIds(new Set());
+        setIsSelectionMode(false);
+        Promise.all(ids.map((id) => onDeleteActivity?.(id))).catch((error) => setInteractionWarning(error?.message || "ลบบางกิจกรรมไม่สำเร็จ"));
+      }
+    };
+    window.addEventListener("keydown", handleSelectionKeys);
+    return () => window.removeEventListener("keydown", handleSelectionKeys);
+  }, [selectedActivityIds, onDeleteActivity]);
+
   useEffect(() => {
     if (!interactionWarning && !contextMenu) return undefined;
     const dismissTransientUi = (event) => {
@@ -324,12 +364,48 @@ export default function ActivityModeWeekSpine({
 
   // Keep the same half-open interval rule as use-activity-mutations:
   // touching an activity's end exactly is valid; intersecting it is not.
-  const findOverlap = (start, end, excludeCalendarId = null) => activities.find((activity) => {
-    if (activity.id === excludeCalendarId) return false;
+  const findOverlap = (start, end, excludeCalendarId = null, excludedCalendarIds = null) => timelineActivities.find((activity) => {
+    if (activity.id === excludeCalendarId || excludedCalendarIds?.has(activity.id)) return false;
     const otherStart = activityDate(activity.start);
     const otherEnd = activityDate(activity.end) || otherStart;
     return otherStart && otherEnd && start < otherEnd && end > otherStart;
   });
+
+  const queueTimeChanges = (changes) => {
+    setPendingTimeChanges((current) => {
+      const next = new Map(current);
+      changes.forEach(({ id, start, end }) => next.set(id, { start: new Date(start), end: new Date(end) }));
+      return next;
+    });
+  };
+
+  const savePendingTimeChanges = async () => {
+    const changes = [...pendingTimeChanges.entries()].map(([id, value]) => ({ id, start: value.start, end: value.end }));
+    if (changes.length === 0) return true;
+    setIsSavingTimeChanges(true);
+    try {
+      const saved = await onSaveTimes?.(changes);
+      if (saved === false) {
+        setInteractionWarning("บันทึกการปรับเวลาไม่สำเร็จ — กรุณาแก้เวลาที่ชนกันก่อน");
+        return false;
+      }
+      setPendingTimeChanges(new Map());
+      return true;
+    } catch (error) {
+      setInteractionWarning(error?.message || "บันทึกการปรับเวลาไม่สำเร็จ");
+      return false;
+    } finally {
+      setIsSavingTimeChanges(false);
+    }
+  };
+
+  const moveActivityToDay = async (activityId, date) => {
+    // A date move is deliberately transactional from the person's point of
+    // view: flush any local timeline edits first, then request the move.
+    const changesBeforeMove = [...pendingTimeChanges.entries()].map(([id, value]) => ({ id, start: value.start, end: value.end }));
+    if (!(await savePendingTimeChanges())) return false;
+    return onMoveActivityToDay?.(activityId, date, changesBeforeMove);
+  };
 
   const openContextMenu = (event, segment) => {
     event.preventDefault();
@@ -427,7 +503,19 @@ export default function ActivityModeWeekSpine({
     setDragged((current) => {
       if (!current) return current;
       if (current.type === "resize") {
-        return { ...current, endMinutes: Math.max(current.startMinutes + SNAP_MINUTES, pointerMinutes + SNAP_MINUTES) };
+        // Selection does not affect moving. It only lets the resize handle
+        // apply one shared end-time delta to all selected activities.
+        const selectedDurations = isSelectionMode && selectedActivityIds.has(current.calendarId)
+          ? timelineSegments
+            .filter((segment) => selectedActivityIds.has(segment.calendarId) && !segment.isLocked && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay)
+            .map((segment) => Math.round((segment.end - segment.start) / 60000))
+          : [current.durationMinutes];
+        const shortestDuration = Math.min(...selectedDurations, current.durationMinutes);
+        const smallestAllowedEnd = Math.max(
+          current.startMinutes + SNAP_MINUTES,
+          current.endMinutes - Math.max(0, shortestDuration - SNAP_MINUTES)
+        );
+        return { ...current, endMinutes: Math.min(DAY_END_HOUR * 60, Math.max(smallestAllowedEnd, pointerMinutes + SNAP_MINUTES)) };
       }
       const startMinutes = Math.max(DAY_START_HOUR * 60, Math.min(DAY_END_HOUR * 60 - current.durationMinutes, pointerMinutes - current.pointerOffsetMinutes));
       return { ...current, day: targetDay, startMinutes, endMinutes: startMinutes + current.durationMinutes };
@@ -441,21 +529,46 @@ export default function ActivityModeWeekSpine({
     setDragged(null);
     dragStartedAt.current = null;
     if (!shouldSuppressBlockClick.current) {
+      // In selection mode, a press/release toggles selection; a true drag is
+      // handled below and moves the selected set together.
+      shouldSuppressBlockClick.current = true;
+      if (isSelectionMode) {
+        setSelectedActivityIds((current) => {
+          const next = new Set(current);
+          next.has(completed.calendarId) ? next.delete(completed.calendarId) : next.add(completed.calendarId);
+          return next;
+        });
+        return;
+      }
       // A pointer press/release without movement is a left-click: open the
       // existing single-activity editor directly from the timeline block.
-      shouldSuppressBlockClick.current = true;
       onEditActivity?.(completed.source);
       return;
     }
     const start = dateAtMinutes(completed.day, completed.startMinutes);
     const end = dateAtMinutes(completed.day, completed.endMinutes);
-    const overlap = findOverlap(start, end, completed.calendarId);
+    const selectionForBatchEdit = isSelectionMode && selectedActivityIds.has(completed.calendarId)
+      ? selectedActivityIds
+      : null;
+    const overlap = findOverlap(start, end, completed.calendarId, selectionForBatchEdit);
     if (overlap) {
       setInteractionWarning(`บันทึกไม่ได้: เวลาชนกับ “${overlap.summary || "(ไม่มีชื่อกิจกรรม)"}`);
       return;
     }
     if (start.getTime() !== new Date(completed.source.start.dateTime).getTime() || end.getTime() !== new Date(completed.source.end.dateTime).getTime()) {
-      onSaveTimes?.([{ id: completed.calendarId, start, end }]);
+      if (selectionForBatchEdit) {
+        const delta = completed.type === "resize"
+          ? end.getTime() - new Date(completed.source.end.dateTime).getTime()
+          : start.getTime() - new Date(completed.source.start.dateTime).getTime();
+        const changes = timelineSegments
+          .filter((segment) => selectedActivityIds.has(segment.calendarId) && !segment.isLocked && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay)
+          .map((segment) => completed.type === "resize"
+            ? { id: segment.calendarId, start: new Date(segment.start), end: new Date(segment.end.getTime() + delta) }
+            : { id: segment.calendarId, start: new Date(segment.start.getTime() + delta), end: new Date(segment.end.getTime() + delta) });
+        queueTimeChanges(changes);
+      } else {
+        queueTimeChanges([{ id: completed.calendarId, start, end }]);
+      }
     }
   };
 
@@ -465,6 +578,11 @@ export default function ActivityModeWeekSpine({
         {visibleAllDayActivities.length > 0 && <div className="week-spine-all-day"><strong>กิจกรรมทั้งวัน</strong>{visibleAllDayActivities.map((activity) => <span key={activity.calendarId}>{activity.title}</span>)}</div>}
         <section className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>
+        {pendingTimeChanges.size > 0 && <div className="week-spine-save-bar" role="status">
+          <span>มีการปรับเวลา {pendingTimeChanges.size} รายการ</span>
+          <button type="button" onClick={() => setPendingTimeChanges(new Map())} disabled={isSavingTimeChanges}>ยกเลิก</button>
+          <button type="button" className="week-spine-save-btn" onClick={savePendingTimeChanges} disabled={isSavingTimeChanges}>{isSavingTimeChanges ? "กำลังบันทึก..." : "บันทึก"}</button>
+        </div>}
         <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
           <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
           <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>
@@ -507,13 +625,13 @@ export default function ActivityModeWeekSpine({
                     const laneLeft = lane.column * laneWidth;
                     if (dragged?.calendarId === segment.calendarId) return null;
                     const continuationClass = segment.continuesFromPreviousDay || segment.continuesIntoNextDay ? " is-continuation" : "";
-                    return <span key={segment.segmentId} title={`${segment.title}${segment.source.isOnboardingSample ? " (ตัวอย่าง)" : ""}${segment.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${segment.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`} className={`week-spine-block${segment.isLocked || segment.source.isOnboardingSample || segment.continuesFromPreviousDay || segment.continuesIntoNextDay ? "" : " is-draggable"}${continuationClass}`} style={{ top: `${top}%`, height: `${height}%`, left: `calc(${laneLeft}% + 3px)`, width: `calc(${laneWidth}% - 6px)`, backgroundColor: continuationClass ? segment.color.bg : segment.color.border, color: segment.color.border, borderLeftColor: segment.color.border }} onPointerDown={(event) => { if (!segment.source.isOnboardingSample) beginExistingDrag(event, segment, day, "move"); }} onClick={(event) => { event.stopPropagation(); if (shouldSuppressBlockClick.current) { shouldSuppressBlockClick.current = false; return; } openSegmentEditor(segment); }} onContextMenu={(event) => openContextMenu(event, segment)}>
+                    return <span key={segment.segmentId} title={`${segment.title}${segment.source.isOnboardingSample ? " (ตัวอย่าง)" : ""}${segment.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${segment.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`} className={`week-spine-block${segment.isLocked || segment.source.isOnboardingSample || segment.continuesFromPreviousDay || segment.continuesIntoNextDay ? "" : " is-draggable"}${continuationClass}${selectedActivityIds.has(segment.calendarId) ? " is-series-selected" : ""}`} style={{ top: `${top}%`, height: `${height}%`, left: `calc(${laneLeft}% + 3px)`, width: `calc(${laneWidth}% - 6px)`, backgroundColor: continuationClass ? segment.color.bg : segment.color.border, color: segment.color.border, borderLeftColor: segment.color.border }} onPointerDown={(event) => { if (!segment.source.isOnboardingSample && (!isSelectionMode || selectedActivityIds.has(segment.calendarId))) beginExistingDrag(event, segment, day, "move"); }} onClick={(event) => { event.stopPropagation(); if (shouldSuppressBlockClick.current) { shouldSuppressBlockClick.current = false; return; } if (isSelectionMode || event.ctrlKey || event.metaKey) { setSelectedActivityIds((current) => { const next = new Set(current); next.has(segment.calendarId) ? next.delete(segment.calendarId) : next.add(segment.calendarId); return next; }); return; } openSegmentEditor(segment); }} onContextMenu={(event) => openContextMenu(event, segment)}>
                       <AutoShrinkText text={segment.title} minScale={0.5} baseFontSize="12px" className="week-spine-block-title" />
-                      {!segment.isLocked && !segment.source.isOnboardingSample && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay && <span className="week-spine-resize-handle" onPointerDown={(event) => beginExistingDrag(event, segment, day, "resize")} />}
+                      {(!isSelectionMode || selectedActivityIds.has(segment.calendarId)) && !segment.isLocked && !segment.source.isOnboardingSample && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay && <span className="week-spine-resize-handle" onPointerDown={(event) => beginExistingDrag(event, segment, day, "resize")} />}
                     </span>;
                   })}
                   {draft && isSameDay(draft.day, day) && <span className={`week-spine-draft${findOverlap(dateAtMinutes(draft.day, draft.startMinutes), dateAtMinutes(draft.day, draft.endMinutes)) ? " is-conflicting" : ""}`} style={{ top: `${((draft.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((draft.endMinutes - draft.startMinutes) / DAY_SPAN_MINUTES) * 100}%` }} />}
-                  {dragged && isSameDay(dragged.day, day) && <span className={`week-spine-block is-dragging${findOverlap(dateAtMinutes(dragged.day, dragged.startMinutes), dateAtMinutes(dragged.day, dragged.endMinutes), dragged.calendarId) ? " is-conflicting" : ""}`} style={{ top: `${((dragged.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((dragged.endMinutes - dragged.startMinutes) / DAY_SPAN_MINUTES) * 100}%`, backgroundColor: dragged.source ? timelineSegments.find((segment) => segment.calendarId === dragged.calendarId)?.color.border : undefined }}><AutoShrinkText text={dragged.source?.summary || "(ไม่มีชื่อกิจกรรม)"} minScale={0.5} baseFontSize="12px" className="week-spine-block-title" /></span>}
+                  {dragged && isSameDay(dragged.day, day) && <span className={`week-spine-block is-dragging${findOverlap(dateAtMinutes(dragged.day, dragged.startMinutes), dateAtMinutes(dragged.day, dragged.endMinutes), dragged.calendarId, isSelectionMode && selectedActivityIds.has(dragged.calendarId) ? selectedActivityIds : null) ? " is-conflicting" : ""}`} style={{ top: `${((dragged.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((dragged.endMinutes - dragged.startMinutes) / DAY_SPAN_MINUTES) * 100}%`, backgroundColor: dragged.source ? timelineSegments.find((segment) => segment.calendarId === dragged.calendarId)?.color.border : undefined }}><AutoShrinkText text={dragged.source?.summary || "(ไม่มีชื่อกิจกรรม)"} minScale={0.5} baseFontSize="12px" className="week-spine-block-title" /></span>}
                 </span>
               </button>
             );
@@ -535,10 +653,14 @@ export default function ActivityModeWeekSpine({
         onToggleLock={(locked) => onToggleLock?.(normalizeActivityId(contextMenu.segment.calendarId), locked)}
         onEditActivity={() => { setContextMenu(null); onEditActivity?.(contextMenu.segment.source); }}
         onEditSeries={() => { setContextMenu(null); onEditSeries?.(contextMenu.segment.source); }}
-        onDelete={() => onDeleteActivity?.(normalizeActivityId(contextMenu.segment.calendarId))}
+        // IMPORTANT: Google Calendar needs the raw occurrence id here.
+        // normalizeActivityId() removes the recurrence suffix and turns this
+        // into the master series id, which would delete every occurrence.
+        onDelete={() => onDeleteActivity?.(contextMenu.segment.calendarId)}
         onDeleteSeries={() => onDeleteSeries?.(contextMenu.segment.source.recurringEventId)}
+        onSelectSeriesDrag={() => { setIsSelectionMode(true); setSelectedActivityIds((current) => new Set(current).add(contextMenu.segment.calendarId)); }}
         onDuplicate={() => onDuplicateActivity?.(contextMenu.segment.source)}
-        onMoveToDay={(date) => onMoveActivityToDay?.(normalizeActivityId(contextMenu.segment.calendarId), date)}
+        onMoveToDay={(date) => moveActivityToDay(contextMenu.segment.calendarId, date)}
         onSetColor={(colorId) => onSetActivityColor?.(normalizeActivityId(contextMenu.segment.calendarId), colorId)}
         onFetchSeriesCount={() => onFetchSeriesCount?.(contextMenu.segment.source.recurringEventId)}
         onArchive={() => archiveActivity(contextMenu.segment)}

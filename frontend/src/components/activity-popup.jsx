@@ -47,6 +47,7 @@ export default function ActivityPopup({
   onEditSeries,
   onDelete,
   onDeleteSeries,
+  onSelectSeriesDrag,
   onDuplicate,
   onMoveToDay,
   onSetColor,
@@ -123,8 +124,8 @@ export default function ActivityPopup({
   };
 
   const handleConfirmMove = () => runQuickAction("move", async () => {
-    await onMoveToDay?.(moveDate);
-    onClose?.();
+    const moved = await onMoveToDay?.(moveDate);
+    if (moved !== false) onClose?.();
   });
 
   // ย้ายไปวันถัดไปทันที (start + 1 วัน) โดยไม่ต้องเปิด date picker — ทางลัด
@@ -134,8 +135,8 @@ export default function ActivityPopup({
   const handleMoveToNextDay = () => runQuickAction("move-next-day", async () => {
     const nextDay = new Date(start);
     nextDay.setDate(nextDay.getDate() + 1);
-    await onMoveToDay?.(toDateInputValue(nextDay));
-    onClose?.();
+    const moved = await onMoveToDay?.(toDateInputValue(nextDay));
+    if (moved !== false) onClose?.();
   });
 
   const handleConfirmDelete = () => runQuickAction("delete", async () => {
@@ -416,6 +417,12 @@ export default function ActivityPopup({
               <span className="quick-btn-icon">⧉</span>
               <span className="quick-btn-label">{busyAction === "duplicate" ? "กำลังทำ..." : "ทำสำเนา"}</span>
             </button>
+            {isRecurring && (
+              <button type="button" className="quick-btn" onClick={() => { onSelectSeriesDrag?.(); onClose?.(); }} title="เปิดโหมดเลือกหลายรายการสำหรับลบ">
+                <span className="quick-btn-icon">✓</span>
+                <span className="quick-btn-label">เลือกรายการ</span>
+              </button>
+            )}
             <button
               type="button" className="quick-btn"
               onClick={() => setMode("move-day")}

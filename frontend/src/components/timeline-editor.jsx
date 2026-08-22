@@ -589,7 +589,9 @@ export default function TimelineEditor({
               onAssignCategory={(categoryId) => onAssignCategory?.(normalizeActivityId(contextActivity.id), categoryId)}
               onToggleLock={(locked) => onToggleLock?.(normalizeActivityId(contextActivity.id), locked)}
               onEditActivity={() => onEditActivity?.(contextActivity)}
-              onDelete={() => onDeleteActivity?.(normalizeActivityId(contextActivity.id))}
+              // Keep the raw recurring occurrence id for a one-instance
+              // delete. Normalizing it targets the recurring master instead.
+              onDelete={() => onDeleteActivity?.(contextActivity.id)}
               onDeleteSeries={
                 contextActivity.recurringEventId
                   ? () => onDeleteSeries?.(contextActivity.recurringEventId)

@@ -466,13 +466,13 @@ export default function ReminderDashboard({
   // ไม่ให้ผู้ใช้เลือกเอง เพื่อลดขั้นตอนเหลือแค่พิมพ์ชื่อ + Enter)
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupColor, setNewGroupColor] = useState(GROUP_COLOR_PALETTE[0]);
   const submitNewGroup = async (event) => {
     event.preventDefault();
     const trimmed = newGroupName.trim();
     if (!trimmed) return;
-    const color = GROUP_COLOR_PALETTE[groups.length % GROUP_COLOR_PALETTE.length];
     try {
-      await addGroup(trimmed, color);
+      await addGroup(trimmed, newGroupColor);
       setNewGroupName("");
       setIsAddingGroup(false);
     } catch {
@@ -990,6 +990,12 @@ export default function ReminderDashboard({
       if (!draft.runAllDay && draft.windowStart && draft.windowEnd) {
         newReminder.windowStart = draft.windowStart;
         newReminder.windowEnd = draft.windowEnd;
+      } else {
+        // ต้องเขียน null อย่างชัดเจน ไม่ใช่ปล่อย field หายไป: ตอนแก้ไข
+        // state ถูก merge กับ reminder เก่า จึงจะล้างช่วงเวลาจำกัดเดิมได้
+        // ทั้งใน local state และ Firestore mirror.
+        newReminder.windowStart = null;
+        newReminder.windowEnd = null;
       }
     } else if (draft.type === REMINDER_TYPE.WEEKLY) {
       newReminder.days = draft.days;
@@ -1821,6 +1827,43 @@ export default function ReminderDashboard({
           display: flex;
           gap: 6px;
         }
+
+        .nav-group-color-picker {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .nav-group-color-option {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border: 2px solid transparent;
+          border-radius: 50%;
+          background: var(--group-color);
+          cursor: pointer;
+        }
+
+        .nav-group-color-option:hover,
+        .nav-group-color-option.is-selected {
+          border-color: var(--g-surface);
+          outline: 2px solid var(--group-color);
+        }
+
+        .nav-group-custom-color {
+          position: relative;
+          display: grid;
+          place-items: center;
+          width: 20px;
+          height: 20px;
+          overflow: hidden;
+          border: 1px dashed var(--g-outline);
+          border-radius: 50%;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+        }
+        .nav-group-custom-color span { position: relative; z-index: 1; pointer-events: none; font-size: 14px; line-height: 1; }
+        .nav-group-custom-color input[type="color"] { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); padding: 0; border: 0; opacity: 0; cursor: pointer; }
 
         .nav-add-group-confirm {
           background: var(--g-blue);
@@ -2940,6 +2983,23 @@ export default function ReminderDashboard({
                   autoFocus
                   maxLength={60}
                 />
+                <div className="nav-group-color-picker" role="group" aria-label="เลือกสีของกลุ่ม">
+                  {GROUP_COLOR_PALETTE.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`nav-group-color-option${newGroupColor === color ? " is-selected" : ""}`}
+                      style={{ "--group-color": color }}
+                      onClick={() => setNewGroupColor(color)}
+                      aria-label={`เลือกสี ${color}`}
+                      aria-pressed={newGroupColor === color}
+                    />
+                  ))}
+                  <label className="nav-group-custom-color" title="เลือกเฉดสีเอง">
+                    <input type="color" value={newGroupColor} onChange={(event) => setNewGroupColor(event.target.value)} aria-label="เลือกเฉดสีเอง" />
+                    <span>+</span>
+                  </label>
+                </div>
                 <div className="nav-add-group-actions">
                   <button type="submit" className="nav-add-group-confirm">เพิ่ม</button>
                   <button
