@@ -62,6 +62,17 @@ function snapToNextWindowStart(ms, windowStart, windowEnd) {
   return candidate;
 }
 
+function nextAllDayIntervalDue(reminder, from) {
+  const step = intervalMs(reminder);
+  if (!Number.isFinite(step) || step <= 0) return Infinity;
+  const dayStart = new Date(from);
+  dayStart.setHours(0, 0, 0, 0);
+  const nextOffset = (Math.floor((from - dayStart.getTime()) / step) + 1) * step;
+  return nextOffset >= 24 * 60 * 60 * 1000
+    ? dayStart.getTime() + 24 * 60 * 60 * 1000
+    : dayStart.getTime() + nextOffset;
+}
+
 function computeNextDueAt(reminder, from) {
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
@@ -99,7 +110,9 @@ function computeNextDueAt(reminder, from) {
     case REMINDER_TYPE.INTERVAL:
     default: {
       const next = from + intervalMs(reminder);
-      return hasWindow(reminder) ? snapToNextWindowStart(next, reminder.windowStart, reminder.windowEnd) : next;
+      return hasWindow(reminder)
+        ? snapToNextWindowStart(next, reminder.windowStart, reminder.windowEnd)
+        : nextAllDayIntervalDue(reminder, from);
     }
   }
 }

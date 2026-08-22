@@ -108,6 +108,30 @@ function MainApp() {
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
 
+  // The archive is per-account local visibility state. Keep one shared set
+  // here so every Activity Mode surface reads the same filtered data.
+  const [archivedActivityIds, setArchivedActivityIds] = useState(() => new Set());
+  useEffect(() => {
+    const archiveStorageKey = `times-activity-archive:${firebaseUser?.uid || "guest"}`;
+    const refreshArchivedActivityIds = () => {
+      try {
+        const archive = JSON.parse(window.localStorage.getItem(archiveStorageKey) || "[]");
+        setArchivedActivityIds(new Set(
+          (Array.isArray(archive) ? archive : [])
+            .flatMap((item) => item.calendarId ? [item.calendarId, normalizeActivityId(item.calendarId)] : [])
+        ));
+      } catch {
+        setArchivedActivityIds(new Set());
+      }
+    };
+    refreshArchivedActivityIds();
+    const onArchiveChanged = (event) => {
+      if (event.detail?.userId === firebaseUser?.uid) refreshArchivedActivityIds();
+    };
+    window.addEventListener("times-activity-archive-changed", onArchiveChanged);
+    return () => window.removeEventListener("times-activity-archive-changed", onArchiveChanged);
+  }, [firebaseUser?.uid]);
+
   useEffect(() => {
     if (!error) return undefined;
     const dismissIfOutsideToast = (event) => {
@@ -144,7 +168,7 @@ function MainApp() {
     closeDay
   } = nav;
 
-  const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError });
+  const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
   const {
     activities,
     setActivities,
@@ -260,14 +284,16 @@ function MainApp() {
    * activities ของสัปดาห์ปัจจุบัน เพื่อให้เห็นผลลัพธ์ข้ามสัปดาห์ได้
    */
   const visibleActivities = useMemo(() => {
-    if (tagSearchTerms.length === 0) return [...activities, ...onboardingActivities];
+    const isArchived = (activity) => archivedActivityIds.has(activity.id) || archivedActivityIds.has(normalizeActivityId(activity.id));
+    if (tagSearchTerms.length === 0) return [...activities, ...onboardingActivities].filter((activity) => !isArchived(activity));
     const queries = tagSearchTerms.map((t) => t.toLowerCase());
     return tagSearchResults.filter((activity) => {
+      if (isArchived(activity)) return false;
       const tags = activityTagMap[normalizeActivityId(activity.id)] || [];
       const lowerTags = tags.map((t) => t.toLowerCase());
       return queries.some((q) => lowerTags.some((tag) => tag.includes(q)));
     });
-  }, [activities, activityTagMap, tagSearchTerms, tagSearchResults, onboardingActivities]);
+  }, [activities, activityTagMap, tagSearchTerms, tagSearchResults, onboardingActivities, archivedActivityIds]);
   const displayedActivityCategoryMap = useMemo(
     () => ({ ...activityCategoryMap, ...onboardingCategoryMap }),
     [activityCategoryMap, onboardingCategoryMap]
@@ -554,7 +580,7 @@ function MainApp() {
         {firebaseUser && mode === "reminder" && (
           <ReminderMode
             firebaseUser={firebaseUser}
-            activities={activities}
+            activities={visibleActivities}
             categories={categories}
             activityCategoryMap={activityCategoryMap}
             onEditActivity={openEditActivity}
@@ -701,7 +727,7 @@ function MainApp() {
                     </div>
                     <div className="flip-face flip-face-timeline">
                       <MiniTimelinePanel
-                        activities={activities}
+                        activities={visibleActivities}
                         categories={categories}
                         activityCategoryMap={activityCategoryMap}
                         userId={firebaseUser.uid}

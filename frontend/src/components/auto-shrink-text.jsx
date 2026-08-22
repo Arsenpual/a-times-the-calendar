@@ -14,10 +14,8 @@ const STEPS = [1, 0.92, 0.85, 0.78, 0.72];
  * where losing text isn't acceptable, unlike e.g. multi-line descriptions
  * elsewhere in the app that can wrap/scroll instead.
  *
- * Steps through a fixed set of discrete scales (1 → 0.72) rather than
- * shrinking by 1% at a time in a loop, since each `scrollWidth` read forces
- * a layout reflow — a handful of steps keeps that cost bounded regardless
- * of how long `text` is.
+ * Uses a small set of discrete scales rather than continuously changing the
+ * size, keeping titles visually stable while still making room for long text.
  *
  * Measures the *parent* element's width (via ResizeObserver), not this
  * span's own — observing the span itself would create a feedback loop,
@@ -26,11 +24,13 @@ const STEPS = [1, 0.92, 0.85, 0.78, 0.72];
  *
  * @param {string} text
  * @param {number} [minScale=0.72] smallest allowed scale (as a fraction of the CSS font-size), so text never shrinks past readable
- * @param {string} [className] applied to the wrapping <span>; font-size/line-height should come from this class as usual — the shrink is layered on top via the CSS var
+ * @param {string} [className] applied to the wrapping <span>
+ * @param {string} [baseFontSize] explicit CSS base size when a caller needs
+ * the shrinking style to preserve a class-defined pixel size exactly
  * @param {object} [style] extra inline styles merged onto the wrapping <span>
  * @param {string} [title] native tooltip — defaults to `text` so the full title is still available on hover/long-press even when shrunk
  */
-export default function AutoShrinkText({ text, minScale = 0.72, className, style, title }) {
+export default function AutoShrinkText({ text, minScale = 0.72, className, style, title, baseFontSize }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
 
@@ -38,10 +38,9 @@ export default function AutoShrinkText({ text, minScale = 0.72, className, style
     const el = ref.current;
     if (!el) return;
 
-    const steps = STEPS.filter((s) => s >= minScale);
-    if (steps[steps.length - 1] !== minScale) steps.push(minScale);
-
     const measure = () => {
+      const steps = STEPS.filter((step) => step >= minScale);
+      if (steps[steps.length - 1] !== minScale) steps.push(minScale);
       let chosen = steps[steps.length - 1];
       for (const step of steps) {
         el.style.setProperty("--auto-shrink-scale", String(step));
@@ -73,7 +72,13 @@ export default function AutoShrinkText({ text, minScale = 0.72, className, style
       ref={ref}
       className={className}
       title={title ?? text}
-      style={{ ...style, "--auto-shrink-scale": scale, fontSize: "calc(1em * var(--auto-shrink-scale))" }}
+      style={{
+        ...style,
+        "--auto-shrink-scale": scale,
+        fontSize: baseFontSize
+          ? `calc(${baseFontSize} * var(--auto-shrink-scale))`
+          : "calc(1em * var(--auto-shrink-scale))"
+      }}
     >
       {text}
     </span>

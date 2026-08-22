@@ -119,6 +119,8 @@ export default function MiniTimelinePanel({
                     <AutoShrinkText
                       text={activity.summary || "(ไม่มีชื่อ)"}
                       className="mini-timeline-event-title"
+                      minScale={0.5}
+                      baseFontSize="12px"
                     />
                     <span className="mini-timeline-event-range">
                       ต่อจากเมื่อคืน – {formatTime(spilloverEnd)}
@@ -153,6 +155,8 @@ export default function MiniTimelinePanel({
                     <AutoShrinkText
                       text={activity.summary || "(ไม่มีชื่อ)"}
                       className="mini-timeline-event-title"
+                      minScale={0.5}
+                      baseFontSize="12px"
                     />
                     <span className="mini-timeline-event-range">
                       {formatTime(start)} – {formatTime(end)}

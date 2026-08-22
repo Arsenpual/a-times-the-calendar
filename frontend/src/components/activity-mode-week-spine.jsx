@@ -6,6 +6,7 @@ import { useLanguage } from "../i18n.jsx";
 import { normalizeActivityId } from "../id-utils.js";
 import ActivityPopup from "./activity-popup.jsx";
 import AutoShrinkText from "./auto-shrink-text.jsx";
+import { deleteActivityArchiveItem, fetchActivityArchive, saveActivityArchiveItem } from "../api.js";
 
 const DAY_START_HOUR = 0;
 const DAY_END_HOUR = 24;
@@ -73,6 +74,8 @@ export default function ActivityModeWeekSpine({
   // the Calendar refresh are settling after a week change.
   const [restoringCalendarIds, setRestoringCalendarIds] = useState(() => new Set());
   const [archiveHydrated, setArchiveHydrated] = useState(false);
+  const [archiveRemoteReady, setArchiveRemoteReady] = useState(false);
+  const archiveSnapshotRef = useRef(new Map());
   const [archiveTagDrafts, setArchiveTagDrafts] = useState({});
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, offset) => {
     const day = new Date(weekStart);
@@ -89,8 +92,9 @@ export default function ActivityModeWeekSpine({
     [activityArchive]
   );
   const timelineSegments = timedSegments.filter((segment) => !archivedCalendarIds.has(segment.calendarId) || restoringCalendarIds.has(segment.calendarId));
+  const visibleAllDayActivities = allDayActivities.filter((activity) => !archivedCalendarIds.has(activity.calendarId) || restoringCalendarIds.has(activity.calendarId));
   const visibleSelectedDay = weekDays.find((day) => isSameDay(day, selectedDay)) || weekDays[0];
-  const selectedSegments = timedSegments
+  const selectedSegments = timelineSegments
     .filter((segment) => isSameDay(segment.day, visibleSelectedDay))
     .sort((a, b) => a.start - b.start);
   const labels = weekdayShortLabels(language);
@@ -107,6 +111,27 @@ export default function ActivityModeWeekSpine({
     }
   }, [archiveStorageKey]);
 
+  // Migrate any existing browser-only archive on first successful load, then
+  // use Firestore as the durable source for this user across devices.
+  useEffect(() => {
+    if (!archiveHydrated || !userId) return;
+    let cancelled = false;
+    fetchActivityArchive()
+      .then((remoteItems) => {
+        if (cancelled) return;
+        if (Array.isArray(remoteItems) && remoteItems.length > 0) {
+          archiveSnapshotRef.current = new Map(remoteItems.map((item) => [item.archiveId, JSON.stringify(item)]));
+          setActivityArchive(remoteItems);
+        }
+        setArchiveRemoteReady(true);
+      })
+      .catch((error) => {
+        console.error("โหลดคลังกิจกรรมจาก Firebase ไม่สำเร็จ:", error.message);
+        // Local copy stays usable; a later state change will retry on reload.
+      });
+    return () => { cancelled = true; };
+  }, [archiveHydrated, userId]);
+
   useEffect(() => {
     if (!archiveHydrated) return;
     try {
@@ -115,7 +140,20 @@ export default function ActivityModeWeekSpine({
     } catch {
       // Storage may be unavailable; keep the in-memory archive usable.
     }
-  }, [activityArchive, archiveStorageKey, archiveHydrated]);
+    if (!archiveRemoteReady) return;
+    const nextSnapshot = new Map(activityArchive.map((item) => [item.archiveId, JSON.stringify(item)]));
+    for (const item of activityArchive) {
+      if (archiveSnapshotRef.current.get(item.archiveId) !== JSON.stringify(item)) {
+        saveActivityArchiveItem(item).catch((error) => console.error("บันทึกคลังกิจกรรมลง Firebase ไม่สำเร็จ:", error.message));
+      }
+    }
+    for (const archiveId of archiveSnapshotRef.current.keys()) {
+      if (!nextSnapshot.has(archiveId)) {
+        deleteActivityArchiveItem(archiveId).catch((error) => console.error("ลบคลังกิจกรรมจาก Firebase ไม่สำเร็จ:", error.message));
+      }
+    }
+    archiveSnapshotRef.current = nextSnapshot;
+  }, [activityArchive, archiveStorageKey, archiveHydrated, archiveRemoteReady, userId]);
 
   const archiveActivity = (segment) => {
     const archived = {
@@ -424,7 +462,7 @@ export default function ActivityModeWeekSpine({
   return (
     <div className="week-spine-layout">
       <section className="week-spine" aria-label="Activity Week Spine">
-        {allDayActivities.length > 0 && <div className="week-spine-all-day"><strong>กิจกรรมทั้งวัน</strong>{allDayActivities.map((activity) => <span key={activity.calendarId}>{activity.title}</span>)}</div>}
+        {visibleAllDayActivities.length > 0 && <div className="week-spine-all-day"><strong>กิจกรรมทั้งวัน</strong>{visibleAllDayActivities.map((activity) => <span key={activity.calendarId}>{activity.title}</span>)}</div>}
         <section className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>
         <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
@@ -470,12 +508,12 @@ export default function ActivityModeWeekSpine({
                     if (dragged?.calendarId === segment.calendarId) return null;
                     const continuationClass = segment.continuesFromPreviousDay || segment.continuesIntoNextDay ? " is-continuation" : "";
                     return <span key={segment.segmentId} title={`${segment.title}${segment.source.isOnboardingSample ? " (ตัวอย่าง)" : ""}${segment.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${segment.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`} className={`week-spine-block${segment.isLocked || segment.source.isOnboardingSample || segment.continuesFromPreviousDay || segment.continuesIntoNextDay ? "" : " is-draggable"}${continuationClass}`} style={{ top: `${top}%`, height: `${height}%`, left: `calc(${laneLeft}% + 3px)`, width: `calc(${laneWidth}% - 6px)`, backgroundColor: continuationClass ? segment.color.bg : segment.color.border, color: segment.color.border, borderLeftColor: segment.color.border }} onPointerDown={(event) => { if (!segment.source.isOnboardingSample) beginExistingDrag(event, segment, day, "move"); }} onClick={(event) => { event.stopPropagation(); if (shouldSuppressBlockClick.current) { shouldSuppressBlockClick.current = false; return; } openSegmentEditor(segment); }} onContextMenu={(event) => openContextMenu(event, segment)}>
-                      <AutoShrinkText text={segment.title} minScale={0.75} className="week-spine-block-title" />
+                      <AutoShrinkText text={segment.title} minScale={0.5} baseFontSize="12px" className="week-spine-block-title" />
                       {!segment.isLocked && !segment.source.isOnboardingSample && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay && <span className="week-spine-resize-handle" onPointerDown={(event) => beginExistingDrag(event, segment, day, "resize")} />}
                     </span>;
                   })}
                   {draft && isSameDay(draft.day, day) && <span className={`week-spine-draft${findOverlap(dateAtMinutes(draft.day, draft.startMinutes), dateAtMinutes(draft.day, draft.endMinutes)) ? " is-conflicting" : ""}`} style={{ top: `${((draft.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((draft.endMinutes - draft.startMinutes) / DAY_SPAN_MINUTES) * 100}%` }} />}
-                  {dragged && isSameDay(dragged.day, day) && <span className={`week-spine-block is-dragging${findOverlap(dateAtMinutes(dragged.day, dragged.startMinutes), dateAtMinutes(dragged.day, dragged.endMinutes), dragged.calendarId) ? " is-conflicting" : ""}`} style={{ top: `${((dragged.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((dragged.endMinutes - dragged.startMinutes) / DAY_SPAN_MINUTES) * 100}%`, backgroundColor: dragged.source ? timelineSegments.find((segment) => segment.calendarId === dragged.calendarId)?.color.border : undefined }}><AutoShrinkText text={dragged.source?.summary || "(ไม่มีชื่อกิจกรรม)"} minScale={0.75} className="week-spine-block-title" /></span>}
+                  {dragged && isSameDay(dragged.day, day) && <span className={`week-spine-block is-dragging${findOverlap(dateAtMinutes(dragged.day, dragged.startMinutes), dateAtMinutes(dragged.day, dragged.endMinutes), dragged.calendarId) ? " is-conflicting" : ""}`} style={{ top: `${((dragged.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((dragged.endMinutes - dragged.startMinutes) / DAY_SPAN_MINUTES) * 100}%`, backgroundColor: dragged.source ? timelineSegments.find((segment) => segment.calendarId === dragged.calendarId)?.color.border : undefined }}><AutoShrinkText text={dragged.source?.summary || "(ไม่มีชื่อกิจกรรม)"} minScale={0.5} baseFontSize="12px" className="week-spine-block-title" /></span>}
                 </span>
               </button>
             );

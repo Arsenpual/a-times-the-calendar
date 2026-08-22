@@ -39,7 +39,7 @@ import { getWeekRange, activityDate, toDateInputValue } from "../date-utils.js";
  * updates via the setters, then calls loadActivities() to reconcile with
  * the server after a write.
  */
-export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError }) {
+export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds = new Set() }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -108,6 +108,7 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
   useEffect(() => {
     const [weekStart, weekEnd] = getWeekRange(cursorDate);
     const weeklyActivities = activities.filter((activity) => {
+      if (archivedActivityIds.has(activity.id)) return false;
       const start = activityDate(activity.start);
       return start && start >= weekStart && start <= weekEnd;
     });
@@ -156,7 +157,7 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
     return () => {
       cancelled = true;
     };
-  }, [firebaseUser, activities, activityCategoryMap, cursorDate]);
+  }, [firebaseUser, activities, activityCategoryMap, cursorDate, archivedActivityIds]);
 
   /** Clears everything this hook owns — called from app.jsx's handleLogout. */
   const resetOnLogout = useCallback(() => {

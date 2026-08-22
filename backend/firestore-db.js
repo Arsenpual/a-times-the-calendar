@@ -160,6 +160,13 @@ function fcmTokensCol(userId) {
   return userDoc(userId).collection("fcmTokens");
 }
 
+// Archive is deliberately separate from Google Calendar activities. An
+// archived item stays private to this app until the user explicitly restores
+// it, so it belongs in its own scalable per-user Firestore subcollection.
+function activityArchiveCol(userId) {
+  return userDoc(userId).collection("activityArchive");
+}
+
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
 // db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
 // start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
@@ -268,5 +275,6 @@ module.exports = {
   remindersCol,
   reminderGroupsCol,
   fcmTokensCol,
+  activityArchiveCol,
   ensureDefaultCategoriesForUser
 };

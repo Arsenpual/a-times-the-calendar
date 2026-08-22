@@ -185,6 +185,9 @@ function createBlankDraft() {
     type: REMINDER_TYPE.INTERVAL,
     amount: "30",
     unit: "minutes",
+    // true = ไม่มีช่วงพัก, interval ทำงาน 24 ชั่วโมง; เก็บช่วงเวลาไว้
+    // เฉพาะเมื่อผู้ใช้ปิดตัวเลือกนี้เท่านั้น
+    runAllDay: true,
     windowStart: "",
     windowEnd: "",
     atTime: now.toTimeString().slice(0, 5),
@@ -241,6 +244,13 @@ function formatDigitalClock(timestamp) {
 // ดูคอมเมนต์ท้ายไฟล์นั้นสำหรับรายละเอียด
 
 function describeReminder(reminder, nowMs) {
+  // While snoozed, the temporary due time is the active schedule. Showing
+  // the normal weekly/interval description here made it look as though the
+  // countdown still started from the old scheduled time.
+  if (reminder.snoozedUntil === reminder.nextDueAt && Number.isFinite(reminder.snoozedUntil)) {
+    const remainingMs = reminder.snoozedUntil - (nowMs ?? Date.now());
+    if (remainingMs > 0) return `เลื่อนเตือน · เหลือ ${formatDurationClock(Math.ceil(remainingMs / 1000))}`;
+  }
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
       const dayNames = reminder.days?.map(d => DAYS_OF_WEEK.find(x => x.value === d)?.label).join(" ");
@@ -299,6 +309,14 @@ function describeReminder(reminder, nowMs) {
 // - STOPWATCH: จับเวลาต่อเนื่องไม่มีเวลาตายตัว จึงไม่ปักหมุดตามเวลาเช่นกัน (เหมือน EVENT_ANCHORED/ROUTINE)
 // - EVENT_ANCHORED / ROUTINE: ไม่มีเวลาตายตัวในแต่ละวัน (ขึ้นกับ event ภายนอก) จึงไม่ปักหมุดตามเวลา
 function getReminderTimeSlots(reminder, startOfTodayMs) {
+  // Snooze is a temporary replacement for the normal schedule. For example,
+  // a weekly 09:00 reminder snoozed at 09:12 for 5 minutes must appear at
+  // 09:17, not continue showing its original 09:00 slot on the timeline.
+  if (reminder.snoozedUntil === reminder.nextDueAt && Number.isFinite(reminder.nextDueAt)) {
+    const dueDay = new Date(reminder.nextDueAt);
+    dueDay.setHours(0, 0, 0, 0);
+    return dueDay.getTime() === startOfTodayMs ? [minuteOfDayAt(reminder.nextDueAt)] : [];
+  }
   switch (reminder.type) {
     case REMINDER_TYPE.INTERVAL: {
       const stepMinutes = reminder.amount * (reminder.unit === "hours" ? 60 : 1);
@@ -969,7 +987,7 @@ export default function ReminderDashboard({
     if (draft.type === REMINDER_TYPE.INTERVAL) {
       newReminder.amount = parseInt(draft.amount) || 30;
       newReminder.unit = draft.unit;
-      if (draft.windowStart && draft.windowEnd) {
+      if (!draft.runAllDay && draft.windowStart && draft.windowEnd) {
         newReminder.windowStart = draft.windowStart;
         newReminder.windowEnd = draft.windowEnd;
       }
@@ -1123,6 +1141,7 @@ export default function ReminderDashboard({
       type: reminder.type,
       amount: String(reminder.amount || 30),
       unit: reminder.unit || "minutes",
+      runAllDay: !hasWindow(reminder),
       windowStart: reminder.windowStart || "",
       windowEnd: reminder.windowEnd || "",
       atTime: reminder.atMs ? new Date(reminder.atMs).toTimeString().slice(0, 5) : "",
@@ -2641,6 +2660,28 @@ export default function ReminderDashboard({
           gap: 12px;
         }
 
+        .interval-window-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 34px;
+          padding: 6px 10px;
+          border: 1px solid var(--g-outline);
+          border-radius: 9px;
+          background: var(--g-surface);
+          color: var(--g-on-surface);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .interval-window-toggle:hover { border-color: var(--g-blue); }
+        .interval-window-toggle.is-active { border-color: var(--g-blue); background: color-mix(in srgb, var(--g-blue) 12%, var(--g-surface)); color: var(--g-blue); }
+        .interval-window-toggle-track { position: relative; width: 30px; height: 17px; border-radius: 99px; background: var(--g-toggle-off); }
+        .interval-window-toggle-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform .16s ease; }
+        .interval-window-toggle.is-active .interval-window-toggle-track { background: var(--g-blue); }
+        .interval-window-toggle.is-active .interval-window-toggle-track::after { transform: translateX(13px); }
+
         .freq-inline-group {
           display: flex;
           gap: 8px;
@@ -3054,11 +3095,17 @@ export default function ReminderDashboard({
                     </div>
                   </div>
                   <div className="form-field">
-                    <label>ช่วงเวลาที่ทำงาน (Optional)</label>
+                    <button type="button" role="switch" aria-checked={draft.runAllDay} className={`interval-window-toggle${draft.runAllDay ? " is-active" : ""}`} onClick={() => setDraft((prev) => ({ ...prev, runAllDay: !prev.runAllDay, ...(!prev.runAllDay ? { windowStart: "", windowEnd: "" } : {}) }))}>
+                      <span className="interval-window-toggle-track" aria-hidden="true" />
+                      <span>ทำงานตลอดเวลา (00:00–24:00)</span>
+                    </button>
+                    {!draft.runAllDay && <>
+                    <label>ช่วงเวลาที่ทำงาน</label>
                     <div className="composer-row">
                       <input className="form-input" type="time" value={draft.windowStart} onChange={(e) => setDraft((prev) => ({ ...prev, windowStart: e.target.value }))} />
                       <input className="form-input" type="time" value={draft.windowEnd} onChange={(e) => setDraft((prev) => ({ ...prev, windowEnd: e.target.value }))} />
                     </div>
+                    </>}
                   </div>
                 </>
               )}

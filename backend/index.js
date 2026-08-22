@@ -9,6 +9,7 @@ const activityCategoriesRouter = require("./routes/activity-categories.js");
 const summaryRouter = require("./routes/summary.js");
 const remindersRouter = require("./routes/reminders.js");
 const reminderGroupsRouter = require("./routes/reminder-groups.js");
+const activityArchiveRouter = require("./routes/activity-archive.js");
 const fcmTokensRouter = require("./routes/fcm-tokens.js");
 
 const app = express();
@@ -69,6 +70,7 @@ app.use("/api/reminders", requireAuth, remindersRouter);
 // resource กับ CRUD ของ reminder เอง — ตรงกับที่ categories.js แยกจาก
 // activity-categories.js ฝั่งปฏิทินเช่นกัน
 app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
+app.use("/api/activity-archive", requireAuth, activityArchiveRouter);
 app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 
 app.use((req, res) => {
