@@ -138,11 +138,19 @@ export function computeNextDueAt(reminder, from) {
  * @param {number} now
  */
 export function isReminderDue(reminder, now) {
+  // A stale nextDueAt can arrive from an older local record or remote mirror
+  // after the user has edited weekly days. Never alert on a day outside the
+  // selected set, except an explicit user snooze which may intentionally
+  // land on another day.
+  const weeklyDayMatches = reminder.type !== REMINDER_TYPE.WEEKLY ||
+    reminder.snoozedUntil === reminder.nextDueAt ||
+    reminder.days?.includes(new Date(reminder.nextDueAt).getDay());
   return (
     !!reminder.enabled &&
     !reminder.completedAt &&
     !!reminder.nextDueAt &&
     reminder.nextDueAt <= now &&
+    weeklyDayMatches &&
     reminder.type !== REMINDER_TYPE.ROUTINE &&
     reminder.type !== REMINDER_TYPE.STOPWATCH
   );

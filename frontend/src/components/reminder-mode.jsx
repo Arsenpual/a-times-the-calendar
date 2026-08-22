@@ -492,6 +492,27 @@ export default function ReminderDashboard({
   const hasSnappedInitiallyRef = useRef(false); // true = เคย sync ตำแหน่งกับเวลาจริงแล้ว รอบต่อไปให้ไหลต่อเนื่อง ไม่สแนปซ้ำ
 
   useEffect(() => {
+    // Repair stale weekly nextDueAt values after a schedule was edited or a
+    // remote mirror returned an older date. A deliberate snooze is runtime
+    // state and is allowed to land on a day outside the weekly selection.
+    setReminders((previous) => {
+      let changed = false;
+      const next = previous.map((reminder) => {
+        if (
+          reminder.type !== REMINDER_TYPE.WEEKLY ||
+          !reminder.enabled ||
+          reminder.snoozedUntil === reminder.nextDueAt ||
+          !Number.isFinite(reminder.nextDueAt) ||
+          reminder.days?.includes(new Date(reminder.nextDueAt).getDay())
+        ) return reminder;
+        changed = true;
+        return { ...reminder, nextDueAt: computeNextDueAt(reminder, Date.now()) };
+      });
+      return changed ? next : previous;
+    });
+  }, [reminders, setReminders]);
+
+  useEffect(() => {
     const checkDue = () => {
       const now = Date.now();
       setNowTick(now); // อัปเดตเวลา "ตอนนี้" ทุกวินาที ให้ countdown บนการ์ด tick แบบ live
@@ -775,12 +796,13 @@ export default function ReminderDashboard({
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (typeof snoozeMinutes === "number") {
+          const snoozedUntil = Date.now() + snoozeMinutes * 60 * 1000;
           logReminderEvent("reminder_snoozed", { reminder_type: r.type, snooze_minutes: snoozeMinutes });
           recordStatsEvent("snoozed", { title: r.title, reminderType: r.type, minutes: snoozeMinutes });
-          return { ...r, enabled: true, nextDueAt: Date.now() + snoozeMinutes * 60 * 1000 };
+          return { ...r, enabled: true, nextDueAt: snoozedUntil, snoozedUntil };
         }
         if (isOneShotType(r.type)) return { ...r, enabled: false, nextDueAt: Infinity };
-        return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
+        return { ...r, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
   };

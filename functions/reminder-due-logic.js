@@ -105,11 +105,15 @@ function computeNextDueAt(reminder, from) {
 }
 
 function isReminderDue(reminder, now) {
+  const weeklyDayMatches = reminder.type !== REMINDER_TYPE.WEEKLY ||
+    reminder.snoozedUntil === reminder.nextDueAt ||
+    reminder.days?.includes(new Date(reminder.nextDueAt).getDay());
   return (
     !!reminder.enabled &&
     !reminder.completedAt &&
     !!reminder.nextDueAt &&
     reminder.nextDueAt <= now &&
+    weeklyDayMatches &&
     reminder.type !== REMINDER_TYPE.ROUTINE &&
     reminder.type !== REMINDER_TYPE.STOPWATCH
   );
