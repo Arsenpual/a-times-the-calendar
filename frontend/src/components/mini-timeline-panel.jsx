@@ -42,6 +42,7 @@ export default function MiniTimelinePanel({
     }
   };
   const [archivedIds, setArchivedIds] = useState(readArchivedIds);
+  const [focusedActivityId, setFocusedActivityId] = useState(null);
 
   useEffect(() => {
     setArchivedIds(readArchivedIds());
@@ -52,7 +53,16 @@ export default function MiniTimelinePanel({
     return () => window.removeEventListener("times-activity-archive-changed", handleArchiveChange);
   }, [archiveStorageKey, userId]);
 
+  useEffect(() => {
+    setFocusedActivityId(null);
+  }, [expandedDate?.getTime()]);
+
   if (!expandedDate) return null;
+
+  const displayDate = new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short"
+  }).format(expandedDate);
 
   const visibleActivities = activities.filter((activity) => !archivedIds.has(activity.id));
 
@@ -81,11 +91,15 @@ export default function MiniTimelinePanel({
     })
     .filter(Boolean);
 
+  const toggleFocusedActivity = (activityId) => {
+    setFocusedActivityId((current) => current === activityId ? null : activityId);
+  };
+
   return (
     <aside className="timeline-card">
       <div className="day-timeline-header">
         <p className="day-timeline-title">
-          {WEEKDAY_FULL[WEEKDAY_SHORT[expandedDate.getDay()]]} ที่ {expandedDate.getDate()}
+          {WEEKDAY_FULL[WEEKDAY_SHORT[expandedDate.getDay()]]} ที่ {displayDate}
         </p>
         <button
           type="button"
@@ -97,13 +111,13 @@ export default function MiniTimelinePanel({
         </button>
       </div>
 
-      <div className="day-timeline-scroll">
+      <div className={`day-timeline-scroll${focusedActivityId ? " has-focused-activity" : ""}`}>
         {incomingSpillover.length > 0 && (
           <ol className="mini-timeline mini-timeline-spillover-list">
             {incomingSpillover.map(({ activity, spilloverEnd }) => {
               const color = getDisplayColor(activity, activityCategoryMap, categories);
               return (
-                <li key={`spillover-${activity.id}`} className="mini-timeline-item">
+                <li key={`spillover-${activity.id}`} className={`mini-timeline-item${focusedActivityId === activity.id ? " is-focused" : ""}`}>
                   <div className="mini-timeline-time">⤴</div>
                   <div className="mini-timeline-track">
                     <span className="mini-timeline-dot" style={{ background: color.border }} />
@@ -114,7 +128,8 @@ export default function MiniTimelinePanel({
                     className="mini-timeline-event mini-timeline-event-spillover"
                     style={{ background: color.bg, borderLeftColor: color.border }}
                     title={`ต่อเนื่องจากเมื่อคืน — ${activity.summary || "(ไม่มีชื่อ)"}`}
-                    onClick={() => onEditActivity?.(activity)}
+                    onClick={() => toggleFocusedActivity(activity.id)}
+                    onDoubleClick={() => onEditActivity?.(activity)}
                   >
                     <AutoShrinkText
                       text={activity.summary || "(ไม่มีชื่อ)"}
@@ -141,7 +156,7 @@ export default function MiniTimelinePanel({
               const end = activityDate(activity.end) || start;
               const color = getDisplayColor(activity, activityCategoryMap, categories);
               return (
-                <li key={activity.id} className="mini-timeline-item">
+                <li key={activity.id} className={`mini-timeline-item${focusedActivityId === activity.id ? " is-focused" : ""}`}>
                   <div className="mini-timeline-time">{formatTime(start)}</div>
                   <div className="mini-timeline-track">
                     <span className="mini-timeline-dot" style={{ background: color.border }} />
@@ -151,6 +166,16 @@ export default function MiniTimelinePanel({
                     className="mini-timeline-event"
                     style={{ background: color.bg, borderLeftColor: color.border }}
                     title={activity.summary || "(ไม่มีชื่อ)"}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={focusedActivityId === activity.id}
+                    onClick={() => toggleFocusedActivity(activity.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleFocusedActivity(activity.id);
+                      }
+                    }}
                   >
                     <AutoShrinkText
                       text={activity.summary || "(ไม่มีชื่อ)"}

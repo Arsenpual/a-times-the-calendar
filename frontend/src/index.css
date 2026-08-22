@@ -1501,6 +1501,18 @@ html.screen-reader-mode .tag-search-input {
   display: none;
 }
 
+.day-timeline-scroll.has-focused-activity .mini-timeline-item:not(.is-focused) {
+  opacity: 0.26;
+  filter: blur(1.4px) saturate(0.55);
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
+.day-timeline-scroll .mini-timeline-item.is-focused {
+  position: relative;
+  z-index: 1;
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
 .mini-timeline-event {
   flex: 1;
   min-width: 0;
