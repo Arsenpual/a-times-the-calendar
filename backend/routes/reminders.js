@@ -49,7 +49,10 @@ const ALLOWED_FIELDS = [
   "activityId",
   // เฟส 5: Cloud Scheduler ต้อง query reminder ที่ถึงกำหนดได้โดยไม่พึ่ง
   // localStorage ของ browser จึง mirror due-date นี้เป็นข้อยกเว้น
-  "nextDueAt"
+  "nextDueAt",
+  // คู่กับ nextDueAt: บอกว่าเวลานี้เกิดจาก Snooze ของผู้ใช้ ไม่ใช่รอบ
+  // weekly ปกติ จึงต้องคงอยู่ข้าม refresh และการ merge จาก cloud
+  "snoozedUntil"
 ];
 
 const REMINDER_TYPES = [
@@ -131,6 +134,9 @@ function sanitizeReminderFields(body) {
   // timestamp ที่ finite เท่านั้น เพื่อกัน NaN/Infinity เข้า Firestore.
   if (body.nextDueAt !== undefined && body.nextDueAt !== null &&
     (typeof body.nextDueAt !== "number" || !Number.isFinite(body.nextDueAt))) return null;
+
+  if (body.snoozedUntil !== undefined && body.snoozedUntil !== null &&
+    (typeof body.snoozedUntil !== "number" || !Number.isFinite(body.snoozedUntil))) return null;
 
   // groupId ต้องเป็น null หรือ non-empty string เท่านั้น — เช็คโครงสร้าง
   // อย่างเดียวตรงนี้ (เหมือน categoryId ใน routes/activity-categories.js)

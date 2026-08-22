@@ -45,7 +45,12 @@ const SCHEDULE_FIELD_KEYS = [
   // 1:1 link กับ Google Calendar activity; Activity เป็นเจ้าของ title/เวลา
   // ร่วม ส่วน reminder เก็บกติกาการแจ้งเตือนของตัวเอง
   "activityId",
-  "nextDueAt"
+  "nextDueAt",
+  // การ Snooze เป็นข้อยกเว้นชั่วคราวของตารางปกติ (โดยเฉพาะ weekly ที่
+  // อาจเลื่อนข้ามวันได้) จึงต้อง mirror คู่กับ nextDueAt ด้วย มิฉะนั้น
+  // ตอน reload/merge จาก Firebase ตัวตรวจ weekly จะเข้าใจผิดว่าเป็นค่า
+  // ค้างและเขียน nextDueAt กลับเป็นรอบปกติ
+  "snoozedUntil"
 ];
 
 function extractScheduleFields(reminder) {
@@ -792,11 +797,16 @@ export default function ReminderDashboard({
    *   เดิม (เช่น interval ไม่ขยับ amount/unit) แค่เขียนทับ nextDueAt ครั้งเดียว
    */
   const scheduleNext = (reminderId, snoozeMinutes) => {
+    // จับ "ตอนกดปุ่ม" เพียงครั้งเดียวก่อนเข้าตัว state updater เพื่อให้
+    // nextDueAt เป็น now + นาทีที่ผู้ใช้เลือกจริง ๆ ไม่ขึ้นกับจังหวะ React
+    // เรียก updater ซ้ำในโหมด development.
+    const snoozedUntil = typeof snoozeMinutes === "number"
+      ? Date.now() + snoozeMinutes * 60 * 1000
+      : null;
     setReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (typeof snoozeMinutes === "number") {
-          const snoozedUntil = Date.now() + snoozeMinutes * 60 * 1000;
           logReminderEvent("reminder_snoozed", { reminder_type: r.type, snooze_minutes: snoozeMinutes });
           recordStatsEvent("snoozed", { title: r.title, reminderType: r.type, minutes: snoozeMinutes });
           return { ...r, enabled: true, nextDueAt: snoozedUntil, snoozedUntil };
@@ -828,11 +838,11 @@ export default function ReminderDashboard({
         if (isOneShotType(r.type)) {
           logReminderEvent("reminder_completed", { reminder_type: r.type });
           recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-          return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity };
+          return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity, snoozedUntil: null };
         }
         logReminderEvent("reminder_completed", { reminder_type: r.type });
         recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-        return { ...r, nextDueAt: computeNextDueAt(r, Date.now()) };
+        return { ...r, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
   };
