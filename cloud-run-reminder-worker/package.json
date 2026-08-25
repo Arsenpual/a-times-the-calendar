@@ -1,0 +1,16 @@
+{
+  "name": "times-the-calendar-reminder-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud Run Job that dispatches due reminder notifications.",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}
