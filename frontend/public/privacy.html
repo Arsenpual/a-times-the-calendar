@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>นโยบายความเป็นส่วนตัว — ปฏิทินของฉัน (times-the-calendar)</title>
+    <meta name="robots" content="index, follow" />
+    <style>
+      body {
+        font-family: "Google Sans", "Roboto", Arial, sans-serif;
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 20px 80px;
+        line-height: 1.7;
+        color: #3c4043;
+        background: #ffffff;
+      }
+      h1 {
+        font-size: 26px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .updated {
+        color: #5f6368;
+        font-size: 13px;
+        margin-bottom: 32px;
+      }
+      h2 {
+        font-size: 18px;
+        font-weight: 500;
+        margin-top: 36px;
+        margin-bottom: 8px;
+        color: #1557b0;
+      }
+      p, li {
+        font-size: 15px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+      th, td {
+        text-align: left;
+        padding: 8px 10px;
+        border: 1px solid #dadce0;
+        vertical-align: top;
+      }
+      th {
+        background: #f1f3f4;
+      }
+      a {
+        color: #1557b0;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 24px;
+        font-size: 14px;
+      }
+      code {
+        background: #f1f3f4;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="back-link" href="./">← กลับไปหน้าแอป</a>
+
+    <h1>นโยบายความเป็นส่วนตัว</h1>
+    <p class="updated">ปฏิทินของฉัน (times-the-calendar) — ปรับปรุงล่าสุด: 7 สิงหาคม 2569</p>
+
+    <p>
+      เอกสารนี้อธิบายว่าแอป "ปฏิทินของฉัน" (times-the-calendar) เก็บ ใช้ และปกป้องข้อมูลของผู้ใช้อย่างไร
+      แอปนี้เป็นโปรเจกต์อิสระที่ไม่ได้เป็นส่วนหนึ่งของ Google หรือบริษัทใด
+    </p>
+
+    <h2>1. ข้อมูลที่แอปเข้าถึงและเก็บไว้</h2>
+    <p>เมื่อเข้าสู่ระบบด้วยบัญชี Google แอปจะขอสิทธิ์และเก็บข้อมูลดังนี้:</p>
+    <table>
+      <tr>
+        <th>ข้อมูล</th>
+        <th>วิธีที่แอปใช้</th>
+        <th>เก็บไว้ที่ไหน</th>
+      </tr>
+      <tr>
+        <td>ข้อมูลบัญชี Google พื้นฐาน (ชื่อ, อีเมล, รูปโปรไฟล์)</td>
+        <td>ใช้ระบุตัวตนผู้ใช้ในระบบ (ผ่าน Firebase Authentication)</td>
+        <td>Firebase Authentication (Google Cloud)</td>
+      </tr>
+      <tr>
+        <td>ข้อมูลกิจกรรมใน Google Calendar (ปฏิทิน "primary" ของบัญชีที่ล็อกอิน)</td>
+        <td>แสดงผล, สร้าง, แก้ไข, ลบกิจกรรมตามที่ผู้ใช้สั่งในแอป (two-way sync)</td>
+        <td><strong>ไม่ถูกเก็บสำเนาไว้ที่เซิร์ฟเวอร์ของแอป</strong> — แอปเรียก Google Calendar API โดยตรงจากเบราว์เซอร์ของผู้ใช้ทุกครั้ง ข้อมูลกิจกรรมยังคงอยู่ใน Google Calendar ของผู้ใช้เท่านั้น</td>
+      </tr>
+      <tr>
+        <td>หมวดหมู่ชีวิตที่ผู้ใช้สร้าง (เช่น งาน, ส่วนตัว, สุขภาพ)</td>
+        <td>จัดกลุ่มกิจกรรมเพื่อคำนวณสรุปรายสัปดาห์</td>
+        <td>Firestore (Google Cloud) — แยกเก็บตามบัญชีผู้ใช้แต่ละคน</td>
+      </tr>
+      <tr>
+        <td>การผูกกิจกรรมกับหมวดหมู่ (activity ↔ category mapping)</td>
+        <td>คำนวณสัดส่วนเวลาต่อหมวดหมู่ในสรุปรายสัปดาห์</td>
+        <td>Firestore — แยกเก็บตามบัญชีผู้ใช้แต่ละคน</td>
+      </tr>
+      <tr>
+        <td>Tag ที่ผู้ใช้ตั้งเอง (free text)</td>
+        <td>ค้นหากิจกรรมด้วย tag</td>
+        <td>Firestore — แยกเก็บตามบัญชีผู้ใช้แต่ละคน</td>
+      </tr>
+      <tr>
+        <td>สถานะล็อกกิจกรรม</td>
+        <td>ป้องกันการแก้ไข/ลบกิจกรรมที่ผู้ใช้ล็อกไว้โดยไม่ตั้งใจ</td>
+        <td>Firestore — แยกเก็บตามบัญชีผู้ใช้แต่ละคน</td>
+      </tr>
+    </table>
+
+    <h2>2. สิทธิ์ (Scope) ที่แอปขอจากบัญชี Google</h2>
+    <p>
+      แอปขอสิทธิ์ <code>https://www.googleapis.com/auth/calendar</code> (อ่านและเขียนปฏิทิน Google Calendar)
+      เพื่อให้ฟีเจอร์ two-way sync ทำงานได้ — สร้าง/แก้ไข/ลบกิจกรรมในแอปแล้วสะท้อนไปยัง Google Calendar จริงของผู้ใช้ทันที
+      แอป<strong>ไม่ขอสิทธิ์เข้าถึงปฏิทินอื่นที่ไม่ใช่ปฏิทิน "primary"</strong> ของบัญชีที่ล็อกอิน และไม่เข้าถึง Gmail, Google Drive,
+      หรือข้อมูล Google อื่นใดนอกเหนือจาก Calendar และข้อมูลบัญชีพื้นฐานสำหรับยืนยันตัวตน
+    </p>
+
+    <h2>3. การแบ่งปันข้อมูลกับบุคคลที่สาม</h2>
+    <p>
+      แอป<strong>ไม่ขาย ไม่แบ่งปัน และไม่เปิดเผยข้อมูลผู้ใช้ให้บุคคลที่สาม</strong>เพื่อวัตถุประสงค์ทางการตลาดหรือโฆษณา
+      ข้อมูลถูกส่งไปยังผู้ให้บริการโครงสร้างพื้นฐาน (infrastructure providers) ที่จำเป็นต่อการทำงานของแอปเท่านั้น ได้แก่:
+    </p>
+    <ul>
+      <li><strong>Google Cloud / Firebase</strong> — สำหรับ Authentication และฐานข้อมูล Firestore</li>
+      <li><strong>Google Calendar API</strong> — สำหรับ sync กิจกรรมปฏิทิน</li>
+      <li><strong>Render.com</strong> — สำหรับรัน backend server ของแอป (Express.js)</li>
+      <li><strong>GitHub Pages</strong> — สำหรับ hosting หน้าเว็บฝั่ง frontend</li>
+    </ul>
+    <p>ผู้ให้บริการเหล่านี้ประมวลผลข้อมูลในฐานะผู้ให้บริการโครงสร้างพื้นฐานตามนโยบายความเป็นส่วนตัวของตนเอง ไม่ใช่เพื่อวัตถุประสงค์ของตนเอง</p>
+
+    <h2>4. การเก็บรักษาและการลบข้อมูล</h2>
+    <p>
+      ข้อมูลที่เก็บใน Firestore (หมวดหมู่, การผูกหมวดหมู่, tag, สถานะล็อก) จะถูกเก็บไว้ตราบเท่าที่ผู้ใช้ยังใช้งานแอปอยู่
+      หากต้องการให้ลบข้อมูลทั้งหมดที่เกี่ยวข้องกับบัญชีของท่าน สามารถติดต่อได้ตามช่องทางในหัวข้อที่ 7
+    </p>
+    <p>
+      ข้อมูลกิจกรรมปฏิทิน (Google Calendar events) ไม่ได้ถูกเก็บสำเนาไว้ที่ฝั่งแอปเลย — การลบกิจกรรมทำได้โดยตรงผ่าน Google Calendar
+      หรือผ่านแอปนี้ (ซึ่งจะสั่งลบที่ Google Calendar จริงทันที)
+    </p>
+
+    <h2>5. ความปลอดภัย</h2>
+    <ul>
+      <li>การยืนยันตัวตนทั้งหมดผ่าน Firebase Authentication และ Google OAuth 2.0 — แอปไม่เก็บรหัสผ่านของผู้ใช้ไว้เอง</li>
+      <li>ข้อมูลใน Firestore แยกตามบัญชีผู้ใช้แต่ละคน (per-user) ผู้ใช้คนอื่นเข้าถึงข้อมูลของกันและกันไม่ได้</li>
+      <li>การเชื่อมต่อทั้งหมดระหว่างแอปกับเซิร์ฟเวอร์เข้ารหัสผ่าน HTTPS</li>
+    </ul>
+
+    <h2>6. สิทธิ์ของผู้ใช้</h2>
+    <p>ผู้ใช้สามารถ:</p>
+    <ul>
+      <li>เพิกถอนสิทธิ์การเข้าถึงบัญชี Google ของแอปได้ทุกเมื่อ ผ่าน <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account — Third-party access</a></li>
+      <li>ขอให้ลบข้อมูลที่แอปเก็บไว้ใน Firestore ได้ตามหัวข้อที่ 7</li>
+    </ul>
+
+    <h2>7. ติดต่อ</h2>
+    <p>
+      หากมีคำถามเกี่ยวกับนโยบายความเป็นส่วนตัวนี้ หรือต้องการขอให้ลบข้อมูล สามารถติดต่อได้ที่:<br />
+      อีเมล: <a href="mailto:newwichansriwiang@gmail.com">newwichansriwiang@gmail.com</a>
+    </p>
+
+    <h2>8. การเปลี่ยนแปลงนโยบายนี้</h2>
+    <p>
+      นโยบายนี้อาจมีการปรับปรุงเป็นครั้งคราวเพื่อให้สอดคล้องกับการเปลี่ยนแปลงของแอปหรือข้อกำหนดทางกฎหมาย
+      วันที่ปรับปรุงล่าสุดจะแสดงไว้ด้านบนของหน้านี้เสมอ
+    </p>
+  </body>
+</html>

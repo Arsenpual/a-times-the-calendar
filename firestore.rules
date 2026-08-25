@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// ============================================================================
+// times-the-calendar — Firestore Security Rules (ระยะ 3)
+//
+// เป้าหมาย: บังคับ lock enforcement ที่ database level ไม่ใช่แค่ route level
+// อีกต่อไป — ดู firebase-migration-plan.md ระยะ 3
+//
+// สถานะปัจจุบันของแอป (ก่อนกฎชุดนี้): frontend ยังไม่คุย Firestore ตรงเลย
+// สักจุด (ผ่าน Express backend + Firebase Admin SDK เท่านั้น ซึ่ง Admin SDK
+// ไม่ถูก Security Rules บังคับอยู่แล้วโดยธรรมชาติ) กฎชุดนี้จึงยังไม่มีผลต่อ
+// พฤติกรรมแอปในทางปฏิบัติตอนนี้ — เขียนไว้ล่วงหน้าเพื่อ (1) ปิดช่องโหว่ default
+// "ปิดทุกอย่าง" ของ Firestore ให้ปลอดภัยตั้งแต่วันแรกถ้ามีใครเผลอเปิด client
+// SDK เข้าถึงตรงในอนาคต และ (2) เป็นฐานพร้อมใช้ทันทีถ้าตัดสินใจย้าย
+// frontend ไปคุย Firestore ตรงในอนาคต (เช่น เพื่อลด backend round-trip)
+//
+// วิธี deploy: firebase deploy --only firestore:rules
+// วิธีทดสอบก่อน deploy จริง: firebase emulators:start --only firestore
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // เอกสารทุกจุดของผู้ใช้อยู่ใต้ users/{userId}/... — กฎเดียวครอบคลุมทั้ง
+    // subtree ได้เลยแทนที่จะเช็ค field userId ในทุก collection แยกกัน (เหตุผล
+    // เดียวกับที่เลือกโครงสร้าง nested path นี้ตอนทำระยะ 2 — ดู firestore-db.js)
+    //
+    // *** แก้ไข (หลังทดสอบผ่าน Emulator จริงครั้งแรกแล้วพบว่าผิด) ***
+    // เข้าใจผิดตอนแรกว่า Firestore รวมกฎจากหลาย match block แบบ "ต้องผ่าน
+    // ทุกกฎที่ match" (AND) — ความจริง Firestore ประเมิน "ทุก match block
+    // ที่ path ตรงกัน" แล้วรวมผลแบบ OR: ถ้ามีกฎไหนกฎหนึ่ง match แล้วอนุญาต
+    // (allow) ก็ผ่านทันที ไม่ใช่ "อันแรกที่เจอ" ตามลำดับการเขียนในไฟล์ (ไม่มี
+    // แนวคิด short-circuit ตามลำดับ block แบบ if/else-if) — กฎกว้างข้างล่างนี้
+    // เดิม match ทั้ง /users/{userId}/activityCategories/{activityId} ด้วย
+    // (เพราะเป็นส่วนหนึ่งของ {document=**}) และตัวมันเองอนุญาตแบบไม่เช็ค
+    // isLocked() เลย ผลรวมแบบ OR จึงทำให้ "อนุญาตเสมอ" ทับกฎเฉพาะที่เช็ค
+    // isLocked() ไปเงียบๆ แม้กฎเฉพาะนั้นจะ deny ก็ตาม (พิสูจน์แล้วจาก 3 เทส
+    // ที่ "ควร fail แต่กลับผ่าน" ตอนรันจริงผ่าน @firebase/rules-unit-testing)
+    //
+    // ทางแก้: กันไม่ให้กฎกว้างนี้ match กับ activityCategories เลย (exclude
+    // ด้วยการเช็คว่า document path ส่วนที่สองไม่ใช่ "activityCategories")
+    // แล้วให้ activityCategories มีกฎ write ของตัวเองเพียงจุดเดียวที่รวม
+    // isOwner() + isLocked() ไว้ในเงื่อนไขเดียวกันเลย — ไม่ใช่เพราะ Firestore
+    // "หยุดที่กฎแรก" แต่เพราะตอนนี้มีแค่กฎเดียวเท่านั้นที่ match path นี้
+    // (กฎกว้างถูก exclude ไปแล้ว) ผลรวม OR จึงเหลือแค่กฎเดียวที่ต้องผ่าน
+    //
+    // ⚠️ ข้อควรระวังสำหรับกฎที่จะเพิ่มในอนาคต: ห้ามเพิ่ม match block ใหม่ที่
+    // ครอบคลุม path เดียวกัน (users/{userId}/activityCategories/**) แล้ว
+    // allow แบบกว้างๆ โดยไม่เช็ค isLocked() — เพราะผลจะ OR รวมกับกฎที่มีอยู่
+    // ทันที ทำให้ lock enforcement หลุดซ้ำแบบเดียวกับที่เคยเกิดตรงนี้
+    match /users/{userId}/{document=**} {
+      allow read: if isOwner(userId);
+
+      allow write: if isOwner(userId) && document[0] != "activityCategories";
+    }
+
+    // ------------------------------------------------------------------
+    // Lock enforcement: ปฏิเสธเขียน activityCategories/{activityId} ถ้า
+    // lockedActivities/{activityId} เป็น locked: true อยู่ — นี่คือหัวใจ
+    // ของระยะ 3 ตามแผนเดิม (เดิม backend เช็คเองที่ route level เท่านั้น
+    // ซึ่งพลาดได้ถ้ามีทางเขียนอื่นที่ไม่ผ่าน route นั้น)
+    //
+    // match block นี้คือกฎ "เดียว" ที่ควบคุมการเขียน activityCategories
+    // ทั้งหมด (กฎกว้างด้านบนถูกกันไม่ให้ match เข้ามาแล้วโดยเจตนา) — isOwner()
+    // ต้องเขียนซ้ำในนี้เองด้วย เพราะไม่มี "กฎรวม" ให้พึ่งพาจากที่อื่นอีกแล้ว
+    // ------------------------------------------------------------------
+    match /users/{userId}/activityCategories/{activityId} {
+      allow read: if isOwner(userId);
+
+      // สร้าง/แก้ไข mapping ใหม่ได้ก็ต่อเมื่อกิจกรรมนั้นไม่ได้ถูก lock ไว้
+      allow create, update: if isOwner(userId) && !isLocked(userId, activityId);
+
+      // ลบ mapping (เช่นตอนลบหมวดหมู่ที่ผูกอยู่ — ดู routes/categories.js
+      // DELETE /:id ที่ลบ activityCategories ที่ผูกกับหมวดหมู่นั้นเป็น batch)
+      // ก็ต้องเช็ค lock เหมือนกัน ไม่งั้นกิจกรรมที่ล็อกไว้จะหลุดหมวดหมู่ได้
+      // ผ่านทางอ้อมแม้เขียนตรงจะถูกบล็อก
+      allow delete: if isOwner(userId) && !isLocked(userId, activityId);
+    }
+
+    // lockedActivities เอง — อนุญาตอ่าน/เขียนตามปกติ (isOwner จากกฎกว้าง
+    // ด้านบนครอบคลุมอยู่แล้ว เพราะ path นี้ไม่ถูก exclude เหมือน
+    // activityCategories — ไม่มีเงื่อนไขพิเศษเพิ่มสำหรับ collection นี้)
+    // เขียน match block แยกให้ชัดเจนไว้เผื่ออนาคตต้องการกฎเพิ่ม (เช่น จำกัดว่า
+    // เปลี่ยนสถานะ lock ได้ไม่เกินกี่ครั้ง/นาที กันการยิง spam)
+
+    // categories และ activityTags ไม่มีเงื่อนไข lock เกี่ยวข้อง — isOwner()
+    // จากกฎกว้างด้านบนครอบคลุมอยู่แล้ว ไม่ต้องเขียน match block แยกเพิ่ม
+
+    // ------------------------------------------------------------------
+    // Helper functions
+    // ------------------------------------------------------------------
+
+    // ต้อง login ผ่าน Firebase Auth ("null" คือยังไม่ login) และ uid ต้อง
+    // ตรงกับ userId ใน path เป๊ะ — เทียบเท่ากับที่ requireAuth middleware
+    // ฝั่ง backend ทำผ่าน auth.verifyIdToken() แล้วแนบ req.userId
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // อ่านสถานะ lock ปัจจุบันของกิจกรรมจาก lockedActivities/{activityId} —
+    // ถ้า document ไม่มีอยู่เลย (ไม่เคยถูก lock) ถือว่า "ไม่ได้ lock" (false)
+    // ตรงกับพฤติกรรมเดิมฝั่ง backend ที่ไม่มี document แปลว่าไม่ล็อก (ดู
+    // GET /api/activities/locks ที่ list เฉพาะ document ที่มีอยู่จริงเป็น true)
+    //
+    // ใช้ exists() ก่อนเช็คค่าเสมอ — get()/exists() นับเป็น 1 read operation
+    // เพิ่มเติมต่อการเขียนแต่ละครั้ง (Firestore Security Rules คิดค่าใช้จ่าย
+    // แยกจาก request หลัก) แต่จำเป็นเพราะไม่มีทางเช็ค "locked หรือไม่" โดยไม่
+    // อ่าน document นั้นก่อน
+    function isLocked(userId, activityId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/lockedActivities/$(activityId))
+        && get(/databases/$(database)/documents/users/$(userId)/lockedActivities/$(activityId)).data.locked == true;
+    }
+  }
+}

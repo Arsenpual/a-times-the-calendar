@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta name="google-site-verification" content="0jlPvixTqYenX-Ug5Q_EuzlUfyAFts-I0xX71_-7bwo" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ปฏิทินของฉัน — สรุปชีวิตคุณรายสัปดาห์ พร้อม Google Calendar sync</title>
+
+    <!-- SEO: คำอธิบายที่ขึ้นใต้ title ในผลการค้นหา Google — เขียนให้สื่อจุดขาย
+         หลัก (สรุปรายสัปดาห์อัตโนมัติ) ไม่ใช่แค่ "ปฏิทิน" เฉยๆ ซึ่งจะไปแข่ง
+         โดยตรงกับ Google Calendar เองอย่างเสียเปรียบ -->
+    <meta
+      name="description"
+      content="ปฏิทินที่สรุปชีวิตคุณให้อัตโนมัติทุกสัปดาห์ — เห็นสัดส่วนเวลาตามหมวดหมู่ชีวิต วันที่ยุ่งที่สุด พร้อม sync สองทางกับ Google Calendar โดยตรง"
+    />
+
+    <!-- robots: อนุญาต crawl+index แบบชัดเจน (ค่าเริ่มต้นของ Google ก็คือ
+         index,follow อยู่แล้วถ้าไม่มี tag นี้เลย แต่ใส่ไว้ให้ชัดเจน กัน
+         สับสนกับ noindex ที่บางทีถูกใส่ไว้ตอน dev แล้วลืมเอาออก) -->
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph: ควบคุมหน้าตาตอนมีคนแชร์ลิงก์นี้ใน Facebook/LINE/Twitter
+         ฯลฯ — ไม่ได้ช่วย SEO ของ Google โดยตรง แต่ช่วยเพิ่มโอกาสให้คนกดลิงก์
+         ต่อเมื่อถูกแชร์ (ซึ่งทางอ้อมก็ช่วยให้ Google เจอเว็บเร็วขึ้นเช่นกัน
+         ผ่าน backlink ตามที่คุยกันไว้) -->
+    <meta property="og:title" content="ปฏิทินของฉัน — สรุปชีวิตคุณรายสัปดาห์" />
+    <meta
+      property="og:description"
+      content="ปฏิทินที่สรุปชีวิตคุณให้อัตโนมัติทุกสัปดาห์ พร้อม sync สองทางกับ Google Calendar"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%BASE_URL%logo/times-icon.svg" />
+
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%logo/times-icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Google Identity Services (OAuth login + token) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
