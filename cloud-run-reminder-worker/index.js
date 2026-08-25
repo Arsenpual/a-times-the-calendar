@@ -61,7 +61,9 @@ async function main() {
   for (const doc of snapshot.docs) {
     const reminder = doc.data();
     if (reminder.completedAt || !reminder.nextDueAt || reminder.nextDueAt > now) continue;
-    if (reminder.type === "routine" || reminder.type === "stopwatch") continue;
+    // Interval เวอร์ชันพื้นฐานยังเป็นเพียงข้อมูลความถี่ใน UI เท่านั้น:
+    // ไม่ต้อง scan, ส่ง FCM หรือเขียน runtime ทุกนาที.
+    if (reminder.type === "interval" || reminder.type === "routine" || reminder.type === "stopwatch") continue;
     if ((reminder[RENOTIFY_GUARD_FIELD] || 0) >= reminder.nextDueAt) continue;
     const userId = doc.ref.parent.parent?.id;
     if (!userId) continue;

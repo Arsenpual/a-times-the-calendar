@@ -19,14 +19,27 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
   });
   const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
   const hasMergedRemoteRef = useRef(false);
+  const [hasMergedRemote, setHasMergedRemote] = useState(false);
   const lastSyncedScheduleRef = useRef(new Map());
   const syncedUserIdRef = useRef(null);
+
+  // localStorage อาจมี nextDueAt ของรอบก่อนหน้า ขณะที่ Cloud Run เลื่อนไป
+  // รอบใหม่แล้ว ห้ามให้ effect sync ด้านล่างเขียนค่าท้องถิ่นเก่าทับ remote
+  // ก่อนการ merge เสร็จ มิฉะนั้น interval จะถูก lastNotifiedAt guard ข้าม
+  // และแจ้งได้เพียงรอบแรก.
+  useEffect(() => {
+    hasMergedRemoteRef.current = false;
+    setHasMergedRemote(false);
+  }, [firebaseUser?.uid]);
 
   useEffect(() => {
     if (!remoteReminders || hasMergedRemoteRef.current) return;
     hasMergedRemoteRef.current = true;
     const remoteIds = Object.keys(remoteReminders);
-    if (remoteIds.length === 0) return;
+    if (remoteIds.length === 0) {
+      setHasMergedRemote(true);
+      return;
+    }
 
     setReminders((previous) => {
       const byId = new Map(previous.map((reminder) => [reminder.id, reminder]));
@@ -37,6 +50,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
       }
       return Array.from(byId.values());
     });
+    setHasMergedRemote(true);
   }, [remoteReminders]);
 
   useEffect(() => {
@@ -44,7 +58,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
   }, [reminders, storageKey]);
 
   useEffect(() => {
-    if (!firebaseUser || remoteReminders === null) return;
+    if (!firebaseUser || remoteReminders === null || !hasMergedRemote) return;
     if (syncedUserIdRef.current !== firebaseUser.uid) {
       lastSyncedScheduleRef.current.clear();
       syncedUserIdRef.current = firebaseUser.uid;
@@ -62,7 +76,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
     for (const id of lastSyncedScheduleRef.current.keys()) {
       if (!presentIds.has(id)) lastSyncedScheduleRef.current.delete(id);
     }
-  }, [firebaseUser, remoteReminders, reminders, extractScheduleFields, syncScheduleFields]);
+  }, [firebaseUser, remoteReminders, hasMergedRemote, reminders, extractScheduleFields, syncScheduleFields]);
 
   return { reminders, setReminders, syncScheduleFields, deleteRemoteReminder };
 }

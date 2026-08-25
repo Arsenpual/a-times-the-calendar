@@ -164,6 +164,7 @@ export function isReminderDue(reminder, now) {
     !!reminder.nextDueAt &&
     reminder.nextDueAt <= now &&
     weeklyDayMatches &&
+    reminder.type !== REMINDER_TYPE.INTERVAL &&
     reminder.type !== REMINDER_TYPE.ROUTINE &&
     reminder.type !== REMINDER_TYPE.STOPWATCH
   );
