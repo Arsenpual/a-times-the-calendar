@@ -955,7 +955,7 @@ export default function ReminderDashboard({
             return r;
           }
 
-          const nextDue = computeNextDueAt(r, Date.now());
+          const nextDue = r.type === REMINDER_TYPE.INTERVAL ? null : computeNextDueAt(r, Date.now());
           return { ...r, enabled: true, nextDueAt: nextDue, completedAt: null };
         }
         return { ...r, enabled: false };
@@ -1053,7 +1053,11 @@ export default function ReminderDashboard({
       }
     }
 
-    newReminder.nextDueAt = computeNextDueAt(newReminder, Date.now());
+    // Interval เวอร์ชันพื้นฐานเก็บเพียงความถี่เพื่อใช้อ้างอิงใน UI ยังไม่
+    // เข้าระบบ due/push จึงไม่สร้างงาน Cloud Run หรือ notification.
+    newReminder.nextDueAt = newReminder.type === REMINDER_TYPE.INTERVAL
+      ? null
+      : computeNextDueAt(newReminder, Date.now());
 
     // migration plan v2 เฟส 4 — completedAt เป็น runtime field (ไม่ sync
     // backend, ดู SCHEDULE_FIELD_KEYS) ต้องคงค่าเดิมไว้ตอนแก้ไข reminder
@@ -1120,7 +1124,9 @@ export default function ReminderDashboard({
       reminder.lineColor = DEFAULT_LINE_COLOR;
     }
 
-    reminder.nextDueAt = computeNextDueAt(reminder, now);
+    reminder.nextDueAt = reminder.type === REMINDER_TYPE.INTERVAL
+      ? null
+      : computeNextDueAt(reminder, now);
     setReminders((prev) => [...prev, reminder]);
     syncScheduleFields(reminder.id, extractScheduleFields(reminder), { immediate: true });
     logReminderEvent("reminder_created", { reminder_type: reminder.type, creation_method: "omnibar" });
