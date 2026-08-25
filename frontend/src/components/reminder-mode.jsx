@@ -408,6 +408,7 @@ export default function ReminderDashboard({
   const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
   const {
     permission: pushPermission,
+    isEnabled: isPushEnabled,
     error: pushError,
     isRequesting: isPushRequesting,
     requestPermission: requestPushPermission,
@@ -2837,9 +2838,17 @@ export default function ReminderDashboard({
               แวดล้อมนี้ กดแล้วจะเห็น error อธิบายตรงๆ แทนที่จะพังเงียบๆ) */}
           <button
             type="button"
-            className={`topbar-icon-btn ${pushPermission === "granted" ? "is-active" : ""}`}
+            className={`topbar-icon-btn ${isPushEnabled ? "is-active" : ""}`}
             disabled={pushPermission === "unsupported" || pushPermission === "denied" || isPushRequesting}
-            onClick={() => (pushPermission === "granted" ? disableNotifications() : requestPushPermission())}
+            onClick={() => {
+              const message = isPushEnabled
+                ? "ต้องการปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?\n\nคุณจะไม่ได้รับ Push notification จนกว่าจะกด 🔕 เพื่อเปิดอีกครั้ง"
+                : "ต้องการเปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?";
+              if (window.confirm(message)) {
+                if (isPushEnabled) disableNotifications();
+                else requestPushPermission();
+              }
+            }}
             title={
               pushError
                 ? `เกิดข้อผิดพลาด: ${pushError}`
@@ -2847,12 +2856,12 @@ export default function ReminderDashboard({
                 ? "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ Push"
                 : pushPermission === "denied"
                 ? "การแจ้งเตือนถูกปิดไว้ — เปิดใหม่ได้ในตั้งค่าเบราว์เซอร์"
-                : pushPermission === "granted"
+                : isPushEnabled
                 ? "ปิดการแจ้งเตือน"
                 : "เปิดการแจ้งเตือน (รับได้แม้ปิดแท็บ)"
             }
           >
-            {pushPermission === "granted" ? "🔔" : "🔕"}
+            {isPushEnabled ? "🔔" : "🔕"}
           </button>
           <button type="button" className="topbar-icon-btn" onClick={() => setIsStatsOpen(true)} title="ดูสถิติ Reminder">📊</button>
         </div>

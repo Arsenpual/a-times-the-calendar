@@ -18,6 +18,8 @@ import { registerFcmToken, unregisterFcmToken } from "../api.js";
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 const SERVICE_WORKER_PATH = `${import.meta.env.BASE_URL}firebase-messaging-sw.js`;
+const PUSH_DISABLED_KEY = "times-the-calendar:push-disabled";
+const PUSH_TOKEN_KEY = "times-the-calendar:push-token";
 
 function messagingServiceWorkerUrl() {
   const url = new URL(SERVICE_WORKER_PATH, window.location.origin);
@@ -48,17 +50,20 @@ export function usePushNotifications({ firebaseUser }) {
   const [fcmToken, setFcmToken] = useState(null);
   const [error, setError] = useState(null);
   const [isRequesting, setIsRequesting] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(() =>
+    permission === "granted" && localStorage.getItem(PUSH_DISABLED_KEY) !== "true"
+  );
 
   // ถ้า permission เคย "granted" มาก่อนแล้ว (จากรอบก่อนหน้า) และมี
   // firebaseUser อยู่แล้วตอนเปิดแอปครั้งนี้ — ลงทะเบียน token ให้อัตโนมัติ
   // โดยไม่ต้องกดปุ่มซ้ำ (permission ที่ "granted" แล้วไม่ต้องขอใหม่ ต่างจาก
   // "default" ที่ต้องรอผู้ใช้กดเอง)
   useEffect(() => {
-    if (permission === "granted" && firebaseUser && !fcmToken) {
+    if (permission === "granted" && isEnabled && firebaseUser && !fcmToken) {
       registerCurrentDevice().catch((e) => setError(e.message));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permission, firebaseUser]);
+  }, [permission, isEnabled, firebaseUser]);
 
   const registerCurrentDevice = useCallback(async () => {
     if (!VAPID_KEY) {
@@ -81,6 +86,7 @@ export function usePushNotifications({ firebaseUser }) {
       throw new Error("ไม่ได้รับ FCM token จาก Firebase — ลองใหม่อีกครั้ง");
     }
     await registerFcmToken(token);
+    localStorage.setItem(PUSH_TOKEN_KEY, token);
     setFcmToken(token);
     return token;
   }, []);
@@ -98,9 +104,11 @@ export function usePushNotifications({ firebaseUser }) {
     setIsRequesting(true);
     setError(null);
     try {
-      const result = await Notification.requestPermission();
+      const result = permission === "granted" ? "granted" : await Notification.requestPermission();
       setPermission(result);
       if (result === "granted") {
+        localStorage.removeItem(PUSH_DISABLED_KEY);
+        setIsEnabled(true);
         await registerCurrentDevice();
       }
     } catch (e) {
@@ -110,12 +118,20 @@ export function usePushNotifications({ firebaseUser }) {
     }
   }, [permission, registerCurrentDevice]);
 
-  /** ปิดการแจ้งเตือนของอุปกรณ์นี้ — เลิกลงทะเบียน token ออกจาก backend (permission ของเบราว์เซอร์เองยังคง "granted" อยู่ แค่เราหยุดส่งไปหา token นี้แล้ว) */
+  /** ปิดการแจ้งเตือนของ origin/อุปกรณ์นี้จากปุ่มเดียว. token ถูกเก็บไว้
+   * เพื่อให้หลัง refresh ยังลบรายการ Firestore ของ localhost ได้. */
   const disableNotifications = useCallback(async () => {
-    if (!fcmToken) return;
     try {
-      await unregisterFcmToken(fcmToken);
+      const tokenToRemove = fcmToken || localStorage.getItem(PUSH_TOKEN_KEY);
+      if (tokenToRemove) await unregisterFcmToken(tokenToRemove);
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations
+        .filter((registration) => registration.active?.scriptURL.includes("firebase-messaging-sw.js"))
+        .map((registration) => registration.unregister()));
+      localStorage.removeItem(PUSH_TOKEN_KEY);
+      localStorage.setItem(PUSH_DISABLED_KEY, "true");
       setFcmToken(null);
+      setIsEnabled(false);
     } catch (e) {
       setError(e.message);
     }
@@ -123,6 +139,7 @@ export function usePushNotifications({ firebaseUser }) {
 
   return {
     permission, // "unsupported" | "default" | "granted" | "denied"
+    isEnabled,
     fcmToken,
     error,
     isRequesting,
