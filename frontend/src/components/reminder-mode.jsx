@@ -2840,7 +2840,15 @@ export default function ReminderDashboard({
             type="button"
             className={`topbar-icon-btn ${isPushEnabled ? "is-active" : ""}`}
             disabled={pushPermission === "unsupported" || pushPermission === "denied" || isPushRequesting}
-            onClick={() => (isPushEnabled ? disableNotifications() : requestPushPermission())}
+            onClick={() => {
+              const message = isPushEnabled
+                ? "ต้องการปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?\n\nคุณจะไม่ได้รับ Push notification จนกว่าจะกด 🔕 เพื่อเปิดอีกครั้ง"
+                : "ต้องการเปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?";
+              if (window.confirm(message)) {
+                if (isPushEnabled) disableNotifications();
+                else requestPushPermission();
+              }
+            }}
             title={
               pushError
                 ? `เกิดข้อผิดพลาด: ${pushError}`

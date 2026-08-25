@@ -19,6 +19,7 @@ import { registerFcmToken, unregisterFcmToken } from "../api.js";
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 const SERVICE_WORKER_PATH = `${import.meta.env.BASE_URL}firebase-messaging-sw.js`;
 const PUSH_DISABLED_KEY = "times-the-calendar:push-disabled";
+const PUSH_TOKEN_KEY = "times-the-calendar:push-token";
 
 function messagingServiceWorkerUrl() {
   const url = new URL(SERVICE_WORKER_PATH, window.location.origin);
@@ -88,6 +89,7 @@ export function usePushNotifications({ firebaseUser }) {
       throw new Error("ไม่ได้รับ FCM token จาก Firebase — ลองใหม่อีกครั้ง");
     }
     await registerFcmToken(token);
+    localStorage.setItem(PUSH_TOKEN_KEY, token);
     setFcmToken(token);
     return token;
   }, []);
@@ -119,31 +121,24 @@ export function usePushNotifications({ firebaseUser }) {
     }
   }, [permission, registerCurrentDevice]);
 
-  /** ปิดการแจ้งเตือนของ origin/อุปกรณ์นี้: ลบ token ฝั่ง server และถอน
-   * service worker เพื่อไม่ให้ localhost ที่ไม่ใช้แล้วรับ push ต่อ. */
+  /** ปิดการแจ้งเตือนของ origin/อุปกรณ์นี้จากปุ่มเดียว. token ถูกเก็บไว้
+   * เพื่อให้หลัง refresh ยังลบรายการ Firestore ของ localhost ได้. */
   const disableNotifications = useCallback(async () => {
     try {
-      let tokenToRemove = fcmToken;
-      if (!tokenToRemove && VAPID_KEY && firebaseUser) {
-        const { getMessaging, getToken } = await import("firebase/messaging");
-        const registration = await navigator.serviceWorker.getRegistration(messagingServiceWorkerUrl());
-        tokenToRemove = await getToken(getMessaging(firebaseApp), {
-          vapidKey: VAPID_KEY,
-          ...(registration ? { serviceWorkerRegistration: registration } : {})
-        });
-      }
+      const tokenToRemove = fcmToken || localStorage.getItem(PUSH_TOKEN_KEY);
       if (tokenToRemove) await unregisterFcmToken(tokenToRemove);
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(registrations
         .filter((registration) => registration.active?.scriptURL.includes("firebase-messaging-sw.js"))
         .map((registration) => registration.unregister()));
+      localStorage.removeItem(PUSH_TOKEN_KEY);
       localStorage.setItem(PUSH_DISABLED_KEY, "true");
       setFcmToken(null);
       setIsEnabled(false);
     } catch (e) {
       setError(e.message);
     }
-  }, [fcmToken, firebaseUser]);
+  }, [fcmToken]);
 
   return {
     permission, // "unsupported" | "default" | "granted" | "denied"
