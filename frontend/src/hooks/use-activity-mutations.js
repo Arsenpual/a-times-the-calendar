@@ -13,7 +13,9 @@ import {
   setActivityTags,
   fetchActivityCategoryMap,
   fetchLockedActivities,
-  setActivityLocked
+  setActivityLocked,
+  saveActivityNotification,
+  deleteActivityNotification
 } from "../api.js";
 import { activityDate } from "../date-utils.js";
 import { normalizeActivityId } from "../id-utils.js";
@@ -73,6 +75,13 @@ export function useActivityMutations({
    */
   const clearTokenIfExpired = (e) => {
     if (isCalendarAuthExpiredError(e)) setCalendarAccessToken(null);
+  };
+
+  const syncActivityNotification = async (activity) => {
+    const startAt = activityDate(activity?.start)?.getTime();
+    if (!activity?.id || !Number.isFinite(startAt)) return;
+    const endAt = activityDate(activity.end)?.getTime();
+    await saveActivityNotification({ activityId: activity.id, title: activity.summary || "(ไม่มีชื่อ)", startAt, endAt: Number.isFinite(endAt) ? endAt : null });
   };
 
   /**
@@ -227,6 +236,8 @@ export function useActivityMutations({
     }
 
     if (savedActivity?.id) {
+      try { await syncActivityNotification(savedActivity); }
+      catch (e) { setError(`บันทึกกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`); }
       const normalizedId = normalizeActivityId(savedActivity.id);
       setActivityCategoryMap((prev) => {
         const next = { ...prev };
@@ -295,10 +306,11 @@ export function useActivityMutations({
       const conflict = await checkConflict(id);
       if (conflict) anyConflicts = true;
       try {
-        await updateActivity(calendarAccessToken, id, {
+        const savedActivity = await updateActivity(calendarAccessToken, id, {
           start: { dateTime: start.toISOString() },
           end: { dateTime: end.toISOString() }
         });
+        syncActivityNotification(savedActivity).catch((e) => setError(`อัปเดตเวลาแล้ว แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
       } catch (e) {
         failures.push(`${id}: ${e.message}`);
         if (isCalendarAuthExpiredError(e)) {
@@ -363,6 +375,7 @@ export function useActivityMutations({
     // Optimistic removal prevents a deleted block lingering while Calendar's
     // subsequent list request is in flight (or briefly eventually-consistent).
     setActivities((previous) => previous.filter((activity) => activity.id !== activityId));
+    deleteActivityNotification(activityId).catch(() => {});
     if (!isRecurringOccurrence) {
       setActivityCategoryMap((prev) => {
         const next = { ...prev };
@@ -424,6 +437,7 @@ export function useActivityMutations({
       throw e;
     }
     setActivities((previous) => previous.filter((activity) => activity.recurringEventId !== recurringEventId && activity.id !== recurringEventId));
+    await Promise.all(seriesActivityIds.map((id) => deleteActivityNotification(id).catch(() => {})));
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       for (const id of normalizedSeriesIds) delete next[id];
@@ -514,6 +528,7 @@ export function useActivityMutations({
       throw e;
     }
     const normalizedCreatedId = created?.id ? normalizeActivityId(created.id) : null;
+    if (created?.id) syncActivityNotification(created).catch((e) => setError(`ทำสำเนาสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
 
     const existingCategoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
     if (normalizedCreatedId && existingCategoryId) {
@@ -579,7 +594,8 @@ export function useActivityMutations({
 
     const conflict = await checkConflict(rawId);
     try {
-      await updateActivity(calendarAccessToken, rawId, body);
+      const savedActivity = await updateActivity(calendarAccessToken, rawId, body);
+      syncActivityNotification(savedActivity).catch((e) => setError(`ย้ายกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
     } catch (e) {
       clearTokenIfExpired(e);
       throw e;
