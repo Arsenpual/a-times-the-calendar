@@ -49,7 +49,12 @@ export function usePushNotifications({ firebaseUser }) {
   const [fcmToken, setFcmToken] = useState(null);
   const [error, setError] = useState(null);
   const [isRequesting, setIsRequesting] = useState(false);
-  const [isEnabled, setIsEnabled] = useState(() => localStorage.getItem(PUSH_DISABLED_KEY) !== "true");
+  // Browser permission กับการเปิดใช้ในแอปเป็นคนละชั้น: ก่อน permission
+  // granted ปุ่มต้องเป็น 🔕 เพื่อให้คลิกแล้วเข้าสู่ flow ขอสิทธิ์ ไม่ใช่
+  // เข้า disable flow ตั้งแต่ครั้งแรก.
+  const [isEnabled, setIsEnabled] = useState(() =>
+    permission === "granted" && localStorage.getItem(PUSH_DISABLED_KEY) !== "true"
+  );
 
   // ถ้า permission เคย "granted" มาก่อนแล้ว (จากรอบก่อนหน้า) และมี
   // firebaseUser อยู่แล้วตอนเปิดแอปครั้งนี้ — ลงทะเบียน token ให้อัตโนมัติ
