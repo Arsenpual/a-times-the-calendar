@@ -795,7 +795,7 @@ html.screen-reader-mode .tag-search-input {
 
 .error-banner {
   position: fixed;
-  z-index: 109;
+  z-index: 8800;
   top: 20px;
   left: 50%;
   width: min(520px, calc(100vw - 32px));
