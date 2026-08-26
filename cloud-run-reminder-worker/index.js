@@ -39,6 +39,7 @@ async function processUserDueReminders(userId, reminders, now) {
     if (isOneShotType(reminder.type)) next.enabled = false;
     else if (reminder.type === "interval" || reminder.type === "weekly") next.nextDueAt = computeNextDueAt(reminder, now);
     else if (reminder.type === "event-anchored") next.nextDueAt = null;
+    else if (reminder.type === "activity-notification") next.enabled = false;
     updates.push({ ref, next });
   }
 
@@ -52,13 +53,17 @@ async function processUserDueReminders(userId, reminders, now) {
 
 async function main() {
   const now = Date.now();
-  const snapshot = await db.collectionGroup("reminder-mode")
+  const reminderSnapshot = await db.collectionGroup("reminder-mode")
+    .where("enabled", "==", true)
+    .where("nextDueAt", "<=", now)
+    .get();
+  const activitySnapshot = await db.collectionGroup("activity-notifications")
     .where("enabled", "==", true)
     .where("nextDueAt", "<=", now)
     .get();
   const byUser = new Map();
 
-  for (const doc of snapshot.docs) {
+  for (const doc of [...reminderSnapshot.docs, ...activitySnapshot.docs]) {
     const reminder = doc.data();
     if (reminder.completedAt || !reminder.nextDueAt || reminder.nextDueAt > now) continue;
     // Interval เวอร์ชันพื้นฐานยังเป็นเพียงข้อมูลความถี่ใน UI เท่านั้น:

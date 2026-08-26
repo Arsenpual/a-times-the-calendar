@@ -9,6 +9,7 @@ import AutoShrinkText from "./auto-shrink-text.jsx";
 import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../reminder-stats.js";
 import { activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
+import { layoutOverlaps } from "../timeline-layout.js";
 import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
@@ -626,7 +627,7 @@ export default function ReminderDashboard({
     const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
     const pixelsPerMinute = ROW_HEIGHT_PX / minutesPerRow;
 
-    return activities
+    const blocks = activities
       .map((activity) => {
         const start = activityDate(activity.start);
         if (!start || Number.isNaN(start.getTime())) return null;
@@ -652,6 +653,8 @@ export default function ReminderDashboard({
           title: activity.summary || "(ไม่มีชื่อกิจกรรม)",
           top: SPACER_HEIGHT_PX + ((startMs - dayStartMs) / 60000) * pixelsPerMinute,
           height: Math.max(22, ((endMs - startMs) / 60000) * pixelsPerMinute),
+          startMin: (startMs - dayStartMs) / 60000,
+          endMin: (endMs - dayStartMs) / 60000,
           color,
           actualStartMs,
           actualEndMs,
@@ -663,6 +666,24 @@ export default function ReminderDashboard({
         };
       })
       .filter(Boolean);
+
+    // Match Week Spine's puzzle layout exactly: activities with intersecting
+    // time ranges receive adjacent lanes instead of covering one another.
+    const lanes = layoutOverlaps(blocks.map((block) => ({
+      id: block.id,
+      startMin: block.startMin,
+      endMin: block.endMin
+    })));
+    return blocks.map((block) => ({
+      ...block,
+      stackIndex: lanes[block.id]?.stackIndex || 0,
+      hidden: lanes[block.id]?.hidden || false,
+      hiddenCount: lanes[block.id]?.hiddenCount || 0,
+      laneCount: lanes[block.id]?.columns || 1,
+      stackZ: lanes[block.id]?.stackZ || 1,
+      titleBelow: lanes[block.id]?.titleBelow || false,
+      titleOffsetMinutes: lanes[block.id]?.titleOffsetMinutes || 0
+    }));
   }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX]);
 
   // แถบสีของ Timer/Stopwatch เป็นคนละ layer กับ now-indicator และ Activity:
@@ -3427,21 +3448,26 @@ export default function ReminderDashboard({
                 </div>
 
                 <div className="calendar-timeline-layer" aria-label="กิจกรรมในปฏิทินของวันนี้">
-                  {calendarTimelineBlocks.map((block) => (
+                  {calendarTimelineBlocks.filter((block) => !block.hidden).map((block) => (
                     <button
                       key={block.id}
                       type="button"
-                      className={`calendar-timeline-block${block.isActive ? " is-current" : ""}`}
+                      className={`calendar-timeline-block${block.isActive ? " is-current" : ""}${block.titleBelow ? " has-stacked-title" : ""}`}
                       style={{
                         top: `${block.top}px`,
                         height: `${block.height}px`,
+                        left: "84px",
+                        width: `calc(100% - ${92 + block.stackIndex * 10}px)`,
+                        right: "auto",
+                        zIndex: block.stackZ,
                         "--calendar-activity-border": block.color.border,
                         "--calendar-activity-bg": block.color.bg
                       }}
                       onClick={() => onEditActivity?.(block.activity)}
                       title={`แก้ไขกิจกรรม: ${block.title}`}
                     >
-                      <span className="calendar-timeline-block-title">{block.title}</span>
+                      <span className={`calendar-timeline-block-title${block.titleBelow ? " is-stacked" : ""}${block.titleOffsetMinutes > 0 ? " is-relocated" : ""}`} style={block.titleOffsetMinutes > 0 ? { top: `${(block.titleOffsetMinutes / Math.max(1, block.endMin - block.startMin)) * 100}%` } : undefined}>{block.title}</span>
+                      {block.hiddenCount > 0 && <small className="calendar-timeline-overflow-count">+{block.hiddenCount}</small>}
                     </button>
                   ))}
                 </div>

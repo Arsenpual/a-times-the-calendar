@@ -167,6 +167,12 @@ function activityArchiveCol(userId) {
   return userDoc(userId).collection("activityArchive");
 }
 
+// Mirror ขนาดเล็กของกิจกรรมที่ผู้ใช้สร้าง/แก้ผ่านแอป เก็บเฉพาะข้อมูลที่
+// Cloud Run ต้องใช้ส่งแจ้งเตือนตอนเริ่มกิจกรรม ไม่ใช่สำเนา Google Calendar.
+function activityNotificationsCol(userId) {
+  return userDoc(userId).collection("activity-notifications");
+}
+
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
 // db.js) แค่ตอนนี้ seed ให้ "ต่อ user" แทนที่จะ seed ครั้งเดียวตอน server
 // start (ดู ensureDefaultCategoriesForUser ด้านล่าง)
@@ -276,5 +282,6 @@ module.exports = {
   reminderGroupsCol,
   fcmTokensCol,
   activityArchiveCol,
+  activityNotificationsCol,
   ensureDefaultCategoriesForUser
 };

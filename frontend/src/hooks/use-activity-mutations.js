@@ -13,7 +13,9 @@ import {
   setActivityTags,
   fetchActivityCategoryMap,
   fetchLockedActivities,
-  setActivityLocked
+  setActivityLocked,
+  saveActivityNotification,
+  deleteActivityNotification
 } from "../api.js";
 import { activityDate } from "../date-utils.js";
 import { normalizeActivityId } from "../id-utils.js";
@@ -75,31 +77,17 @@ export function useActivityMutations({
     if (isCalendarAuthExpiredError(e)) setCalendarAccessToken(null);
   };
 
-  /**
-   * ห้ามกิจกรรมเวลาทับซ้อนกันในโหมด calendar — logic เดียวกันกับที่ใช้ใน
-   * ActivityModal.jsx's validate() (ที่นั่นเช็คตอนสร้าง/แก้ไขผ่านฟอร์ม
-   * ปกติ) แต่จุดนี้ครอบคลุมสองทางเข้าที่ไม่ผ่านฟอร์มเลย: ลากปรับเวลาใน
-   * TimelineEditor (handleSaveTimes) และย้ายกิจกรรมไปวันอื่น
-   * (handleMoveActivityToDay) — ทั้งสองจุดคำนวณเวลาใหม่แล้วยิง
-   * updateActivity ตรงๆ โดยไม่ผ่าน ActivityModal ดังนั้นต้องเช็คซ้ำที่นี่
-   * อีกชั้น ไม่งั้นกฎ "ห้ามทับซ้อน" จะถูกข้ามได้ง่ายๆ แค่ลากบล็อกในไทม์ไลน์
-   *
-   * @param {string} excludeId normalized id ของกิจกรรมที่กำลังแก้ไขเอง — ไม่นับว่าทับกับตัวเอง
-   * @param {Date} newStart
-   * @param {Date} newEnd
-   * @returns {object|null} กิจกรรมที่ทับซ้อนกัน (ตัวแรกที่เจอ) หรือ null ถ้าไม่มี
-   */
-  const findOverlappingActivity = (excludeId, newStart, newEnd, excludedActivityIds = null, timeOverrides = null) => {
-    return activities.find((activity) => {
-      // Multiple selected blocks can be moved in one operation. Compare each
-      // destination only with activities outside that moving batch; otherwise
-      // every selected neighbour incorrectly blocks the save.
-      if (normalizeActivityId(activity.id) === excludeId || excludedActivityIds?.has(activity.id)) return false;
-      const override = timeOverrides?.get(activity.id);
-      const otherStart = override?.start || activityDate(activity.start);
-      const otherEnd = override?.end || activityDate(activity.end) || otherStart;
-      if (!otherStart || !otherEnd) return false;
-      return newStart < otherEnd && newEnd > otherStart;
+  // Firestore mirror ไม่ใช่ source of truth ของ activity: Google Calendar
+  // save สำเร็จแล้วจึง mirror เฉพาะเวลาเริ่มเพื่อให้ Cloud Run แจ้งเตือนได้.
+  const syncActivityNotification = async (activity) => {
+    const startAt = activityDate(activity?.start)?.getTime();
+    if (!activity?.id || !Number.isFinite(startAt)) return;
+    const endAt = activityDate(activity.end)?.getTime();
+    await saveActivityNotification({
+      activityId: activity.id,
+      title: activity.summary || "(ไม่มีชื่อ)",
+      startAt,
+      endAt: Number.isFinite(endAt) ? endAt : null
     });
   };
 
@@ -227,6 +215,11 @@ export function useActivityMutations({
     }
 
     if (savedActivity?.id) {
+      try {
+        await syncActivityNotification(savedActivity);
+      } catch (e) {
+        setError(`บันทึกกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`);
+      }
       const normalizedId = normalizeActivityId(savedActivity.id);
       setActivityCategoryMap((prev) => {
         const next = { ...prev };
@@ -275,30 +268,22 @@ export function useActivityMutations({
     if (changes.length === 0) return true;
     const failures = [];
     let anySkippedLocked = false;
-    let anySkippedOverlap = false;
     let anyConflicts = false;
     let tokenExpired = false;
-    const movingActivityIds = new Set(changes.map(({ id }) => id));
     for (const { id, start, end } of changes) {
       const normalizedId = normalizeActivityId(id);
       if (lockedActivities[normalizedId]) {
         anySkippedLocked = true;
         continue;
       }
-      // เช็คทับซ้อนก่อนบันทึกเวลาใหม่ — เทียบกับ `activities` ที่โหลดไว้
-      // สมาชิกใน batch เดียวกันย้ายด้วย delta เดียวกัน จึงไม่ควรกีดขวาง
-      // กันเอง แต่กิจกรรมที่ไม่ได้เลือกยังเป็นข้อห้ามตามปกติ.
-      if (findOverlappingActivity(normalizedId, start, end, movingActivityIds)) {
-        anySkippedOverlap = true;
-        continue;
-      }
       const conflict = await checkConflict(id);
       if (conflict) anyConflicts = true;
       try {
-        await updateActivity(calendarAccessToken, id, {
+        const savedActivity = await updateActivity(calendarAccessToken, id, {
           start: { dateTime: start.toISOString() },
           end: { dateTime: end.toISOString() }
         });
+        syncActivityNotification(savedActivity).catch((e) => setError(`อัปเดตเวลาแล้ว แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
       } catch (e) {
         failures.push(`${id}: ${e.message}`);
         if (isCalendarAuthExpiredError(e)) {
@@ -314,10 +299,6 @@ export function useActivityMutations({
     }
     if (failures.length > 0) {
       setError(`ปรับเวลาบางกิจกรรมไม่สำเร็จ — ${failures.join(", ")}`);
-    } else if (anySkippedOverlap) {
-      setError(
-        "บางกิจกรรมเวลาทับซ้อนกับกิจกรรมอื่นจึงไม่ถูกบันทึก — ปรับเวลาไม่ให้ชนกัน หรือใช้โหมด reminder สำหรับกิจกรรมย่อย"
-      );
     } else if (anySkippedLocked && anyConflicts) {
       setError("บางกิจกรรมถูกล็อกไว้จึงข้ามไป และบางกิจกรรมถูกแก้ไขที่อื่น — บันทึกทับข้อมูลนั้นแล้ว");
     } else if (anySkippedLocked) {
@@ -327,7 +308,7 @@ export function useActivityMutations({
     }
     await loadActivities();
     refreshTagSearchIfActive();
-    return failures.length === 0 && !anySkippedLocked && !anySkippedOverlap;
+    return failures.length === 0 && !anySkippedLocked;
   };
 
   /** นับจำนวน instances ของ recurring series สำหรับ ActivityPopup */
@@ -363,6 +344,7 @@ export function useActivityMutations({
     // Optimistic removal prevents a deleted block lingering while Calendar's
     // subsequent list request is in flight (or briefly eventually-consistent).
     setActivities((previous) => previous.filter((activity) => activity.id !== activityId));
+    deleteActivityNotification(activityId).catch(() => {});
     if (!isRecurringOccurrence) {
       setActivityCategoryMap((prev) => {
         const next = { ...prev };
@@ -400,6 +382,7 @@ export function useActivityMutations({
     }
     await loadActivities();
     refreshTagSearchIfActive();
+    return created;
   };
 
   /**
@@ -424,6 +407,7 @@ export function useActivityMutations({
       throw e;
     }
     setActivities((previous) => previous.filter((activity) => activity.recurringEventId !== recurringEventId && activity.id !== recurringEventId));
+    await Promise.all(seriesActivityIds.map((id) => deleteActivityNotification(id).catch(() => {})));
     setActivityCategoryMap((prev) => {
       const next = { ...prev };
       for (const id of normalizedSeriesIds) delete next[id];
@@ -494,18 +478,16 @@ export function useActivityMutations({
 
   /**
    * Clones an activity onto the same day: same title (with a "(copy)"
-   * suffix), time range, and colorId, plus the same life-area category
+   * suffix), time range, plus the same life-area category
    * assignment. Locked state is deliberately NOT copied.
    */
-  const handleDuplicateActivity = async (activity) => {
+  const handleDuplicateActivity = async (activity, timeOverride = null) => {
     if (!calendarAccessToken) return;
     const body = {
       summary: nextCopySummary(activity.summary),
-      start: activity.start,
-      end: activity.end
+      start: timeOverride?.start || activity.start,
+      end: timeOverride?.end || activity.end
     };
-    if (activity.colorId) body.colorId = activity.colorId;
-
     let created;
     try {
       created = await createActivity(calendarAccessToken, body);
@@ -514,6 +496,9 @@ export function useActivityMutations({
       throw e;
     }
     const normalizedCreatedId = created?.id ? normalizeActivityId(created.id) : null;
+    if (created?.id) {
+      syncActivityNotification(created).catch((e) => setError(`ทำสำเนาสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
+    }
 
     const existingCategoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
     if (normalizedCreatedId && existingCategoryId) {
@@ -567,19 +552,12 @@ export function useActivityMutations({
     const newStart = new Date(y, m - 1, d, oldStart.getHours(), oldStart.getMinutes(), oldStart.getSeconds());
     const newEnd = new Date(newStart.getTime() + durationMs);
 
-    const overlapping = findOverlappingActivity(normalizedId, newStart, newEnd, null, savedTimes);
-    if (overlapping) {
-      setError(
-        `ย้ายไม่สำเร็จ — เวลาจะทับซ้อนกับกิจกรรม "${overlapping.summary || "(ไม่มีชื่อ)"}" ในวันนั้น`
-      );
-      return false;
-    }
-
     const body = { start: { dateTime: newStart.toISOString() }, end: { dateTime: newEnd.toISOString() } };
 
     const conflict = await checkConflict(rawId);
     try {
-      await updateActivity(calendarAccessToken, rawId, body);
+      const savedActivity = await updateActivity(calendarAccessToken, rawId, body);
+      syncActivityNotification(savedActivity).catch((e) => setError(`ย้ายกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${e.message}`));
     } catch (e) {
       clearTokenIfExpired(e);
       throw e;
@@ -590,31 +568,6 @@ export function useActivityMutations({
     await loadActivities();
     refreshTagSearchIfActive();
     return true;
-  };
-
-  /**
-   * Sets or clears a custom color override on an activity, using Google
-   * Calendar's own native `colorId` field.
-   * @param {string} activityId
-   * @param {string|null} colorId null resets to default
-   */
-  const handleSetActivityColor = async (activityId, colorId) => {
-    if (!calendarAccessToken) return;
-    const normalizedId = normalizeActivityId(activityId);
-    if (lockedActivities[normalizedId]) {
-      setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนเปลี่ยนสี");
-      return;
-    }
-    const activity = activities.find((a) => normalizeActivityId(a.id) === normalizedId);
-    if (!activity) return;
-    try {
-      await updateActivity(calendarAccessToken, activity.id, { colorId: colorId || "" });
-    } catch (e) {
-      clearTokenIfExpired(e);
-      throw e;
-    }
-    await loadActivities();
-    refreshTagSearchIfActive();
   };
 
   return {
@@ -629,7 +582,6 @@ export function useActivityMutations({
     handleDeleteActivity,
     handleDeleteSeries,
     handleDuplicateActivity,
-    handleMoveActivityToDay,
-    handleSetActivityColor
+    handleMoveActivityToDay
   };
 }

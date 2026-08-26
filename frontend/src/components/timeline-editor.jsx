@@ -63,7 +63,6 @@ function minutesToLabel(totalMinutes) {
  * @param {(recurringEventId: string) => Promise<void>} onDeleteSeries deletes an entire recurring series in one call
  * @param {(activity: object) => Promise<void>} onDuplicateActivity clone an activity onto the same day
  * @param {(activityId: string, dateStr: string) => Promise<void>} onMoveActivityToDay dateStr is "YYYY-MM-DD"
- * @param {(activityId: string, colorId: string|null) => Promise<void>} onSetActivityColor colorId null resets to default
  * @param {(activity: object) => Promise<void>} onEditSeries เปิด modal แก้ไขทั้งชุด recurring
  * @param {(recurringEventId: string) => Promise<number|null>} onFetchSeriesCount นับ instances ทั้งชุด
  */
@@ -84,7 +83,6 @@ export default function TimelineEditor({
   onDeleteSeries,
   onDuplicateActivity,
   onMoveActivityToDay,
-  onSetActivityColor,
   onEditSeries,
   onFetchSeriesCount
 }) {
@@ -127,42 +125,8 @@ export default function TimelineEditor({
 
   const hasChanges = Object.keys(draftTimes).length > 0;
 
-  // Timeline Editor มีไว้จัดกิจกรรมหลักให้เป็นช่วงเวลาที่ไม่ชนกัน ส่วนงาน
-  // ย่อย/สิ่งที่ทำควบคู่กันให้ใช้ Reminder Mode แทน. เปรียบเทียบ Date จริง
-  // (ไม่ใช่แค่นาทีในวัน) เพื่อให้กิจกรรมข้ามเที่ยงคืนและ incoming spillover
-  // ถูกตรวจด้วยกติกาเดียวกันด้วย.
-  const findOverlap = (activityId, candidateTimes) => {
-    const candidateStart = candidateTimes.start?.getTime();
-    const candidateEnd = candidateTimes.end?.getTime();
-    if (!Number.isFinite(candidateStart) || !Number.isFinite(candidateEnd) || candidateEnd <= candidateStart) return null;
-
-    const otherTimedActivity = timedActivities.find((activity) => {
-      if (activity.id === activityId) return false;
-      const times = getTimes(activity);
-      return candidateStart < times.end.getTime() && candidateEnd > times.start.getTime();
-    });
-    if (otherTimedActivity) return otherTimedActivity.summary || "กิจกรรมอื่น";
-
-    const incoming = incomingSpillover.find(({ activity, start, end }) =>
-      activity.id !== activityId && candidateStart < end.getTime() && candidateEnd > start.getTime()
-    );
-    return incoming ? (incoming.activity.summary || "กิจกรรมที่ต่อเนื่องจากเมื่อคืน") : null;
-  };
-
-  const validateDraftTimes = () => {
-    for (const [activityId, times] of Object.entries(draftTimes)) {
-      const overlappingTitle = findOverlap(activityId, times);
-      if (overlappingTitle) return `เวลาซ้อนกับ “${overlappingTitle}” — งานย่อยให้สร้างใน Reminder Mode แทน`;
-    }
-    return null;
-  };
-
   const saveEditing = async () => {
-    const validationError = validateDraftTimes();
-    if (validationError) {
-      setOverlapError(validationError);
-      return;
-    }
+    setOverlapError(null);
     const changes = Object.entries(draftTimes).map(([id, times]) => ({
       id,
       start: times.start,
@@ -252,19 +216,13 @@ export default function TimelineEditor({
     const start = new Date(base.getTime() + nextStart * 60000);
     const end = new Date(base.getTime() + nextEnd * 60000);
 
-    // อนุญาตให้ลาก "ผ่าน" ช่วงที่ซ้อนกันได้ เพื่อจัดลำดับ/ย้ายข้ามกิจกรรม
-    // อื่นอย่างลื่นไหล แต่แจ้งเตือนทันทีและ saveEditing จะกันการบันทึกไว้
-    // จนกว่าจะจัดช่วงเวลาให้ไม่ชนกัน.
-    const overlappingTitle = findOverlap(dragState.activityId, { start, end });
     // Pointer events เกิดถี่กว่า refresh rate ของจอได้มาก การ setState ทุก
     // event ทำให้ทั้งกริด 24 ชั่วโมงคำนวณ layout ใหม่ถี่เกินจำเป็นและเกิด
     // อาการกระตุก จึงรวม update เหลืออย่างมากหนึ่งครั้งต่อ animation frame.
     pendingDragPreviewRef.current = {
       activityId: dragState.activityId,
       times: { start, end },
-      overlapError: overlappingTitle
-        ? `เวลาซ้อนกับ “${overlappingTitle}” — จัดเวลาให้ไม่ทับกันก่อนบันทึก หรือย้ายงานย่อยไป Reminder Mode`
-        : null
+      overlapError: null
     };
     if (dragAnimationFrameRef.current !== null) return;
     dragAnimationFrameRef.current = requestAnimationFrame(() => {
@@ -411,8 +369,8 @@ export default function TimelineEditor({
         </button>
       </div>
 
-      {/* จองพื้นที่ alert ไว้ตลอด: ถ้า mount/unmount เฉพาะตอนเวลาชนกัน
-          กริดจะถูกดันลง/เด้งกลับใต้ pointer และทำให้ตำแหน่งลากสั่น */}
+      {/* Reserve status space so non-overlap save feedback never shifts the
+          grid beneath the pointer during a drag. */}
       <div className="timeline-editor-status" aria-live="polite">
         {overlapError && <p className="timeline-editor-error" role="alert">{overlapError}</p>}
       </div>
@@ -599,7 +557,6 @@ export default function TimelineEditor({
               }
               onDuplicate={() => onDuplicateActivity?.(contextActivity)}
               onMoveToDay={(dateStr) => onMoveActivityToDay?.(normalizeActivityId(contextActivity.id), dateStr)}
-              onSetColor={(colorId) => onSetActivityColor?.(normalizeActivityId(contextActivity.id), colorId)}
               onEditSeries={() => onEditSeries?.(contextActivity)}
               onFetchSeriesCount={contextActivity.recurringEventId ? () => onFetchSeriesCount?.(contextActivity.recurringEventId) : undefined}
             />

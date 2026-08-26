@@ -6,6 +6,8 @@
 // before it was centralized in id-utils.js.
 
 export const SNAP_MINUTES = 15;
+export const MAX_OVERLAP_STACKS = 3;
+const TITLE_CLEARANCE_MINUTES = 30;
 
 /** Minutes since local midnight, clamped to the 0–1440 day range. */
 export function minutesOfDay(date) {
@@ -34,12 +36,9 @@ export function minutesFromDayStart(date, day) {
 
 /**
  * Lays out overlapping activities side by side: activities are grouped into
- * clusters of mutually-overlapping time ranges, then within each cluster
- * assigned to columns left-to-right ordered by duration ascending — so the
- * activity that takes the most time ends up in the rightmost column, per
- * the proposal's overlap rule. Returns a map of activityId -> { column,
- * columns } where `columns` is the total column count for that activity's
- * cluster.
+ * clusters of mutually-overlapping time ranges, then assigns lanes. Visual
+ * consumers render them as at most three offset, stacked building cards;
+ * further lanes are represented by a +N badge on the third card.
  * @param {Array<{id: string, startMin: number, endMin: number}>} entries
  */
 export function layoutOverlaps(entries) {
@@ -50,24 +49,60 @@ export function layoutOverlaps(entries) {
 
   const flushCluster = () => {
     if (cluster.length === 0) return;
-    // Order columns left-to-right by ascending duration, so the longest
-    // activity lands in the rightmost column.
-    const ordered = [...cluster].sort((a, b) => (a.endMin - a.startMin) - (b.endMin - b.startMin));
-    const columnEnds = []; // tracks the latest endMin occupied in each column
-    const assigned = {};
+    const ordered = [...cluster].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+    const columns = [];
+    const assigned = new Map();
     for (const entry of ordered) {
-      let col = columnEnds.findIndex((end) => end <= entry.startMin);
+      let col = columns.findIndex((lane) => lane.every((other) => other.endMin <= entry.startMin || other.startMin >= entry.endMin));
       if (col === -1) {
-        col = columnEnds.length;
-        columnEnds.push(entry.endMin);
-      } else {
-        columnEnds[col] = entry.endMin;
+        col = columns.length;
+        columns.push([]);
       }
-      assigned[entry.id] = col;
+      columns[col].push(entry);
+      assigned.set(entry.id, col);
     }
-    const totalColumns = columnEnds.length;
+    const totalColumns = columns.length;
+    const longestDuration = Math.max(...cluster.map((entry) => entry.endMin - entry.startMin));
     for (const entry of cluster) {
-      layout[entry.id] = { column: assigned[entry.id], columns: totalColumns };
+      const column = assigned.get(entry.id);
+      const duration = entry.endMin - entry.startMin;
+      // Find the first 30-minute vertical slot that isn't covered by a
+      // shorter (therefore visually higher) activity. The title keeps its
+      // top position when clear, moves inside the long block when possible,
+      // and only goes below the block when every usable position is covered.
+      const blockers = cluster
+        .filter((candidate) => {
+          if (candidate.id === entry.id) return false;
+          const candidateDuration = candidate.endMin - candidate.startMin;
+          return candidateDuration < duration && candidate.endMin > entry.startMin && candidate.startMin < entry.endMin;
+        })
+        .map((candidate) => ({
+          start: Math.max(entry.startMin, candidate.startMin),
+          end: Math.min(entry.endMin, candidate.endMin)
+        }))
+        .sort((a, b) => a.start - b.start);
+      let titleStart = entry.startMin;
+      for (const blocker of blockers) {
+        if (titleStart + TITLE_CLEARANCE_MINUTES <= blocker.start) break;
+        titleStart = Math.max(titleStart, blocker.end);
+      }
+      const titleBelow = titleStart + TITLE_CLEARANCE_MINUTES > entry.endMin;
+      const titleOffsetMinutes = titleBelow ? null : titleStart - entry.startMin;
+      const hiddenCount = column === MAX_OVERLAP_STACKS - 1
+        ? cluster.filter((candidate) => assigned.get(candidate.id) >= MAX_OVERLAP_STACKS).length
+        : 0;
+      layout[entry.id] = {
+        column,
+        columns: totalColumns,
+        stackIndex: Math.min(column, MAX_OVERLAP_STACKS - 1),
+        hidden: column >= MAX_OVERLAP_STACKS,
+        hiddenCount,
+        // Shorter blocks sit visually on top. `titleOffsetMinutes` lets the
+        // rendered label move out of a covered part of the long card.
+        stackZ: Math.round(longestDuration - duration) + 1,
+        titleBelow,
+        titleOffsetMinutes
+      };
     }
     cluster = [];
     clusterEnd = -Infinity;

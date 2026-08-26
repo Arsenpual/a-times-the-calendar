@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import loginGuideStep1 from "../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../public/login-guide-step3.jpg";
@@ -35,6 +35,7 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/acti
 // entirely without removing the component from the tree.
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
 const BRAND_WORDMARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
+const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
@@ -78,7 +79,22 @@ export default function App() {
 function MainApp() {
   const [isActivityReading, setIsActivityReading] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [weekSpineHoursPerCell, setWeekSpineHoursPerCell] = useState(() => {
+    try {
+      const savedValue = Number(window.localStorage.getItem(WEEK_SPINE_HOURS_PER_CELL_KEY));
+      return [1, 2, 4].includes(savedValue) ? savedValue : 2;
+    } catch {
+      return 2;
+    }
+  });
   const accountMenuRef = useRef(null);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WEEK_SPINE_HOURS_PER_CELL_KEY, String(weekSpineHoursPerCell));
+    } catch {
+      // The default grid remains available when local storage is unavailable.
+    }
+  }, [weekSpineHoursPerCell]);
   useEffect(() => {
     const openMockupMode = (event) => {
       const target = event.target;
@@ -188,6 +204,19 @@ function MainApp() {
     resetOnLogout
   } = calendarData;
 
+  const handleManualCalendarSync = useCallback(async () => {
+    if (!calendarAccessToken) {
+      setError("สิทธิ์ Google Calendar หมดอายุแล้ว — ยืนยันตัวตนเมื่อต้องการดึงกิจกรรม");
+      return;
+    }
+    try {
+      await loadActivities();
+    } catch {
+      // loadActivities already exposes a recoverable error and clears an
+      // expired token. Keep the modal usable after a failed manual sync.
+    }
+  }, [calendarAccessToken, loadActivities, setError]);
+
   const tagSearch = useTagSearch({ calendarAccessToken, setCalendarAccessToken });
   const {
     tagSearchTerms,
@@ -245,8 +274,7 @@ function MainApp() {
     handleDeleteActivity,
     handleDeleteSeries,
     handleDuplicateActivity,
-    handleMoveActivityToDay,
-    handleSetActivityColor
+    handleMoveActivityToDay
   } = mutations;
 
   const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
@@ -547,12 +575,7 @@ function MainApp() {
           Deliberately does NOT auto-open the Google popup from a timer —
           browsers block popups that aren't triggered by a direct click, so
           a button the person presses themselves is the only reliable way
-          to renew either way.
-
-          Shown in every mode (not just activity mode) — if the token
-          expires while the person is in reminder mode, they still need a
-          way to renew it without first switching back to activity mode,
-          since there'd otherwise be no visible path to recover access. */}
+          to renew either way. */}
       {firebaseUser && (tokenNearingExpiry || !calendarAccessToken) && (
         <div className="token-expiry-backdrop">
           <div
@@ -680,15 +703,9 @@ function MainApp() {
 
             {/* Signed in to Firebase, but the Google Calendar consent hasn't
                 happened yet (first sign-in denied Calendar scope), OR its
-                token specifically expired mid-session — either way there's
-                no calendarAccessToken to work with. Rendered as an
-                empty-state placeholder in the main content area; the
-                *actionable* blocking prompt (backdrop + banner asking to
-                re-auth) is handled separately below, right before <main>,
-                using the exact same token-expiry-backdrop/banner styling as
-                the "nearing expiry" warning — see that block's comment for
-                why both share one visual treatment. */}
-            {firebaseUser && !calendarAccessToken && (
+                token specifically expired mid-session. Show this only while
+                there is no previously synced activity data to read. */}
+            {firebaseUser && !calendarAccessToken && activities.length === 0 && (
               <div className="empty-state">
                 <p>ต้องยืนยันตัวตนกับ Google Calendar อีกครั้งเพื่อดึงปฏิทินของคุณมาแสดง</p>
               </div>
@@ -711,7 +728,7 @@ function MainApp() {
               </div>
             )}
 
-            {firebaseUser && calendarAccessToken && (
+            {firebaseUser && (
               <div className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
@@ -777,7 +794,6 @@ function MainApp() {
                     onDeleteSeries={handleDeleteSeries}
                     onDuplicateActivity={handleDuplicateActivity}
                     onMoveActivityToDay={handleMoveActivityToDay}
-                    onSetActivityColor={handleSetActivityColor}
                     onEditSeries={handleEditSeries}
                     onFetchSeriesCount={handleFetchSeriesCount}
                     onNavigateWeek={navigateWeek}
@@ -787,6 +803,8 @@ function MainApp() {
                     userId={firebaseUser.uid}
                     tokenNearingExpiry={tokenNearingExpiry}
                     onReauthCalendar={handleReauthCalendar}
+                    hoursPerCell={weekSpineHoursPerCell}
+                    onHoursPerCellChange={setWeekSpineHoursPerCell}
                   />
                 )}
               </div>
@@ -817,6 +835,7 @@ function MainApp() {
         initialActivity={modalEditingActivity}
         isSeries={modalEditingAsSeries}
         activities={activities}
+        archivedActivityIds={archivedActivityIds}
         categories={categories}
         activityCategoryMap={activityCategoryMap}
         activityTagMap={activityTagMap}
@@ -824,6 +843,8 @@ function MainApp() {
         onDeleteCategory={handleDeleteCategory}
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
+        onSyncGoogleCalendar={handleManualCalendarSync}
+        googleCalendarSyncing={loading}
         onClose={closeModal}
       />
 

@@ -7,6 +7,14 @@
         { "fieldPath": "enabled", "order": "ASCENDING" },
         { "fieldPath": "nextDueAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "activity-notifications",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "nextDueAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

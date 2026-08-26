@@ -11,6 +11,7 @@ const remindersRouter = require("./routes/reminders.js");
 const reminderGroupsRouter = require("./routes/reminder-groups.js");
 const activityArchiveRouter = require("./routes/activity-archive.js");
 const fcmTokensRouter = require("./routes/fcm-tokens.js");
+const activityNotificationsRouter = require("./routes/activity-notifications.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -71,6 +72,7 @@ app.use("/api/reminders", requireAuth, remindersRouter);
 // activity-categories.js ฝั่งปฏิทินเช่นกัน
 app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
 app.use("/api/activity-archive", requireAuth, activityArchiveRouter);
+app.use("/api/activity-notifications", requireAuth, activityNotificationsRouter);
 app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 
 app.use((req, res) => {

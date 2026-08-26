@@ -1,21 +1,16 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-const STEPS = [1, 0.92, 0.85, 0.78, 0.72];
-
 /**
  * Renders `text` on a single line, automatically shrinking font-size (via a
  * CSS custom property, --auto-shrink-scale) until it fits the element's own
- * width — instead of overflowing and getting cut off with an ellipsis like
- * plain `text-overflow: ellipsis` does.
+ * width. A binary search finds the largest fitting continuous scale rather
+ * than choosing from a few visibly-jumpy preset sizes.
  *
  * Used for activity titles in MiniTimelinePanel and TimelineEditor, where a
  * long title being unreadable behind "..." was worse than a slightly
  * smaller (but fully legible) label — these are short single-line labels
  * where losing text isn't acceptable, unlike e.g. multi-line descriptions
  * elsewhere in the app that can wrap/scroll instead.
- *
- * Uses a small set of discrete scales rather than continuously changing the
- * size, keeping titles visually stable while still making room for long text.
  *
  * Measures the *parent* element's width (via ResizeObserver), not this
  * span's own — observing the span itself would create a feedback loop,
@@ -39,15 +34,28 @@ export default function AutoShrinkText({ text, minScale = 0.72, className, style
     if (!el) return;
 
     const measure = () => {
-      const steps = STEPS.filter((step) => step >= minScale);
-      if (steps[steps.length - 1] !== minScale) steps.push(minScale);
-      let chosen = steps[steps.length - 1];
-      for (const step of steps) {
-        el.style.setProperty("--auto-shrink-scale", String(step));
-        if (el.scrollWidth <= el.clientWidth) {
-          chosen = step;
-          break;
+      const minimum = Math.max(0.01, Math.min(1, minScale));
+      const fits = (candidate) => {
+        el.style.setProperty("--auto-shrink-scale", String(candidate));
+        return el.scrollWidth <= el.clientWidth;
+      };
+
+      let chosen = minimum;
+      if (fits(1)) {
+        chosen = 1;
+      } else if (fits(minimum)) {
+        let low = minimum;
+        let high = 1;
+        // Twelve passes give sub-pixel precision even for a 12px base font.
+        for (let pass = 0; pass < 12; pass += 1) {
+          const midpoint = (low + high) / 2;
+          if (fits(midpoint)) {
+            low = midpoint;
+          } else {
+            high = midpoint;
+          }
         }
+        chosen = low;
       }
       setScale(chosen);
     };

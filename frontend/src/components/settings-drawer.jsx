@@ -118,6 +118,7 @@ export default function SettingsDrawer({
                 ))}
               </div>
             </div>
+
           </section>
 
           <section className="settings-section">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { activityDate, formatTime, isSameDay } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { getIncomingSpillover } from "../timeline-layout.js";
+import { downloadDayTimelineImage } from "../export-day-image.js";
 import AutoShrinkText from "./auto-shrink-text.jsx";
 
 const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -101,14 +102,31 @@ export default function MiniTimelinePanel({
         <p className="day-timeline-title">
           {WEEKDAY_FULL[WEEKDAY_SHORT[expandedDate.getDay()]]} ที่ {displayDate}
         </p>
-        <button
-          type="button"
-          className="day-timeline-nav day-timeline-close"
-          onClick={() => onClose?.()}
-          aria-label="กลับไปหน้าสรุปสัปดาห์"
-        >
-          ✕
-        </button>
+        <div className="day-timeline-header-actions">
+          <button
+            type="button"
+            className="day-timeline-nav"
+            onClick={() => downloadDayTimelineImage({
+              day: expandedDate,
+              activities: timedActivities,
+              allActivities: visibleActivities,
+              categories,
+              activityCategoryMap
+            })}
+            aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ"
+            title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)"
+          >
+            📷
+          </button>
+          <button
+            type="button"
+            className="day-timeline-nav day-timeline-close"
+            onClick={() => onClose?.()}
+            aria-label="กลับไปหน้าสรุปสัปดาห์"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className={`day-timeline-scroll${focusedActivityId ? " has-focused-activity" : ""}`}>

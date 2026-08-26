@@ -5,7 +5,6 @@ import {
   combineDateAndTime,
   activityDate
 } from "../date-utils.js";
-import { EVENT_COLORS } from "../activity-colors.js";
 import {
   defaultRepeatState,
   parseRRule,
@@ -43,14 +42,8 @@ function normalizeRepeatState(state) {
   return state;
 }
 
-// A curated subset of Google's 11-color palette for the quick-pick swatches
-// (matches ActivityPopup's QUICK_COLOR_IDS) — full palette isn't needed here.
-const QUICK_COLOR_IDS = ["1", "7", "2", "5", "6", "11", "3"];
-
-// เฉดสีให้เลือกตอนสร้างหมวดหมู่ชีวิตใหม่ — กว้างกว่า QUICK_COLOR_IDS ด้านบน
-// (นั่นคือ Google's built-in event colorId 11 สี ใช้กับกิจกรรมเดี่ยวๆ)
-// เพราะหมวดหมู่เป็นของถาวรที่ผู้ใช้จะเห็นซ้ำๆ ในทุกกิจกรรมที่ผูกไว้ จึงให้
-// เฉดสีเยอะและหลากหลายกว่า ทุกค่าเป็น hex 6 หลักตรงตามที่ backend ตรวจสอบ
+// เฉดสีให้เลือกตอนสร้างหมวดหมู่ชีวิตใหม่ เพราะสีของกิจกรรมทั้งหมดต้องมา
+// จากหมวดหมู่เท่านั้น ทุกค่าเป็น hex 6 หลักตรงตามที่ backend ตรวจสอบ
 // (ดู HEX_COLOR_RE ใน routes/categories.js)
 const CATEGORY_COLOR_SWATCHES = [
   "#1557B0", "#0B6B33", "#B71C1C", "#F29900", "#6A1B9A",
@@ -64,9 +57,6 @@ const CATEGORY_COLOR_SWATCHES = [
  * straight back to Google Calendar via the parent's onSave handler.
  *
  * Phase 3 additions:
- * - Per-activity custom color override (Google event colorId) — only takes
- *   visible effect where no life-area category is assigned, since category
- *   color still wins in the agenda display (see activity-colors.js).
  * - Recurring events via RRULE, built client-side and handed to Google
  *   Calendar as-is in the event's `recurrence` field — we never store or
  *   expand occurrences ourselves. Editing the repeat rule of an *existing*
@@ -94,6 +84,7 @@ export default function ActivityModal({
   missingFields = [],
   initialActivity,
   activities,
+  archivedActivityIds = new Set(),
   categories,
   activityCategoryMap,
   activityTagMap,
@@ -101,6 +92,8 @@ export default function ActivityModal({
   onDeleteCategory,
   onSave,
   onDelete,
+  onSyncGoogleCalendar,
+  googleCalendarSyncing = false,
   onClose
 }) {
   const isEditing = !!initialActivity;
@@ -188,9 +181,6 @@ export default function ActivityModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [categoryDropdownOpen]);
-
-  const hasCategory = !!categoryId;
-  const [colorId, setColorId] = useState(initialActivity?.colorId || null);
 
   // Repeat rule is only editable for brand-new activities, or existing ones
   // whose recurrence we can fully represent in this simple UI (see
@@ -371,14 +361,6 @@ export default function ActivityModal({
     body.start = { dateTime: start.toISOString(), timeZone };
     body.end = { dateTime: end.toISOString(), timeZone };
 
-    // colorId only meaningfully shows once no category is assigned (category
-    // color always wins in the display — see activity-colors.js) but we still
-    // save whichever swatch was picked so it's ready the moment the category
-    // is cleared, matching how ActivityPopup already behaves.
-    if (colorId) {
-      body.colorId = colorId;
-    }
-
     if (recurrenceEditable) {
       const rrule = buildRRule(repeat);
       body.recurrence = rrule ? [rrule] : null;
@@ -411,41 +393,6 @@ export default function ActivityModal({
     const durationHours = (durationEnd - durationStart) / 3600000;
     if (durationHours > 18 && !overnightWarningAcknowledged) {
       return `กิจกรรมนี้ยาว ${durationHours.toFixed(1)} ชั่วโมง (ข้ามเที่ยงคืนไปจบวันถัดไป) — ถ้าตั้งใจแบบนี้ กดบันทึกอีกครั้งเพื่อยืนยัน`;
-    }
-
-    // ห้ามกิจกรรมเวลาทับซ้อนกันในโหมด calendar — กิจกรรมย่อยๆ ให้ใช้โหมด
-    // reminder แทน (calendar เก็บแค่กิจกรรมสำคัญที่มีเวลาแน่นอนไม่ชนกัน)
-    // เช็คเป็นสองช่วงเวลาทับกันแบบมาตรฐาน: A ทับ B ก็ต่อเมื่อ A เริ่มก่อน B
-    // จบ และ A จบหลัง B เริ่ม (เท่ากันพอดี เช่น กิจกรรมหนึ่งจบ 10:00 อีก
-    // กิจกรรมเริ่ม 10:00 พอดี ไม่ถือว่าทับกัน — ใช้ < ไม่ใช่ <=)
-    //
-    // ข้อจำกัดที่ทราบอยู่แล้ว: `activities` ที่ส่งมาจาก app.jsx มีแค่
-    // กิจกรรมของสัปดาห์ที่กำลังโหลดอยู่ (+ วันก่อนหน้า 1 วันสำหรับ
-    // spillover indicator) ไม่ใช่ทั้งปฏิทิน — ถ้าแก้ไข `date` ในฟอร์มให้
-    // ออกนอกสัปดาห์ที่โหลดอยู่ตอนนี้ การเช็คนี้จะไม่เห็นกิจกรรมของวันนั้น
-    // เลย (เช็คผ่านเสมอ) ในทางปฏิบัติแทบไม่เกิดเพราะฟอร์มถูกเปิดจากวันที่
-    // มองเห็นอยู่แล้วเสมอ แต่ยังทฤษฎีเปิดช่องให้หลุดได้ถ้าผู้ใช้เปลี่ยนวันที่
-    // เอง — ยอมรับความเสี่ยงนี้ไว้ก่อน (ตรวจสอบทั้งปฏิทินจริงต้อง fetch
-    // เพิ่มแยกต่างหาก ซึ่งเกินขอบเขตของรอบนี้)
-    const { start: newStart, end: newEnd } = computeStartEnd();
-    const editingNormalizedId = initialActivity ? normalizeActivityId(initialActivity.id) : null;
-    const overlapping = (activities || []).find((activity) => {
-      // ข้ามตัวเองตอนแก้ไข — ไม่งั้นกิจกรรมที่กำลังแก้จะชนกับเวลาเดิมของ
-      // ตัวเองเสมอ (ก่อนบันทึกเวลาใหม่) ทำให้แก้ไขอะไรไม่ได้เลย
-      if (editingNormalizedId && normalizeActivityId(activity.id) === editingNormalizedId) {
-        return false;
-      }
-      const otherStart = activityDate(activity.start);
-      const otherEnd = activityDate(activity.end) || otherStart;
-      if (!otherStart || !otherEnd) return false;
-      return newStart < otherEnd && newEnd > otherStart;
-    });
-    if (overlapping) {
-      const otherStart = activityDate(overlapping.start);
-      const otherEnd = activityDate(overlapping.end) || otherStart;
-      return `เวลาทับซ้อนกับกิจกรรม "${overlapping.summary || "(ไม่มีชื่อ)"}" (${toTimeInputValue(
-        otherStart
-      )}–${toTimeInputValue(otherEnd)}) — ปรับเวลา หรือใช้โหมด reminder สำหรับกิจกรรมย่อย`;
     }
 
     return null;
@@ -514,9 +461,17 @@ export default function ActivityModal({
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">{isEditing ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">
-            ✕
-          </button>
+          <div className="modal-header-actions">
+            {!isEditing && onSyncGoogleCalendar && (
+              <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
+                <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
+                <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
+              </button>
+            )}
+            <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">
+              ✕
+            </button>
+          </div>
         </div>
         {initialWarning && <div className="modal-initial-warning" role="alert"><strong>ต้องกรอกข้อมูลเพิ่มเติม</strong><span>{initialWarning}</span></div>}
 
@@ -711,31 +666,6 @@ export default function ActivityModal({
                 disabled={tags.length >= TAGS_MAX_COUNT}
               />
             </div>
-          </div>
-
-          <div className="modal-field">
-            <span className="field-label">สีกิจกรรม</span>
-            <div className="color-picker-row">
-              {QUICK_COLOR_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`color-dot${colorId === id ? " is-selected" : ""}${hasCategory ? " is-category-locked" : ""}`}
-                  style={{ background: EVENT_COLORS[id].border, color: EVENT_COLORS[id].border }}
-                  onClick={() => setColorId(id)}
-                  disabled={hasCategory}
-                  title={EVENT_COLORS[id].name}
-                />
-              ))}
-            </div>
-            {hasCategory ? (
-              <p className="color-source-note is-override">
-                ⚠ ตอนนี้ถูกกำหนดสีจากหมวดหมู่ "{selectedCategory?.name}" อยู่ — เลือก "ไม่ระบุ"
-                หมวดหมู่ก่อนถ้าอยากใช้สีที่เลือกเอง
-              </p>
-            ) : (
-              colorId && <p className="color-source-note">ใช้สีที่เลือกเองสำหรับกิจกรรมนี้</p>
-            )}
           </div>
 
           {recurrenceEditable ? (

@@ -45,7 +45,6 @@ function buildDayBreakdown(dayActivities, activityCategoryMap, categories) {
  * @param {(recurringEventId: string) => Promise<void>} onDeleteSeries deletes an entire recurring series in one call
  * @param {(activity: object) => Promise<void>} onDuplicateActivity
  * @param {(activityId: string, dateStr: string) => Promise<void>} onMoveActivityToDay
- * @param {(activityId: string, colorId: string|null) => Promise<void>} onSetActivityColor
  * @param {(activity: object) => Promise<void>} onEditSeries
  * @param {(recurringEventId: string) => Promise<number|null>} onFetchSeriesCount
  */
@@ -67,7 +66,6 @@ export default function ActivityMode({
   onDeleteSeries,
   onDuplicateActivity,
   onMoveActivityToDay,
-  onSetActivityColor,
   onEditSeries,
   onFetchSeriesCount
 }) {
@@ -210,7 +208,6 @@ export default function ActivityMode({
                     onDeleteSeries={onDeleteSeries}
                     onDuplicateActivity={onDuplicateActivity}
                     onMoveActivityToDay={onMoveActivityToDay}
-                    onSetActivityColor={onSetActivityColor}
                     onEditSeries={onEditSeries}
                     onFetchSeriesCount={onFetchSeriesCount}
                   />

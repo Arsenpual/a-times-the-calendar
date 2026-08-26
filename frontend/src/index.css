@@ -97,6 +97,8 @@ html.screen-reader-mode .tag-search-input {
 /* Header */
 
 .app-header {
+  position: relative;
+  z-index: 8500;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -130,7 +132,7 @@ html.screen-reader-mode .tag-search-input {
 
 .account-menu-wrap { position: relative; flex: 0 0 auto; }
 .account-menu-trigger { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 50%; background: var(--bg); color: var(--text-primary); cursor: pointer; }.account-menu-trigger:hover { background: var(--hover); }.account-menu-trigger img, .account-menu-identity > img { width: 100%; height: 100%; object-fit: cover; }.account-menu-avatar-fallback { display: grid; place-items: center; width: 100%; height: 100%; background: color-mix(in srgb, var(--today) 20%, var(--bg)); color: var(--today); font-size: 14px; font-weight: 700; }
-.account-menu { position: fixed; z-index: 1000; top: 60px; right: 16px; width: min(300px, calc(100vw - 24px)); overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-muted); box-shadow: 0 12px 32px rgb(0 0 0 / 20%); }.account-menu-identity { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; padding: 13px; border-bottom: 1px solid var(--border); }.account-menu-identity > img, .account-menu-identity > .account-menu-avatar-fallback { width: 40px; height: 40px; overflow: hidden; border-radius: 50%; }.account-menu-identity div { min-width: 0; }.account-menu-identity strong, .account-menu-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.account-menu-identity strong { font-size: 14px; }.account-menu-identity span { margin-top: 2px; color: var(--text-secondary); font-size: 12px; }.account-menu-actions { display: grid; padding: 6px; }.account-menu-actions button { padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.account-menu-actions button:hover { background: var(--hover); }.account-menu-actions .is-danger { color: #d93025; }
+.account-menu { position: fixed; z-index: 8600; top: 60px; right: 16px; width: min(300px, calc(100vw - 24px)); overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-muted); box-shadow: 0 12px 32px rgb(0 0 0 / 20%); }.account-menu-identity { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; padding: 13px; border-bottom: 1px solid var(--border); }.account-menu-identity > img, .account-menu-identity > .account-menu-avatar-fallback { width: 40px; height: 40px; overflow: hidden; border-radius: 50%; }.account-menu-identity div { min-width: 0; }.account-menu-identity strong, .account-menu-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.account-menu-identity strong { font-size: 14px; }.account-menu-identity span { margin-top: 2px; color: var(--text-secondary); font-size: 12px; }.account-menu-actions { display: grid; padding: 6px; }.account-menu-actions button { padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.account-menu-actions button:hover { background: var(--hover); }.account-menu-actions .is-danger { color: #d93025; }
 
 .app-logo {
   display: block;
@@ -483,7 +485,7 @@ html.screen-reader-mode .tag-search-input {
   position: fixed;
   top: 72px;
   left: 50%;
-  z-index: 120;
+  z-index: 8700;
   width: min(680px, calc(100vw - 32px));
   transform: translateX(-50%);
   overflow: hidden;
@@ -808,20 +810,15 @@ html.screen-reader-mode .tag-search-input {
   transform: translateX(-50%);
 }
 
-/* Dimmed backdrop for the token warning/expiry banner — blocks all other
-   interaction until the person renews, same idea as .modal-overlay but
-   with no click-to-dismiss (renewing is the only way out, there's no
-   "cancel" that makes sense here). Highest z-index in the app: needs to
-   sit above even .modal-overlay (z-index: 100), since letting the token
-   die while someone has an ActivityModal open mid-edit would risk losing
-   unsaved form input when the eventual save fails with a 401. Covers both
-   the "nearing expiry" and "already expired" situations (see app.jsx) with
-   the same visual treatment. */
 .token-expiry-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(32, 33, 36, 0.35);
-  z-index: 110;
+  z-index: 9500;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(32 33 36 / 58%);
+  backdrop-filter: blur(2px);
 }
 
 /* Heads-up for the Google Calendar token — amber/warning tone (not the red
@@ -829,14 +826,11 @@ html.screen-reader-mode .tag-search-input {
    still a recoverable one-click fix, not a hard failure. Small card,
    top-left corner, sitting on top of .token-expiry-backdrop above. */
 .token-expiry-banner {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 111;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 320px;
+  max-width: min(420px, 100%);
   padding: 10px 12px;
   background: #fef7e0;
   color: #7a5c00;
@@ -844,6 +838,7 @@ html.screen-reader-mode .tag-search-input {
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(60, 64, 67, 0.18);
   font-size: 13px;
+  pointer-events: auto;
 }
 
 .token-expiry-renew-btn {
@@ -1410,6 +1405,12 @@ html.screen-reader-mode .tag-search-input {
   justify-content: space-between;
 }
 
+.day-timeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .day-timeline-nav {
   width: 28px;
   height: 28px;
@@ -1837,7 +1838,7 @@ html.screen-reader-mode .tag-search-input {
 
 .activity-popup {
   position: absolute;
-  z-index: 10;
+  z-index: 2200;
   width: 260px;
   background: var(--bg-muted);
   border-radius: 10px;
@@ -2254,7 +2255,7 @@ html.screen-reader-mode .tag-search-input {
   position: fixed;
   inset: 0;
   background: rgba(32, 33, 36, 0.4);
-  z-index: 105;
+  z-index: 10000;
 }
 
 .settings-drawer {
@@ -2459,10 +2460,12 @@ html.screen-reader-mode .tag-search-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 9000;
 }
 
 .modal-box {
+  position: relative;
+  z-index: 9001;
   background: var(--bg-muted);
   border-radius: 12px;
   width: 100%;
@@ -2481,6 +2484,42 @@ html.screen-reader-mode .tag-search-input {
   padding: 20px 24px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.google-calendar-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.google-calendar-sync-btn:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(60, 64, 67, 0.08));
+}
+
+.google-calendar-sync-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.google-calendar-sync-btn img {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 .modal-close {
@@ -3196,17 +3235,21 @@ html[data-theme="dark"] .new-category-name-input {
 .week-spine-layout { display: contents; }
 .week-spine { position: relative; min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg-muted); }
 .week-spine-all-day { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--today) 14%, transparent); color: var(--text-secondary); font-size: 13px; }.week-spine-all-day span { padding: 3px 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-primary); }
-.week-spine-timeline-surface { position: relative; }.week-spine-fullscreen-btn { position: absolute; z-index: 4; top: 0; right: 0; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-muted); color: var(--text-primary); font: inherit; cursor: pointer; }.week-spine-save-bar { position: absolute; z-index: 6; top: 0; right: 42px; display: flex; align-items: center; gap: 7px; padding: 5px 6px 5px 9px; border: 1px solid color-mix(in srgb, var(--today) 48%, var(--border)); border-radius: 9px; background: var(--bg-muted); box-shadow: 0 5px 16px rgb(0 0 0 / 14%); color: var(--text-secondary); font-size: 12px; }.week-spine-save-bar button { border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; background: var(--bg); color: var(--text-primary); font: inherit; font-size: 12px; cursor: pointer; }.week-spine-save-bar .week-spine-save-btn { border-color: var(--today); background: var(--today); color: #fff; font-weight: 700; }.week-spine-save-bar button:disabled { cursor: wait; opacity: .62; }.week-spine-edge-nav button { position: absolute; z-index: 4; top: 50%; display: grid; place-items: center; width: 34px; height: 54px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--bg-muted) 92%, transparent); box-shadow: 0 4px 16px rgb(0 0 0 / 16%); color: var(--text-primary); font-size: 29px; line-height: 1; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(-50%); transition: opacity 140ms ease, background 140ms ease; }.week-spine-edge-nav-prev { left: 8px; }.week-spine-edge-nav-next { right: 8px; }.week-spine-timeline-surface:hover .week-spine-edge-nav button, .week-spine-edge-nav button:focus-visible { opacity: 1; pointer-events: auto; }.week-spine-edge-nav button:hover { background: var(--bg); }.week-spine-token-prompt { position: absolute; z-index: 5; top: 12px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 110px); padding: 10px 12px; border: 1px solid #fbbc04; border-radius: 10px; background: color-mix(in srgb, var(--bg-muted) 94%, #fbbc04); box-shadow: 0 8px 24px rgb(0 0 0 / 20%); color: var(--text-primary); font-size: 13px; transform: translateX(-50%); }.week-spine-token-prompt button { border: 0; border-radius: 7px; padding: 6px 9px; background: #fbbc04; color: #202124; font: inherit; font-weight: 600; cursor: pointer; }
-.week-spine-grid-wrap { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px; }
-.week-spine-hours { position: relative; height: 340px; color: var(--text-secondary); font-size: 11px; }.week-spine-hours span { position: absolute; right: 0; transform: translateY(-50%); }
+.week-spine-timeline-surface { position: relative; }.week-spine-fullscreen-btn { position: absolute; z-index: 2200; top: 0; right: 0; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-muted); color: var(--text-primary); font: inherit; cursor: pointer; }.week-spine-overlap-alignment { position: absolute; z-index: 2200; top: 40px; right: 0; display: inline-flex; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-muted); box-shadow: 0 4px 14px rgb(0 0 0 / 14%); }.week-spine-overlap-alignment button { width: 31px; height: 28px; padding: 0; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text-secondary); font: inherit; font-size: 17px; cursor: pointer; }.week-spine-overlap-alignment button:first-child { border-left: 0; }.week-spine-overlap-alignment button.is-active { background: var(--blue); color: #fff; }.week-spine-save-bar { position: absolute; z-index: 2200; top: 0; right: 42px; display: flex; align-items: center; gap: 7px; padding: 5px 6px 5px 9px; border: 1px solid color-mix(in srgb, var(--today) 48%, var(--border)); border-radius: 9px; background: var(--bg-muted); box-shadow: 0 5px 16px rgb(0 0 0 / 14%); color: var(--text-secondary); font-size: 12px; }.week-spine-save-bar button { border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; background: var(--bg); color: var(--text-primary); font: inherit; font-size: 12px; cursor: pointer; }.week-spine-save-bar .week-spine-save-btn { border-color: var(--today); background: var(--today); color: #fff; font-weight: 700; }.week-spine-save-bar button:disabled { cursor: wait; opacity: .62; }.week-spine-edge-nav button { position: absolute; z-index: 2200; top: 50%; display: grid; place-items: center; width: 34px; height: 54px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--bg-muted) 92%, transparent); box-shadow: 0 4px 16px rgb(0 0 0 / 16%); color: var(--text-primary); font-size: 29px; line-height: 1; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(-50%); transition: opacity 140ms ease, background 140ms ease; }.week-spine-edge-nav-prev { left: 8px; }.week-spine-edge-nav-next { right: 8px; }.week-spine-timeline-surface:hover .week-spine-edge-nav button, .week-spine-edge-nav button:focus-visible { opacity: 1; pointer-events: auto; }.week-spine-edge-nav button:hover { background: var(--bg); }.week-spine-token-prompt { position: absolute; z-index: 2200; top: 12px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 110px); padding: 10px 12px; border: 1px solid #fbbc04; border-radius: 10px; background: color-mix(in srgb, var(--bg-muted) 94%, #fbbc04); box-shadow: 0 8px 24px rgb(0 0 0 / 20%); color: var(--text-primary); font-size: 13px; transform: translateX(-50%); }.week-spine-token-prompt button { border: 0; border-radius: 7px; padding: 6px 9px; background: #fbbc04; color: #202124; font: inherit; font-weight: 600; cursor: pointer; }
+.week-spine-grid-wrap { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px; }.week-spine-density-control { position: absolute; z-index: 3000; top: 0; left: 0; display: inline-flex; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); }.week-spine-density-control button { min-width: 20px; height: 18px; padding: 0 3px; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text-secondary); font: 700 9px/1 "Google Sans", "Roboto", sans-serif; cursor: pointer; }.week-spine-density-control button:first-child { border-left: 0; }.week-spine-density-control button.is-active { background: var(--today); color: #fff; }
+.week-spine-hours { position: relative; height: 720px; margin-top: 50px; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1; }.week-spine-hours span { position: absolute; right: 0; display: flex; align-items: flex-start; height: calc(100% / var(--week-spine-hour-cell-count)); white-space: nowrap; transform: none; }
 .week-spine-days { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 7px; }
 .week-spine-day { display: grid; grid-template-rows: auto auto 1fr; gap: 3px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; text-align: center; cursor: pointer; }.week-spine-day-label { color: var(--text-secondary); font-size: 12px; }.week-spine-day strong { display: flex; justify-content: center; font-size: 14px; }.week-spine-day strong span { display: grid; place-items: center; min-width: 25px; height: 25px; border-radius: 50%; }.week-spine-day.is-selected strong { color: var(--today); }.week-spine-day.is-today .week-spine-day-label { color: var(--today); font-weight: 600; }.week-spine-day.is-today strong span { background: color-mix(in srgb, var(--today) 22%, transparent); color: var(--today); font-weight: 700; }.week-spine-day.is-today .week-spine-track { box-shadow: inset 0 3px 0 var(--today); }
-.week-spine-track { position: relative; display: block; height: 340px; margin-top: 4px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background-color: color-mix(in srgb, var(--bg) 72%, transparent); background-image: linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--border) 72%, transparent) 0); background-size: 100% calc(100% / 24); touch-action: none; }.week-spine-day.is-selected .week-spine-track { border: 2px solid var(--today); }
-.week-spine-block { position: absolute; min-height: 5px; overflow: hidden; border-radius: 4px; opacity: .9; }.week-spine-block-title { display: block; width: 100%; padding: 2px 3px; overflow: hidden; color: #fff; font-size: 12px; font-weight: 600; line-height: 1.1; white-space: nowrap; text-shadow: 0 1px 1px rgb(0 0 0 / 30%); }.week-spine-block.is-continuation { border-left: 2px dashed; border-radius: 0 4px 4px 0; opacity: .5; }.week-spine-block.is-continuation .week-spine-block-title { color: var(--text-primary); font-weight: 500; text-shadow: none; }.week-spine-block.is-draggable { cursor: grab; }.week-spine-block.is-draggable:active { cursor: grabbing; }.week-spine-block.is-dragging { right: 4px; left: 4px; opacity: .65; pointer-events: none; }.week-spine-block.is-conflicting { outline: 2px solid #d93025; background-color: #f28b82 !important; }
-.week-spine-resize-handle { position: absolute; right: 0; bottom: 0; left: 0; height: 7px; cursor: ns-resize; }
+.week-spine-track { position: relative; display: block; height: 720px; margin-top: 4px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background-color: color-mix(in srgb, var(--bg) 72%, transparent); background-image: linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--border) 72%, transparent) 0); background-size: 100% calc(100% / 24); touch-action: none; }.week-spine-day.is-selected .week-spine-track { border: 2px solid var(--today); }
+.week-spine-block { position: absolute; min-height: 5px; overflow: visible; border-radius: 4px; opacity: .9; }.week-spine-block-title { display: block; width: 100%; padding: 2px 3px; overflow: hidden; color: #fff; font-size: 12px; font-weight: 600; line-height: 1.1; white-space: nowrap; text-align: left; text-shadow: 0 1px 1px rgb(0 0 0 / 30%); }.week-spine-block-title.is-stacked { position: absolute; top: calc(100% + 2px); left: 0; max-width: 100%; padding: 1px 3px; border-radius: 3px; background: inherit; color: #fff; font-size: 10px; pointer-events: none; }.week-spine-block-title.is-relocated { position: absolute; left: 0; max-width: 100%; padding: 1px 3px; border-radius: 3px; background: inherit; color: #fff; font-size: 10px; pointer-events: none; }.week-spine-overflow-count { position: absolute; z-index: 2; right: 3px; top: 3px; min-width: 17px; padding: 1px 3px; border-radius: 9px; background: rgba(32,33,36,.72); color: #fff; font-size: 9px; font-weight: 700; line-height: 1.2; text-align: center; }.week-spine-block.is-continuation { border-left: 2px dashed; border-radius: 0 4px 4px 0; opacity: .5; }.week-spine-block.is-continuation .week-spine-block-title { color: var(--text-primary); font-weight: 500; text-shadow: none; }.week-spine-block.is-draggable { cursor: grab; }.week-spine-block.is-draggable:active { cursor: grabbing; }.week-spine-block.is-dragging { right: 4px; left: 4px; opacity: .65; pointer-events: none; }.week-spine-block.is-conflicting { outline: 2px solid #d93025; background-color: #f28b82 !important; }
+.week-spine-resize-handle { position: absolute; right: 0; bottom: 0; left: 0; height: 9px; cursor: ns-resize; }.week-spine-resize-handle::after { position: absolute; bottom: 2px; left: 50%; width: 13px; height: 2px; border-radius: 99px; background: repeating-linear-gradient(to right, rgb(255 255 255 / 86%) 0 2px, transparent 2px 4px); content: ""; transform: translateX(-50%); pointer-events: none; }
 .week-spine-draft { position: absolute; right: 4px; left: 4px; min-height: 5px; border: 2px solid var(--today); border-radius: 4px; background: color-mix(in srgb, var(--today) 28%, transparent); pointer-events: none; }.week-spine-draft.is-conflicting { border-color: #d93025; background: color-mix(in srgb, #f28b82 35%, transparent); }
 .week-spine-detail { grid-column: 1 / -1; margin-top: 8px; padding: 20px 4px 28px; border-top: 1px solid var(--border); background: transparent; }.week-spine-detail h3 { margin: 0 0 8px; font-size: 15px; }.week-spine-detail p { margin: 0; color: var(--text-secondary); font-size: 14px; }
 .week-spine-detail-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 9px 0; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }.week-spine-detail-item:first-of-type { border-top: 0; }.week-spine-detail-item:hover { background: var(--hover); }.week-spine-detail-dot { width: 8px; height: 8px; border-radius: 50%; }.week-spine-detail-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.week-spine-detail-item time { color: var(--text-secondary); font-family: monospace; font-size: 12px; }
 .activity-archive { grid-column: 1 / -1; padding: 20px 4px 36px; border-top: 1px solid var(--border); }.activity-archive-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }.activity-archive h3 { margin: 0 0 12px; font-size: 16px; }.activity-archive-heading span, .activity-archive > p { margin: 0; color: var(--text-secondary); font-size: 13px; }.activity-archive-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }.activity-archive-list li { display: grid; grid-template-columns: 8px minmax(130px, 1fr) minmax(178px, auto) minmax(178px, auto) auto; align-items: center; gap: 10px; padding: 10px 6px; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }.activity-archive-color { width: 8px; height: 8px; border-radius: 50%; }.activity-archive-main { min-width: 0; }.activity-archive-title, .activity-archive-original-time { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.activity-archive-title { font-size: 14px; font-weight: 500; }.activity-archive-original-time { margin-top: 2px; color: var(--text-secondary); font-size: 12px; }.activity-archive-field { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 5px; color: var(--text-secondary); font-size: 11px; }.activity-archive-field input { min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; background: var(--bg); color: var(--text-primary); font: inherit; font-size: 12px; }.activity-archive-actions { display: flex; align-items: center; gap: 4px; }.activity-archive-actions button { border: 0; cursor: pointer; }.activity-archive-restore { border-radius: 7px !important; padding: 7px 9px; background: var(--today) !important; color: #fff !important; font: inherit; font-size: 12px; }.activity-archive-restore:hover { filter: brightness(.94); }.activity-archive-delete { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); }.activity-archive-delete:hover { background: var(--hover); color: var(--text-primary); }
-.week-spine-timeline-surface.is-fullscreen { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; overflow: auto; padding: 24px; background: var(--bg); }.week-spine-timeline-surface.is-fullscreen .week-spine-grid-wrap { width: min(1500px, 100%); grid-template-columns: 54px minmax(0, 1fr); }.week-spine-timeline-surface.is-fullscreen .week-spine-hours, .week-spine-timeline-surface.is-fullscreen .week-spine-track { height: calc(100vh - 80px); }.week-spine-timeline-surface.is-fullscreen .week-spine-days { gap: 12px; }.week-spine-timeline-surface.is-fullscreen .week-spine-fullscreen-btn { top: 16px; right: 16px; }
-@media (max-width: 780px) { .activity-dashboard { grid-template-columns: 1fr; }.week-spine-detail, .activity-archive { grid-column: 1; }.week-spine { padding: 14px; }.week-spine-header { align-items: flex-start; }.week-spine-days { gap: 3px; }.week-spine-hours, .week-spine-track { height: 280px; }.week-spine-detail-item { grid-template-columns: 8px 1fr; }.week-spine-detail-item time { grid-column: 2; }.activity-archive-list li { grid-template-columns: 8px minmax(0, 1fr) auto; }.activity-archive-field { grid-column: 2 / -1; }.activity-archive-actions { grid-column: 2 / -1; }.activity-archive-delete { grid-column: 3; grid-row: 1; } }
+.week-spine-timeline-surface.is-fullscreen { position: fixed; z-index: 8000; inset: 0; display: grid; place-items: center; overflow: auto; padding: 24px; background: var(--bg); }.week-spine-timeline-surface.is-fullscreen .week-spine-grid-wrap { width: min(1500px, 100%); grid-template-columns: 54px minmax(0, 1fr); }.week-spine-timeline-surface.is-fullscreen .week-spine-hours, .week-spine-timeline-surface.is-fullscreen .week-spine-track { height: calc(100vh - 80px); }.week-spine-timeline-surface.is-fullscreen .week-spine-days { gap: 12px; }.week-spine-timeline-surface.is-fullscreen .week-spine-fullscreen-btn { top: 16px; right: 16px; }.week-spine-fullscreen-active .app-header { display: none; }
+.week-spine-timeline-surface.is-two-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-two-hour-grid .week-spine-track { height: 360px; }.week-spine-timeline-surface.is-two-hour-grid .week-spine-track { background-size: 100% calc(100% / 12); }
+.week-spine-timeline-surface.is-four-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-four-hour-grid .week-spine-track { height: 180px; }.week-spine-timeline-surface.is-four-hour-grid .week-spine-track { background-size: 100% calc(100% / 6); }
+@media (max-width: 780px) { .activity-dashboard { grid-template-columns: 1fr; }.week-spine-detail, .activity-archive { grid-column: 1; }.week-spine { padding: 14px; }.week-spine-header { align-items: flex-start; }.week-spine-days { gap: 3px; }.week-spine-hours, .week-spine-track { height: 560px; }.week-spine-detail-item { grid-template-columns: 8px 1fr; }.week-spine-detail-item time { grid-column: 2; }.activity-archive-list li { grid-template-columns: 8px minmax(0, 1fr) auto; }.activity-archive-field { grid-column: 2 / -1; }.activity-archive-actions { grid-column: 2 / -1; }.activity-archive-delete { grid-column: 3; grid-row: 1; } }
+@media (max-width: 780px) { .week-spine-timeline-surface.is-two-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-two-hour-grid .week-spine-track { height: 280px; } }
+@media (max-width: 780px) { .week-spine-timeline-surface.is-four-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-four-hour-grid .week-spine-track { height: 140px; } }

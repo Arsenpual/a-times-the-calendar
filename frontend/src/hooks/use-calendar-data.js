@@ -92,13 +92,16 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
     }
   }, [calendarAccessToken, cursorDate, setError, setCalendarAccessToken]);
 
+  // Keep the visible week synchronized with Google Calendar. When the
+  // access token has expired, loadActivities clears it and app.jsx presents
+  // the blocking re-authentication overlay before the user can continue.
   useEffect(() => {
+    if (!firebaseUser || !calendarAccessToken) return;
     loadActivities().catch(() => {
-      // loadActivities already recorded the error via setError above;
-      // this catch only exists so the effect itself doesn't produce an
-      // unhandled promise rejection when the fetch fails.
+      // The hook has already published the error and cleared an expired
+      // token when appropriate. Avoid an unhandled rejection from the effect.
     });
-  }, [loadActivities]);
+  }, [firebaseUser, calendarAccessToken, cursorDate, loadActivities]);
 
   // Recompute the weekly summary from our backend whenever the activities
   // for the visible week (or their category assignments) change. activities

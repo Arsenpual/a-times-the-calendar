@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { toDateInputValue } from "../date-utils.js";
-import { EVENT_COLORS } from "../activity-colors.js";
-
-const QUICK_COLOR_IDS = ["9", "11", "5", "10", "3"];
 // กิจกรรมซ้ำที่มี instance เกินกว่านี้จะเตือนก่อน แต่ยังอนุญาตให้ดำเนินการได้
 const SERIES_WARN_LIMIT = 20;
 
@@ -50,7 +47,6 @@ export default function ActivityPopup({
   onSelectSeriesDrag,
   onDuplicate,
   onMoveToDay,
-  onSetColor,
   onFetchSeriesCount,
   onArchive
 }) {
@@ -64,7 +60,6 @@ export default function ActivityPopup({
   const [seriesCount, setSeriesCount] = useState(null);
   const [seriesCountLoading, setSeriesCountLoading] = useState(false);
 
-  const hasCategory = !!categoryId;
   const canReschedule = !locked;
   const isRecurring = !!activity.recurringEventId;
 
@@ -148,8 +143,6 @@ export default function ActivityPopup({
     await onDeleteSeries?.();
     onClose?.();
   });
-
-  const handlePickColor = (colorId) => runQuickAction("color", () => onSetColor?.(colorId));
 
   /**
    * เมื่อกด "ลบ" หรือ "แก้ไข" บน recurring event:
@@ -507,39 +500,6 @@ export default function ActivityPopup({
                 </select>
               </div>
             </label>
-
-            {/* สีกิจกรรม */}
-            <div className="popup-field">
-              <span className="popup-field-label">สีกิจกรรม</span>
-              {hasCategory ? (
-                <p className="popup-color-disabled-note">
-                  สีถูกกำหนดโดยหมวดหมู่ "{selectedCategory?.name}" — เลือก "ไม่ระบุ" ก่อนถ้าอยากเปลี่ยนสีเอง
-                </p>
-              ) : (
-                <div className="color-swatch-row">
-                  {QUICK_COLOR_IDS.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      className={`color-swatch${activity.colorId === id ? " is-selected" : ""}`}
-                      style={{ background: EVENT_COLORS[id].border }}
-                      onClick={() => handlePickColor(id)}
-                      disabled={locked || busyAction !== null}
-                      aria-label={EVENT_COLORS[id].name}
-                      title={EVENT_COLORS[id].name}
-                    />
-                  ))}
-                  <button
-                    type="button"
-                    className="color-swatch-reset"
-                    onClick={() => handlePickColor(null)}
-                    disabled={locked || busyAction !== null || !activity.colorId}
-                  >
-                    ค่าเริ่มต้น
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* Lock status */}
             {locked && (
