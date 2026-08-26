@@ -1,0 +1,21 @@
+{
+  "name": "times-the-calendar-backend",
+  "version": "1.0.0",
+  "description": "Backend สำหรับแอปปฏิทิน — จัดการหมวดหมู่ชีวิต (Life Areas) และคำนวณสรุปรายสัปดาห์",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2",
+    "firebase-admin": "^14.2.0"
+  }
+}
