@@ -12,6 +12,8 @@ const reminderGroupsRouter = require("./routes/reminder-groups.js");
 const activityArchiveRouter = require("./routes/activity-archive.js");
 const fcmTokensRouter = require("./routes/fcm-tokens.js");
 const activityNotificationsRouter = require("./routes/activity-notifications.js");
+const calendarAuthRouter = require("./routes/calendar-auth.js");
+const calendarRouter = require("./routes/calendar.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -74,6 +76,11 @@ app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
 app.use("/api/activity-archive", requireAuth, activityArchiveRouter);
 app.use("/api/activity-notifications", requireAuth, activityNotificationsRouter);
 app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
+app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
+app.use("/api/calendar", requireAuth, calendarRouter);
+// OAuth callback มาจาก Google จึงไม่มี Firebase Authorization header;
+// state ที่ลงลายเซ็นไว้ผูก callback กลับเข้ากับ uid อย่างปลอดภัยแทน.
+app.get("/oauth/google/calendar/callback", calendarAuthRouter.callback);
 
 app.use((req, res) => {
   res.status(404).json({ error: "ไม่พบ endpoint นี้" });
@@ -86,6 +93,9 @@ app.use((req, res) => {
 // ค้างไม่ตอบอะไรกลับไปเลยแทนที่จะได้ 500 พร้อมเหตุผล
 app.use((err, req, res, next) => {
   console.error("[times-the-calendar backend] unhandled error:", err);
+  if (err.code === "CALENDAR_REAUTH_REQUIRED") {
+    return res.status(428).json({ code: err.code, error: err.message });
+  }
   res.status(500).json({ error: "เกิดข้อผิดพลาดฝั่ง backend — ดู log เซิร์ฟเวอร์" });
 });
 

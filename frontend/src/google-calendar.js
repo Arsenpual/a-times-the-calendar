@@ -14,6 +14,7 @@ import {
 import { firebaseApp } from "./firebase-config.js";
 
 const EVENTS_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 // Narrowed from the full "https://www.googleapis.com/auth/calendar" scope
 // (read/write access to every calendar the user owns, calendar list
 // management, sharing settings, etc.) down to "calendar.events" — this app
@@ -40,12 +41,42 @@ export const auth = getAuth(firebaseApp);
  * @param {unknown} error
  */
 export function isCalendarAuthExpiredError(error) {
-  return error?.code === "CALENDAR_TOKEN_EXPIRED";
+  return error?.code === "CALENDAR_TOKEN_EXPIRED" || error?.code === "CALENDAR_REAUTH_REQUIRED";
+}
+
+async function backendCalendarRequest(path, options = {}) {
+  if (!auth.currentUser) throw new Error("ยังไม่ได้เข้าสู่ระบบ — กรุณาเข้าสู่ระบบก่อนใช้งาน");
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${await auth.currentUser.getIdToken()}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    if (response.status === 428) {
+      const error = new Error("สิทธิ์ Google Calendar หมดอายุหรือยังไม่ได้เชื่อมต่อ — กรุณาเชื่อมต่อใหม่");
+      error.code = "CALENDAR_REAUTH_REQUIRED";
+      throw error;
+    }
+    throw new Error(`[Calendar backend] error (${response.status}): ${text || "ไม่มีรายละเอียด"}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+export async function getCalendarConnectionStatus() {
+  return backendCalendarRequest("/api/calendar-auth/status");
+}
+
+export async function beginCalendarAuthorization() {
+  const { authorizationUrl } = await backendCalendarRequest("/api/calendar-auth/authorization-url", { method: "POST" });
+  window.location.assign(authorizationUrl);
 }
 
 /**
- * Builds a fresh GoogleAuthProvider with the Calendar scope requested, for
- * the *first* sign-in specifically (signInWithGoogle below).
+ * Provider สำหรับ Firebase Login เท่านั้น; สิทธิ์ Calendar ระยะยาวถูกขอ
+ * แยกผ่าน backend OAuth flow หลังผู้ใช้กดเชื่อมต่อ Calendar โดยตรง.
  * prompt: "select_account" forces Google's account picker to show every
  * time, even if the browser only has one Google session — this matters
  * here because a first sign-in is exactly the moment someone with multiple
@@ -59,7 +90,6 @@ export function isCalendarAuthExpiredError(error) {
  */
 function googleProviderForSignIn() {
   const provider = new GoogleAuthProvider();
-  provider.addScope(CALENDAR_SCOPE);
   provider.setCustomParameters({ prompt: "select_account" });
   return provider;
 }
@@ -99,21 +129,15 @@ function googleProviderForReauth(email) {
 }
 
 /**
- * Opens the Google sign-in popup, requesting both Firebase identity and the
- * Calendar scope in one consent screen.
- * @returns {Promise<{ idToken: string, calendarAccessToken: string }>}
+ * Opens the Firebase identity sign-in popup. Calendar permission is not
+ * requested here, so signing in never grants long-lived calendar access by
+ * accident.
  */
 export async function signInWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProviderForSignIn());
-    const credential = GoogleAuthProvider.credentialFromResult(result);
     const idToken = await result.user.getIdToken();
-    
-    if (!credential?.accessToken) {
-      throw new Error("ไม่ได้รับ Access Token จาก Google กรุณาลองใหม่อีกครั้ง");
-    }
-
-    return { idToken, calendarAccessToken: credential.accessToken };
+    return { idToken };
   } catch (error) {
     if (error.code === "auth/popup-closed-by-user") {
       throw new Error("หน้าต่างเข้าสู่ระบบถูกปิดก่อนทำรายการเสร็จสิ้น");
@@ -237,7 +261,7 @@ export async function fetchActivities(accessToken, timeMin, timeMax) {
     maxResults: "250"
   });
 
-  const data = await calendarRequest(accessToken, `${EVENTS_BASE}?${params}`);
+  const data = await backendCalendarRequest(`/api/calendar/events?${params}`);
   return data?.items || [];
 }
 
@@ -245,14 +269,14 @@ export async function fetchActivities(accessToken, timeMin, timeMax) {
  * Fetches a single activity by id.
  */
 export async function getActivity(accessToken, activityId) {
-  return calendarRequest(accessToken, `${EVENTS_BASE}/${encodeURIComponent(activityId)}`);
+  return backendCalendarRequest(`/api/calendar/events/${encodeURIComponent(activityId)}`);
 }
 
 /**
  * Creates a new activity.
  */
 export async function createActivity(accessToken, activityBody) {
-  return calendarRequest(accessToken, EVENTS_BASE, {
+  return backendCalendarRequest("/api/calendar/events", {
     method: "POST",
     body: JSON.stringify(activityBody)
   });
@@ -262,7 +286,7 @@ export async function createActivity(accessToken, activityBody) {
  * Updates (patches) an existing activity.
  */
 export async function updateActivity(accessToken, activityId, activityBody) {
-  return calendarRequest(accessToken, `${EVENTS_BASE}/${encodeURIComponent(activityId)}`, {
+  return backendCalendarRequest(`/api/calendar/events/${encodeURIComponent(activityId)}`, {
     method: "PATCH",
     body: JSON.stringify(activityBody)
   });
@@ -272,7 +296,7 @@ export async function updateActivity(accessToken, activityId, activityBody) {
  * Deletes an activity from primary calendar.
  */
 export async function deleteActivity(accessToken, activityId) {
-  await calendarRequest(accessToken, `${EVENTS_BASE}/${encodeURIComponent(activityId)}`, {
+  await backendCalendarRequest(`/api/calendar/events/${encodeURIComponent(activityId)}`, {
     method: "DELETE"
   });
 }
@@ -286,9 +310,6 @@ export async function fetchRecurringInstances(accessToken, recurringEventId, max
     orderBy: "startTime",
     singleEvents: "true"
   });
-  const data = await calendarRequest(
-    accessToken,
-    `${EVENTS_BASE}/${encodeURIComponent(recurringEventId)}/instances?${params}`
-  );
+  const data = await backendCalendarRequest(`/api/calendar/events/${encodeURIComponent(recurringEventId)}/instances?${params}`);
   return data?.items || [];
 }

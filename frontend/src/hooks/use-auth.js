@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   signInWithGoogle,
-  reauthenticateWithGooglePopup,
+  beginCalendarAuthorization,
+  getCalendarConnectionStatus,
   subscribeToAuthState,
   signOut
 } from "../google-calendar.js";
 
 const CALENDAR_TOKEN_STORAGE_KEY = "calendarAccessToken";
 const CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY = "calendarAccessTokenExpiresAt";
-const CALENDAR_TOKEN_LIFETIME_MS = 60 * 60 * 1000; // Google's standard OAuth access token lifetime
+const CALENDAR_TOKEN_LIFETIME_MS = 60 * 60 * 1000; // legacy direct-token fallback only
 const CALENDAR_TOKEN_WARNING_WINDOW_MS = 5 * 60 * 1000; // show the renew banner starting 5 minutes before expiry
 
 /**
@@ -93,10 +94,12 @@ export function useAuth() {
   });
   const setCalendarAccessToken = useCallback((token) => {
     setCalendarAccessTokenState(token);
-    const expiresAt = token ? Date.now() + CALENDAR_TOKEN_LIFETIME_MS : null;
+    // "server-managed" หมายถึง backend มี refresh token แล้ว; ไม่ตั้งวันหมด
+    // อายุ เพราะ access token จริงถูกสร้าง/ต่ออายุเฉพาะบน server.
+    const expiresAt = token && token !== "server-managed" ? Date.now() + CALENDAR_TOKEN_LIFETIME_MS : null;
     setCalendarTokenExpiresAtState(expiresAt);
     try {
-      if (token) {
+      if (token && token !== "server-managed") {
         window.localStorage.setItem(CALENDAR_TOKEN_STORAGE_KEY, token);
         window.localStorage.setItem(CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY, String(expiresAt));
       } else {
@@ -143,6 +146,12 @@ export function useAuth() {
         // drop the Calendar token too, since it's meaningless without a
         // Firebase session to pair it with.
         setCalendarAccessToken(null);
+      } else {
+        // Login เดิมที่เคยเชื่อม Calendar แล้วจะได้สถานะ server-managed
+        // กลับมาทันทีหลัง refresh โดยไม่ขอ popup ซ้ำ.
+        getCalendarConnectionStatus()
+          .then((status) => setCalendarAccessToken(status.connected ? "server-managed" : null))
+          .catch(() => setCalendarAccessToken(null));
       }
     });
     return unsubscribe;
@@ -153,8 +162,9 @@ export function useAuth() {
     authPopupInFlight.current = true;
     try {
       setError(null);
-      const { calendarAccessToken: token } = await signInWithGoogle();
-      setCalendarAccessToken(token);
+      await signInWithGoogle();
+      const status = await getCalendarConnectionStatus();
+      setCalendarAccessToken(status.connected ? "server-managed" : null);
       // firebaseUser itself is set by the subscribeToAuthState listener
       // above, not here — signInWithPopup's result also triggers that
       // subscription, so we'd otherwise be setting it twice.
@@ -179,18 +189,14 @@ export function useAuth() {
   }, []);
 
   /**
-   * Re-opens the Google consent popup purely to mint a fresh Calendar
-   * access token, without touching the Firebase session — used when a
-   * direct Calendar API call comes back 401 with calendarAccessToken
-   * cleared to null.
+   * เริ่ม server-side OAuth flow สำหรับเชื่อม/reconnect Google Calendar.
    */
   const handleReauthCalendar = useCallback(async () => {
     if (authPopupInFlight.current) return;
     authPopupInFlight.current = true;
     try {
       setError(null);
-      const token = await reauthenticateWithGooglePopup();
-      setCalendarAccessToken(token);
+      await beginCalendarAuthorization();
     } catch (e) {
       if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
         setError(e.message);

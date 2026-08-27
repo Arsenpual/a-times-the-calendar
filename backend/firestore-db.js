@@ -96,6 +96,13 @@ function userDoc(userId) {
   return db.collection("users").doc(userId);
 }
 
+// เอกสารสิทธิ์ Google Calendar เป็น private server-only document: เขียน/อ่าน
+// ผ่าน Firebase Admin SDK เท่านั้น ไม่เคยถูกส่งกลับ frontend และเก็บ refresh
+// token ในรูปเข้ารหัส (ดู calendar-oauth.js).
+function calendarAuthDoc(userId) {
+  return userDoc(userId).collection("private").doc("calendarAuth");
+}
+
 function categoriesCol(userId) {
   return userDoc(userId).collection("categories");
 }
@@ -274,6 +281,7 @@ async function ensureDefaultCategoriesForUser(userId) {
 module.exports = {
   db,
   auth,
+  calendarAuthDoc,
   categoriesCol,
   activityCategoriesCol,
   activityTagsCol,
