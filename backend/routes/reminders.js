@@ -79,6 +79,7 @@ const MAX_DAYS = 7; // ไม่มีทางเกิน 7 วันต่อ
 const MAX_WEEKLY_TIMES = 12;
 const MAX_STEPS = 50; // routine หนึ่งชุดไม่ควรมีมากกว่านี้ในทางปฏิบัติ
 const MAX_STEP_JSON_LENGTH = 20000; // กันแต่ละ step object ใหญ่ผิดปกติ (เช่น title ยาวเป็นหมื่นตัวอักษร)
+const MAX_STEP_TEXT_LENGTH = 500; // รูปแบบ checklist ปัจจุบันของ frontend คือ string[]
 const MAX_STRING_FIELD_LENGTH = 200; // เพดานความยาวสำหรับ string field ทั่วไป (title, eventName, unit, lineColor, afterUnit)
 
 function isValidStringField(value, maxLength = MAX_STRING_FIELD_LENGTH) {
@@ -99,15 +100,14 @@ function isValidWeeklyTimes(times) {
 }
 
 /**
- * ตรวจ "steps" — ต้องเป็น array ของ object ล้วน (ไม่ใช่ primitive/array
- * ซ้อน) ไม่เกิน MAX_STEPS รายการ และแต่ละ step เมื่อ serialize เป็น JSON
- * แล้วต้องไม่เกิน MAX_STEP_JSON_LENGTH ตัวอักษร — ไม่ได้เช็ค schema ภายใน
- * แบบละเอียด (เช่น step ต้องมี field อะไรบ้าง) เพราะ frontend ยังไม่ได้
- * fix รูปแบบ step object ให้นิ่งพอ แค่กันขนาดที่ผิดปกติชัดเจนไว้ก่อน
+ * ตรวจ "steps" — UI ปัจจุบันส่ง checklist เป็น string[]; รองรับ object
+ * ไว้ด้วยสำหรับข้อมูลเวอร์ชันเก่าหรือโครงสร้างในอนาคต. ไม่เกิน MAX_STEPS
+ * รายการ และจำกัดขนาดของแต่ละรายการเพื่อกัน document ใหญ่ผิดปกติ.
  */
 function isValidSteps(steps) {
   if (!Array.isArray(steps) || steps.length > MAX_STEPS) return false;
   return steps.every((step) => {
+    if (typeof step === "string") return step.trim().length > 0 && step.length <= MAX_STEP_TEXT_LENGTH;
     if (typeof step !== "object" || step === null || Array.isArray(step)) return false;
     try {
       return JSON.stringify(step).length <= MAX_STEP_JSON_LENGTH;
