@@ -587,12 +587,20 @@ export default function ReminderDashboard({
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-    // เตรียม slot เวลาของ reminder ทุกตัวไว้ล่วงหน้า (ไม่สนใจ enabled/nextDueAt)
-    // เพื่อให้ทุกประเภทที่มีเวลาตายตัวในแต่ละวัน ถูกปักหมุดให้เห็นบน timeline เสมอเวลาเลื่อนดู
-    const reminderSlots = reminders.map((r) => ({
+    // Timeline ใช้ filter ชุดเดียวกับ nav-sidebar/main-panel: แสดงเฉพาะ
+    // reminder ที่ใช้งานอยู่และตรงกับประเภท/กลุ่มที่ผู้ใช้เลือก. รายการที่
+    // พักหรือทำสำเร็จแล้วต้องไม่ทิ้ง chip/slot ค้างบน timeline.
+    const reminderSlots = reminders
+      .filter((r) => (
+        r.enabled &&
+        !r.completedAt &&
+        (!activeTypeFilter || r.type === activeTypeFilter) &&
+        (!activeGroupFilter || r.groupId === activeGroupFilter)
+      ))
+      .map((r) => ({
       reminder: r,
       minutes: getReminderTimeSlots(r, startOfToday)
-    }));
+      }));
 
     for (let i = 0; i < totalRows; i++) {
       const startMinute = i * minutesPerRow;
@@ -623,7 +631,7 @@ export default function ReminderDashboard({
     }
 
     return rows;
-  }, [reminders, minutesPerRow, totalRows]);
+  }, [reminders, minutesPerRow, totalRows, activeTypeFilter, activeGroupFilter]);
 
   // ให้ track กว้างตามจำนวน reminder ที่อยู่เวลาเดียวกัน เพื่อให้ผู้ใช้
   // เลื่อนดูทุก chip ทางแนวนอนได้ แทนการซ่อนรายการส่วนเกินในแต่ละแถว.
@@ -845,6 +853,34 @@ export default function ReminderDashboard({
     }, 3000);
   };
 
+  // พา slot ของ reminder มาทับตำแหน่งกลาง viewport ซึ่งเป็นตำแหน่งเดียวกับ
+  // now-indicator. หยุด auto-follow ชั่วคราวผ่าน handleUserInteraction() แล้ว
+  // ให้กลับตามเวลาปัจจุบันเองหลังผู้ใช้หยุดโต้ตอบ 3 วินาที.
+  const focusReminderOnTimeline = (reminder) => {
+    const container = tapeScrollRef.current;
+    if (!container || !reminder.enabled || reminder.completedAt) return;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const slots = getReminderTimeSlots(reminder, startOfToday);
+    if (slots.length === 0) return; // routine/stopwatch ไม่มีเวลาตายตัวบน timeline
+
+    const currentMinute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+    const targetMinute = slots.reduce((nearest, candidate) => (
+      Math.abs(candidate - currentMinute) < Math.abs(nearest - currentMinute) ? candidate : nearest
+    ));
+    const selectedOffset = (targetMinute / 1440) * singleDayHeight;
+    const totalHeight = SPACER_HEIGHT_PX * 2 + singleDayHeight;
+    const maxScrollTop = Math.max(0, totalHeight - container.clientHeight);
+    const targetScrollTop = Math.min(
+      Math.max(SPACER_HEIGHT_PX + selectedOffset - container.clientHeight / 2, 0),
+      maxScrollTop
+    );
+
+    handleUserInteraction();
+    container.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+  };
+
   /**
    * @param {string} reminderId
    * @param {number} [snoozeMinutes] ถ้าระบุ — เลื่อน nextDueAt ไปตามจำนวน
@@ -1022,11 +1058,16 @@ export default function ReminderDashboard({
     event.preventDefault();
     if (!draft.title.trim()) return;
 
+    const existingReminder = editingId
+      ? reminders.find((reminder) => reminder.id === editingId)
+      : null;
     let newReminder = {
       id: editingId || `reminder-${Date.now()}`,
       title: draft.title,
       type: draft.type,
-      enabled: true,
+      // การบันทึกฟอร์มแก้ไขเปลี่ยนเฉพาะรายละเอียด ไม่เปิดใช้งาน reminder
+      // เองโดยปริยาย ผู้ใช้ต้องกด switch เท่านั้นจึงจะ reuse รายการเดิมได้.
+      enabled: existingReminder ? existingReminder.enabled : true,
       groupId: draft.groupId ?? null // migration plan v2 เฟส 3
     };
 
@@ -1110,10 +1151,9 @@ export default function ReminderDashboard({
     // เหมือน pattern ที่ accumulatedMs/startedAt ของ stopwatch ทำไว้ข้างบน
     // reminder สร้างใหม่เริ่มต้นที่ null เสมอ (ยังไม่เคยทำเสร็จ)
     if (editingId) {
-      const existing = reminders.find((r) => r.id === editingId);
-      newReminder.completedAt = existing?.completedAt ?? null;
+      newReminder.completedAt = existingReminder?.completedAt ?? null;
       if (newReminder.type === REMINDER_TYPE.ROUTINE) {
-        newReminder.completionCount = Number.isInteger(existing?.completionCount) ? existing.completionCount : 0;
+        newReminder.completionCount = Number.isInteger(existingReminder?.completionCount) ? existingReminder.completionCount : 0;
       }
     } else {
       newReminder.completedAt = null;
@@ -1283,9 +1323,13 @@ export default function ReminderDashboard({
       className={`reminder-card ${reminder.enabled ? "active" : ""}${cardMenuOpenId === reminder.id ? " menu-open" : ""}`}
       style={{ borderLeftColor: TYPE_ACCENT_COLOR[reminder.type] }}
     >
-      <div
+      <button
+        type="button"
         className="reminder-type-icon"
         style={{ backgroundColor: TYPE_ACCENT_COLOR[reminder.type], color: getTypeIconTextColor(reminder.type) }}
+        onClick={() => focusReminderOnTimeline(reminder)}
+        title="เลื่อน Timeline มาที่เวลาของ Reminder"
+        aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}
       >
         {reminder.type === REMINDER_TYPE.WEEKLY ? "📅" :
          reminder.type === REMINDER_TYPE.EVENT_ANCHORED ? "⚓" :
@@ -1293,8 +1337,20 @@ export default function ReminderDashboard({
          reminder.type === REMINDER_TYPE.ONCE_AT ? "1x" : 
          reminder.type === REMINDER_TYPE.COUNTDOWN ? "⏱" :
          reminder.type === REMINDER_TYPE.STOPWATCH ? "⏱️" : "↻"}
-      </div>
-      <div className="reminder-info">
+      </button>
+      <div
+        className="reminder-info"
+        role="button"
+        tabIndex={0}
+        onClick={() => startEdit(reminder)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            startEdit(reminder);
+          }
+        }}
+        title="คลิกเพื่อแก้ไข Reminder"
+      >
         <p className="title">{reminder.title}</p>
         <p className="meta">{describeReminder(reminder, nowTick)}</p>
         {/* Badge "ทำเสร็จแล้ว" (migration plan v2 เฟส 4) — ทำให้การ์ดใน tab
@@ -1318,13 +1374,13 @@ export default function ReminderDashboard({
         )}
 
         {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && (
-          <button type="button" className="btn-action-small" onClick={() => triggerAnchorEvent(reminder.id)}>
+          <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); triggerAnchorEvent(reminder.id); }}>
             ⚡ เริ่มเหตุการณ์ "{reminder.eventName}"
           </button>
         )}
 
         {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && (
-          <button type="button" className="btn-action-small" onClick={() => advanceRoutine(reminder.id)}>
+          <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); advanceRoutine(reminder.id); }}>
             ✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})
           </button>
         )}
@@ -2507,6 +2563,8 @@ export default function ReminderDashboard({
         .reminder-type-icon {
           width: 26px;
           height: 26px;
+          padding: 0;
+          border: 0;
           border-radius: 8px;
           display: flex;
           align-items: center;
@@ -2514,6 +2572,13 @@ export default function ReminderDashboard({
           font-weight: 700;
           font-size: 11px;
           flex-shrink: 0;
+          cursor: pointer;
+        }
+
+        .reminder-type-icon:focus-visible,
+        .reminder-info:focus-visible {
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
         }
 
         .reminder-card:not(.active) .reminder-type-icon {
@@ -2522,6 +2587,7 @@ export default function ReminderDashboard({
 
         .reminder-info {
           min-width: 0;
+          cursor: pointer;
         }
 
         .reminder-info .title {
