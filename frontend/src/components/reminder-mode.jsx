@@ -29,7 +29,8 @@ const STORAGE_KEY = "times-reminders-v1";
 // backend/routes/reminders.js เป๊ะๆ (ฝั่ง backend มี allow-list ของตัวเอง
 // อยู่แล้ว ตัดฟิลด์ที่ไม่อยู่ในนี้ทิ้งเงียบๆ — รายการนี้ฝั่ง frontend มีไว้
 // เพื่อความชัดเจนตอนอ่านโค้ด ไม่ใช่ security boundary จริง) ไม่รวม runtime
-// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt/completedAt
+// field เช่น startedAt/accumulatedMs/currentIndex/lastTriggeredAt — ยกเว้น
+// completedAt/completionCount ของ routine ซึ่ง sync เพื่อเก็บประวัติการทำครบ
 // (เพิ่มเข้ามาเฟส 4) — nextDueAt เป็นข้อยกเว้นในเฟส 5 เพราะ scheduler
 // ฝั่ง Cloud Function ต้องอ่านมันได้แม้ผู้ใช้ปิดแท็บอยู่
 const SCHEDULE_FIELD_KEYS = [
@@ -64,11 +65,26 @@ function extractScheduleFields(reminder) {
       fields[key] = key === "nextDueAt" && !Number.isFinite(reminder[key]) ? null : reminder[key];
     }
   }
+  // เก็บสถานะและจำนวนครั้งเฉพาะ Checklist/Routine เพื่อรองรับข้ามอุปกรณ์.
+  if (reminder.type === REMINDER_TYPE.ROUTINE) {
+    fields.completedAt = reminder.completedAt ?? null;
+    fields.completionCount = Number.isInteger(reminder.completionCount)
+      ? reminder.completionCount
+      : 0;
+  }
   return fields;
 }
 
 const ZOOM_LEVELS_MINUTES = [60, 15, 5, 1];
 const DEFAULT_ZOOM_INDEX = ZOOM_LEVELS_MINUTES.indexOf(15);
+
+// ค่า tab เฉพาะสำหรับรายการ Reminder — ตั้งชื่อตามสถานะที่กรองจริง ไม่ใช้
+// string "active" กว้าง ๆ เพื่อให้อ่าน handler และปุ่มแต่ละตัวได้ตรงกัน.
+const REMINDER_STATUS_TAB = Object.freeze({
+  ENABLED: "enabled",
+  PAUSED: "paused",
+  COMPLETED: "completed"
+});
 
 // REMINDER_TYPE ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2
 // เฟส 5, import ไว้ด้านบนของไฟล์) — ดูคอมเมนต์ในไฟล์นั้นสำหรับเหตุผล
@@ -447,7 +463,8 @@ export default function ReminderDashboard({
   // active/paused พร้อมกันทั้งคู่คั่นด้วย section header, ตอนนี้เลือกดูได้
   // ทีละ tab แบบ mockup "completed" ยังเป็น placeholder เฉยๆ (รอ field
   // completedAt จริงจากเฟส 4) กด disabled ไว้ก่อน
-  const [activeTab, setActiveTab] = useState("active"); // "active" | "paused" | "completed"
+  // สถานะของรายการที่กำลังแสดง ไม่ใช่ "active" ของ UI ทั่วไป.
+  const [reminderStatusTab, setReminderStatusTab] = useState(REMINDER_STATUS_TAB.ENABLED);
 
   // ตัวกรองประเภทใน left nav (migration plan v2 เฟส 2) — null = ไม่กรอง
   // (แสดงทุกประเภท) client-side ล้วนๆ ไม่กระทบ backend หรือ query ใด ๆ
@@ -911,7 +928,13 @@ export default function ReminderDashboard({
           // จะเคลียร์ completedAt คืนเป็น null ให้ ดูฟังก์ชันนั้นด้านล่าง)
           logReminderEvent("reminder_completed", { reminder_type: r.type });
           recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-          return { ...r, currentIndex: 0, enabled: false, completedAt: Date.now() };
+          return {
+            ...r,
+            currentIndex: 0,
+            enabled: false,
+            completedAt: Date.now(),
+            completionCount: (Number.isInteger(r.completionCount) ? r.completionCount : 0) + 1
+          };
         }
         return { ...r, currentIndex: nextIdx };
       })
@@ -1089,8 +1112,12 @@ export default function ReminderDashboard({
     if (editingId) {
       const existing = reminders.find((r) => r.id === editingId);
       newReminder.completedAt = existing?.completedAt ?? null;
+      if (newReminder.type === REMINDER_TYPE.ROUTINE) {
+        newReminder.completionCount = Number.isInteger(existing?.completionCount) ? existing.completionCount : 0;
+      }
     } else {
       newReminder.completedAt = null;
+      if (newReminder.type === REMINDER_TYPE.ROUTINE) newReminder.completionCount = 0;
     }
 
     if (editingId) {
@@ -1226,16 +1253,19 @@ export default function ReminderDashboard({
   // ตัวที่ map ขึ้นจอจริงจะกรองซ้ำอีกชั้นด้วย activeTypeFilter ที่จุด render
   //
   // migration plan v2 เฟส 4 — เพิ่มเงื่อนไข !r.completedAt เข้า
-  // activeReminders/pausedReminders ทั้งคู่ (reminder ที่ทำเสร็จแล้วต้อง
+  // enabledReminders/pausedReminders ทั้งคู่ (reminder ที่ทำเสร็จแล้วต้อง
   // ไม่ปรากฏใน tab เดิมอีกต่อไป ย้ายไป completedReminders แทน) และเพิ่ม
   // completedReminders เป็น tab ที่ 3
-  const activeReminders = reminders.filter((r) => r.enabled && !r.completedAt);
+  const enabledReminders = reminders.filter((r) => r.enabled && !r.completedAt);
   const pausedReminders = reminders.filter((r) => !r.enabled && !r.completedAt);
   const completedReminders = reminders.filter((r) => !!r.completedAt);
+  const completedRoutineCount = completedReminders
+    .filter((r) => r.type === REMINDER_TYPE.ROUTINE)
+    .reduce((total, r) => total + (Number.isInteger(r.completionCount) ? r.completionCount : 0), 0);
   const filterByType = (list) => (activeTypeFilter ? list.filter((r) => r.type === activeTypeFilter) : list);
   const filterByGroup = (list) => (activeGroupFilter ? list.filter((r) => r.groupId === activeGroupFilter) : list);
   const applyFilters = (list) => filterByGroup(filterByType(list));
-  const visibleActiveReminders = applyFilters(activeReminders);
+  const visibleEnabledReminders = applyFilters(enabledReminders);
   const visiblePausedReminders = applyFilters(pausedReminders);
   const visibleCompletedReminders = applyFilters(completedReminders);
 
@@ -1276,7 +1306,9 @@ export default function ReminderDashboard({
             toggle-switch/stopwatch ปกติเพื่อ "เปิดใช้งานใหม่" ได้เหมือนเดิม
             ซึ่งจะเคลียร์ completedAt ให้อัตโนมัติ (ดู toggle() function) */}
         {reminder.completedAt && (
-          <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว</span>
+          <span className="reminder-completed-badge">
+            ✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}
+          </span>
         )}
         {reminder.groupId && groups.find((g) => g.id === reminder.groupId) && (
           <span className="reminder-group-chip">
@@ -2368,7 +2400,7 @@ export default function ReminderDashboard({
           flex-shrink: 0;
         }
 
-        .tab-btn {
+        .reminder-status-tab {
           background: none;
           border: none;
           border-bottom: 2px solid transparent;
@@ -2384,17 +2416,17 @@ export default function ReminderDashboard({
           gap: 6px;
         }
 
-        .tab-btn:disabled {
+        .reminder-status-tab:disabled {
           cursor: not-allowed;
           opacity: 0.5;
         }
 
-        .tab-btn.is-active {
+        .reminder-status-tab.is-active {
           color: var(--g-blue);
           border-bottom-color: var(--g-blue);
         }
 
-        .tab-btn-count {
+        .reminder-status-tab-count {
           font-size: 11px;
           color: var(--g-on-surface-variant);
           background: var(--g-background);
@@ -2402,7 +2434,7 @@ export default function ReminderDashboard({
           padding: 1px 7px;
         }
 
-        .tab-btn.is-active .tab-btn-count {
+        .reminder-status-tab.is-active .reminder-status-tab-count {
           color: var(--g-blue);
         }
 
@@ -3094,7 +3126,7 @@ export default function ReminderDashboard({
                   </span>
                 )}
               </h2>
-              <p className="toolbar-subtitle">{reminders.length} รายการ · กำลังทำงาน {activeReminders.length} · ปิดใช้งาน {pausedReminders.length} · ทำเสร็จแล้ว {completedReminders.length}</p>
+              <p className="toolbar-subtitle">{reminders.length} รายการ · ใช้งานอยู่ {enabledReminders.length} · พักการแจ้งเตือน {pausedReminders.length} · ทำสำเร็จแล้ว {completedReminders.length}</p>
             </div>
             <button type="button" className={`add-reminder-btn ${isComposerOpen ? "is-open" : ""}`} onClick={toggleComposer}>
               <span className="add-reminder-btn-icon">+</span> {isComposerOpen ? "ปิดฟอร์ม" : "เพิ่ม Reminder"}
@@ -3108,29 +3140,30 @@ export default function ReminderDashboard({
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "active"}
-              className={`tab-btn ${activeTab === "active" ? "is-active" : ""}`}
-              onClick={() => setActiveTab("active")}
+              aria-selected={reminderStatusTab === REMINDER_STATUS_TAB.ENABLED}
+              className={`reminder-status-tab reminder-status-tab--enabled ${reminderStatusTab === REMINDER_STATUS_TAB.ENABLED ? "is-active" : ""}`}
+              onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.ENABLED)}
             >
-              กำลังทำงาน <span className="tab-btn-count">{visibleActiveReminders.length}</span>
+              ใช้งานอยู่ <span className="reminder-status-tab-count">{visibleEnabledReminders.length}</span>
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "paused"}
-              className={`tab-btn ${activeTab === "paused" ? "is-active" : ""}`}
-              onClick={() => setActiveTab("paused")}
+              aria-selected={reminderStatusTab === REMINDER_STATUS_TAB.PAUSED}
+              className={`reminder-status-tab reminder-status-tab--paused ${reminderStatusTab === REMINDER_STATUS_TAB.PAUSED ? "is-active" : ""}`}
+              onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.PAUSED)}
             >
-              ปิดใช้งาน <span className="tab-btn-count">{visiblePausedReminders.length}</span>
+              พักการแจ้งเตือน <span className="reminder-status-tab-count">{visiblePausedReminders.length}</span>
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "completed"}
-              className={`tab-btn ${activeTab === "completed" ? "is-active" : ""}`}
-              onClick={() => setActiveTab("completed")}
+              aria-selected={reminderStatusTab === REMINDER_STATUS_TAB.COMPLETED}
+              className={`reminder-status-tab reminder-status-tab--completed ${reminderStatusTab === REMINDER_STATUS_TAB.COMPLETED ? "is-active" : ""}`}
+              onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.COMPLETED)}
             >
-              ทำเสร็จแล้ว <span className="tab-btn-count">{visibleCompletedReminders.length}</span>
+              ทำสำเร็จแล้ว <span className="reminder-status-tab-count">{visibleCompletedReminders.length}</span>
+              {completedRoutineCount > 0 && <span className="reminder-status-tab-count">{completedRoutineCount} ครั้ง</span>}
             </button>
           </div>
 
@@ -3341,9 +3374,9 @@ export default function ReminderDashboard({
               <p className="empty-state">ยังไม่มีการแจ้งเตือน กด "เพิ่ม Reminder" เพื่อเริ่มต้น</p>
             ) : (
               <>
-                {activeTab === "active" && (
-                  visibleActiveReminders.length > 0 ? (
-                    visibleActiveReminders.map(renderReminder)
+                {reminderStatusTab === REMINDER_STATUS_TAB.ENABLED && (
+                  visibleEnabledReminders.length > 0 ? (
+                    visibleEnabledReminders.map(renderReminder)
                   ) : (
                     !isComposerOpen && (
                       <p className="empty-state">
@@ -3355,7 +3388,7 @@ export default function ReminderDashboard({
                   )
                 )}
 
-                {activeTab === "paused" && (
+                {reminderStatusTab === REMINDER_STATUS_TAB.PAUSED && (
                   visiblePausedReminders.length > 0 ? (
                     visiblePausedReminders.map(renderReminder)
                   ) : (
@@ -3369,7 +3402,7 @@ export default function ReminderDashboard({
                   )
                 )}
 
-                {activeTab === "completed" && (
+                {reminderStatusTab === REMINDER_STATUS_TAB.COMPLETED && (
                   visibleCompletedReminders.length > 0 ? (
                     visibleCompletedReminders.map(renderReminder)
                   ) : (

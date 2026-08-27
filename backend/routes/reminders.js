@@ -52,7 +52,10 @@ const ALLOWED_FIELDS = [
   "nextDueAt",
   // คู่กับ nextDueAt: บอกว่าเวลานี้เกิดจาก Snooze ของผู้ใช้ ไม่ใช่รอบ
   // weekly ปกติ จึงต้องคงอยู่ข้าม refresh และการ merge จาก cloud
-  "snoozedUntil"
+  "snoozedUntil",
+  // เก็บข้ามอุปกรณ์เฉพาะสถานะการทำครบของ checklist/routine
+  "completedAt",
+  "completionCount"
 ];
 
 const REMINDER_TYPES = [
@@ -137,6 +140,14 @@ function sanitizeReminderFields(body) {
 
   if (body.snoozedUntil !== undefined && body.snoozedUntil !== null &&
     (typeof body.snoozedUntil !== "number" || !Number.isFinite(body.snoozedUntil))) return null;
+
+  // ไม่ขยาย runtime state ของ reminder ประเภทอื่นขึ้น Firestore ในรอบนี้.
+  if (body.completedAt !== undefined && body.type !== "routine") return null;
+  if (body.completionCount !== undefined && body.type !== "routine") return null;
+  if (body.completedAt !== undefined && body.completedAt !== null &&
+    (typeof body.completedAt !== "number" || !Number.isFinite(body.completedAt))) return null;
+  if (body.completionCount !== undefined &&
+    (!Number.isInteger(body.completionCount) || body.completionCount < 0)) return null;
 
   // groupId ต้องเป็น null หรือ non-empty string เท่านั้น — เช็คโครงสร้าง
   // อย่างเดียวตรงนี้ (เหมือน categoryId ใน routes/activity-categories.js)
