@@ -1259,9 +1259,6 @@ export default function ReminderDashboard({
   const enabledReminders = reminders.filter((r) => r.enabled && !r.completedAt);
   const pausedReminders = reminders.filter((r) => !r.enabled && !r.completedAt);
   const completedReminders = reminders.filter((r) => !!r.completedAt);
-  const completedRoutineCount = completedReminders
-    .filter((r) => r.type === REMINDER_TYPE.ROUTINE)
-    .reduce((total, r) => total + (Number.isInteger(r.completionCount) ? r.completionCount : 0), 0);
   const filterByType = (list) => (activeTypeFilter ? list.filter((r) => r.type === activeTypeFilter) : list);
   const filterByGroup = (list) => (activeGroupFilter ? list.filter((r) => r.groupId === activeGroupFilter) : list);
   const applyFilters = (list) => filterByGroup(filterByType(list));
@@ -3163,7 +3160,6 @@ export default function ReminderDashboard({
               onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.COMPLETED)}
             >
               ทำสำเร็จแล้ว <span className="reminder-status-tab-count">{visibleCompletedReminders.length}</span>
-              {completedRoutineCount > 0 && <span className="reminder-status-tab-count">{completedRoutineCount} ครั้ง</span>}
             </button>
           </div>
 
