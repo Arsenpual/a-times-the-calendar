@@ -1,18 +1,46 @@
-<svg width="600" height="160" viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg" role="img">
-<title>T.i.M.E.S. wordmark</title>
-<desc>โลโก้ตัวอักษร T.i.M.E.S. ตัวใหญ่ทั้งหมดยกเว้นตัว i เล็กที่มีวงแหวนล้อมรอบจุด สื่อถึงขณะปัจจุบัน</desc>
-<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="84" fill="#1C1C1A">
-<text x="16" y="108">T</text>
-<text x="90" y="108" font-size="40" fill="#8A8A85">.</text>
-<rect x="115" y="72" width="16" height="36" fill="#1C1C1A"/>
-<text x="150" y="108" font-size="40" fill="#8A8A85">.</text>
-<text x="172" y="108">M</text>
-<text x="270" y="108" font-size="40" fill="#8A8A85">.</text>
-<text x="292" y="108">E</text>
-<text x="360" y="108" font-size="40" fill="#8A8A85">.</text>
-<text x="382" y="108">S</text>
-<text x="450" y="108" font-size="40" fill="#8A8A85">.</text>
+<svg width="640" height="220" viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>T.i.M.E.S. logo</title>
+<desc>โลโก้ T.i.M.E.S. พร้อมไอคอนวงแหวน-จุด และชื่อเต็มด้านล่าง</desc>
+
+<!-- Icon mark: ring = cycle/system, dot = present task, small tick = "clock" reference -->
+<g transform="translate(46,72)">
+  <circle cx="0" cy="0" r="34" fill="none" stroke="#1C1C1A" stroke-width="3"/>
+  <circle cx="0" cy="0" r="34" fill="none" stroke="#D85A30" stroke-width="3" stroke-dasharray="18 190" stroke-linecap="round" transform="rotate(-90)"/>
+  <line x1="0" y1="0" x2="0" y2="-20" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round">
+    <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="8s" repeatCount="indefinite"/>
+  </line>
+  <line x1="0" y1="0" x2="14" y2="6" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round">
+    <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="60s" repeatCount="indefinite"/>
+  </line>
+  <circle cx="0" cy="0" r="5" fill="#D85A30"/>
 </g>
-<circle cx="123" cy="52" r="9" fill="none" stroke="#D85A30" stroke-width="1.5" opacity="0.4"/>
-<circle cx="123" cy="52" r="4.5" fill="#D85A30"/>
+
+<!-- Wordmark -->
+<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="72" fill="#1C1C1A">
+<text x="108" y="98">T</text>
+<text x="172" y="98" font-size="34" fill="#8A8A85">.</text>
+<rect x="193" y="68" width="14" height="30" fill="#1C1C1A"/>
+<text x="222" y="98" font-size="34" fill="#8A8A85">.</text>
+<text x="242" y="98">M</text>
+<text x="312" y="98" font-size="34" fill="#8A8A85">.</text>
+<text x="332" y="98">E</text>
+<text x="390" y="98" font-size="34" fill="#8A8A85">.</text>
+<text x="410" y="98">S</text>
+<text x="468" y="98" font-size="34" fill="#8A8A85">.</text>
+</g>
+<circle cx="200" cy="46" r="7" fill="none" stroke="#D85A30" stroke-width="1.5" opacity="0.4"/>
+<circle cx="200" cy="46" r="3.5" fill="#D85A30"/>
+
+<!-- Divider -->
+<line x1="108" y1="122" x2="500" y2="122" stroke="#E4E2DC" stroke-width="1.5"/>
+
+<!-- Full name tagline -->
+<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="16.5" letter-spacing="2.6" fill="#6B6B66">
+<text x="108" y="150">TASK</text>
+<text x="192" y="150" fill="#D85A30">INTERACTIVE</text>
+<text x="360" y="150">&amp; MANAGEMENT</text>
+<text x="108" y="176">EFFICIENCY</text>
+<text x="260" y="176">INTELLIGENT</text>
+<text x="425" y="176">SYSTEM</text>
+</g>
 </svg>
