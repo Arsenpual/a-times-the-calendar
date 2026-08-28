@@ -23,9 +23,21 @@ const PORT = process.env.PORT || 4000;
 // ขนาดนั้นตอน deploy จริง แม้จะมี Firebase Auth คุ้มกันชั้นในอยู่แล้วก็ตาม)
 // FRONTEND_URL ตั้งเป็น env var แยกจาก origin dev (localhost:5173) เพื่อให้
 // รันคู่กันได้ทั้งสองฝั่งระหว่าง deploy จริงกับพัฒนาต่อในเครื่อง
+// `Origin` header ไม่มี path (เช่น https://arsenpual.github.io) แต่
+// FRONTEND_URL ต้องเก็บ path ของ GitHub Pages ไว้ด้วยเพื่อใช้ redirect กลับ
+// หลัง OAuth (เช่น .../a-times-the-calendar/) จึงต้องแปลงเป็น origin ก่อน
+// นำมาใช้กับ CORS เสมอ
+function toOrigin(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
 const allowedOrigins = [
   "http://localhost:5173",
-  process.env.FRONTEND_URL
+  toOrigin(process.env.FRONTEND_URL)
 ].filter(Boolean);
 
 app.use(
