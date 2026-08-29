@@ -103,6 +103,14 @@ function calendarAuthDoc(userId) {
   return userDoc(userId).collection("private").doc("calendarAuth");
 }
 
+function telegramAuthDoc(userId) {
+  return userDoc(userId).collection("private").doc("telegramAuth");
+}
+
+function telegramLinkDoc(token) {
+  return db.collection("telegram-link-tokens").doc(token);
+}
+
 function categoriesCol(userId) {
   return userDoc(userId).collection("categories");
 }
@@ -282,6 +290,8 @@ module.exports = {
   db,
   auth,
   calendarAuthDoc,
+  telegramAuthDoc,
+  telegramLinkDoc,
   categoriesCol,
   activityCategoriesCol,
   activityTagsCol,

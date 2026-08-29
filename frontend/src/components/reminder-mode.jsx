@@ -10,6 +10,7 @@ import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminder
 import { activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { layoutOverlaps } from "../timeline-layout.js";
+import { sendTelegramReminder } from "../api.js";
 import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
@@ -433,6 +434,7 @@ export default function ReminderDashboard({
   } = usePushNotifications({ firebaseUser });
 
   const [dueReminders, setDueReminders] = useState([]);
+  const telegramSentRef = useRef(new Set());
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [omnibarInput, setOmnibarInput] = useState("");
   const [isStatsOpen, setIsStatsOpen] = useState(false);
@@ -564,6 +566,16 @@ export default function ReminderDashboard({
       // เรียกใช้ตรงกันได้เป๊ะๆ ในอนาคต ไม่ต้องคัดลอกเงื่อนไข if ซ้ำอีกที่
       const due = reminders.filter((r) => isReminderDue(r, now));
       setDueReminders(due);
+      // ไม่มี scheduler: ส่งได้เฉพาะเมื่อหน้า Reminder Mode เปิดอยู่เท่านั้น.
+      // ใช้ due timestamp เป็น key เพื่อกัน tick ทุกวินาทีส่งข้อความซ้ำ.
+      due.forEach((reminder) => {
+        const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
+        if (telegramSentRef.current.has(key)) return;
+        telegramSentRef.current.add(key);
+        sendTelegramReminder(reminder.title).catch(() => {
+          // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
+        });
+      });
     };
 
     checkDue();

@@ -14,6 +14,7 @@ const fcmTokensRouter = require("./routes/fcm-tokens.js");
 const activityNotificationsRouter = require("./routes/activity-notifications.js");
 const calendarAuthRouter = require("./routes/calendar-auth.js");
 const calendarRouter = require("./routes/calendar.js");
+const telegramRouter = require("./routes/telegram.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -90,6 +91,10 @@ app.use("/api/activity-notifications", requireAuth, activityNotificationsRouter)
 app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
 app.use("/api/calendar", requireAuth, calendarRouter);
+// Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
+// กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
+app.post("/api/telegram/webhook", telegramRouter.webhook);
+app.use("/api/telegram", requireAuth, telegramRouter);
 // OAuth callback มาจาก Google จึงไม่มี Firebase Authorization header;
 // state ที่ลงลายเซ็นไว้ผูก callback กลับเข้ากับ uid อย่างปลอดภัยแทน.
 app.get("/oauth/google/calendar/callback", calendarAuthRouter.callback);
@@ -120,4 +125,7 @@ app.use((err, req, res, next) => {
 // (ดู middleware/require-auth.js)
 app.listen(PORT, () => {
   console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
+  telegramRouter.registerWebhook(process.env.RENDER_EXTERNAL_URL).catch((error) => {
+    console.error("[telegram] ตั้ง webhook อัตโนมัติไม่สำเร็จ:", error.message);
+  });
 });

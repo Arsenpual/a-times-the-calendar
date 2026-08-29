@@ -73,6 +73,22 @@ async function handleResponse(res, label) {
   }
 }
 
+export async function getTelegramStatus() {
+  return handleResponse(await apiRequest("/api/telegram/status"), "GET /api/telegram/status");
+}
+
+export async function beginTelegramConnection() {
+  return handleResponse(await apiRequest("/api/telegram/connect", { method: "POST" }), "POST /api/telegram/connect");
+}
+
+export async function sendTelegramTest() {
+  return handleResponse(await apiRequest("/api/telegram/test", { method: "POST" }), "POST /api/telegram/test");
+}
+
+export async function sendTelegramReminder(title) {
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title }) }), "POST /api/telegram/notify");
+}
+
 /** GET /api/categories — รายการหมวดหมู่ชีวิตทั้งหมด */
 export async function fetchCategories() {
   const res = await apiRequest("/api/categories");
