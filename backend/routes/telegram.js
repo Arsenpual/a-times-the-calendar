@@ -61,12 +61,20 @@ module.exports = router;
 
 module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_WEBHOOK_SECRET || !baseUrl) return;
+  const identityResponse = await fetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
+  const identity = await identityResponse.json().catch(() => ({}));
+  if (!identityResponse.ok || !identity.ok) {
+    throw new Error(`ตรวจ Telegram bot ไม่สำเร็จ: ${identity.description || identityResponse.status}`);
+  }
+  console.log(`[telegram] ยืนยัน bot @${identity.result?.username || "unknown"} สำเร็จ`);
   const response = await fetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: `${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`, secret_token: process.env.TELEGRAM_WEBHOOK_SECRET })
   });
-  if (!response.ok) throw new Error(`ตั้ง Telegram webhook ไม่สำเร็จ: ${response.status}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`ตั้ง Telegram webhook ไม่สำเร็จ: ${data.description || response.status}`);
+  console.log(`[telegram] ตั้ง webhook สำเร็จ: ${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
 };
 
 module.exports.webhook = async function telegramWebhook(req, res) {

@@ -18,6 +18,10 @@ const telegramRouter = require("./routes/telegram.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+// Render วาง Express ไว้หลัง reverse proxy และส่ง X-Forwarded-For มาให้.
+// ระบุจำนวน proxy ที่เชื่อถือได้ก่อนสร้าง rate limiter เพื่อไม่ให้
+// express-rate-limit ปฏิเสธ request ปกติจาก public site.
+app.set("trust proxy", 1);
 
 // จำกัด CORS ให้รับ request จากโดเมน frontend ที่ deploy จริงเท่านั้น
 // (เดิม cors() เปล่าๆ เปิดรับทุก origin — ใช้ได้ตอน dev แต่ไม่ควรเปิดกว้าง
