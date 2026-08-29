@@ -125,7 +125,9 @@ app.use((err, req, res, next) => {
 // (ดู middleware/require-auth.js)
 app.listen(PORT, () => {
   console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
-  telegramRouter.registerWebhook(process.env.RENDER_EXTERNAL_URL).catch((error) => {
+  telegramRouter.registerWebhook(
+    process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com"
+  ).catch((error) => {
     console.error("[telegram] ตั้ง webhook อัตโนมัติไม่สำเร็จ:", error.message);
   });
 });
