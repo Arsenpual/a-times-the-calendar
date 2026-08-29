@@ -60,12 +60,19 @@ export default function SettingsDrawer({
   }, [open]);
 
   const connectTelegram = async () => {
+    // เปิดหน้าต่างในจังหวะ click โดยตรงก่อนรอ network; ถ้าเปิดหลัง await
+    // Chrome อาจมองว่าเป็น popup ที่ไม่ได้มาจาก user gesture แล้วบล็อกได้.
+    const telegramWindow = window.open("about:blank", "_blank");
     try {
       setTelegram((prev) => ({ ...prev, loading: true, message: "" }));
       const { connectUrl } = await beginTelegramConnection();
-      window.open(connectUrl, "_blank", "noopener,noreferrer");
+      if (telegramWindow) telegramWindow.location.replace(connectUrl);
+      else window.location.assign(connectUrl);
       setTelegram((prev) => ({ ...prev, loading: false, message: "เปิด Telegram แล้วกด Start เพื่อเชื่อมต่อ" }));
-    } catch (error) { setTelegram((prev) => ({ ...prev, loading: false, message: error.message })); }
+    } catch (error) {
+      telegramWindow?.close();
+      setTelegram((prev) => ({ ...prev, loading: false, message: error.message }));
+    }
   };
 
   const testTelegram = async () => {
