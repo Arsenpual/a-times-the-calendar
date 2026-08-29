@@ -10,7 +10,7 @@ import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminder
 import { activityDate } from "../date-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { layoutOverlaps } from "../timeline-layout.js";
-import { sendTelegramReminder } from "../api.js";
+import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder, sendTelegramTest } from "../api.js";
 import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
@@ -434,7 +434,8 @@ export default function ReminderDashboard({
   } = usePushNotifications({ firebaseUser });
 
   const [dueReminders, setDueReminders] = useState([]);
-  const telegramSentRef = useRef(new Set());
+  const sentTelegramReminderKeysRef = useRef(new Set());
+  const [telegramConnection, setTelegramConnection] = useState({ isConnected: false, isLoading: false, statusMessage: "" });
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [omnibarInput, setOmnibarInput] = useState("");
   const [isStatsOpen, setIsStatsOpen] = useState(false);
@@ -444,6 +445,42 @@ export default function ReminderDashboard({
   useEffect(() => {
     getReminderFeatureFlags().then(({ omnibarEnabled: enabled }) => setOmnibarEnabled(enabled));
   }, []);
+
+  useEffect(() => {
+    if (!firebaseUser) {
+      setTelegramConnection({ isConnected: false, isLoading: false, statusMessage: "" });
+      return;
+    }
+    getTelegramStatus()
+      .then(({ connected }) => setTelegramConnection((previous) => ({ ...previous, isConnected: connected })))
+      .catch(() => {});
+  }, [firebaseUser]);
+
+  const handleTelegramConnection = async () => {
+    // เปิดหน้าต่างจาก user gesture โดยตรง เพื่อไม่ให้ browser บล็อก popup.
+    const telegramDesktopWindow = window.open("about:blank", "_blank");
+    try {
+      setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
+      const { connectUrl, appConnectUrl } = await beginTelegramConnection();
+      const telegramDestination = appConnectUrl || connectUrl;
+      if (telegramDesktopWindow) telegramDesktopWindow.location.replace(telegramDestination);
+      else window.location.assign(telegramDestination);
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: "เปิด Telegram แล้วกด Start เพื่อเชื่อมต่อ" }));
+    } catch (error) {
+      telegramDesktopWindow?.close();
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
+    }
+  };
+
+  const handleTelegramTestMessage = async () => {
+    try {
+      setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
+      await sendTelegramTest();
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: "ส่งข้อความทดสอบแล้ว" }));
+    } catch (error) {
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
+    }
+  };
 
   const omnibarPreview = useMemo(() => parseReminderQuickInput(omnibarInput), [omnibarInput]);
   const reminderStats = useMemo(() => buildReminderStats(reminders, statsEvents), [reminders, statsEvents]);
@@ -570,8 +607,8 @@ export default function ReminderDashboard({
       // ใช้ due timestamp เป็น key เพื่อกัน tick ทุกวินาทีส่งข้อความซ้ำ.
       due.forEach((reminder) => {
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
-        if (telegramSentRef.current.has(key)) return;
-        telegramSentRef.current.add(key);
+        if (sentTelegramReminderKeysRef.current.has(key)) return;
+        sentTelegramReminderKeysRef.current.add(key);
         sendTelegramReminder(reminder.title).catch(() => {
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
         });
@@ -1776,6 +1813,16 @@ export default function ReminderDashboard({
           color: var(--g-blue);
         }
 
+        .topbar-telegram-btn {
+          color: #229ed9;
+        }
+
+        .topbar-telegram-btn svg {
+          width: 19px;
+          height: 19px;
+          fill: currentColor;
+        }
+
         .reminder-stats-backdrop {
           position: fixed;
           inset: 0;
@@ -2967,6 +3014,18 @@ export default function ReminderDashboard({
           )}
         </div>
         <div className="topbar-actions">
+          <button
+            type="button"
+            className="topbar-icon-btn topbar-telegram-btn"
+            disabled={telegramConnection.isLoading}
+            onClick={telegramConnection.isConnected ? handleTelegramTestMessage : handleTelegramConnection}
+            title={telegramConnection.statusMessage || (telegramConnection.isConnected ? "ส่งข้อความทดสอบผ่าน Telegram" : "เชื่อมต่อ Telegram")}
+            aria-label={telegramConnection.isConnected ? "ส่งข้อความทดสอบผ่าน Telegram" : "เชื่อมต่อ Telegram"}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M21.4 3.2 2.9 10.3c-1.26.5-1.25 1.2-.23 1.51l4.75 1.48 1.84 5.64c.22.61.11.85.76.85.5 0 .72-.23 1-.5l2.3-2.24 4.78 3.53c.88.49 1.52.24 1.74-.82l3.15-14.85c.33-1.3-.5-1.89-1.57-1.42ZM8.4 12.8l10.72-6.77c.54-.33 1.03-.15.62.22l-9.19 8.3-.36 3.87-1.79-5.62Z" />
+            </svg>
+          </button>
           {/* migration plan v2 เฟส 5 — ปุ่มเปิด/ปิด push notification จริง
               (ทดสอบได้แค่ permission flow + เรียก backend — getToken()
               จริงต้องมี VITE_FIREBASE_VAPID_KEY ที่ยังไม่ตั้งค่าไว้ในสภาพ

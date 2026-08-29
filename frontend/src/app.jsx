@@ -34,7 +34,8 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/acti
 // this string and redeploying. Set to "" (or null) to hide the ticker
 // entirely without removing the component from the tree.
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
-const BRAND_WORDMARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
+const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
+const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
 const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
@@ -183,6 +184,7 @@ function MainApp() {
     openDay,
     closeDay
   } = nav;
+  const brandWordmarkSrc = theme === "dark" ? BRAND_WORDMARK_DARK_SRC : BRAND_WORDMARK_LIGHT_SRC;
 
   const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
   const {
@@ -363,7 +365,7 @@ function MainApp() {
       {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
-            <img className="app-logo" src={BRAND_WORDMARK_SRC} alt="T.i.M.E.S." />
+            <img className="app-logo" src={brandWordmarkSrc} alt="T.i.M.E.S." />
             <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
               <button
                 type="button"
@@ -622,7 +624,7 @@ function MainApp() {
             {authReady && !firebaseUser && (
               <div className="login-screen">
                 <div className="login-card">
-                  <img className="login-logo" src={BRAND_WORDMARK_SRC} alt="T.i.M.E.S." />
+                  <img className="login-logo" src={brandWordmarkSrc} alt="T.i.M.E.S." />
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
                     เข้าสู่ระบบด้วย Google เพื่อ sync ปฏิทินของคุณโดยตรง — ปลอดภัย ไม่มีการเก็บสำเนาข้อมูลกิจกรรมไว้ที่อื่น

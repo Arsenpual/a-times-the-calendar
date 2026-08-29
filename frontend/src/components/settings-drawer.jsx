@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../i18n.jsx";
-import { beginTelegramConnection, getTelegramStatus, sendTelegramTest } from "../api.js";
 
 /**
  * Slide-over settings drawer, opened from the ⚙️ icon in the header — in
@@ -42,8 +41,6 @@ export default function SettingsDrawer({
   onReminderTimelineColorsChange
 }) {
   const { language, setLanguage, t } = useLanguage();
-  const [telegram, setTelegram] = useState({ connected: false, loading: false, message: "" });
-
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
   useEffect(() => {
     if (!open) return;
@@ -53,39 +50,6 @@ export default function SettingsDrawer({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    getTelegramStatus().then((status) => setTelegram((prev) => ({ ...prev, connected: status.connected }))).catch(() => {});
-  }, [open]);
-
-  const connectTelegram = async () => {
-    // เปิดหน้าต่างในจังหวะ click โดยตรงก่อนรอ network; ถ้าเปิดหลัง await
-    // Chrome อาจมองว่าเป็น popup ที่ไม่ได้มาจาก user gesture แล้วบล็อกได้.
-    const telegramWindow = window.open("about:blank", "_blank");
-    try {
-      setTelegram((prev) => ({ ...prev, loading: true, message: "" }));
-      const { connectUrl, appConnectUrl } = await beginTelegramConnection();
-      // Telegram Desktop ลงทะเบียน tg:// handler ไว้ จึงไม่ต้องพึ่ง t.me
-      // ที่อาจ timeout จาก network/DNS ของ browser. ใช้ web URL เป็น fallback
-      // เฉพาะกรณี API เก่ายังไม่ส่ง appConnectUrl กลับมา.
-      const destination = appConnectUrl || connectUrl;
-      if (telegramWindow) telegramWindow.location.replace(destination);
-      else window.location.assign(destination);
-      setTelegram((prev) => ({ ...prev, loading: false, message: "เปิด Telegram แล้วกด Start เพื่อเชื่อมต่อ" }));
-    } catch (error) {
-      telegramWindow?.close();
-      setTelegram((prev) => ({ ...prev, loading: false, message: error.message }));
-    }
-  };
-
-  const testTelegram = async () => {
-    try {
-      setTelegram((prev) => ({ ...prev, loading: true, message: "" }));
-      await sendTelegramTest();
-      setTelegram((prev) => ({ ...prev, loading: false, message: "ส่งข้อความทดสอบแล้ว" }));
-    } catch (error) { setTelegram((prev) => ({ ...prev, loading: false, message: error.message })); }
-  };
 
   if (!open) return null;
 
@@ -154,20 +118,6 @@ export default function SettingsDrawer({
               </div>
             </div>
 
-          </section>
-
-          <section className="settings-section">
-            <h3 className="settings-section-title">Telegram</h3>
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <span className="settings-row-title">MR.Zettascale</span>
-                <span className="settings-row-desc">{telegram.connected ? "เชื่อมต่อแล้ว" : "รับแจ้งเตือนเมื่อเปิดเว็บอยู่"}</span>
-              </div>
-              <button type="button" className="btn btn-primary" disabled={telegram.loading} onClick={telegram.connected ? testTelegram : connectTelegram}>
-                {telegram.loading ? "กำลังทำรายการ..." : telegram.connected ? "ส่งข้อความทดสอบ" : "เชื่อม Telegram"}
-              </button>
-            </div>
-            {telegram.message && <p className="settings-row-desc">{telegram.message}</p>}
           </section>
 
           <section className="settings-section">

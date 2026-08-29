@@ -35,12 +35,12 @@
 <line x1="108" y1="122" x2="500" y2="122" stroke="#E4E2DC" stroke-width="1.5"/>
 
 <!-- Full name tagline -->
-<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="16.5" letter-spacing="2.6" fill="#6B6B66">
-<text x="108" y="150">TASK</text>
-<text x="192" y="150" fill="#D85A30">INTERACTIVE</text>
-<text x="360" y="150">&amp; MANAGEMENT</text>
-<text x="108" y="176">EFFICIENCY</text>
-<text x="260" y="176">INTELLIGENT</text>
-<text x="425" y="176">SYSTEM</text>
+<g font-family="'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="11" letter-spacing="1.8" fill="#8A8A85">
+<text x="108" y="142">TASK</text>
+<text x="160" y="142" fill="#D85A30">INTERACTIVE</text>
+<text x="275" y="142">&amp; MANAGEMENT</text>
+<text x="108" y="160">EFFICIENCY</text>
+<text x="205" y="160">INTELLIGENT</text>
+<text x="320" y="160">SYSTEM</text>
 </g>
 </svg>
