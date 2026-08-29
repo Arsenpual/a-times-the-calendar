@@ -34,7 +34,11 @@ router.post("/connect", async (req, res, next) => {
     const username = requiredEnv("TELEGRAM_BOT_USERNAME").replace(/^@/, "");
     const token = crypto.randomBytes(24).toString("base64url");
     await telegramLinkDoc(token).set({ userId: req.userId, expiresAt: Date.now() + LINK_TTL_MS, createdAt: new Date().toISOString() });
-    res.json({ connectUrl: `https://t.me/${username}?start=${token}`, expiresAt: Date.now() + LINK_TTL_MS });
+    res.json({
+      connectUrl: `https://t.me/${username}?start=${token}`,
+      appConnectUrl: `tg://resolve?domain=${username}&start=${token}`,
+      expiresAt: Date.now() + LINK_TTL_MS
+    });
   } catch (error) { next(error); }
 });
 

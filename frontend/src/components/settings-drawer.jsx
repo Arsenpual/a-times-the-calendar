@@ -65,9 +65,13 @@ export default function SettingsDrawer({
     const telegramWindow = window.open("about:blank", "_blank");
     try {
       setTelegram((prev) => ({ ...prev, loading: true, message: "" }));
-      const { connectUrl } = await beginTelegramConnection();
-      if (telegramWindow) telegramWindow.location.replace(connectUrl);
-      else window.location.assign(connectUrl);
+      const { connectUrl, appConnectUrl } = await beginTelegramConnection();
+      // Telegram Desktop ลงทะเบียน tg:// handler ไว้ จึงไม่ต้องพึ่ง t.me
+      // ที่อาจ timeout จาก network/DNS ของ browser. ใช้ web URL เป็น fallback
+      // เฉพาะกรณี API เก่ายังไม่ส่ง appConnectUrl กลับมา.
+      const destination = appConnectUrl || connectUrl;
+      if (telegramWindow) telegramWindow.location.replace(destination);
+      else window.location.assign(destination);
       setTelegram((prev) => ({ ...prev, loading: false, message: "เปิด Telegram แล้วกด Start เพื่อเชื่อมต่อ" }));
     } catch (error) {
       telegramWindow?.close();
