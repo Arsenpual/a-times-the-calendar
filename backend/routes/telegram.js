@@ -6,10 +6,12 @@ const router = express.Router();
 const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
-const QUICK_COMMAND_KEYBOARD = {
+// ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
+// ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
+const CUSTOM_COMMAND_KEYBOARD = {
   keyboard: [[{ text: "/start" }, { text: "/cmd" }]],
   resize_keyboard: true,
-  is_persistent: true,
+  one_time_keyboard: true,
   input_field_placeholder: "เลือกคำสั่งด่วน หรือพิมพ์ข้อความ"
 };
 
@@ -127,7 +129,7 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   if (!response.ok || !data.ok) throw new Error(`ตั้ง Telegram webhook ไม่สำเร็จ: ${data.description || response.status}`);
   console.log(`[telegram] ตั้ง webhook สำเร็จ: ${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
   await registerBotCommands();
-  console.log("[telegram] ตั้งเมนูคำสั่งของบอทสำเร็จ");
+  console.log("[telegram] ตั้ง Bot Command Menu สำเร็จ");
 };
 
 module.exports.webhook = async function telegramWebhook(req, res) {
@@ -147,7 +149,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
         "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
         "/announce off — ซ่อน announcement-ticker\n\n" +
         "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้",
-        { reply_markup: QUICK_COMMAND_KEYBOARD }
+        { reply_markup: CUSTOM_COMMAND_KEYBOARD }
       );
       return res.sendStatus(200);
     }
@@ -187,7 +189,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     const match = text.match(/^\/start\s+([A-Za-z0-9_-]{1,64})$/);
     if (!match) {
       if (/^\/start(?:@\w+)?$/i.test(text)) {
-        await sendTelegram(chatId, "ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: QUICK_COMMAND_KEYBOARD });
+        await sendTelegram(chatId, "ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       }
       return res.sendStatus(200);
     }
@@ -196,7 +198,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     if (!link || link.expiresAt < Date.now()) return res.sendStatus(200);
     await telegramAuthDoc(link.userId).set({ chatId: String(chatId), connectedAt: new Date().toISOString() }, { merge: true });
     await ref.delete();
-    await sendTelegram(chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: QUICK_COMMAND_KEYBOARD });
+    await sendTelegram(chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
     res.sendStatus(200);
   } catch (error) {
     console.error("[telegram] webhook ล้มเหลว:", error.message);
