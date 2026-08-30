@@ -38,6 +38,23 @@ async function sendTelegram(chatId, text) {
   if (!response.ok || !data.ok) throw new Error(`Telegram ส่งข้อความไม่สำเร็จ: ${data.description || response.status}`);
 }
 
+async function registerBotCommands() {
+  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      commands: [
+        { command: "start", description: "เชื่อมต่อ T.i.M.E.S." },
+        { command: "cmd", description: "ดูคำสั่งทั้งหมด" },
+        { command: "myid", description: "ดู Telegram chat ID ของฉัน" },
+        { command: "announce", description: "ตั้งข้อความ announcement (ผู้ดูแล)" }
+      ]
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`ตั้งเมนูคำสั่ง Telegram ไม่สำเร็จ: ${data.description || response.status}`);
+}
+
 router.get("/status", async (req, res, next) => {
   try {
     const data = (await telegramAuthDoc(req.userId).get()).data();
@@ -72,8 +89,14 @@ router.post("/notify", async (req, res, next) => {
     const data = (await telegramAuthDoc(req.userId).get()).data();
     if (!data?.chatId) return res.json({ sent: false });
     const title = String(req.body?.title || "Reminder").slice(0, 500);
-    const notificationKind = req.body?.notificationKind === "activity" ? "activity" : "reminder";
-    const notificationLabel = notificationKind === "activity" ? "กิจกรรม" : "reminder";
+    const notificationKind = ["activity", "interval"].includes(req.body?.notificationKind)
+      ? req.body.notificationKind
+      : "reminder";
+    const notificationLabel = notificationKind === "activity"
+      ? "กิจกรรม"
+      : notificationKind === "interval"
+        ? "Reminder แบบช่วงเวลา"
+        : "reminder";
     await sendTelegram(data.chatId, `🔔 ถึงเวลาของ${notificationLabel}: ${title}`);
     res.json({ sent: true });
   } catch (error) { next(error); }
@@ -97,6 +120,8 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(`ตั้ง Telegram webhook ไม่สำเร็จ: ${data.description || response.status}`);
   console.log(`[telegram] ตั้ง webhook สำเร็จ: ${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
+  await registerBotCommands();
+  console.log("[telegram] ตั้งเมนูคำสั่งของบอทสำเร็จ");
 };
 
 module.exports.webhook = async function telegramWebhook(req, res) {
@@ -106,6 +131,19 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
     if (!chatId) return res.sendStatus(200);
+
+    if (/^\/cmd(?:@\w+)?$/i.test(text)) {
+      await sendTelegram(chatId,
+        "📚 คำสั่งของ MR.Zettascale\n\n" +
+        "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
+        "/cmd — ดูรายการคำสั่งนี้\n" +
+        "/myid — ดู Telegram chat ID ของคุณ\n" +
+        "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
+        "/announce off — ซ่อน announcement-ticker\n\n" +
+        "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้"
+      );
+      return res.sendStatus(200);
+    }
 
     if (/^\/(?:myid|chatid)(?:@\w+)?$/i.test(text)) {
       await sendTelegram(chatId, `รหัส Telegram chat ของคุณ: ${chatId}\nตั้งค่า TELEGRAM_ANNOUNCEMENT_ADMIN_CHAT_IDS=${chatId} ใน Render เพื่อใช้คำสั่งประกาศ`);

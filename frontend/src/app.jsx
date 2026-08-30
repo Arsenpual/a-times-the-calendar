@@ -79,6 +79,7 @@ export default function App() {
 function MainApp() {
   const [isActivityReading, setIsActivityReading] = useState(false);
   const [announcementMessage, setAnnouncementMessage] = useState(ANNOUNCEMENT_MESSAGE);
+  const activityDashboardRef = useRef(null);
   const sentTelegramActivityKeysRef = useRef(new Set());
   const activityNotificationCursorRef = useRef(Date.now() - 30_000);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -401,6 +402,19 @@ function MainApp() {
   useEffect(() => {
     if (mode !== "activity") setIsActivityReading(false);
   }, [mode]);
+
+  // Activity Mode is an overview-first screen. Every entry to the mode starts
+  // from the header and week spine rather than restoring a stale reading
+  // position near the archive/details section below.
+  useEffect(() => {
+    if (mode !== "activity") return undefined;
+    const frameId = window.requestAnimationFrame(() => {
+      activityDashboardRef.current?.scrollTo({ top: 0, behavior: "auto" });
+      window.scrollTo({ top: 0, behavior: "auto" });
+      setIsActivityReading(false);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [mode, firebaseUser?.uid]);
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -801,7 +815,7 @@ function MainApp() {
             )}
 
             {firebaseUser && (
-              <div className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
+              <div ref={activityDashboardRef} className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">

@@ -321,6 +321,25 @@ function describeReminder(reminder, nowMs) {
   }
 }
 
+// Interval stays intentionally outside the normal due-banner/checklist flow.
+// This helper only identifies the current visual interval slot so the open
+// Reminder Mode can send one Telegram message when that slot changes.
+function getIntervalTelegramSlot(reminder, nowMs) {
+  if (!reminder.enabled || reminder.completedAt || reminder.type !== REMINDER_TYPE.INTERVAL) return null;
+  const stepMinutes = Number(reminder.amount) * (reminder.unit === "hours" ? 60 : 1);
+  if (!Number.isFinite(stepMinutes) || stepMinutes <= 0) return null;
+
+  const now = new Date(nowMs);
+  const currentMinute = now.getHours() * 60 + now.getMinutes();
+  if (hasWindow(reminder) && !isMinuteWithinWindow(currentMinute, reminder.windowStart, reminder.windowEnd)) return null;
+
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const slotMinute = Math.floor(currentMinute / stepMinutes) * stepMinutes;
+  const scheduleSignature = `${stepMinutes}:${reminder.windowStart || "all-day"}:${reminder.windowEnd || "all-day"}`;
+  return { scheduleSignature, slotKey: `${scheduleSignature}:${dayStart.getTime()}:${slotMinute}` };
+}
+
 // คืนค่ารายการ "นาทีของวัน" (0-1439) ที่ reminder ประเภทนี้ควรถูกปักหมุดแสดงบน timeline
 // ใช้แสดงผลบน timeline โดยไม่สนใจว่า enabled/nextDueAt ถึงกำหนดหรือยัง (โชว์ทุกประเภทเสมอเวลาเลื่อนดู)
 // - INTERVAL: ปักซ้ำทุก ๆ N นาที (จำกัดในช่วง window ถ้ามีกำหนด)
@@ -436,6 +455,7 @@ export default function ReminderDashboard({
 
   const [dueReminders, setDueReminders] = useState([]);
   const sentTelegramReminderKeysRef = useRef(new Set());
+  const intervalTelegramSlotRef = useRef(new Map());
   const [telegramConnection, setTelegramConnection] = useState({ isConnected: false, isLoading: false, statusMessage: "" });
   const [activityContextMenu, setActivityContextMenu] = useState(null);
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
@@ -644,6 +664,32 @@ export default function ReminderDashboard({
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
         });
       });
+
+      // Interval is deliberately Telegram-only: it does not join `due`, so
+      // it never produces a due banner, browser notification, completion
+      // checklist, or server-side schedule. Seed its current slot on mount to
+      // avoid sending a stale alert merely because the user opened the page
+      // halfway through an already-running interval.
+      const activeIntervalIds = new Set();
+      reminders.forEach((reminder) => {
+        const slot = getIntervalTelegramSlot(reminder, now);
+        if (!slot) return;
+        activeIntervalIds.add(reminder.id);
+        const previousSlot = intervalTelegramSlotRef.current.get(reminder.id);
+        if (!previousSlot || previousSlot.scheduleSignature !== slot.scheduleSignature) {
+          intervalTelegramSlotRef.current.set(reminder.id, slot);
+          return;
+        }
+        if (previousSlot.slotKey === slot.slotKey) return;
+        intervalTelegramSlotRef.current.set(reminder.id, slot);
+        sendTelegramReminder(reminder.title, "interval").catch(() => {
+          // Telegram is optional; an unavailable bot must not alter the
+          // interval schedule or interrupt the timeline.
+        });
+      });
+      for (const reminderId of intervalTelegramSlotRef.current.keys()) {
+        if (!activeIntervalIds.has(reminderId)) intervalTelegramSlotRef.current.delete(reminderId);
+      }
     };
 
     checkDue();

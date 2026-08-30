@@ -85,8 +85,8 @@ export async function sendTelegramTest() {
   return handleResponse(await apiRequest("/api/telegram/test", { method: "POST" }), "POST /api/telegram/test");
 }
 
-export async function sendTelegramReminder(title) {
-  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "reminder" }) }), "POST /api/telegram/notify");
+export async function sendTelegramReminder(title, notificationKind = "reminder") {
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind }) }), "POST /api/telegram/notify");
 }
 
 /** Sends an Activity Mode start notification through the connected Telegram bot. */
