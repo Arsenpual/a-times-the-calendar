@@ -466,11 +466,9 @@ export default function ActivityModeWeekSpine({
       return;
     }
     event.stopPropagation();
-    const container = event.currentTarget.closest(".week-spine-timeline-surface") || document.querySelector(".week-spine-timeline-surface");
-    const bounds = container?.getBoundingClientRect();
     setContextMenu({
       segment,
-      position: { x: event.clientX - (bounds?.left || 0), y: event.clientY - (bounds?.top || 0) },
+      position: { x: event.clientX, y: event.clientY },
     });
   };
 

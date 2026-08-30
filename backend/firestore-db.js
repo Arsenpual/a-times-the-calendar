@@ -111,6 +111,13 @@ function telegramLinkDoc(token) {
   return db.collection("telegram-link-tokens").doc(token);
 }
 
+// ประกาศกลางของแอปเป็นข้อมูลระดับผลิตภัณฑ์ ไม่ผูกกับผู้ใช้คนใดคนหนึ่ง
+// จึงเก็บแยกจาก users/{uid}/... และเปิดให้อ่านผ่าน backend ที่ตรวจ Firebase
+// token เท่านั้น ส่วนการเขียนทำได้จาก Telegram command ของแอดมินเท่านั้น.
+function announcementDoc() {
+  return db.collection("app-config").doc("announcement");
+}
+
 function categoriesCol(userId) {
   return userDoc(userId).collection("categories");
 }
@@ -292,6 +299,7 @@ module.exports = {
   calendarAuthDoc,
   telegramAuthDoc,
   telegramLinkDoc,
+  announcementDoc,
   categoriesCol,
   activityCategoriesCol,
   activityTagsCol,

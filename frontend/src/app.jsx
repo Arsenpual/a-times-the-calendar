@@ -10,8 +10,9 @@ import ActivityModal from "./components/activity-modal.jsx";
 import ReminderMode from "./components/reminder-mode.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
-import { formatWeekLabel, toDateInputValue } from "./date-utils.js";
+import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
+import { getAnnouncement, sendTelegramActivity } from "./api.js";
 import { useAuth } from "./hooks/use-auth.js";
 import { useWeekNavigation } from "./hooks/use-week-navigation.js";
 import { useCalendarData } from "./hooks/use-calendar-data.js";
@@ -28,11 +29,9 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/acti
   })
   .filter((mockup) => typeof mockup.Component === "function");
 
-// Hardcoded broadcast message shown in the scrolling ticker below the
-// header, in both activity and reminder mode — see AnnouncementTicker. Not
-// dismissible and not fetched from a backend, so updating it means editing
-// this string and redeploying. Set to "" (or null) to hide the ticker
-// entirely without removing the component from the tree.
+// Fallback only: after sign-in the app replaces this with the announcement
+// configured through the authorised Telegram command. It remains useful when
+// no remote announcement has ever been set or the backend is temporarily down.
 const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
 const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
@@ -79,6 +78,9 @@ export default function App() {
  */
 function MainApp() {
   const [isActivityReading, setIsActivityReading] = useState(false);
+  const [announcementMessage, setAnnouncementMessage] = useState(ANNOUNCEMENT_MESSAGE);
+  const sentTelegramActivityKeysRef = useRef(new Set());
+  const activityNotificationCursorRef = useRef(Date.now() - 30_000);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [weekSpineHoursPerCell, setWeekSpineHoursPerCell] = useState(() => {
     try {
@@ -124,6 +126,35 @@ function MainApp() {
     handleReauthCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
+
+  // Announcement updates are loaded after Firebase authentication. Refreshing
+  // again when the tab regains focus keeps it current without a polling loop
+  // that would create unnecessary Firestore reads for every open client.
+  useEffect(() => {
+    let cancelled = false;
+    const loadAnnouncement = async () => {
+      if (!firebaseUser) {
+        if (!cancelled) setAnnouncementMessage(ANNOUNCEMENT_MESSAGE);
+        return;
+      }
+      try {
+        const announcement = await getAnnouncement();
+        if (!cancelled) {
+          setAnnouncementMessage(announcement.configured ? (announcement.message || "") : ANNOUNCEMENT_MESSAGE);
+        }
+      } catch {
+        // Keep the local fallback visible if a transient backend failure occurs.
+        if (!cancelled) setAnnouncementMessage(ANNOUNCEMENT_MESSAGE);
+      }
+    };
+
+    loadAnnouncement();
+    window.addEventListener("focus", loadAnnouncement);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadAnnouncement);
+    };
+  }, [firebaseUser]);
 
   // The archive is per-account local visibility state. Keep one shared set
   // here so every Activity Mode surface reads the same filtered data.
@@ -328,6 +359,43 @@ function MainApp() {
     () => ({ ...activityCategoryMap, ...onboardingCategoryMap }),
     [activityCategoryMap, onboardingCategoryMap]
   );
+
+  useEffect(() => {
+    sentTelegramActivityKeysRef.current.clear();
+    activityNotificationCursorRef.current = Date.now() - 30_000;
+  }, [firebaseUser?.uid]);
+
+  // Like reminder notifications, activity start alerts operate only while
+  // the web app is open. A session key prevents repeat sends if React
+  // re-renders or calendar data refreshes during the same occurrence.
+  useEffect(() => {
+    if (!firebaseUser) return undefined;
+
+    const notifyActivitiesStartingNow = () => {
+      const now = Date.now();
+      const previousCheck = activityNotificationCursorRef.current;
+      activityNotificationCursorRef.current = now;
+
+      activities.forEach((activity) => {
+        if (!activity.start?.dateTime) return; // All-day activities do not have a precise alert time.
+        const activityStart = activityDate(activity.start)?.getTime();
+        const normalizedId = normalizeActivityId(activity.id);
+        const isArchived = archivedActivityIds.has(activity.id) || archivedActivityIds.has(normalizedId);
+        if (!Number.isFinite(activityStart) || isArchived || activityStart <= previousCheck || activityStart > now) return;
+
+        const notificationKey = `${normalizedId}:${activityStart}`;
+        if (sentTelegramActivityKeysRef.current.has(notificationKey)) return;
+        sentTelegramActivityKeysRef.current.add(notificationKey);
+        sendTelegramActivity(activity.summary || "(Untitled activity)").catch(() => {
+          // Telegram may be disconnected; activity interaction must remain available.
+        });
+      });
+    };
+
+    notifyActivitiesStartingNow();
+    const intervalId = window.setInterval(notifyActivitiesStartingNow, 15_000);
+    return () => window.clearInterval(intervalId);
+  }, [firebaseUser, activities, archivedActivityIds]);
 
 
   useEffect(() => {
@@ -551,7 +619,7 @@ function MainApp() {
         </header>
       )}
 
-      {firebaseUser && <AnnouncementTicker message={ANNOUNCEMENT_MESSAGE} />}
+      {firebaseUser && <AnnouncementTicker message={announcementMessage} />}
 
       {/* Blocking heads-up for the Google Calendar token — covers two
           situations with the same visual treatment (dimmed backdrop +
@@ -608,7 +676,9 @@ function MainApp() {
             activities={visibleActivities}
             categories={categories}
             activityCategoryMap={activityCategoryMap}
+            lockedActivities={lockedActivities}
             onEditActivity={openEditActivity}
+            onToggleActivityLock={handleToggleLock}
             timelineColors={reminderTimelineColors}
           />
         )}

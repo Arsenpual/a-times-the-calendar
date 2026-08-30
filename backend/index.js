@@ -15,6 +15,7 @@ const activityNotificationsRouter = require("./routes/activity-notifications.js"
 const calendarAuthRouter = require("./routes/calendar-auth.js");
 const calendarRouter = require("./routes/calendar.js");
 const telegramRouter = require("./routes/telegram.js");
+const announcementRouter = require("./routes/announcement.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -95,6 +96,7 @@ app.use("/api/activity-notifications", requireAuth, activityNotificationsRouter)
 app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
 app.use("/api/calendar", requireAuth, calendarRouter);
+app.use("/api/announcement", requireAuth, announcementRouter);
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
 // กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
 app.post("/api/telegram/webhook", telegramRouter.webhook);

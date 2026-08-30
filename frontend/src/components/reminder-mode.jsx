@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 import { usePushNotifications } from "../hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { getReminderFeatureFlags, logReminderEvent } from "../reminder-telemetry.js";
 import { parseReminderQuickInput } from "../reminder-quick-parse.js";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
+import ActivityPopup from "./activity-popup.jsx";
 import AutoShrinkText from "./auto-shrink-text.jsx";
 import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../reminder-stats.js";
 import { activityDate } from "../date-utils.js";
+import { normalizeActivityId } from "../id-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { layoutOverlaps } from "../timeline-layout.js";
 import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder, sendTelegramTest } from "../api.js";
+import { useLanguage } from "../i18n.jsx";
 import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
@@ -120,23 +124,23 @@ const SNOOZE_OPTIONS_MINUTES = [5, 10, 15, 30];
 // เพื่อให้ใช้ label เดียวกันได้ทั้งใน nav list และหัวข้อ toolbar เมื่อกรองอยู่
 // ไม่ต้อง duplicate ข้อความ
 const TYPE_FILTER_OPTIONS = [
-  { type: REMINDER_TYPE.INTERVAL, label: "ทำซ้ำเป็นช่วง" },
-  { type: REMINDER_TYPE.WEEKLY, label: "รายสัปดาห์" },
-  { type: REMINDER_TYPE.EVENT_ANCHORED, label: "อิงเหตุการณ์" },
-  { type: REMINDER_TYPE.ROUTINE, label: "รูทีน" },
-  { type: REMINDER_TYPE.ONCE_AT, label: "ครั้งเดียว" },
-  { type: REMINDER_TYPE.COUNTDOWN, label: "นับถอยหลัง" },
-  { type: REMINDER_TYPE.STOPWATCH, label: "จับเวลา" }
+  { type: REMINDER_TYPE.INTERVAL, labelKey: "reminder.type.interval" },
+  { type: REMINDER_TYPE.WEEKLY, labelKey: "reminder.type.weekly" },
+  { type: REMINDER_TYPE.EVENT_ANCHORED, labelKey: "reminder.type.event-anchored" },
+  { type: REMINDER_TYPE.ROUTINE, labelKey: "reminder.type.routine" },
+  { type: REMINDER_TYPE.ONCE_AT, labelKey: "reminder.type.once-at" },
+  { type: REMINDER_TYPE.COUNTDOWN, labelKey: "reminder.type.countdown" },
+  { type: REMINDER_TYPE.STOPWATCH, labelKey: "reminder.type.stopwatch" }
 ];
 
 const DAYS_OF_WEEK = [
-  { label: "อา", value: 0 },
-  { label: "จ", value: 1 },
-  { label: "อ", value: 2 },
-  { label: "พ", value: 3 },
-  { label: "พฤ", value: 4 },
-  { label: "ศ", value: 5 },
-  { label: "ส", value: 6 }
+  { labelKey: "reminder.day.sun", value: 0 },
+  { labelKey: "reminder.day.mon", value: 1 },
+  { labelKey: "reminder.day.tue", value: 2 },
+  { labelKey: "reminder.day.wed", value: 3 },
+  { labelKey: "reminder.day.thu", value: 4 },
+  { labelKey: "reminder.day.fri", value: 5 },
+  { labelKey: "reminder.day.sat", value: 6 }
 ];
 
 // ตัวเลือกสีเส้นสำหรับ Timer/Stopwatch ที่กำลังทำงาน (ผู้ใช้เลือกได้ตอนสร้าง/แก้ไข)
@@ -271,8 +275,7 @@ function describeReminder(reminder, nowMs) {
   }
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
-      const dayNames = reminder.days?.map(d => DAYS_OF_WEEK.find(x => x.value === d)?.label).join(" ");
-      return `วนสัปดาห์ · [${dayNames}] เวลา ${reminder.time}`;
+      return `วนสัปดาห์ · เวลา ${reminder.time}`;
     }
     case REMINDER_TYPE.EVENT_ANCHORED: {
       const unit = reminder.afterUnit === "hours" ? "ชม." : "นาที";
@@ -411,9 +414,12 @@ export default function ReminderDashboard({
   activities = [],
   categories = [],
   activityCategoryMap = {},
+  lockedActivities = {},
   onEditActivity,
+  onToggleActivityLock,
   timelineColors
 }) {
+  const { t } = useLanguage();
   // Runtime reminder state belongs to a person, not to this browser. The
   // previous shared key exposed the prior account's reminders after logout.
   const userStorageKey = `${STORAGE_KEY}:${firebaseUser?.uid || "guest"}`;
@@ -425,17 +431,13 @@ export default function ReminderDashboard({
   });
   const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
   const {
-    permission: pushPermission,
-    isEnabled: isPushEnabled,
-    error: pushError,
-    isRequesting: isPushRequesting,
-    requestPermission: requestPushPermission,
-    disableNotifications
+    isEnabled: isPushEnabled
   } = usePushNotifications({ firebaseUser });
 
   const [dueReminders, setDueReminders] = useState([]);
   const sentTelegramReminderKeysRef = useRef(new Set());
   const [telegramConnection, setTelegramConnection] = useState({ isConnected: false, isLoading: false, statusMessage: "" });
+  const [activityContextMenu, setActivityContextMenu] = useState(null);
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [omnibarInput, setOmnibarInput] = useState("");
   const [isStatsOpen, setIsStatsOpen] = useState(false);
@@ -445,6 +447,35 @@ export default function ReminderDashboard({
   useEffect(() => {
     getReminderFeatureFlags().then(({ omnibarEnabled: enabled }) => setOmnibarEnabled(enabled));
   }, []);
+
+  useEffect(() => {
+    if (!activityContextMenu) return undefined;
+    const closeActivityContextMenu = (event) => {
+      if (event.target instanceof Element && event.target.closest(".activity-popup")) return;
+      setActivityContextMenu(null);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setActivityContextMenu(null);
+    };
+    document.addEventListener("pointerdown", closeActivityContextMenu, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeActivityContextMenu, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activityContextMenu]);
+
+  const openActivityContextMenu = (event, block) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActivityContextMenu({
+      block,
+      position: {
+        x: Math.min(event.clientX, window.innerWidth - 224),
+        y: Math.min(event.clientY, window.innerHeight - 252)
+      }
+    });
+  };
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -465,7 +496,7 @@ export default function ReminderDashboard({
       const telegramDestination = appConnectUrl || connectUrl;
       if (telegramDesktopWindow) telegramDesktopWindow.location.replace(telegramDestination);
       else window.location.assign(telegramDestination);
-      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: "เปิด Telegram แล้วกด Start เพื่อเชื่อมต่อ" }));
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: t("reminder.telegramOpen") }));
     } catch (error) {
       telegramDesktopWindow?.close();
       setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
@@ -476,7 +507,7 @@ export default function ReminderDashboard({
     try {
       setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
       await sendTelegramTest();
-      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: "ส่งข้อความทดสอบแล้ว" }));
+      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: t("reminder.telegramTestSent") }));
     } catch (error) {
       setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
     }
@@ -559,10 +590,10 @@ export default function ReminderDashboard({
   // เมนู "⋮" บนการ์ด (แทนปุ่ม edit/delete แยก) + เมนู snooze บน due-banner
   // (migration plan v2 เฟส 1.3/1.4) — เก็บเป็น id เดียวต่อเมนู เพราะเปิด
   // ได้ทีละอันในแต่ละกลุ่มเสมออยู่แล้ว ไม่ต้องเป็น Set
-  const [cardMenuOpenId, setCardMenuOpenId] = useState(null);
+  const [cardMenu, setCardMenu] = useState(null);
   const [snoozeMenuForId, setSnoozeMenuForId] = useState(null);
   const closeAllMenus = () => {
-    setCardMenuOpenId(null);
+    setCardMenu(null);
     setSnoozeMenuForId(null);
   };
   const [nowTick, setNowTick] = useState(() => Date.now()); // อัปเดตทุกวินาที เพื่อให้ countdown แสดงเวลานับถอยหลังแบบ live
@@ -1358,18 +1389,40 @@ export default function ReminderDashboard({
   /** ข้อความอธิบาย filter ที่กำลังเปิดอยู่ (ทั้งคู่พร้อมกันได้) สำหรับ empty-state — คืน "" ถ้าไม่มี filter ใดเปิดอยู่เลย */
   const describeActiveFilters = () => {
     const parts = [];
-    if (activeTypeFilter) parts.push(`ประเภท "${TYPE_FILTER_OPTIONS.find((o) => o.type === activeTypeFilter)?.label}"`);
-    if (activeGroupFilter) parts.push(`กลุ่ม "${groups.find((g) => g.id === activeGroupFilter)?.name}"`);
+    if (activeTypeFilter) {
+      const type = TYPE_FILTER_OPTIONS.find((option) => option.type === activeTypeFilter);
+      parts.push(t("reminder.filterType", { type: t(type?.labelKey) }));
+    }
+    if (activeGroupFilter) parts.push(t("reminder.filterGroup", { group: groups.find((group) => group.id === activeGroupFilter)?.name }));
     return parts.join(" ");
   };
 
   const zoomOut = () => setZoomIndex(Math.max(0, zoomIndex - 1));
   const zoomIn = () => setZoomIndex(Math.min(ZOOM_LEVELS_MINUTES.length - 1, zoomIndex + 1));
 
-  const renderReminder = (reminder) => (
-    <div
+  const getReminderPriority = (reminder) => {
+    if (reminder.completedAt) return { label: t("reminder.completed"), tone: "completed" };
+    if (!reminder.enabled) return { label: t("reminder.status.paused"), tone: "paused" };
+    if (Number.isFinite(reminder.nextDueAt)) {
+      const remainingSeconds = Math.ceil((reminder.nextDueAt - nowTick) / 1000);
+      if (remainingSeconds <= 0) return { label: t("reminder.status.due"), tone: "due" };
+      return { label: t("reminder.status.next", { time: formatDurationClock(remainingSeconds) }), tone: "next" };
+    }
+    if (reminder.type === REMINDER_TYPE.EVENT_ANCHORED) return { label: t("reminder.status.waiting"), tone: "waiting" };
+    return { label: t("reminder.status.active"), tone: "active" };
+  };
+
+  const renderReminder = (reminder) => {
+    const priority = getReminderPriority(reminder);
+    const typeLabel = t(TYPE_FILTER_OPTIONS.find((option) => option.type === reminder.type)?.labelKey);
+    const group = reminder.groupId ? groups.find((item) => item.id === reminder.groupId) : null;
+    const weeklyDaysLabel = reminder.type === REMINDER_TYPE.WEEKLY
+      ? DAYS_OF_WEEK.filter((day) => reminder.days?.includes(day.value)).map((day) => t(day.labelKey)).join(" · ")
+      : null;
+    return (
+      <div
       key={reminder.id}
-      className={`reminder-card ${reminder.enabled ? "active" : ""}${cardMenuOpenId === reminder.id ? " menu-open" : ""}`}
+      className={`reminder-card ${reminder.enabled ? "active" : ""}${cardMenu?.id === reminder.id ? " menu-open" : ""}`}
       style={{ borderLeftColor: TYPE_ACCENT_COLOR[reminder.type] }}
     >
       <button
@@ -1400,8 +1453,16 @@ export default function ReminderDashboard({
         }}
         title="คลิกเพื่อแก้ไข Reminder"
       >
-        <p className="title">{reminder.title}</p>
-        <p className="meta">{describeReminder(reminder, nowTick)}</p>
+        <div className="reminder-card-title-row">
+          <p className="title">{reminder.title}</p>
+          <span className={`reminder-priority reminder-priority--${priority.tone}`}>{priority.label}</span>
+        </div>
+        <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
+        {weeklyDaysLabel && (
+          <p className="reminder-weekly-days-detail">
+            <span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}
+          </p>
+        )}
         {/* Badge "ทำเสร็จแล้ว" (migration plan v2 เฟส 4) — ทำให้การ์ดใน tab
             "ทำเสร็จแล้ว" ดูต่างจาก "ปิดใช้งาน" เฉยๆ ชัดเจน (ทั้งคู่มี
             enabled: false เหมือนกัน แต่ความหมายต่างกันคนละเรื่อง) กด
@@ -1412,15 +1473,18 @@ export default function ReminderDashboard({
             ✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}
           </span>
         )}
-        {reminder.groupId && groups.find((g) => g.id === reminder.groupId) && (
+        <div className="reminder-card-metadata">
+          <span className="reminder-type-chip">{typeLabel}</span>
+          {group && (
           <span className="reminder-group-chip">
             <span
               className="reminder-group-chip-dot"
-              style={{ background: groups.find((g) => g.id === reminder.groupId).color }}
+              style={{ background: group.color }}
             />
-            {groups.find((g) => g.id === reminder.groupId).name}
+            {group.name}
           </span>
-        )}
+          )}
+        </div>
 
         {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && (
           <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); triggerAnchorEvent(reminder.id); }}>
@@ -1450,20 +1514,34 @@ export default function ReminderDashboard({
         <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => toggle(reminder.id)} aria-label="สวิตช์เปิดปิด" />
       )}
 
-      <div className={`reminder-card-actions ${cardMenuOpenId === reminder.id ? "menu-open" : ""}`}>
+      <div className={`reminder-card-actions ${cardMenu?.id === reminder.id ? "menu-open" : ""}`}>
         <button
           type="button"
           className="icon-btn"
-          onClick={() => setCardMenuOpenId(cardMenuOpenId === reminder.id ? null : reminder.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (cardMenu?.id === reminder.id) {
+              setCardMenu(null);
+              return;
+            }
+            const bounds = event.currentTarget.getBoundingClientRect();
+            setCardMenu({
+              id: reminder.id,
+              position: {
+                x: Math.max(8, Math.min(bounds.right - 118, window.innerWidth - 126)),
+                y: Math.max(8, Math.min(bounds.bottom + 4, window.innerHeight - 142))
+              }
+            });
+          }}
           title="ตัวเลือกเพิ่มเติม"
           aria-haspopup="true"
-          aria-expanded={cardMenuOpenId === reminder.id}
+          aria-expanded={cardMenu?.id === reminder.id}
         >
           ⋮
         </button>
-        {cardMenuOpenId === reminder.id && (
-          <div className="card-dropdown-menu" role="menu">
-            <button type="button" role="menuitem" onClick={() => { setCardMenuOpenId(null); startEdit(reminder); }}>
+        {cardMenu?.id === reminder.id && createPortal(
+          <div className="card-dropdown-menu" role="menu" onPointerDown={(event) => event.stopPropagation()} style={{ "--card-menu-x": `${cardMenu.position.x}px`, "--card-menu-y": `${cardMenu.position.y}px` }}>
+            <button type="button" role="menuitem" onClick={() => { setCardMenu(null); startEdit(reminder); }}>
               ✏️ แก้ไข
             </button>
             {/* migration plan v2 เฟส 4 — mark เสร็จเองได้โดยไม่ต้องรอถึงเวลา
@@ -1473,18 +1551,20 @@ export default function ReminderDashboard({
                 ก่อนถึงเวลาจริงจากตรงนี้จึงจะดูสมเหตุสมผลเฉพาะ type ที่จบ
                 แบบถาวรได้เท่านั้น ไม่แสดงถ้าทำเสร็จไปแล้ว (ป้องกันกดซ้ำ) */}
             {isOneShotType(reminder.type) && !reminder.completedAt && (
-              <button type="button" role="menuitem" onClick={() => { setCardMenuOpenId(null); markCompleted(reminder.id); }}>
+              <button type="button" role="menuitem" onClick={() => { setCardMenu(null); markCompleted(reminder.id); }}>
                 ✓ ทำเสร็จแล้ว
               </button>
             )}
-            <button type="button" role="menuitem" className="is-danger" onClick={() => { setCardMenuOpenId(null); deleteReminder(reminder.id); }}>
+            <button type="button" role="menuitem" className="is-danger" onClick={() => { setCardMenu(null); deleteReminder(reminder.id); }}>
               🗑️ ลบ
             </button>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1506,9 +1586,9 @@ export default function ReminderDashboard({
         }
 
         .reminder-app-container {
-          --g-blue: #1a73e8;
-          --g-blue-hover: #1557b0;
-          --g-blue-light: #e8f0fe;
+          --g-blue: #D85A30;
+          --g-blue-hover: #B74623;
+          --g-blue-light: #F9E8E1;
           --g-red: #ea4335;
           --g-yellow: #fbbc04;
           --g-green: #34a853;
@@ -1519,16 +1599,16 @@ export default function ReminderDashboard({
           --g-purple: #a142f4;
           --g-teal: #00bcd4;
           --g-surface: #ffffff;
-          --g-background: #f8f9fa;
-          --g-on-surface: #202124;
-          --g-on-surface-variant: #5f6368;
-          --g-outline: #dadce0;
-          --g-outline-variant: #e8eaed;
+          --g-background: #F7F6F2;
+          --g-on-surface: #1C1C1A;
+          --g-on-surface-variant: #8A8A85;
+          --g-outline: #E4E2DC;
+          --g-outline-variant: #EDEBE5;
           /* ฟิลด์เพิ่มเติมสำหรับสี hover/active ที่เดิม hardcode เป็น hex
              ตรงๆ ในหลายจุดด้านล่าง (ไม่เคยผ่าน --g-* เลย) — ดึงมาเป็นตัวแปร
              ตรงนี้เพื่อให้ dark-mode override block ด้านล่างจัดการได้ที่
              จุดเดียว แทนที่จะต้องไล่แก้ hex ทีละจุดในกฎที่กระจายอยู่ทั่วไฟล์ */
-          --g-blue-light-hover: #d2e3fc;
+          --g-blue-light-hover: #F3D5C9;
           --g-red-light: #fce8e6;
           --g-red-light-border: #f5c6cb;
           --g-red-dark: #c5221f;
@@ -1566,14 +1646,16 @@ export default function ReminderDashboard({
            ออกบนพื้นมืดได้อยู่แล้ว การปรับจะต้องเช็ค contrast ใหม่ทุกจุดที่
            ใช้ ซึ่งเกินขอบเขตของรอบนี้) */
         html[data-theme="dark"] .reminder-app-container {
-          --g-surface: #2d2e30;
-          --g-background: #202124;
-          --g-on-surface: #e8eaed;
-          --g-on-surface-variant: #9aa0a6;
-          --g-outline: #4a4d51;
-          --g-outline-variant: #35363a;
-          --g-blue-light: #1a2b47;
-          --g-blue-light-hover: #223a5e;
+          --g-blue: #E8703F;
+          --g-blue-hover: #F08A60;
+          --g-surface: #292927;
+          --g-background: #20201E;
+          --g-on-surface: #F2F1ED;
+          --g-on-surface-variant: #9C9C97;
+          --g-outline: #3A3A38;
+          --g-outline-variant: #30302E;
+          --g-blue-light: #4A2920;
+          --g-blue-light-hover: #5A3226;
           --g-red-light: #3c1c1c;
           --g-red-light-border: #5c2b2b;
           --g-red-dark: #f28b82;
@@ -2065,7 +2147,10 @@ export default function ReminderDashboard({
           gap: 4px;
           font-size: 11px;
           color: var(--g-on-surface-variant);
-          margin-top: 2px;
+          min-height: 20px;
+          padding: 2px 7px;
+          border-radius: 999px;
+          background: var(--g-background);
         }
 
         .reminder-group-chip-dot {
@@ -2323,6 +2408,12 @@ export default function ReminderDashboard({
 
         .time-row {
           position: relative;
+          /* Every scheduled reminder row sits above the Activity Mode
+             background layer. Pointer events are restored only on its
+             reminder chips, so empty row space still reaches the activity
+             button underneath. */
+          z-index: 20;
+          pointer-events: none;
           border-bottom: 1px solid var(--g-outline-variant);
           padding-left: 12px;
           display: flex;
@@ -2360,6 +2451,7 @@ export default function ReminderDashboard({
           align-items: center;
           gap: 4px;
           overflow: visible;
+          pointer-events: auto;
         }
 
         .event-chip {
@@ -2647,11 +2739,22 @@ export default function ReminderDashboard({
         .reminder-info {
           min-width: 0;
           cursor: pointer;
+          display: grid;
+          gap: 4px;
+        }
+
+        .reminder-card-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
         }
 
         .reminder-info .title {
-          font-size: 13.5px;
-          font-weight: 500;
+          flex: 1 1 auto;
+          min-width: 0;
+          font-size: 14px;
+          font-weight: 700;
           margin: 0;
           color: var(--g-on-surface);
           white-space: nowrap;
@@ -2659,13 +2762,78 @@ export default function ReminderDashboard({
           text-overflow: ellipsis;
         }
 
-        .reminder-info .meta {
+        .reminder-priority {
+          flex: 0 0 auto;
+          padding: 3px 7px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+
+        .reminder-priority--next,
+        .reminder-priority--active {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .reminder-priority--due {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .reminder-priority--paused,
+        .reminder-priority--waiting {
+          background: var(--g-background);
+          color: var(--g-on-surface-variant);
+        }
+
+        .reminder-priority--completed {
+          background: color-mix(in srgb, var(--g-green) 14%, var(--g-surface));
+          color: var(--g-green);
+        }
+
+        .reminder-schedule-detail {
           font-size: 12px;
           color: var(--g-on-surface-variant);
           margin: 0;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+
+        .reminder-weekly-days-detail {
+          display: flex;
+          gap: 4px;
+          margin: -1px 0 0;
+          color: var(--g-on-surface-variant);
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
+        .reminder-weekly-days-detail span {
+          color: var(--g-on-surface);
+          font-weight: 700;
+        }
+
+        .reminder-card-metadata {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .reminder-type-chip {
+          display: inline-flex;
+          align-items: center;
+          min-height: 20px;
+          padding: 2px 7px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--g-on-surface) 7%, transparent);
+          color: var(--g-on-surface-variant);
+          font-size: 10px;
+          font-weight: 700;
         }
 
         .btn-action-small {
@@ -2782,18 +2950,21 @@ export default function ReminderDashboard({
         }
 
         .card-dropdown-menu {
-          position: absolute;
-          top: calc(100% + 4px);
-          right: 0;
-          z-index: 50;
-          background: var(--g-surface);
-          border: 1px solid var(--g-outline);
+          position: fixed;
+          top: var(--card-menu-y);
+          left: var(--card-menu-x);
+          z-index: 1000;
+          background: var(--bg-muted);
+          border: 1px solid var(--border);
           border-radius: 10px;
           box-shadow: 0 2px 8px rgba(60,64,67,0.18);
           padding: 4px;
           display: flex;
           flex-direction: column;
           min-width: 110px;
+          max-width: calc(100vw - 16px);
+          max-height: calc(100vh - 16px);
+          overflow: auto;
         }
 
         .card-dropdown-menu button {
@@ -2804,17 +2975,17 @@ export default function ReminderDashboard({
           border-radius: 6px;
           font-family: inherit;
           font-size: 13px;
-          color: var(--g-on-surface);
+          color: var(--text-primary);
           cursor: pointer;
           white-space: nowrap;
         }
 
         .card-dropdown-menu button:hover {
-          background: var(--g-background);
+          background: var(--hover);
         }
 
         .card-dropdown-menu button.is-danger {
-          color: var(--g-red-dark);
+          color: var(--red);
         }
 
         .icon-btn {
@@ -3002,14 +3173,14 @@ export default function ReminderDashboard({
                 submitOmnibar();
               }
             }}
-            placeholder="เช่น เตือนพักสายตาทุก20นาที"
+            placeholder={t("reminder.omnibarPlaceholder")}
             disabled={!omnibarEnabled}
-            title={omnibarEnabled ? "พิมพ์แล้วกด Enter เพื่อสร้าง Reminder" : "Omnibar ยังไม่เปิดใช้ใน Remote Config"}
+            title={omnibarEnabled ? t("reminder.omnibarCreateHint") : t("reminder.omnibarDisabledHint")}
           />
           {omnibarEnabled && omnibarInput.trim() && (
             <div className={`omnibar-preview ${omnibarPreview.matched ? "is-matched" : ""}`}>
-              <span>{omnibarPreview.matched ? `→ ${omnibarPreview.description}` : "ไม่เข้าใจรูปแบบนี้ — จะเปิดฟอร์มให้ตรวจเอง"}</span>
-              <button type="button" onClick={submitOmnibar}>{omnibarPreview.matched ? "สร้าง" : "เปิดฟอร์ม"}</button>
+              <span>{omnibarPreview.matched ? `→ ${omnibarPreview.description}` : t("reminder.omnibarUnknown")}</span>
+              <button type="button" onClick={submitOmnibar}>{omnibarPreview.matched ? t("reminder.create") : t("reminder.openForm")}</button>
             </div>
           )}
         </div>
@@ -3019,45 +3190,25 @@ export default function ReminderDashboard({
             className="topbar-icon-btn topbar-telegram-btn"
             disabled={telegramConnection.isLoading}
             onClick={telegramConnection.isConnected ? handleTelegramTestMessage : handleTelegramConnection}
-            title={telegramConnection.statusMessage || (telegramConnection.isConnected ? "ส่งข้อความทดสอบผ่าน Telegram" : "เชื่อมต่อ Telegram")}
-            aria-label={telegramConnection.isConnected ? "ส่งข้อความทดสอบผ่าน Telegram" : "เชื่อมต่อ Telegram"}
+            title={telegramConnection.statusMessage || (telegramConnection.isConnected ? t("reminder.sendTelegramTest") : t("reminder.connectTelegram"))}
+            aria-label={telegramConnection.isConnected ? t("reminder.sendTelegramTest") : t("reminder.connectTelegram")}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M21.4 3.2 2.9 10.3c-1.26.5-1.25 1.2-.23 1.51l4.75 1.48 1.84 5.64c.22.61.11.85.76.85.5 0 .72-.23 1-.5l2.3-2.24 4.78 3.53c.88.49 1.52.24 1.74-.82l3.15-14.85c.33-1.3-.5-1.89-1.57-1.42ZM8.4 12.8l10.72-6.77c.54-.33 1.03-.15.62.22l-9.19 8.3-.36 3.87-1.79-5.62Z" />
             </svg>
           </button>
-          {/* migration plan v2 เฟส 5 — ปุ่มเปิด/ปิด push notification จริง
-              (ทดสอบได้แค่ permission flow + เรียก backend — getToken()
-              จริงต้องมี VITE_FIREBASE_VAPID_KEY ที่ยังไม่ตั้งค่าไว้ในสภาพ
-              แวดล้อมนี้ กดแล้วจะเห็น error อธิบายตรงๆ แทนที่จะพังเงียบๆ) */}
+          {/* เก็บปุ่ม Push เดิมไว้เพื่อรักษา layout แต่หยุดการทำงานชั่วคราว:
+              Telegram เป็นช่องทางแจ้งเตือนหลักในระยะนี้. */}
           <button
             type="button"
             className={`topbar-icon-btn ${isPushEnabled ? "is-active" : ""}`}
-            disabled={pushPermission === "unsupported" || pushPermission === "denied" || isPushRequesting}
-            onClick={() => {
-              const message = isPushEnabled
-                ? "ต้องการปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?\n\nคุณจะไม่ได้รับ Push notification จนกว่าจะกด 🔕 เพื่อเปิดอีกครั้ง"
-                : "ต้องการเปิดการแจ้งเตือนสำหรับอุปกรณ์/เว็บนี้ใช่ไหม?";
-              if (window.confirm(message)) {
-                if (isPushEnabled) disableNotifications();
-                else requestPushPermission();
-              }
-            }}
-            title={
-              pushError
-                ? `เกิดข้อผิดพลาด: ${pushError}`
-                : pushPermission === "unsupported"
-                ? "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ Push"
-                : pushPermission === "denied"
-                ? "การแจ้งเตือนถูกปิดไว้ — เปิดใหม่ได้ในตั้งค่าเบราว์เซอร์"
-                : isPushEnabled
-                ? "ปิดการแจ้งเตือน"
-                : "เปิดการแจ้งเตือน (รับได้แม้ปิดแท็บ)"
-            }
+            disabled
+            title={t("reminder.pushPaused")}
+            aria-label={t("reminder.pushPaused")}
           >
             {isPushEnabled ? "🔔" : "🔕"}
           </button>
-          <button type="button" className="topbar-icon-btn" onClick={() => setIsStatsOpen(true)} title="ดูสถิติ Reminder">📊</button>
+          <button type="button" className="topbar-icon-btn" onClick={() => setIsStatsOpen(true)} title={t("reminder.viewStats")}>📊</button>
         </div>
       </header>
 
@@ -3067,14 +3218,14 @@ export default function ReminderDashboard({
           ใช้ตัวเดียวร่วมกันทั้งสองระบบเมนู (migration plan v2 เฟส 1.3/1.4)
           เพราะเปิดได้ทีละเมนูอยู่แล้วในทางปฏิบัติ ไม่ต้อง portal/listener
           แยกต่างหาก */}
-      {(cardMenuOpenId || snoozeMenuForId) && (
+      {(cardMenu || snoozeMenuForId) && (
         <div className="dropdown-backdrop" onClick={closeAllMenus} />
       )}
 
       {/* Alert Banner */}
       {dueReminders.length > 0 && (
         <div className="due-alert-banner" role="alert">
-          <span>🔔 ถึงเวลาแล้ว: {dueReminders.map((r) => r.title).join(", ")}</span>
+          <span>🔔 {t("reminder.due", { titles: dueReminders.map((r) => r.title).join(", ") })}</span>
           <div className="due-alert-actions">
             {dueReminders.map((r) => (
               <span key={r.id} className="due-alert-item-actions">
@@ -3086,16 +3237,16 @@ export default function ReminderDashboard({
                     aria-haspopup="true"
                     aria-expanded={snoozeMenuForId === r.id}
                   >
-                    เตือนอีกครั้ง ({r.title}) ▾
+                    {t("reminder.snooze", { title: r.title })}
                   </button>
                   {snoozeMenuForId === r.id && (
                     <div className="snooze-menu" role="menu">
                       <button type="button" role="menuitem" onClick={() => { scheduleNext(r.id); setSnoozeMenuForId(null); }}>
-                        ตามรอบปกติ
+                        {t("reminder.normalSchedule")}
                       </button>
                       {SNOOZE_OPTIONS_MINUTES.map((m) => (
                         <button key={m} type="button" role="menuitem" onClick={() => { scheduleNext(r.id, m); setSnoozeMenuForId(null); }}>
-                          อีก {m} นาที
+                          {t("reminder.snoozeMinutes", { minutes: m })}
                         </button>
                       ))}
                     </div>
@@ -3104,7 +3255,7 @@ export default function ReminderDashboard({
                 {/* migration plan v2 เฟส 4 — ผูก markCompleted() จริงแล้ว
                     (เดิมเป็น placeholder disabled รอ field completedAt) */}
                 <button type="button" className="btn-mark-done" onClick={() => markCompleted(r.id)}>
-                  ✓ ทำเสร็จแล้ว
+                  ✓ {t("reminder.complete")}
                 </button>
               </span>
             ))}
@@ -3121,7 +3272,7 @@ export default function ReminderDashboard({
             มุมมองในอนาคต count ทุกจุดคำนวณจาก reminders/groups จริงเสมอ */}
         <nav className="nav-sidebar">
           <div>
-            <p className="nav-section-title">มุมมองหลัก</p>
+            <p className="nav-section-title">{t("reminder.primaryViews")}</p>
             <button
               type="button"
               className={`nav-item ${activeTypeFilter === null && activeGroupFilter === null ? "is-active" : ""}`}
@@ -3130,18 +3281,18 @@ export default function ReminderDashboard({
                 setActiveGroupFilter(null);
               }}
             >
-              <span>ทั้งหมด</span>
+              <span>{t("reminder.all")}</span>
               <span className="nav-item-count">{reminders.length}</span>
             </button>
             <button type="button" className="nav-item" disabled title="เร็วๆ นี้: ระบบมุมมอง">
-              <span>ของวันนี้</span>
+              <span>{t("reminder.today")}</span>
             </button>
           </div>
 
           <div>
-            <p className="nav-section-title">กลุ่ม/โปรเจกต์</p>
+            <p className="nav-section-title">{t("reminder.groups")}</p>
             {groupsError && <p className="nav-error-state">{groupsError}</p>}
-            {groups.length === 0 && !isAddingGroup && <p className="nav-empty-state">ยังไม่มีกลุ่ม</p>}
+            {groups.length === 0 && !isAddingGroup && <p className="nav-empty-state">{t("reminder.noGroups")}</p>}
             {groups.map((group) => (
               <button
                 key={group.id}
@@ -3163,7 +3314,7 @@ export default function ReminderDashboard({
                     role="button"
                     tabIndex={0}
                     className="nav-item-delete-group"
-                    title="ลบกลุ่ม"
+                    title={t("reminder.deleteGroup")}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteGroup(group.id);
@@ -3180,13 +3331,13 @@ export default function ReminderDashboard({
                 <input
                   type="text"
                   className="nav-add-group-input"
-                  placeholder="ชื่อกลุ่ม"
+                  placeholder={t("reminder.groupName")}
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   autoFocus
                   maxLength={60}
                 />
-                <div className="nav-group-color-picker" role="group" aria-label="เลือกสีของกลุ่ม">
+                <div className="nav-group-color-picker" role="group" aria-label={t("reminder.chooseGroupColor")}>
                   {GROUP_COLOR_PALETTE.map((color) => (
                     <button
                       key={color}
@@ -3194,17 +3345,17 @@ export default function ReminderDashboard({
                       className={`nav-group-color-option${newGroupColor === color ? " is-selected" : ""}`}
                       style={{ "--group-color": color }}
                       onClick={() => setNewGroupColor(color)}
-                      aria-label={`เลือกสี ${color}`}
+                      aria-label={`${t("reminder.chooseGroupColor")}: ${color}`}
                       aria-pressed={newGroupColor === color}
                     />
                   ))}
-                  <label className="nav-group-custom-color" title="เลือกเฉดสีเอง">
-                    <input type="color" value={newGroupColor} onChange={(event) => setNewGroupColor(event.target.value)} aria-label="เลือกเฉดสีเอง" />
+                  <label className="nav-group-custom-color" title={t("reminder.chooseCustomColor")}>
+                    <input type="color" value={newGroupColor} onChange={(event) => setNewGroupColor(event.target.value)} aria-label={t("reminder.chooseCustomColor")} />
                     <span>+</span>
                   </label>
                 </div>
                 <div className="nav-add-group-actions">
-                  <button type="submit" className="nav-add-group-confirm">เพิ่ม</button>
+                  <button type="submit" className="nav-add-group-confirm">{t("reminder.add")}</button>
                   <button
                     type="button"
                     className="nav-add-group-cancel"
@@ -3213,20 +3364,20 @@ export default function ReminderDashboard({
                       setNewGroupName("");
                     }}
                   >
-                    ยกเลิก
+                    {t("reminder.cancel")}
                   </button>
                 </div>
               </form>
             ) : (
               <button type="button" className="nav-item" onClick={() => setIsAddingGroup(true)}>
-                <span>+ เพิ่มกลุ่มใหม่</span>
+                <span>{t("reminder.addGroup")}</span>
               </button>
             )}
           </div>
 
           <div>
-            <p className="nav-section-title">ตัวกรองประเภท</p>
-            {TYPE_FILTER_OPTIONS.map(({ type, label }) => (
+            <p className="nav-section-title">{t("reminder.typeFilters")}</p>
+            {TYPE_FILTER_OPTIONS.map(({ type, labelKey }) => (
               <button
                 key={type}
                 type="button"
@@ -3234,7 +3385,7 @@ export default function ReminderDashboard({
                 onClick={() => toggleTypeFilter(type)}
                 aria-pressed={activeTypeFilter === type}
               >
-                <span>{label}</span>
+                <span>{t(labelKey)}</span>
                 <span className="nav-item-count">{reminders.filter((r) => r.type === type).length}</span>
               </button>
             ))}
@@ -3246,24 +3397,24 @@ export default function ReminderDashboard({
           <div className="main-panel-toolbar">
             <div>
               <h2>
-                การแจ้งเตือนทั้งหมด
+                {t("reminder.allReminders")}
                 {activeTypeFilter && (
                   <span className="active-filter-chip">
-                    {TYPE_FILTER_OPTIONS.find((o) => o.type === activeTypeFilter)?.label}
-                    <button type="button" onClick={() => setActiveTypeFilter(null)} aria-label="ล้างตัวกรองประเภท">✕</button>
+                    {t(TYPE_FILTER_OPTIONS.find((o) => o.type === activeTypeFilter)?.labelKey)}
+                    <button type="button" onClick={() => setActiveTypeFilter(null)} aria-label={t("reminder.clearTypeFilter")}>✕</button>
                   </span>
                 )}
                 {activeGroupFilter && (
                   <span className="active-filter-chip">
                     {groups.find((g) => g.id === activeGroupFilter)?.name}
-                    <button type="button" onClick={() => setActiveGroupFilter(null)} aria-label="ล้างตัวกรองกลุ่ม">✕</button>
+                    <button type="button" onClick={() => setActiveGroupFilter(null)} aria-label={t("reminder.clearGroupFilter")}>✕</button>
                   </span>
                 )}
               </h2>
-              <p className="toolbar-subtitle">{reminders.length} รายการ · ใช้งานอยู่ {enabledReminders.length} · พักการแจ้งเตือน {pausedReminders.length} · ทำสำเร็จแล้ว {completedReminders.length}</p>
+              <p className="toolbar-subtitle">{t("reminder.summary", { total: reminders.length, enabled: enabledReminders.length, paused: pausedReminders.length, completed: completedReminders.length })}</p>
             </div>
             <button type="button" className={`add-reminder-btn ${isComposerOpen ? "is-open" : ""}`} onClick={toggleComposer}>
-              <span className="add-reminder-btn-icon">+</span> {isComposerOpen ? "ปิดฟอร์ม" : "เพิ่ม Reminder"}
+              <span className="add-reminder-btn-icon">+</span> {isComposerOpen ? t("reminder.closeForm") : t("reminder.addReminder")}
             </button>
           </div>
 
@@ -3278,7 +3429,7 @@ export default function ReminderDashboard({
               className={`reminder-status-tab reminder-status-tab--enabled ${reminderStatusTab === REMINDER_STATUS_TAB.ENABLED ? "is-active" : ""}`}
               onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.ENABLED)}
             >
-              ใช้งานอยู่ <span className="reminder-status-tab-count">{visibleEnabledReminders.length}</span>
+              {t("reminder.enabled")} <span className="reminder-status-tab-count">{visibleEnabledReminders.length}</span>
             </button>
             <button
               type="button"
@@ -3287,7 +3438,7 @@ export default function ReminderDashboard({
               className={`reminder-status-tab reminder-status-tab--paused ${reminderStatusTab === REMINDER_STATUS_TAB.PAUSED ? "is-active" : ""}`}
               onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.PAUSED)}
             >
-              พักการแจ้งเตือน <span className="reminder-status-tab-count">{visiblePausedReminders.length}</span>
+              {t("reminder.paused")} <span className="reminder-status-tab-count">{visiblePausedReminders.length}</span>
             </button>
             <button
               type="button"
@@ -3296,7 +3447,7 @@ export default function ReminderDashboard({
               className={`reminder-status-tab reminder-status-tab--completed ${reminderStatusTab === REMINDER_STATUS_TAB.COMPLETED ? "is-active" : ""}`}
               onClick={() => setReminderStatusTab(REMINDER_STATUS_TAB.COMPLETED)}
             >
-              ทำสำเร็จแล้ว <span className="reminder-status-tab-count">{visibleCompletedReminders.length}</span>
+              {t("reminder.completed")} <span className="reminder-status-tab-count">{visibleCompletedReminders.length}</span>
             </button>
           </div>
 
@@ -3307,20 +3458,20 @@ export default function ReminderDashboard({
               <div className="composer-backdrop" onMouseDown={cancelEditing}>
               <form className="composer-card" onMouseDown={(event) => event.stopPropagation()} onSubmit={submitReminderForm}>
               <div className="form-field">
-                <label htmlFor="reminder-title">ชื่อการแจ้งเตือน</label>
-                <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="เช่น พักสายตา 5 นาที" />
+                <label htmlFor="reminder-title">{t("reminder.title")}</label>
+                <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder={t("reminder.titlePlaceholder")} />
               </div>
 
               <div className="form-field">
-                <label htmlFor="reminder-type">ประเภทการเตือน</label>
+                <label htmlFor="reminder-type">{t("reminder.type")}</label>
                 <select id="reminder-type" className="form-select" value={draft.type} onChange={(e) => setDraft((prev) => ({ ...prev, type: e.target.value }))}>
-                  <option value={REMINDER_TYPE.INTERVAL}>เตือนวนลูปเป็นรอบ (Interval)</option>
-                  <option value={REMINDER_TYPE.WEEKLY}>เกิดซ้ำตามวันในสัปดาห์ (Weekly Days)</option>
-                  <option value={REMINDER_TYPE.EVENT_ANCHORED}>ผูกกับเหตุการณ์ (Event-Anchored)</option>
-                  <option value={REMINDER_TYPE.ROUTINE}>ชุดงานต่อเนื่อง (Checklist/Routine)</option>
-                  <option value={REMINDER_TYPE.ONCE_AT}>เตือนครั้งเดียว ตามวันที่/เวลา (Once)</option>
-                  <option value={REMINDER_TYPE.COUNTDOWN}>นับถอยหลัง (Timer)</option>
-                  <option value={REMINDER_TYPE.STOPWATCH}>จับเวลา (Stopwatch)</option>
+                  <option value={REMINDER_TYPE.INTERVAL}>{t("reminder.type.interval")}</option>
+                  <option value={REMINDER_TYPE.WEEKLY}>{t("reminder.type.weekly")}</option>
+                  <option value={REMINDER_TYPE.EVENT_ANCHORED}>{t("reminder.type.event-anchored")}</option>
+                  <option value={REMINDER_TYPE.ROUTINE}>{t("reminder.type.routine")}</option>
+                  <option value={REMINDER_TYPE.ONCE_AT}>{t("reminder.type.once-at")}</option>
+                  <option value={REMINDER_TYPE.COUNTDOWN}>{t("reminder.type.countdown")}</option>
+                  <option value={REMINDER_TYPE.STOPWATCH}>{t("reminder.type.stopwatch")}</option>
                 </select>
               </div>
 
@@ -3330,14 +3481,14 @@ export default function ReminderDashboard({
                   ว่างๆ ที่มีแค่ตัวเลือกเดียว ("ไม่มีกลุ่ม") ซึ่งไม่มีประโยชน์ */}
               {groups.length > 0 && (
                 <div className="form-field">
-                  <label htmlFor="reminder-group">กลุ่ม/โปรเจกต์ (ถ้ามี)</label>
+                  <label htmlFor="reminder-group">{t("reminder.groupOptional")}</label>
                   <select
                     id="reminder-group"
                     className="form-select"
                     value={draft.groupId ?? ""}
                     onChange={(e) => setDraft((prev) => ({ ...prev, groupId: e.target.value || null }))}
                   >
-                    <option value="">ไม่มีกลุ่ม</option>
+                    <option value="">{t("reminder.noGroup")}</option>
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>{group.name}</option>
                     ))}
@@ -3348,22 +3499,22 @@ export default function ReminderDashboard({
               {draft.type === REMINDER_TYPE.INTERVAL && (
                 <>
                   <div className="form-field">
-                    <label htmlFor="reminder-amount">ความถี่</label>
+                    <label htmlFor="reminder-amount">{t("reminder.frequency")}</label>
                     <div className="freq-inline-group">
                       <input id="reminder-amount" className="form-input" type="number" min="1" value={draft.amount} onChange={(e) => setDraft((prev) => ({ ...prev, amount: e.target.value }))} />
                       <select className="form-select" value={draft.unit} onChange={(e) => setDraft((prev) => ({ ...prev, unit: e.target.value }))}>
-                        <option value="minutes">นาที</option>
-                        <option value="hours">ชั่วโมง</option>
+                        <option value="minutes">{t("reminder.minutes")}</option>
+                        <option value="hours">{t("reminder.hours")}</option>
                       </select>
                     </div>
                   </div>
                   <div className="form-field">
                     <button type="button" role="switch" aria-checked={draft.runAllDay} className={`interval-window-toggle${draft.runAllDay ? " is-active" : ""}`} onClick={() => setDraft((prev) => ({ ...prev, runAllDay: !prev.runAllDay, ...(!prev.runAllDay ? { windowStart: "", windowEnd: "" } : {}) }))}>
                       <span className="interval-window-toggle-track" aria-hidden="true" />
-                      <span>ทำงานตลอดเวลา (00:00–24:00)</span>
+                      <span>{t("reminder.runAllDay")}</span>
                     </button>
                     {!draft.runAllDay && <>
-                    <label>ช่วงเวลาที่ทำงาน</label>
+                    <label>{t("reminder.activeWindow")}</label>
                     <div className="composer-row">
                       <input className="form-input" type="time" value={draft.windowStart} onChange={(e) => setDraft((prev) => ({ ...prev, windowStart: e.target.value }))} />
                       <input className="form-input" type="time" value={draft.windowEnd} onChange={(e) => setDraft((prev) => ({ ...prev, windowEnd: e.target.value }))} />
@@ -3376,24 +3527,24 @@ export default function ReminderDashboard({
               {draft.type === REMINDER_TYPE.WEEKLY && (
                 <>
                   <div className="form-field">
-                    <label>เลือกวันในสัปดาห์</label>
+                    <label>{t("reminder.selectWeekdays")}</label>
                     <div className="day-selector">
                       {DAYS_OF_WEEK.map((d) => (
                         <button key={d.value} type="button" className={`day-btn ${draft.days.includes(d.value) ? "selected" : ""}`} onClick={() => toggleDayInDraft(d.value)}>
-                          {d.label}
+                          {t(d.labelKey)}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="form-field">
-                    <label>เวลาแจ้งเตือน</label>
+                    <label>{t("reminder.time")}</label>
                     {(draft.times || [draft.time]).map((time, index) => (
                       <div className="weekly-time-row" key={`${time}-${index}`}>
                         <input className="form-input" type="time" value={time} onChange={(event) => setDraft((prev) => ({ ...prev, times: prev.times.map((value, itemIndex) => itemIndex === index ? event.target.value : value) }))} />
                         <button type="button" className="icon-btn" disabled={draft.times.length === 1} onClick={() => setDraft((prev) => ({ ...prev, times: prev.times.filter((_, itemIndex) => itemIndex !== index) }))}>✕</button>
                       </div>
                     ))}
-                    <button type="button" className="btn-text weekly-add-time" onClick={() => setDraft((prev) => ({ ...prev, times: [...prev.times, "12:00"] }))}>+ เพิ่มเวลา</button>
+                    <button type="button" className="btn-text weekly-add-time" onClick={() => setDraft((prev) => ({ ...prev, times: [...prev.times, "12:00"] }))}>{t("reminder.addTime")}</button>
                   </div>
                 </>
               )}
@@ -3401,16 +3552,16 @@ export default function ReminderDashboard({
               {draft.type === REMINDER_TYPE.EVENT_ANCHORED && (
                 <>
                   <div className="form-field">
-                    <label>อ้างอิงจากเหตุการณ์</label>
-                    <input className="form-input" value={draft.eventName} onChange={(e) => setDraft((prev) => ({ ...prev, eventName: e.target.value }))} placeholder="เช่น กินยาแก้ปวด" />
+                    <label>{t("reminder.eventReference")}</label>
+                    <input className="form-input" value={draft.eventName} onChange={(e) => setDraft((prev) => ({ ...prev, eventName: e.target.value }))} placeholder={t("reminder.eventReferencePlaceholder")} />
                   </div>
                   <div className="form-field">
-                    <label>ระยะเวลาหลังจากเกิดเหตุการณ์</label>
+                    <label>{t("reminder.afterEvent")}</label>
                     <div className="freq-inline-group">
                       <input className="form-input" type="number" min="1" value={draft.afterAmount} onChange={(e) => setDraft((prev) => ({ ...prev, afterAmount: e.target.value }))} />
                       <select className="form-select" value={draft.afterUnit} onChange={(e) => setDraft((prev) => ({ ...prev, afterUnit: e.target.value }))}>
-                        <option value="minutes">นาที</option>
-                        <option value="hours">ชั่วโมง</option>
+                        <option value="minutes">{t("reminder.minutes")}</option>
+                        <option value="hours">{t("reminder.hours")}</option>
                       </select>
                     </div>
                   </div>
@@ -3419,19 +3570,19 @@ export default function ReminderDashboard({
 
               {draft.type === REMINDER_TYPE.ROUTINE && (
                 <div className="form-field">
-                  <label>รายการขั้นตอน (คั่นด้วยเครื่องหมายจุลภาค ,)</label>
-                  <input className="form-input" value={draft.routineSteps} onChange={(e) => setDraft((prev) => ({ ...prev, routineSteps: e.target.value }))} placeholder="เช่น แปรงฟัน, ยืดตัว, กินวิตามิน" />
+                  <label>{t("reminder.steps")}</label>
+                  <input className="form-input" value={draft.routineSteps} onChange={(e) => setDraft((prev) => ({ ...prev, routineSteps: e.target.value }))} placeholder={t("reminder.stepsPlaceholder")} />
                 </div>
               )}
 
               {draft.type === REMINDER_TYPE.ONCE_AT && (
                 <div className="composer-row form-field">
                   <div>
-                    <label htmlFor="at-date">วันที่</label>
+                    <label htmlFor="at-date">{t("reminder.date")}</label>
                     <input id="at-date" className="form-input" type="date" value={draft.atDate} onChange={(e) => setDraft((prev) => ({ ...prev, atDate: e.target.value }))} />
                   </div>
                   <div>
-                    <label htmlFor="at-time">เวลา</label>
+                    <label htmlFor="at-time">{t("reminder.time")}</label>
                     <input id="at-time" className="form-input" type="time" value={draft.atTime} onChange={(e) => setDraft((prev) => ({ ...prev, atTime: e.target.value }))} />
                   </div>
                 </div>
@@ -3440,11 +3591,11 @@ export default function ReminderDashboard({
               {draft.type === REMINDER_TYPE.COUNTDOWN && (
                 <>
                   <div className="form-field">
-                    <label htmlFor="countdown-minutes">ระยะเวลา (นาที)</label>
+                    <label htmlFor="countdown-minutes">{t("reminder.durationMinutes")}</label>
                     <input id="countdown-minutes" className="form-input" type="number" min="1" max="1440" value={draft.countdownMinutes} onChange={(e) => setDraft((prev) => ({ ...prev, countdownMinutes: e.target.value }))} />
                   </div>
                   <div className="form-field">
-                    <label>สีเส้นบน Timeline</label>
+                    <label>{t("reminder.timelineColor")}</label>
                     <div className="color-picker-group">
                       {LINE_COLOR_OPTIONS.map((c) => (
                         <button
@@ -3467,9 +3618,9 @@ export default function ReminderDashboard({
 
               {draft.type === REMINDER_TYPE.STOPWATCH && (
                 <>
-                  <p className="form-hint">จับเวลานับขึ้นเรื่อย ๆ ไม่มีการแจ้งเตือน กด Start/Stop ได้จากการ์ดหลังสร้างเสร็จ</p>
+                  <p className="form-hint">{t("reminder.stopwatchHint")}</p>
                   <div className="form-field">
-                    <label>สีเส้นบน Timeline</label>
+                    <label>{t("reminder.timelineColor")}</label>
                     <div className="color-picker-group">
                       {LINE_COLOR_OPTIONS.map((c) => (
                         <button
@@ -3492,11 +3643,11 @@ export default function ReminderDashboard({
 
               <div className="composer-actions">
                 {editingId && (
-                  <button className="btn-text btn-delete-reminder" type="button" onClick={deleteEditingReminder}>ลบ Reminder</button>
+                  <button className="btn-text btn-delete-reminder" type="button" onClick={deleteEditingReminder}>{t("reminder.delete")}</button>
                 )}
-                <button className="btn-text" type="button" onClick={cancelEditing}>ยกเลิก</button>
+                <button className="btn-text" type="button" onClick={cancelEditing}>{t("reminder.cancel")}</button>
                 <button className="btn-contained" type="submit">
-                  {editingId ? "บันทึกการแก้ไข" : "สร้าง Reminder"}
+                  {editingId ? t("reminder.save") : t("reminder.addReminder")}
                 </button>
               </div>
               </form>
@@ -3504,7 +3655,7 @@ export default function ReminderDashboard({
             )}
 
             {reminders.length === 0 && !isComposerOpen ? (
-              <p className="empty-state">ยังไม่มีการแจ้งเตือน กด "เพิ่ม Reminder" เพื่อเริ่มต้น</p>
+              <p className="empty-state">{t("reminder.empty")}</p>
             ) : (
               <>
                 {reminderStatusTab === REMINDER_STATUS_TAB.ENABLED && (
@@ -3514,8 +3665,8 @@ export default function ReminderDashboard({
                     !isComposerOpen && (
                       <p className="empty-state">
                         {describeActiveFilters()
-                          ? `ไม่มี reminder ${describeActiveFilters()} ที่กำลังทำงานอยู่`
-                          : "ยังไม่มี reminder ที่กำลังทำงานอยู่"}
+                          ? t("reminder.emptyFilteredEnabled", { filters: describeActiveFilters() })
+                          : t("reminder.emptyEnabled")}
                       </p>
                     )
                   )
@@ -3528,8 +3679,8 @@ export default function ReminderDashboard({
                     !isComposerOpen && (
                       <p className="empty-state">
                         {describeActiveFilters()
-                          ? `ไม่มี reminder ${describeActiveFilters()} ที่ปิดใช้งานไว้`
-                          : "ยังไม่มี reminder ที่ปิดใช้งานไว้"}
+                          ? t("reminder.emptyFilteredPaused", { filters: describeActiveFilters() })
+                          : t("reminder.emptyPaused")}
                       </p>
                     )
                   )
@@ -3541,8 +3692,8 @@ export default function ReminderDashboard({
                   ) : (
                     <p className="empty-state">
                       {describeActiveFilters()
-                        ? `ไม่มี reminder ${describeActiveFilters()} ที่ทำเสร็จแล้ว`
-                        : "ยังไม่มี reminder ที่ทำเสร็จแล้ว"}
+                        ? t("reminder.emptyFilteredCompleted", { filters: describeActiveFilters() })
+                        : t("reminder.emptyCompleted")}
                     </p>
                   )
                 )}
@@ -3556,11 +3707,11 @@ export default function ReminderDashboard({
             ให้ตรงกับ 3-column grid ใหม่เท่านั้น */}
         <aside className="timeline-panel">
           <div className="timeline-header">
-            <p className="timeline-title">Timeline 24 ชม.</p>
+            <p className="timeline-title">{t("reminder.timeline24h")}</p>
             <div className="zoom-controls">
-              <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title="ซูมออก">−</button>
-              <span className="zoom-display">{minutesPerRow} นาที/ช่อง</span>
-              <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title="ซูมเข้า">+</button>
+              <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title={t("reminder.zoomOut")}>−</button>
+              <span className="zoom-display">{t("reminder.minutesPerSlot", { minutes: minutesPerRow })}</span>
+              <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title={t("reminder.zoomIn")}>+</button>
             </div>
           </div>
 
@@ -3629,8 +3780,14 @@ export default function ReminderDashboard({
                         "--calendar-activity-border": block.color.border,
                         "--calendar-activity-bg": block.color.bg
                       }}
-                      onClick={() => onEditActivity?.(block.activity)}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEditActivity?.(block.activity);
+                      }}
+                      onContextMenu={(event) => openActivityContextMenu(event, block)}
                       title={`แก้ไขกิจกรรม: ${block.title}`}
+                      aria-label={`แก้ไขกิจกรรม: ${block.title}`}
                     >
                       <span className={`calendar-timeline-block-title${block.titleBelow ? " is-stacked" : ""}${block.titleOffsetMinutes > 0 ? " is-relocated" : ""}`} style={block.titleOffsetMinutes > 0 ? { top: `${(block.titleOffsetMinutes / Math.max(1, block.endMin - block.startMin)) * 100}%` } : undefined}>{block.title}</span>
                       {block.hiddenCount > 0 && <small className="calendar-timeline-overflow-count">+{block.hiddenCount}</small>}
@@ -3647,6 +3804,22 @@ export default function ReminderDashboard({
             </div>
           </div>
         </aside>
+        {activityContextMenu && (
+          <ActivityPopup
+            activity={activityContextMenu.block.activity}
+            start={new Date(activityContextMenu.block.actualStartMs)}
+            end={new Date(activityContextMenu.block.actualEndMs)}
+            position={activityContextMenu.position}
+            locked={Boolean(lockedActivities[normalizeActivityId(activityContextMenu.block.activity.id)])}
+            categories={categories}
+            categoryId={activityCategoryMap[normalizeActivityId(activityContextMenu.block.activity.id)] || null}
+            tags={[]}
+            displayColor={activityContextMenu.block.color.border}
+            onClose={() => setActivityContextMenu(null)}
+            onToggleLock={(isLocked) => onToggleActivityLock?.(normalizeActivityId(activityContextMenu.block.activity.id), isLocked)}
+            restrictedToLock
+          />
+        )}
       </div>
     </div>
   );

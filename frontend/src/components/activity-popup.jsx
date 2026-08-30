@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { toDateInputValue } from "../date-utils.js";
 // กิจกรรมซ้ำที่มี instance เกินกว่านี้จะเตือนก่อน แต่ยังอนุญาตให้ดำเนินการได้
 const SERIES_WARN_LIMIT = 20;
@@ -48,8 +48,11 @@ export default function ActivityPopup({
   onDuplicate,
   onMoveToDay,
   onFetchSeriesCount,
-  onArchive
+  onArchive,
+  restrictedToLock = false
 }) {
+  const popupRef = useRef(null);
+  const [resolvedPosition, setResolvedPosition] = useState(position);
   const [mode, setMode] = useState("menu");
   const [busyAction, setBusyAction] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -59,11 +62,23 @@ export default function ActivityPopup({
   const [pendingAction, setPendingAction] = useState(null); // "delete" | "edit"
   const [seriesCount, setSeriesCount] = useState(null);
   const [seriesCountLoading, setSeriesCountLoading] = useState(false);
+  const [lockFeedback, setLockFeedback] = useState(null);
 
   const canReschedule = !locked;
   const isRecurring = !!activity.recurringEventId;
 
   const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  // Both Timeline surfaces can open this popup near any viewport edge.
+  // Resolve its coordinates after layout because its height varies by mode.
+  useLayoutEffect(() => {
+    const rect = popupRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 8;
+    const x = Math.max(margin, Math.min(position?.x ?? margin, window.innerWidth - rect.width - margin));
+    const y = Math.max(margin, Math.min(position?.y ?? margin, window.innerHeight - rect.height - margin));
+    setResolvedPosition((current) => current?.x === x && current?.y === y ? current : { x, y });
+  }, [position?.x, position?.y, mode, restrictedToLock]);
 
   // Escape ถอยกลับทีละขั้นให้ตรงกับปุ่ม "กลับ"/"ยกเลิก" ที่มีอยู่แล้วในแต่ละ
   // sub-mode — ลำดับชั้นจริงลึกกว่า 2 ระดับ (เช่น menu → recurring-action →
@@ -115,6 +130,15 @@ export default function ActivityPopup({
   const handleOpenInGoogle = () => {
     if (activity.htmlLink) {
       window.open(activity.htmlLink, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleToggleLock = async () => {
+    setLockFeedback(locked ? "🔓" : "🔒");
+    try {
+      await onToggleLock?.(!locked);
+    } finally {
+      window.setTimeout(() => setLockFeedback(null), 700);
     }
   };
 
@@ -207,8 +231,9 @@ export default function ActivityPopup({
 
   return (
     <div
-      className="activity-popup"
-      style={{ top: position.y, left: position.x }}
+      ref={popupRef}
+      className={`activity-popup${restrictedToLock ? " activity-popup--lock-only" : ""}`}
+      style={{ top: resolvedPosition?.y ?? position?.y ?? 8, left: resolvedPosition?.x ?? position?.x ?? 8 }}
       onPointerDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -404,14 +429,14 @@ export default function ActivityPopup({
             <button
               type="button" className="quick-btn"
               onClick={handleDuplicate}
-              disabled={busyAction !== null}
+              disabled={restrictedToLock || busyAction !== null}
               title="ทำสำเนากิจกรรมนี้ในวันเดียวกัน"
             >
               <span className="quick-btn-icon">⧉</span>
               <span className="quick-btn-label">{busyAction === "duplicate" ? "กำลังทำ..." : "ทำสำเนา"}</span>
             </button>
             {isRecurring && (
-              <button type="button" className="quick-btn" onClick={() => { onSelectSeriesDrag?.(); onClose?.(); }} title="เปิดโหมดเลือกหลายรายการสำหรับลบ">
+              <button type="button" className="quick-btn" onClick={() => { onSelectSeriesDrag?.(); onClose?.(); }} disabled={restrictedToLock || busyAction !== null} title="เปิดโหมดเลือกหลายรายการสำหรับลบ">
                 <span className="quick-btn-icon">✓</span>
                 <span className="quick-btn-label">เลือกรายการ</span>
               </button>
@@ -419,7 +444,7 @@ export default function ActivityPopup({
             <button
               type="button" className="quick-btn"
               onClick={() => setMode("move-day")}
-              disabled={!canReschedule || busyAction !== null}
+              disabled={restrictedToLock || !canReschedule || busyAction !== null}
               title={canReschedule ? "ย้ายกิจกรรมไปวันอื่น" : "ปลดล็อกก่อนย้ายวัน"}
             >
               <span className="quick-btn-icon">📅</span>
@@ -428,7 +453,7 @@ export default function ActivityPopup({
             <button
               type="button" className="quick-btn"
               onClick={handleMoveToNextDay}
-              disabled={!canReschedule || busyAction !== null}
+              disabled={restrictedToLock || !canReschedule || busyAction !== null}
               title={canReschedule ? "ย้ายกิจกรรมไปวันถัดไป" : "ปลดล็อกก่อนย้ายวัน"}
             >
               <span className="quick-btn-icon">⏭</span>
@@ -437,7 +462,7 @@ export default function ActivityPopup({
             <button
               type="button" className="quick-btn"
               onClick={handleOpenInGoogle}
-              disabled={!activity.htmlLink}
+              disabled={restrictedToLock || !activity.htmlLink}
               title="เปิดกิจกรรมนี้ใน Google Calendar"
             >
               <span className="quick-btn-icon">↗</span>
@@ -445,15 +470,16 @@ export default function ActivityPopup({
             </button>
             <button
               type="button" className="quick-btn"
-              onClick={() => onToggleLock?.(!locked)}
+              onClick={handleToggleLock}
               title={locked ? "ปลดล็อกกิจกรรม" : "ล็อกกิจกรรม"}
             >
-              <span className="quick-btn-icon">{locked ? "🔓" : "🔒"}</span>
+              <span className={`quick-btn-icon${lockFeedback ? " is-lock-feedback" : ""}`}>{lockFeedback || (locked ? "🔓" : "🔒")}</span>
               <span className="quick-btn-label">{locked ? "ปลดล็อก" : "ล็อก"}</span>
             </button>
             <button
               type="button" className="quick-btn"
               onClick={() => { onArchive?.(); onClose?.(); }}
+              disabled={restrictedToLock || busyAction !== null}
               title="เก็บสำเนากิจกรรมนี้ไว้ในคลัง"
             >
               <span className="quick-btn-icon">▣</span>
@@ -463,7 +489,7 @@ export default function ActivityPopup({
             <button
               type="button" className="quick-btn danger"
               onClick={() => isRecurring ? initiateRecurringAction("delete") : setMode("confirm-delete")}
-              disabled={!canReschedule || busyAction !== null}
+              disabled={restrictedToLock || !canReschedule || busyAction !== null}
               title={canReschedule ? "ลบกิจกรรม" : "ปลดล็อกก่อนลบ"}
             >
               <span className="quick-btn-icon">🗑</span>
@@ -491,7 +517,7 @@ export default function ActivityPopup({
                   className="popup-select"
                   value={categoryId || ""}
                   onChange={(e) => onAssignCategory?.(e.target.value || null)}
-                  disabled={locked}
+                  disabled={locked || restrictedToLock}
                 >
                   <option value="">ไม่ระบุ</option>
                   {categories.map((cat) => (
@@ -522,7 +548,7 @@ export default function ActivityPopup({
                   onEditActivity?.();
                 }
               }}
-              disabled={locked}
+              disabled={locked || restrictedToLock}
               title={locked ? "ปลดล็อกก่อนแก้ไข" : undefined}
             >
               {isRecurring ? "✏ แก้ไข (ชื่อ/เวลา)..." : "แก้ไขทั้งหมด (ชื่อ/เวลา)"}

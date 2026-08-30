@@ -1,16 +1,23 @@
 :root {
-  --blue: #1557b0;
-  --blue-dark: #103d82;
-  --blue-tint: #e8f0fe;
+  /* Brand palette — derived from the TIMES wordmark.  Keep these as the
+     source of truth; the legacy semantic aliases below preserve existing
+     component styles while giving both modes the same visual identity. */
+  --brand-ink: #1C1C1A;
+  --brand-accent: #D85A30;
+  --brand-muted: #8A8A85;
+  --brand-divider: #E4E2DC;
+  --blue: var(--brand-accent);
+  --blue-dark: #B74623;
+  --blue-tint: #F9E8E1;
   --red: #b71c1c;
   --red-tint: #fce8e6;
-  --border: #dadce0;
-  --text-primary: #3c4043;
-  --text-secondary: #5f6368;
-  --bg: #e8eaed;
+  --border: var(--brand-divider);
+  --text-primary: var(--brand-ink);
+  --text-secondary: var(--brand-muted);
+  --bg: #F7F6F2;
   --bg-muted: #ffffff;
-  --hover: #e8eaed;
-  --today: #1557b0;
+  --hover: #F0EEE8;
+  --today: var(--brand-accent);
   font-family: "Google Sans", "Roboto", Arial, sans-serif;
 }
 
@@ -26,15 +33,20 @@
    spillover indicators, etc. that don't yet reference these variables)
    are NOT covered by this block — a separate pass. */
 html[data-theme="dark"] {
-  --blue-tint: #1a2b47;
+  --brand-ink: #F2F1ED;
+  --brand-accent: #E8703F;
+  --brand-muted: #9C9C97;
+  --brand-divider: #3A3A38;
+  --blue-dark: #F08A60;
+  --blue-tint: #4A2920;
   --red-tint: #3c1c1c;
-  --border: #4a4d51;
-  --text-primary: #e8eaed;
-  --text-secondary: #9aa0a6;
-  --bg: #202124;
-  --bg-muted: #2d2e30;
-  --hover: #35363a;
-  --today: #8ab4f8;
+  --border: var(--brand-divider);
+  --text-primary: var(--brand-ink);
+  --text-secondary: var(--brand-muted);
+  --bg: #20201E;
+  --bg-muted: #292927;
+  --hover: #353532;
+  --today: var(--brand-accent);
 }
 
 * {
@@ -1837,14 +1849,19 @@ html.screen-reader-mode .tag-search-input {
    color) alongside the original category/lock/edit controls. */
 
 .activity-popup {
-  position: absolute;
+  position: fixed;
   z-index: 2200;
   width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
   background: var(--bg-muted);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(32, 33, 36, 0.25), 0 0 0 1px rgba(32, 33, 36, 0.04);
-  overflow: hidden;
+  overflow: auto;
 }
+
+/* The Reminder Timeline uses the same popup but positions it with viewport
+   coordinates instead of the Week Spine's relative surface coordinates. */
 
 .popup-header {
   padding: 10px 12px 9px;
@@ -1955,6 +1972,15 @@ html.screen-reader-mode .tag-search-input {
 .quick-btn-icon {
   font-size: 15px;
   line-height: 1;
+}
+
+.activity-popup .quick-btn-icon.is-lock-feedback {
+  animation: popup-lock-icon-pop 420ms ease-out;
+}
+
+@keyframes popup-lock-icon-pop {
+  from { transform: scale(.55) rotate(-18deg); }
+  to { transform: scale(1) rotate(0); }
 }
 
 .quick-btn-label {

@@ -86,7 +86,17 @@ export async function sendTelegramTest() {
 }
 
 export async function sendTelegramReminder(title) {
-  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title }) }), "POST /api/telegram/notify");
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "reminder" }) }), "POST /api/telegram/notify");
+}
+
+/** Sends an Activity Mode start notification through the connected Telegram bot. */
+export async function sendTelegramActivity(title) {
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "activity" }) }), "POST /api/telegram/notify");
+}
+
+/** Gets the optional announcement set by the authorised Telegram command. */
+export async function getAnnouncement() {
+  return handleResponse(await apiRequest("/api/announcement"), "GET /api/announcement");
 }
 
 /** GET /api/categories — รายการหมวดหมู่ชีวิตทั้งหมด */
