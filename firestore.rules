@@ -51,7 +51,7 @@ service cloud.firestore {
     match /users/{userId}/{document=**} {
       allow read: if isOwner(userId);
 
-      allow write: if isOwner(userId) && document[0] != "activityCategories";
+      allow write: if isOwner(userId) && !isActivityCategoryPath(document);
     }
 
     // ------------------------------------------------------------------
@@ -64,7 +64,7 @@ service cloud.firestore {
     // ทั้งหมด (กฎกว้างด้านบนถูกกันไม่ให้ match เข้ามาแล้วโดยเจตนา) — isOwner()
     // ต้องเขียนซ้ำในนี้เองด้วย เพราะไม่มี "กฎรวม" ให้พึ่งพาจากที่อื่นอีกแล้ว
     // ------------------------------------------------------------------
-    match /users/{userId}/activityCategories/{activityId} {
+    match /users/{userId}/modes/activity-mode/activityCategories/{activityId} {
       allow read: if isOwner(userId);
 
       // สร้าง/แก้ไข mapping ใหม่ได้ก็ต่อเมื่อกิจกรรมนั้นไม่ได้ถูก lock ไว้
@@ -107,8 +107,16 @@ service cloud.firestore {
     // แยกจาก request หลัก) แต่จำเป็นเพราะไม่มีทางเช็ค "locked หรือไม่" โดยไม่
     // อ่าน document นั้นก่อน
     function isLocked(userId, activityId) {
-      return exists(/databases/$(database)/documents/users/$(userId)/lockedActivities/$(activityId))
-        && get(/databases/$(database)/documents/users/$(userId)/lockedActivities/$(activityId)).data.locked == true;
+      return exists(/databases/$(database)/documents/users/$(userId)/modes/activity-mode/lockedActivities/$(activityId))
+        && get(/databases/$(database)/documents/users/$(userId)/modes/activity-mode/lockedActivities/$(activityId)).data.locked == true;
+    }
+
+    // relative path ใต้ users/{uid}: modes/activity-mode/activityCategories/{id}
+    function isActivityCategoryPath(document) {
+      return document.size() >= 3
+        && document[0] == "modes"
+        && document[1] == "activity-mode"
+        && document[2] == "activityCategories";
     }
   }
 }

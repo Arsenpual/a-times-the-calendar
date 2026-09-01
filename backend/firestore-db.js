@@ -96,6 +96,19 @@ function userDoc(userId) {
   return db.collection("users").doc(userId);
 }
 
+// Firestore path ต้องสลับ collection/document เสมอ จึงมี `modes` เป็น
+// collection ตัวกลาง แล้วใช้ document หลักสองตัว (`reminder-mode` และ
+// `activity-mode`) เป็นรากของข้อมูลแต่ละ feature.  ห้ามใช้
+// users/{uid}/reminder-mode เป็น document ตรง ๆ เพราะ path นั้นเคยเป็น
+// collection ของ reminder แบบเก่าอยู่แล้ว.
+function reminderModeDoc(userId) {
+  return userDoc(userId).collection("modes").doc("reminder-mode");
+}
+
+function activityModeDoc(userId) {
+  return userDoc(userId).collection("modes").doc("activity-mode");
+}
+
 // เอกสารสิทธิ์ Google Calendar เป็น private server-only document: เขียน/อ่าน
 // ผ่าน Firebase Admin SDK เท่านั้น ไม่เคยถูกส่งกลับ frontend และเก็บ refresh
 // token ในรูปเข้ารหัส (ดู calendar-oauth.js).
@@ -119,11 +132,11 @@ function announcementDoc() {
 }
 
 function categoriesCol(userId) {
-  return userDoc(userId).collection("categories");
+  return activityModeDoc(userId).collection("categories");
 }
 
 function activityCategoriesCol(userId) {
-  return userDoc(userId).collection("activityCategories");
+  return activityModeDoc(userId).collection("activityCategories");
 }
 
 // Tags แบบ free-text ต่อกิจกรรม — เก็บ { tags: string[] } ต่อ document เดียวกับ
@@ -131,11 +144,11 @@ function activityCategoriesCol(userId) {
 // array แทนค่าเดียว เพราะกิจกรรมหนึ่งติดได้หลาย tag พร้อมกัน (many-to-many)
 // ต่างจาก category ที่ผูกได้ทีละหมวดหมู่เท่านั้น (one-to-one)
 function activityTagsCol(userId) {
-  return userDoc(userId).collection("activityTags");
+  return activityModeDoc(userId).collection("activityTags");
 }
 
 function lockedActivitiesCol(userId) {
-  return userDoc(userId).collection("lockedActivities");
+  return activityModeDoc(userId).collection("lockedActivities");
 }
 
 // Reminder mode (Phase: initial Firebase sync — day/time/title fields
@@ -155,7 +168,7 @@ function lockedActivitiesCol(userId) {
 // activityCategoriesCol/lockedActivitiesCol using the activity's own id
 // as the doc key — no separate id generation needed on the backend).
 function remindersCol(userId) {
-  return userDoc(userId).collection("reminder-mode");
+  return reminderModeDoc(userId).collection("reminders");
 }
 
 // Groups/Projects สำหรับ reminder mode (migration plan v2 เฟส 3) — โครง
@@ -167,7 +180,7 @@ function remindersCol(userId) {
 // schedule field หนึ่งตรงๆ ก็พอ ไม่ต้องมี join collection แยกเหมือนฝั่ง
 // calendar ที่ activity มาจาก Google Calendar ไม่ใช่ document ของเราเอง)
 function reminderGroupsCol(userId) {
-  return userDoc(userId).collection("reminderGroups");
+  return reminderModeDoc(userId).collection("groups");
 }
 
 // FCM device tokens (migration plan v2 เฟส 5) — หนึ่ง user มีได้หลาย token
@@ -179,20 +192,93 @@ function reminderGroupsCol(userId) {
 // upsert อัตโนมัติแทนที่จะสร้างซ้ำเรื่อยๆ ทุกครั้งที่ผู้ใช้เปิดแอปในเครื่อง
 // เดิม (FCM token ของเบราว์เซอร์หนึ่งๆ มักไม่เปลี่ยนบ่อย)
 function fcmTokensCol(userId) {
-  return userDoc(userId).collection("fcmTokens");
+  return reminderModeDoc(userId).collection("fcmTokens");
 }
 
 // Archive is deliberately separate from Google Calendar activities. An
 // archived item stays private to this app until the user explicitly restores
 // it, so it belongs in its own scalable per-user Firestore subcollection.
 function activityArchiveCol(userId) {
-  return userDoc(userId).collection("activityArchive");
+  return activityModeDoc(userId).collection("activityArchive");
 }
 
 // Mirror ขนาดเล็กของกิจกรรมที่ผู้ใช้สร้าง/แก้ผ่านแอป เก็บเฉพาะข้อมูลที่
 // Cloud Run ต้องใช้ส่งแจ้งเตือนตอนเริ่มกิจกรรม ไม่ใช่สำเนา Google Calendar.
 function activityNotificationsCol(userId) {
-  return userDoc(userId).collection("activity-notifications");
+  return activityModeDoc(userId).collection("activity-notifications");
+}
+
+// ---------------------------------------------------------------------------
+// Feature-storage migration
+// ---------------------------------------------------------------------------
+// ก่อนปรับโครงสร้าง ข้อมูลถูกเก็บเป็น collection ตรงใต้ users/{uid} เช่น
+// users/{uid}/categories และ users/{uid}/reminder-mode/{reminderId}.  ย้าย
+// แบบ copy-once ไปยัง modes/{modeId}/... เพื่อให้ผู้ใช้เดิมไม่สูญข้อมูล
+// และยังเก็บ path เก่าไว้เป็น backup ชั่วคราว (ไม่ลบทิ้งอัตโนมัติ).
+const FEATURE_STORAGE_SCHEMA_VERSION = 1;
+const migratedUserIds = new Set();
+const migrationPromises = new Map();
+
+function legacyFeatureCollections(userId) {
+  const root = userDoc(userId);
+  return [
+    [root.collection("reminder-mode"), remindersCol(userId)],
+    [root.collection("reminderGroups"), reminderGroupsCol(userId)],
+    [root.collection("fcmTokens"), fcmTokensCol(userId)],
+    [root.collection("categories"), categoriesCol(userId)],
+    [root.collection("activityCategories"), activityCategoriesCol(userId)],
+    [root.collection("activityTags"), activityTagsCol(userId)],
+    [root.collection("lockedActivities"), lockedActivitiesCol(userId)],
+    [root.collection("activityArchive"), activityArchiveCol(userId)],
+    [root.collection("activity-notifications"), activityNotificationsCol(userId)]
+  ];
+}
+
+async function migrateUserFeatureStorage(userId) {
+  if (migratedUserIds.has(userId)) return;
+  if (migrationPromises.has(userId)) return migrationPromises.get(userId);
+
+  const migration = (async () => {
+    const userRef = userDoc(userId);
+    const userSnap = await userRef.get();
+    if (userSnap.data()?.featureStorageSchemaVersion >= FEATURE_STORAGE_SCHEMA_VERSION) {
+      migratedUserIds.add(userId);
+      return;
+    }
+
+    const pairs = legacyFeatureCollections(userId);
+    const snapshots = await Promise.all(pairs.map(([legacyCol]) => legacyCol.get()));
+    const writes = [
+      [reminderModeDoc(userId), { schemaVersion: FEATURE_STORAGE_SCHEMA_VERSION, migratedAt: new Date().toISOString() }],
+      [activityModeDoc(userId), { schemaVersion: FEATURE_STORAGE_SCHEMA_VERSION, migratedAt: new Date().toISOString() }]
+    ];
+
+    snapshots.forEach((snapshot, index) => {
+      const [, destination] = pairs[index];
+      snapshot.docs.forEach((legacyDoc) => {
+        writes.push([destination.doc(legacyDoc.id), legacyDoc.data()]);
+      });
+    });
+
+    // จำกัด batch ละ 450 operations เผื่อเหลือ margin จากเพดาน Firestore
+    // 500 operations/batch เมื่อผู้ใช้มี archive หรือ reminder จำนวนมาก.
+    for (let start = 0; start < writes.length; start += 450) {
+      const batch = db.batch();
+      writes.slice(start, start + 450).forEach(([ref, data]) => batch.set(ref, data, { merge: true }));
+      await batch.commit();
+    }
+
+    await userRef.set({ featureStorageSchemaVersion: FEATURE_STORAGE_SCHEMA_VERSION }, { merge: true });
+    migratedUserIds.add(userId);
+    console.log(`[firestore-db] user ${userId}: ย้ายข้อมูลเข้าโครงสร้าง mode storage แล้ว`);
+  })();
+
+  migrationPromises.set(userId, migration);
+  try {
+    await migration;
+  } finally {
+    migrationPromises.delete(userId);
+  }
 }
 
 // 4 หมวดเริ่มต้น — เหมือนเดิมทุกประการจาก Phase 0-1 (DEFAULT_DATA เดิมใน
@@ -270,6 +356,8 @@ const seededUserIds = new Set();
 async function ensureDefaultCategoriesForUser(userId) {
   if (seededUserIds.has(userId)) return;
 
+  await migrateUserFeatureStorage(userId);
+
   const userRef = userDoc(userId);
   const col = categoriesCol(userId);
 
@@ -296,6 +384,8 @@ async function ensureDefaultCategoriesForUser(userId) {
 module.exports = {
   db,
   auth,
+  reminderModeDoc,
+  activityModeDoc,
   calendarAuthDoc,
   telegramAuthDoc,
   telegramLinkDoc,
@@ -309,5 +399,6 @@ module.exports = {
   fcmTokensCol,
   activityArchiveCol,
   activityNotificationsCol,
+  migrateUserFeatureStorage,
   ensureDefaultCategoriesForUser
 };

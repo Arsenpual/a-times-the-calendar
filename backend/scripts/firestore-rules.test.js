@@ -67,38 +67,38 @@ describe("Firestore Security Rules — times-the-calendar (ระยะ 3)", () 
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         await adminCtx
           .firestore()
-          .doc(`users/${USER_A}/categories/work`)
+          .doc(`users/${USER_A}/modes/activity-mode/categories/work`)
           .set({ name: "งาน", color: "#1557B0" });
       });
 
       const db = asUser(USER_A);
-      await assertSucceeds(db.doc(`users/${USER_A}/categories/work`).get());
+      await assertSucceeds(db.doc(`users/${USER_A}/modes/activity-mode/categories/work`).get());
     });
 
     it("user อ่านหมวดหมู่ของ user อื่นไม่ได้", async () => {
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         await adminCtx
           .firestore()
-          .doc(`users/${USER_A}/categories/work`)
+          .doc(`users/${USER_A}/modes/activity-mode/categories/work`)
           .set({ name: "งาน", color: "#1557B0" });
       });
 
       const dbAsB = asUser(USER_B);
-      await assertFails(dbAsB.doc(`users/${USER_A}/categories/work`).get());
+      await assertFails(dbAsB.doc(`users/${USER_A}/modes/activity-mode/categories/work`).get());
     });
 
     it("user เขียนข้อมูลใต้ userId ของ user อื่นไม่ได้", async () => {
       const dbAsB = asUser(USER_B);
       await assertFails(
-        dbAsB.doc(`users/${USER_A}/categories/hacked`).set({ name: "แฮ็ก", color: "#000000" })
+        dbAsB.doc(`users/${USER_A}/modes/activity-mode/categories/hacked`).set({ name: "แฮ็ก", color: "#000000" })
       );
     });
 
     it("request ที่ไม่ได้ login ทำอะไรไม่ได้เลย", async () => {
       const anon = asAnonymous();
-      await assertFails(anon.doc(`users/${USER_A}/categories/work`).get());
+      await assertFails(anon.doc(`users/${USER_A}/modes/activity-mode/categories/work`).get());
       await assertFails(
-        anon.doc(`users/${USER_A}/categories/work`).set({ name: "x", color: "#000000" })
+        anon.doc(`users/${USER_A}/modes/activity-mode/categories/work`).set({ name: "x", color: "#000000" })
       );
     });
   });
@@ -107,7 +107,7 @@ describe("Firestore Security Rules — times-the-calendar (ระยะ 3)", () 
     it("เขียน activityCategories ของกิจกรรมที่ไม่ได้ lock ได้ตามปกติ", async () => {
       const db = asUser(USER_A);
       await assertSucceeds(
-        db.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" })
+        db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" })
       );
     });
 
@@ -115,47 +115,47 @@ describe("Firestore Security Rules — times-the-calendar (ระยะ 3)", () 
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         await adminCtx
           .firestore()
-          .doc(`users/${USER_A}/lockedActivities/event123`)
+          .doc(`users/${USER_A}/modes/activity-mode/lockedActivities/event123`)
           .set({ locked: true });
       });
 
       const db = asUser(USER_A);
       await assertFails(
-        db.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" })
+        db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" })
       );
     });
 
     it("ลบ activityCategories ของกิจกรรมที่ lock ไว้ต้องถูกปฏิเสธด้วย (ไม่ใช่แค่เขียน)", async () => {
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         const admin = adminCtx.firestore();
-        await admin.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" });
-        await admin.doc(`users/${USER_A}/lockedActivities/event123`).set({ locked: true });
+        await admin.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" });
+        await admin.doc(`users/${USER_A}/modes/activity-mode/lockedActivities/event123`).set({ locked: true });
       });
 
       const db = asUser(USER_A);
-      await assertFails(db.doc(`users/${USER_A}/activityCategories/event123`).delete());
+      await assertFails(db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).delete());
     });
 
     it("ปลด lock แล้วเขียน activityCategories ได้ตามปกติอีกครั้ง", async () => {
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         await adminCtx
           .firestore()
-          .doc(`users/${USER_A}/lockedActivities/event123`)
+          .doc(`users/${USER_A}/modes/activity-mode/lockedActivities/event123`)
           .set({ locked: true });
       });
 
       const db = asUser(USER_A);
       // ยังล็อกอยู่ — ต้องล้มเหลว
       await assertFails(
-        db.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" })
+        db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" })
       );
 
       // ปลด lock (การปลด lock เองไม่มีเงื่อนไขพิเศษ แค่ isOwner ก็พอ)
-      await assertSucceeds(db.doc(`users/${USER_A}/lockedActivities/event123`).delete());
+      await assertSucceeds(db.doc(`users/${USER_A}/modes/activity-mode/lockedActivities/event123`).delete());
 
       // ปลดแล้ว — ต้องเขียนได้ตามปกติ
       await assertSucceeds(
-        db.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" })
+        db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" })
       );
     });
 
@@ -163,13 +163,13 @@ describe("Firestore Security Rules — times-the-calendar (ระยะ 3)", () 
       await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
         await adminCtx
           .firestore()
-          .doc(`users/${USER_A}/lockedActivities/event123`)
+          .doc(`users/${USER_A}/modes/activity-mode/lockedActivities/event123`)
           .set({ locked: false });
       });
 
       const db = asUser(USER_A);
       await assertSucceeds(
-        db.doc(`users/${USER_A}/activityCategories/event123`).set({ categoryId: "work" })
+        db.doc(`users/${USER_A}/modes/activity-mode/activityCategories/event123`).set({ categoryId: "work" })
       );
     });
   });
