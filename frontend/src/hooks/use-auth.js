@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  auth,
   signInWithGoogle,
   beginCalendarAuthorization,
   getCalendarConnectionStatus,
