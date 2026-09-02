@@ -220,6 +220,16 @@ function MainApp() {
   } = nav;
   const brandWordmarkSrc = theme === "dark" ? BRAND_WORDMARK_DARK_SRC : BRAND_WORDMARK_LIGHT_SRC;
 
+  // Reminder timeline has one unambiguous reference day: "today" (its now
+  // indicator and all reminder slots are real-time).  Calendar data on the
+  // other hand is fetched for Activity Mode's cursor week.  Returning to
+  // today here keeps both sources in the same week, so activities scheduled
+  // for today cannot disappear merely because Activity Mode was last viewed
+  // on another week.
+  useEffect(() => {
+    if (mode === "reminder") goToday();
+  }, [mode, goToday]);
+
   const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
   const {
     activities,
