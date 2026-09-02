@@ -82,6 +82,11 @@ export default function ActivityModeWeekSpine({
   const [archiveHydrated, setArchiveHydrated] = useState(false);
   const [archiveRemoteReady, setArchiveRemoteReady] = useState(false);
   const archiveSnapshotRef = useRef(new Map());
+  // IDs created locally while the initial Firestore read is still in flight.
+  // The response can be older than a successful archive write; without this
+  // ref it overwrites the new local item, after its Calendar event was
+  // already deleted, making the activity appear to vanish.
+  const pendingArchiveWritesRef = useRef(new Set());
   const [archiveTagDrafts, setArchiveTagDrafts] = useState({});
   // Only a draft created during this live session may claim focus. Persisted
   // draft rows are loaded from the archive too, but must not pull the page
@@ -148,8 +153,19 @@ export default function ActivityModeWeekSpine({
         // Firestore is the archive source of truth. A local browser copy may
         // help during startup, but must never resurrect items absent from the
         // user's remote archive.
-        archiveSnapshotRef.current = new Map(archiveItems.map((item) => [item.archiveId, JSON.stringify(item)]));
-        setActivityArchive(archiveItems);
+        const remoteSnapshot = new Map(archiveItems.map((item) => [item.archiveId, JSON.stringify(item)]));
+        archiveSnapshotRef.current = remoteSnapshot;
+        setActivityArchive((current) => {
+          const merged = new Map(archiveItems.map((item) => [item.archiveId, item]));
+          // Keep only writes known to have started in this session. Existing
+          // browser-only records remain governed by Firestore as before.
+          current.forEach((item) => {
+            if (pendingArchiveWritesRef.current.has(item.archiveId) && !merged.has(item.archiveId)) {
+              merged.set(item.archiveId, item);
+            }
+          });
+          return [...merged.values()].sort((a, b) => String(b.archivedAt || "").localeCompare(String(a.archivedAt || "")));
+        });
         setArchiveRemoteReady(true);
       })
       .catch((error) => {
@@ -200,6 +216,7 @@ export default function ActivityModeWeekSpine({
     };
     try {
       // Archive first so a failed network request can never lose the activity.
+      pendingArchiveWritesRef.current.add(archived.archiveId);
       await saveActivityArchiveItem(archived);
       // An archived activity must no longer exist in Google Calendar. This
       // removes it from the automatic two-way Calendar sync and Week Spine.
@@ -210,12 +227,14 @@ export default function ActivityModeWeekSpine({
       // If Calendar deletion fails, remove the just-created remote archive so
       // the same activity is not simultaneously archived and on the calendar.
       await deleteActivityArchiveItem(archived.archiveId).catch(() => {});
+      pendingArchiveWritesRef.current.delete(archived.archiveId);
       setInteractionWarning(error?.message || "เก็บกิจกรรมเข้าคลังไม่สำเร็จ");
     }
   };
 
   const addArchiveDraft = () => {
     const archiveId = `draft:${Date.now()}`;
+    pendingArchiveWritesRef.current.add(archiveId);
     setActivityArchive((current) => [{
       archiveId,
       calendarId: null,
@@ -761,7 +780,7 @@ export default function ActivityModeWeekSpine({
               <span className="activity-archive-main"><span className="activity-archive-title-row"><input className="activity-archive-title-input" autoFocus={archiveTitleToFocus === item.archiveId} value={item.title} onFocus={() => { if (archiveTitleToFocus === item.archiveId) setArchiveTitleToFocus(null); }} onChange={(event) => updateArchivedActivity(item.archiveId, "title", event.target.value)} aria-label="ชื่อกิจกรรม" />{(item.tags || []).map((tag) => <small className="activity-inline-tag" key={tag}>#{tag}<button type="button" onClick={() => updateArchivedActivity(item.archiveId, "tags", (item.tags || []).filter((savedTag) => savedTag !== tag))} aria-label={`ลบ tag ${tag}`}>✕</button></small>)}{Object.hasOwn(archiveTagDrafts, item.archiveId) ? <input className="activity-archive-tag-input" autoFocus value={archiveTagDrafts[item.archiveId]} placeholder="tag" onChange={(event) => setArchiveTagDrafts((current) => ({ ...current, [item.archiveId]: event.target.value }))} onBlur={() => setArchiveTagDrafts((current) => { const next = { ...current }; delete next[item.archiveId]; return next; })} onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); const tag = archiveTagDrafts[item.archiveId]?.trim(); if (tag) updateArchivedActivity(item.archiveId, "tags", [...(item.tags || []), tag]); setArchiveTagDrafts((current) => { const next = { ...current }; delete next[item.archiveId]; return next; }); }} /> : <button type="button" className="activity-archive-tag-add" onClick={() => setArchiveTagDrafts((current) => ({ ...current, [item.archiveId]: "" }))} aria-label="ใส่ tag" title="เพิ่ม tag">+ Tag</button>}</span>{item.start && <span className="activity-archive-original-time">{new Date(item.start).toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}</span>
               <><label className="activity-archive-field"><span>เริ่ม</span><span className="activity-archive-time-input"><input type="datetime-local" value={toDateTimeLocalValue(item.start)} onChange={(event) => updateArchivedActivity(item.archiveId, "start", event.target.value)} />{!item.start && <em>-- --</em>}</span><button type="button" onClick={() => updateArchivedActivity(item.archiveId, "start", "")}>✕</button></label><label className="activity-archive-field"><span>จบ</span><span className="activity-archive-time-input"><input type="datetime-local" value={toDateTimeLocalValue(item.end)} onChange={(event) => updateArchivedActivity(item.archiveId, "end", event.target.value)} />{!item.end && <em>-- --</em>}</span><button type="button" onClick={() => updateArchivedActivity(item.archiveId, "end", "")}>✕</button></label></>
               <label className="activity-archive-category"><span className="activity-archive-category-color" style={{ backgroundColor: categories.find((category) => category.id === item.categoryId)?.color || "transparent" }} /><select value={item.categoryId || ""} onChange={(event) => updateArchiveCategory(item, event.target.value || null)}><option value="">ไม่กำหนดหมวดหมู่</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>{item.categoryId && <button type="button" onClick={() => updateArchiveCategory(item, null)} aria-label="ลบหมวดหมู่">✕</button>}</label>
-              <div className="activity-archive-actions"><button type="button" className="activity-archive-edit" onClick={() => { if (item.isDraft) { onOpenArchiveDraft?.(item); return; } onEditArchivedActivity?.(item.calendarId); }} aria-label={`แก้ไข ${item.title}`} title="แก้ไขกิจกรรม">✎</button><button type="button" className="activity-archive-restore" onClick={() => restoreArchivedActivity(item)} aria-label={`ส่ง ${item.title} กลับไป Timeline`} title="ส่งไป Timeline">↗</button><button type="button" className="activity-archive-delete" onClick={() => setActivityArchive((current) => current.filter((archived) => archived.archiveId !== item.archiveId))} aria-label={`ลบ ${item.title} ออกจากคลัง`} title="ลบจากคลัง">🗑</button></div>
+              <div className="activity-archive-actions"><button type="button" className="activity-archive-edit" onClick={() => { if (item.isDraft) { onOpenArchiveDraft?.(item); return; } onEditArchivedActivity?.(item.calendarId); }} aria-label={`แก้ไข ${item.title}`} title="แก้ไขกิจกรรม">✎</button><button type="button" className="activity-archive-restore" onClick={() => restoreArchivedActivity(item)} aria-label={`ส่ง ${item.title} กลับไป Timeline`} title="ส่งไป Timeline">↗</button><button type="button" className="activity-archive-delete" onClick={() => { pendingArchiveWritesRef.current.delete(item.archiveId); setActivityArchive((current) => current.filter((archived) => archived.archiveId !== item.archiveId)); }} aria-label={`ลบ ${item.title} ออกจากคลัง`} title="ลบจากคลัง">🗑</button></div>
             </li>)}
           </ol>
         )}
