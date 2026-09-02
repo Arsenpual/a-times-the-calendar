@@ -92,8 +92,13 @@ export function useAuth() {
       return null;
     }
   });
+  // แยก "สิทธิ์หมดจริง" ออกจาก "backend/เน็ตเข้าไม่ถึงชั่วคราว".  ก่อน
+  // หน้านี้ catch ของ /calendar-auth/status ล้าง token ทันที ทำให้ Render
+  // cold start ถูกตีความผิดว่า Google Calendar ต้องยืนยันใหม่ทุกครั้ง.
+  const [calendarConnectionState, setCalendarConnectionState] = useState("idle");
   const setCalendarAccessToken = useCallback((token) => {
     setCalendarAccessTokenState(token);
+    setCalendarConnectionState(token ? "connected" : "needs-reauth");
     // "server-managed" หมายถึง backend มี refresh token แล้ว; ไม่ตั้งวันหมด
     // อายุ เพราะ access token จริงถูกสร้าง/ต่ออายุเฉพาะบน server.
     const expiresAt = token && token !== "server-managed" ? Date.now() + CALENDAR_TOKEN_LIFETIME_MS : null;
@@ -112,6 +117,37 @@ export function useAuth() {
       // reload like before this change.
     }
   }, []);
+
+  const refreshCalendarConnection = useCallback(async () => {
+    if (!auth.currentUser) {
+      setCalendarConnectionState("idle");
+      return false;
+    }
+
+    setCalendarConnectionState("checking");
+    // ให้เวลา Render ตื่นจาก cold start สองรอบก่อนตัดสินว่า backend
+    // เข้าไม่ถึงจริง ๆ; สำคัญคือไม่ล้าง Calendar state ระหว่างนี้.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const status = await getCalendarConnectionStatus();
+        if (status.connected) {
+          setCalendarAccessToken("server-managed");
+          return true;
+        }
+        // Backend ตอบมาเองว่าไม่มี/ใช้ refresh token ไม่ได้เท่านั้น จึง
+        // เปลี่ยนเป็น needs-reauth และแสดงหน้าต่างบังคับยืนยันสิทธิ์.
+        setCalendarAccessToken(null);
+        return false;
+      } catch {
+        if (attempt < 2) {
+          await new Promise((resolve) => window.setTimeout(resolve, (attempt + 1) * 1500));
+        }
+      }
+    }
+
+    setCalendarConnectionState("unavailable");
+    return false;
+  }, [setCalendarAccessToken]);
 
   // Re-checked once a minute (not on every render) whether the token is
   // within the warning window — a plain comparison in the render body
@@ -146,16 +182,16 @@ export function useAuth() {
         // drop the Calendar token too, since it's meaningless without a
         // Firebase session to pair it with.
         setCalendarAccessToken(null);
+        setCalendarConnectionState("idle");
       } else {
         // Login เดิมที่เคยเชื่อม Calendar แล้วจะได้สถานะ server-managed
-        // กลับมาทันทีหลัง refresh โดยไม่ขอ popup ซ้ำ.
-        getCalendarConnectionStatus()
-          .then((status) => setCalendarAccessToken(status.connected ? "server-managed" : null))
-          .catch(() => setCalendarAccessToken(null));
+        // กลับมาทันทีหลัง refresh โดยไม่ขอ popup ซ้ำ.  Network error ไม่ใช่
+        // reauth: refreshCalendarConnection จะ retry และคืน unavailable แทน.
+        refreshCalendarConnection();
       }
     });
     return unsubscribe;
-  }, [setCalendarAccessToken]);
+  }, [refreshCalendarConnection, setCalendarAccessToken]);
 
   const handleLogin = useCallback(async () => {
     if (authPopupInFlight.current) return;
@@ -212,10 +248,12 @@ export function useAuth() {
     error,
     setError,
     calendarAccessToken,
+    calendarConnectionState,
     setCalendarAccessToken,
     calendarTokenExpiresAt,
     setCalendarTokenExpiresAtState, // exposed only for app.jsx's dev-only token-expiry-simulation button
     tokenNearingExpiry,
+    refreshCalendarConnection,
     handleLogin,
     handleLogout,
     handleReauthCalendar,

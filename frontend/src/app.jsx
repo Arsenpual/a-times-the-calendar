@@ -118,10 +118,12 @@ function MainApp() {
     error,
     setError,
     calendarAccessToken,
+    calendarConnectionState,
     setCalendarAccessToken,
     calendarTokenExpiresAt,
     setCalendarTokenExpiresAtState,
     tokenNearingExpiry,
+    refreshCalendarConnection,
     handleLogin,
     handleLogout: authHandleLogout,
     handleReauthCalendar,
@@ -635,6 +637,17 @@ function MainApp() {
 
       {firebaseUser && <AnnouncementTicker message={announcementMessage} />}
 
+      {/* Render อาจต้องตื่นก่อนตอบสถานะ Calendar หลังผู้ใช้หายไปนาน.
+          ระหว่าง retry ให้สื่อสารว่าแอปกำลังทำงาน แทนปล่อยให้ดูเหมือน
+          ค้างหรือพาไปยืนยัน Google ซ้ำทั้งที่สิทธิ์เดิมอาจยังใช้ได้. */}
+      {firebaseUser && calendarConnectionState === "checking" && (
+        <div className="token-expiry-backdrop calendar-connection-backdrop">
+          <div className="token-expiry-banner" role="status" aria-live="polite">
+            <span>กำลังเชื่อมต่อและโหลดข้อมูลจาก Google Calendar…</span>
+          </div>
+        </div>
+      )}
+
       {/* Blocking heads-up for the Google Calendar token — covers two
           situations with the same visual treatment (dimmed backdrop +
           small banner, top-left corner), just different wording:
@@ -660,24 +673,24 @@ function MainApp() {
           browsers block popups that aren't triggered by a direct click, so
           a button the person presses themselves is the only reliable way
           to renew either way. */}
-      {firebaseUser && (tokenNearingExpiry || !calendarAccessToken) && (
+      {firebaseUser && (tokenNearingExpiry || calendarConnectionState === "needs-reauth") && (
         <div className="token-expiry-backdrop">
           <div
             className="token-expiry-banner"
             role="alertdialog"
             aria-label={
-              calendarAccessToken
+              tokenNearingExpiry
                 ? "แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ"
                 : "ต้องยืนยันตัวตนกับ Google Calendar อีกครั้ง"
             }
           >
             <span>
-              {calendarAccessToken
+              {tokenNearingExpiry
                 ? "สิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ — ต่ออายุตอนนี้เพื่อไม่ให้การใช้งานสะดุด"
                 : "สิทธิ์เข้าถึง Google Calendar หมดอายุแล้ว — ยืนยันตัวตนอีกครั้งเพื่อดึงปฏิทินของคุณกลับมาแสดง"}
             </span>
             <button type="button" className="btn btn-outline token-expiry-renew-btn" onClick={handleReauthCalendar}>
-              {calendarAccessToken ? "ต่ออายุตอนนี้" : "ยืนยันตัวตน"}
+              {tokenNearingExpiry ? "ต่ออายุตอนนี้" : "ยืนยันตัวตน"}
             </button>
           </div>
         </div>
@@ -791,9 +804,16 @@ function MainApp() {
                 happened yet (first sign-in denied Calendar scope), OR its
                 token specifically expired mid-session. Show this only while
                 there is no previously synced activity data to read. */}
-            {firebaseUser && !calendarAccessToken && activities.length === 0 && (
+            {firebaseUser && calendarConnectionState === "needs-reauth" && activities.length === 0 && (
               <div className="empty-state">
                 <p>ต้องยืนยันตัวตนกับ Google Calendar อีกครั้งเพื่อดึงปฏิทินของคุณมาแสดง</p>
+              </div>
+            )}
+
+            {firebaseUser && calendarConnectionState === "unavailable" && (
+              <div className="error-banner" role="status">
+                <span>ยังติดต่อ Calendar backend ไม่ได้ชั่วคราว — อาจกำลังเริ่มทำงาน</span>
+                <button type="button" className="btn btn-outline" onClick={refreshCalendarConnection}>ลองเชื่อมต่อใหม่</button>
               </div>
             )}
 
