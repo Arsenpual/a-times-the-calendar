@@ -382,7 +382,11 @@ export function useActivityMutations({
     }
     await loadActivities();
     refreshTagSearchIfActive();
-    return created;
+    // Calendar deletion completed successfully.  This handler used to
+    // return an unrelated, undefined `created` variable after the delete,
+    // which made callers such as archiveActivity treat a successful delete
+    // as a failure and roll back the archive record.
+    return true;
   };
 
   /**
