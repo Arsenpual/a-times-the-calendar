@@ -142,9 +142,20 @@ app.use((err, req, res, next) => {
 // (ดู middleware/require-auth.js)
 app.listen(PORT, () => {
   console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
-  telegramRouter.registerWebhook(
-    process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com"
-  ).catch((error) => {
-    console.error("[telegram] ตั้ง webhook อัตโนมัติไม่สำเร็จ:", error.message);
-  });
+  const webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com";
+  const retryDelaysMs = [3_000, 10_000, 30_000];
+  const registerTelegramWebhook = (attempt = 0) => {
+    telegramRouter.registerWebhook(webhookBaseUrl).catch((error) => {
+      // Render can briefly lack outbound DNS/network readiness just after a
+      // deploy. Outgoing notifications may work later, but Telegram commands
+      // require this initial webhook registration, so retry without a redeploy.
+      const reason = error?.cause?.message || error?.message || String(error);
+      console.error(`[telegram] ตั้ง webhook อัตโนมัติไม่สำเร็จ (ครั้งที่ ${attempt + 1}):`, reason);
+      if (attempt >= retryDelaysMs.length) return;
+      const delay = retryDelaysMs[attempt];
+      console.log(`[telegram] จะลองตั้ง webhook ใหม่ใน ${delay / 1000} วินาที`);
+      setTimeout(() => registerTelegramWebhook(attempt + 1), delay);
+    });
+  };
+  registerTelegramWebhook();
 });
