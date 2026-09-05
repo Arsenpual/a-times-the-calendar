@@ -94,6 +94,14 @@ export async function sendTelegramActivity(title) {
   return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "activity" }) }), "POST /api/telegram/notify");
 }
 
+/** Ask the low-cost Gemini model to propose one activity; it never saves it. */
+export async function createAiActivityDraft(input) {
+  return handleResponse(
+    await apiRequest("/api/ai/activity-draft", { method: "POST", body: JSON.stringify(input) }),
+    "POST /api/ai/activity-draft"
+  );
+}
+
 /** Gets the optional announcement set by the authorised Telegram command. */
 export async function getAnnouncement() {
   return handleResponse(await apiRequest("/api/announcement"), "GET /api/announcement");

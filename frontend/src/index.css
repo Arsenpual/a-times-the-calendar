@@ -2548,6 +2548,24 @@ html.screen-reader-mode .tag-search-input {
   flex: 0 0 auto;
 }
 
+.ai-activity-draft-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--app-divider, #e4e2dc);
+  border-radius: 999px;
+  background: var(--app-surface, #fff);
+  color: var(--app-text, #1c1c1a);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.ai-activity-draft-btn:hover:not(:disabled) { border-color: #d85a30; color: #d85a30; }
+.ai-activity-draft-btn:disabled { cursor: wait; opacity: 0.65; }
+
 .modal-close {
   border: none;
   background: transparent;

@@ -94,6 +94,10 @@ router.post("/test", async (req, res, next) => {
 
 router.post("/notify", async (req, res, next) => {
   try {
+    // Telegram is an optional delivery channel. A local development setup
+    // commonly omits its production-only bot secret, which must not turn an
+    // otherwise successful Activity/Reminder action into a backend error.
+    if (!process.env.TELEGRAM_BOT_TOKEN) return res.json({ sent: false, unavailable: true });
     const data = (await telegramAuthDoc(req.userId).get()).data();
     if (!data?.chatId) return res.json({ sent: false });
     const title = String(req.body?.title || "Reminder").slice(0, 500);

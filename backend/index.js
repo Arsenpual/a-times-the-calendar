@@ -16,6 +16,7 @@ const calendarAuthRouter = require("./routes/calendar-auth.js");
 const calendarRouter = require("./routes/calendar.js");
 const telegramRouter = require("./routes/telegram.js");
 const announcementRouter = require("./routes/announcement.js");
+const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -97,6 +98,16 @@ app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
 app.use("/api/calendar", requireAuth, calendarRouter);
 app.use("/api/announcement", requireAuth, announcementRouter);
+// Gemini is used only to propose a draft. The client still confirms before
+// saving anything to Google Calendar.
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "เรียกผู้ช่วย AI ถี่เกินไป กรุณาลองใหม่ภายหลัง" }
+});
+app.use("/api/ai", requireAuth, aiLimiter, aiActivityDraftRouter);
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
 // กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
 app.post("/api/telegram/webhook", telegramRouter.webhook);

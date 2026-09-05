@@ -94,6 +94,7 @@ export default function ActivityModal({
   onDelete,
   onSyncGoogleCalendar,
   googleCalendarSyncing = false,
+  onGenerateAiDraft,
   onClose
 }) {
   const isEditing = !!initialActivity;
@@ -201,6 +202,7 @@ export default function ActivityModal({
   const [notes, setNotes] = useState(initialActivity?.description || "");
 
   const [saving, setSaving] = useState(false);
+  const [aiDrafting, setAiDrafting] = useState(false);
   const [formError, setFormError] = useState(initialWarning || null);
   const [remainingRequiredFields, setRemainingRequiredFields] = useState(missingFields);
   // Editing an existing event must never unexpectedly rewrite its end time.
@@ -235,6 +237,65 @@ export default function ActivityModal({
         ? !endDate && !endTime
         : !date && !startTime;
       if (otherIsEmpty) setEditingTimesCleared(true);
+    }
+  };
+
+  const normalizeAiDateTime = (value) => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    // Gemini occasionally returns valid ISO with seconds (or an explicit
+    // offset) despite being asked for YYYY-MM-DDTHH:mm. Keep calendar time
+    // correct instead of rejecting an otherwise usable AI draft.
+    const plainMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (plainMatch) return `${plainMatch[1]}T${plainMatch[2]}`;
+    const withZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed) ? new Date(trimmed) : null;
+    if (withZone && !Number.isNaN(withZone.getTime())) {
+      return `${toDateInputValue(withZone)}T${toTimeInputValue(withZone)}`;
+    }
+    return null;
+  };
+
+  const applyAiDateTime = (kind, value) => {
+    const normalized = normalizeAiDateTime(value);
+    if (!normalized) return false;
+    const [nextDate, nextTime] = normalized.split("T");
+    if (kind === "start") {
+      setDate(nextDate);
+      setStartTime(nextTime);
+    } else {
+      setEndDate(nextDate);
+      setEndTime(nextTime);
+    }
+    return true;
+  };
+
+  const handleAiDraft = async () => {
+    if (!onGenerateAiDraft || isEditing) return;
+    const request = window.prompt("อธิบายกิจกรรม เช่น ‘พรุ่งนี้ประชุมทีม 10 โมง 90 นาที’");
+    if (!request?.trim()) return;
+    setAiDrafting(true);
+    setFormError(null);
+    try {
+      const draft = await onGenerateAiDraft({
+        text: request,
+        referenceDate: date || toDateInputValue(new Date()),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        categories: categories.map((category) => category.name)
+      });
+      if (draft.title) setTitle(draft.title);
+      const hasStart = applyAiDateTime("start", draft.startLocal);
+      const hasEnd = applyAiDateTime("end", draft.endLocal);
+      if (!hasStart || !hasEnd) throw new Error("Gemini ส่งวันหรือเวลาในรูปแบบที่ใช้ไม่ได้");
+      if (typeof draft.notes === "string") {
+        setNotes(draft.notes);
+        setNotesOpen(Boolean(draft.notes));
+      }
+      const matchingCategory = categories.find((category) => category.name === draft.categoryName);
+      setCategoryId(matchingCategory?.id || "");
+    } catch (error) {
+      setFormError(error.message || "สร้างร่างกิจกรรมด้วย AI ไม่สำเร็จ");
+    } finally {
+      setAiDrafting(false);
     }
   };
   const startMissing = remainingRequiredFields.includes("start");
@@ -466,6 +527,11 @@ export default function ActivityModal({
               <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
                 <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
                 <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
+              </button>
+            )}
+            {!isEditing && onGenerateAiDraft && (
+              <button type="button" className="ai-activity-draft-btn" onClick={handleAiDraft} disabled={aiDrafting} title="ให้ Gemini ช่วยร่างกิจกรรม">
+                <span aria-hidden="true">✨</span><span>{aiDrafting ? "กำลังร่าง..." : "ร่างด้วย AI"}</span>
               </button>
             )}
             <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">

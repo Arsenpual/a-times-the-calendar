@@ -12,7 +12,7 @@ import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
 import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
-import { getAnnouncement, sendTelegramActivity } from "./api.js";
+import { createAiActivityDraft, getAnnouncement, sendTelegramActivity } from "./api.js";
 import { useAuth } from "./hooks/use-auth.js";
 import { useWeekNavigation } from "./hooks/use-week-navigation.js";
 import { useCalendarData } from "./hooks/use-calendar-data.js";
@@ -262,6 +262,8 @@ function MainApp() {
       // expired token. Keep the modal usable after a failed manual sync.
     }
   }, [calendarAccessToken, loadActivities, setError]);
+
+  const handleGenerateAiActivityDraft = useCallback((input) => createAiActivityDraft(input), []);
 
   const tagSearch = useTagSearch({ calendarAccessToken, setCalendarAccessToken });
   const {
@@ -960,6 +962,7 @@ function MainApp() {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
+        onGenerateAiDraft={handleGenerateAiActivityDraft}
         googleCalendarSyncing={loading}
         onClose={closeModal}
       />
