@@ -709,17 +709,25 @@ function MainApp() {
       )}
 
       <main className="app-main">
-        {firebaseUser && mode === "reminder" && (
-          <ReminderMode
-            firebaseUser={firebaseUser}
-            activities={visibleActivities}
-            categories={categories}
-            activityCategoryMap={activityCategoryMap}
-            lockedActivities={lockedActivities}
-            onEditActivity={openEditActivity}
-            onToggleActivityLock={handleToggleLock}
-            timelineColors={reminderTimelineColors}
-          />
+        {firebaseUser && (
+          // Keep the reminder runtime mounted while Activity Mode is open.
+          // Its due-check loop owns Telegram reminder delivery, so unmounting
+          // it on every mode switch used to stop Telegram until the user
+          // explicitly returned to Reminder Mode. `hidden` removes only its
+          // visual layout; state, Firebase sync, and the notification loop
+          // continue while this browser tab remains open.
+          <div hidden={mode !== "reminder"} aria-hidden={mode !== "reminder"}>
+            <ReminderMode
+              firebaseUser={firebaseUser}
+              activities={visibleActivities}
+              categories={categories}
+              activityCategoryMap={activityCategoryMap}
+              lockedActivities={lockedActivities}
+              onEditActivity={openEditActivity}
+              onToggleActivityLock={handleToggleLock}
+              timelineColors={reminderTimelineColors}
+            />
+          </div>
         )}
 
         {mode === "activity" && (
