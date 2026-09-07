@@ -1,0 +1,1591 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&family=Roboto+Mono:wght@500&display=swap');
+
+        * { box-sizing: border-box; }
+        
+        html, body {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          overflow: hidden;
+        }
+
+        .reminder-app-container {
+          --g-blue: #D85A30;
+          --g-blue-hover: #B74623;
+          --g-blue-light: #F9E8E1;
+          --g-red: #ea4335;
+          --g-yellow: #fbbc04;
+          --g-green: #34a853;
+          /* เพิ่มเข้ามาคู่กับ TYPE_ACCENT_COLOR (migration plan v2 เฟส 1.4)
+             — hex เดียวกับ "ม่วง"/"ฟ้าอมเขียว" ใน LINE_COLOR_OPTIONS ไม่ได้
+             คิดโทนใหม่ ตามหลักเดียวกับ --g-yellow/--g-red/--g-green ข้างบน
+             ที่ไม่ปรับตาม dark mode (อ่านออกบนพื้นมืดได้อยู่แล้ว) */
+          --g-purple: #a142f4;
+          --g-teal: #00bcd4;
+          --g-surface: #ffffff;
+          --g-background: #F7F6F2;
+          --g-on-surface: #1C1C1A;
+          --g-on-surface-variant: #8A8A85;
+          --g-outline: #E4E2DC;
+          --g-outline-variant: #EDEBE5;
+          /* ฟิลด์เพิ่มเติมสำหรับสี hover/active ที่เดิม hardcode เป็น hex
+             ตรงๆ ในหลายจุดด้านล่าง (ไม่เคยผ่าน --g-* เลย) — ดึงมาเป็นตัวแปร
+             ตรงนี้เพื่อให้ dark-mode override block ด้านล่างจัดการได้ที่
+             จุดเดียว แทนที่จะต้องไล่แก้ hex ทีละจุดในกฎที่กระจายอยู่ทั่วไฟล์ */
+          --g-blue-light-hover: #F3D5C9;
+          --g-red-light: #fce8e6;
+          --g-red-light-border: #f5c6cb;
+          --g-red-dark: #c5221f;
+          --g-red-light-hover: #fad2cf;
+          --g-active-bg: #fef7e0;
+          --g-active-border: #fde293;
+          --g-toggle-off: #bdc1c6;
+          --g-major-hour-tint: rgba(248, 249, 250, 0.6);
+
+          font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          height: 100vh;
+          max-height: 100vh;
+          background-color: var(--g-background);
+          color: var(--g-on-surface);
+          overflow: hidden;
+        }
+
+        /* Dark mode — reminder mode มี custom property namespace ของตัวเอง
+           (--g-*) แยกจาก --bg/--text-primary/ฯลฯ ที่เหลือทั้งแอปใช้ (ดู
+           index.css's html[data-theme="dark"] block) เพราะ style block นี้
+           ถูกเขียนแบบ self-contained ตั้งแต่ตอนยังเป็น mockup แยกเดี่ยว —
+           แทนที่จะไล่เปลี่ยนทุก var(--g-...) ในไฟล์นี้ (700+ บรรทัด) ให้ไป
+           อ้าง --bg/--text-primary/ฯลฯ ตรงๆ ซึ่งเสี่ยง regression สูงและ
+           breaking การ preview เป็น standalone component ในอนาคต แค่ override
+           ค่าของ --g-* เองที่นี่ตาม data-theme ก็พอ — ทุกกฎที่เหลือด้านล่าง
+           ที่อ้างอิงผ่าน var(--g-...) อยู่แล้วจะเปลี่ยนตามอัตโนมัติ พาเลท
+           อ้างอิงจาก index.css's dark block (--bg: #202124, --bg-muted:
+           #2d2e30, --text-primary: #e8eaed, --text-secondary: #9aa0a6,
+           --border: #4a4d51) เพื่อให้โทนสีเข้ากับส่วนอื่นของแอป ไม่ใช่คิด
+           พาเลทใหม่แยกต่างหาก
+           สีใน semantic accent (--g-yellow, --g-red, --g-green หลัก) คงค่า
+           เดิมไว้เกือบทั้งหมด ตามหลักเดียวกับที่ index.css บอกไว้ (ยังอ่าน
+           ออกบนพื้นมืดได้อยู่แล้ว การปรับจะต้องเช็ค contrast ใหม่ทุกจุดที่
+           ใช้ ซึ่งเกินขอบเขตของรอบนี้) */
+        html[data-theme="dark"] .reminder-app-container {
+          --g-blue: #E8703F;
+          --g-blue-hover: #F08A60;
+          --g-surface: #292927;
+          --g-background: #20201E;
+          --g-on-surface: #F2F1ED;
+          --g-on-surface-variant: #9C9C97;
+          --g-outline: #3A3A38;
+          --g-outline-variant: #30302E;
+          --g-blue-light: #4A2920;
+          --g-blue-light-hover: #5A3226;
+          --g-red-light: #3c1c1c;
+          --g-red-light-border: #5c2b2b;
+          --g-red-dark: #f28b82;
+          --g-red-light-hover: #4a2424;
+          --g-active-bg: #3a341a;
+          --g-active-border: #5c4f22;
+          --g-toggle-off: #5f6368;
+          --g-major-hour-tint: rgba(255, 255, 255, 0.04);
+        }
+
+        .due-alert-banner {
+          background: var(--g-red-light);
+          border-bottom: 1px solid var(--g-red-light-border);
+          padding: 12px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: var(--g-red-dark);
+          font-size: 14px;
+          font-weight: 500;
+          flex-shrink: 0;
+        }
+
+        .due-alert-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .btn-snooze {
+          background: var(--g-surface);
+          border: 1px solid var(--g-red-light-border);
+          color: var(--g-red-dark);
+          padding: 6px 14px;
+          border-radius: 18px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+
+        .btn-snooze:hover {
+          background: var(--g-red-light);
+        }
+
+        .due-alert-item-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        /* Backdrop โปร่งใสเต็มจอ ปิดเมนูเมื่อคลิกข้างนอก (เฟส 1.3/1.4) */
+        .dropdown-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 40;
+        }
+
+        .snooze-dropdown-wrap {
+          position: relative;
+        }
+
+        .snooze-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          z-index: 50;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 140px;
+        }
+
+        .snooze-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--g-on-surface);
+          cursor: pointer;
+        }
+
+        .snooze-menu button:hover {
+          background: var(--g-background);
+        }
+
+        .btn-mark-done {
+          background: #1e8e3e;
+          border: 1px solid #188038;
+          color: #fff;
+          padding: 7px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 2px 5px rgba(24, 128, 56, 0.30);
+          transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        .btn-mark-done:hover {
+          background: #188038;
+          box-shadow: 0 3px 8px rgba(24, 128, 56, 0.38);
+          transform: translateY(-1px);
+        }
+
+        .btn-mark-done:focus-visible {
+          outline: 3px solid color-mix(in srgb, #1e8e3e 38%, transparent);
+          outline-offset: 2px;
+        }
+
+        .btn-mark-done:active {
+          transform: translateY(0);
+          box-shadow: 0 1px 3px rgba(24, 128, 56, 0.30);
+        }
+
+        /* Top bar — เพิ่มเข้ามาในรอบ layout-only ของ migration plan v2 เฟส 1
+           (โครง 3 คอลัมน์ + top bar) โลโก้/omnibar/ปุ่มสถิติเป็น placeholder
+           ล้วนๆ ในรอบนี้ ยังไม่ผูก logic จริง — omnibar รอเฟส 6, สถิติรอ
+           เฟส 7 ปุ่มตั้งค่าตั้งใจไม่ใส่ซ้ำที่นี่ เพราะ app.jsx render ปุ่ม
+           settings ของตัวเองอยู่แล้วเป็นปุ่มเดียวฝั่งขวาบนตอนอยู่ใน
+           reminder mode (ดู settings-drawer.jsx's module comment) */
+        .app-topbar {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 10px 24px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          background: var(--g-surface);
+          flex-shrink: 0;
+        }
+
+        .topbar-logo {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 700;
+          font-size: 16px;
+          color: var(--g-on-surface);
+          white-space: nowrap;
+        }
+
+        .topbar-logo-icon {
+          font-size: 18px;
+        }
+
+        .topbar-omnibar-wrap {
+          flex: 1;
+          max-width: 560px;
+          margin: 0 auto;
+          position: relative;
+        }
+
+        .topbar-omnibar {
+          width: 100%;
+          padding: 8px 16px;
+          border-radius: 20px;
+          border: 1px solid var(--g-outline);
+          background: var(--g-background);
+          color: var(--g-on-surface-variant);
+          font-size: 13px;
+          font-family: inherit;
+        }
+
+        .topbar-omnibar:disabled {
+          cursor: not-allowed;
+          opacity: 0.75;
+        }
+
+        .omnibar-preview {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 8px 10px 8px 14px;
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          background: var(--g-surface);
+          color: var(--g-on-surface-variant);
+          box-shadow: 0 5px 14px rgba(60, 64, 67, 0.18);
+          font-size: 12px;
+        }
+
+        .omnibar-preview.is-matched {
+          border-color: var(--g-blue);
+          color: var(--g-on-surface);
+        }
+
+        .omnibar-preview button {
+          flex-shrink: 0;
+          border: 0;
+          border-radius: 7px;
+          padding: 5px 9px;
+          background: var(--g-blue);
+          color: #fff;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 600;
+        }
+
+        .topbar-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .topbar-icon-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          font-size: 15px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .topbar-icon-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        .topbar-icon-btn.is-active {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+        }
+
+        .topbar-telegram-btn {
+          color: #229ed9;
+          position: relative;
+          transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+        }
+
+        .topbar-telegram-btn.is-active {
+          background: color-mix(in srgb, #229ed9 18%, transparent);
+          color: #168bc3;
+        }
+
+        .topbar-telegram-btn.is-muted {
+          color: var(--g-on-surface-variant);
+          opacity: 0.62;
+        }
+
+        .topbar-telegram-btn svg {
+          width: 19px;
+          height: 19px;
+          fill: currentColor;
+        }
+
+        .reminder-stats-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          background: rgba(32, 33, 36, 0.34);
+        }
+
+        .reminder-stats-panel {
+          width: min(520px, 100%);
+          padding: 22px;
+          border-radius: 16px;
+          background: var(--g-surface);
+          box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+          color: var(--g-on-surface);
+        }
+
+        .reminder-stats-panel header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 18px;
+        }
+
+        .reminder-stats-panel header p { margin: 0; font-size: 18px; font-weight: 700; }
+        .reminder-stats-panel header span, .reminder-stats-note { color: var(--g-on-surface-variant); font-size: 12px; }
+        .reminder-stats-panel header button { border: 0; background: none; font-size: 25px; line-height: 1; cursor: pointer; color: var(--g-on-surface-variant); }
+        .reminder-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+        .reminder-stats-grid article { display: grid; gap: 3px; padding: 12px 8px; border-radius: 10px; background: var(--g-background); text-align: center; }
+        .reminder-stats-grid strong { font-size: 22px; color: var(--g-blue); }
+        .reminder-stats-grid span { color: var(--g-on-surface-variant); font-size: 11px; }
+        .reminder-stats-details { margin: 18px 0; }
+        .reminder-stats-details div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--g-outline-variant); font-size: 13px; }
+        .reminder-stats-details dt { color: var(--g-on-surface-variant); }
+        .reminder-stats-details dd { margin: 0; text-align: right; font-weight: 600; }
+        .reminder-stats-note { margin: 0; line-height: 1.45; }
+
+        /* Left nav — "ตัวกรองประเภท" wired จริงแล้ว (เฟส 2) filter แบบ
+           client-side, "กลุ่ม/โปรเจกต์" ยังว่างเปล่ารอเฟส 3, "ของวันนี้"
+           ยังเป็น placeholder รอระบบมุมมองในอนาคต */
+        .nav-sidebar {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+          overflow-y: auto;
+          padding: 16px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .nav-section-title {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--g-on-surface-variant);
+          margin: 0 0 6px 8px;
+        }
+
+        .nav-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface);
+          font-size: 13px;
+          font-family: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .nav-item:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .nav-item.is-active {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          font-weight: 500;
+        }
+
+        .nav-item-count {
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          background: var(--g-background);
+          border-radius: 10px;
+          padding: 1px 8px;
+        }
+
+        .nav-empty-state {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          padding: 4px 10px;
+          margin: 0 0 6px;
+        }
+
+        .nav-error-state {
+          font-size: 12px;
+          color: var(--g-red-dark);
+          padding: 4px 10px;
+          margin: 0 0 6px;
+        }
+
+        /* กลุ่ม/โปรเจกต์ ใน left nav (migration plan v2 เฟส 3) */
+        .nav-item-group-label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .nav-item-group-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .nav-item-right-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .nav-item-delete-group {
+          opacity: 0;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          padding: 2px 4px;
+          border-radius: 4px;
+          flex-shrink: 0;
+        }
+
+        .nav-item:hover .nav-item-delete-group {
+          opacity: 1;
+        }
+
+        .nav-item-delete-group:hover {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .nav-add-group-form {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 6px 10px;
+        }
+
+        .nav-add-group-input {
+          padding: 6px 10px;
+          border-radius: 8px;
+          border: 1px solid var(--g-outline);
+          background: var(--g-background);
+          color: var(--g-on-surface);
+          font-family: inherit;
+          font-size: 13px;
+        }
+
+        .nav-add-group-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        .nav-group-color-picker {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .nav-group-color-option {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border: 2px solid transparent;
+          border-radius: 50%;
+          background: var(--group-color);
+          cursor: pointer;
+        }
+
+        .nav-group-color-option:hover,
+        .nav-group-color-option.is-selected {
+          border-color: var(--g-surface);
+          outline: 2px solid var(--group-color);
+        }
+
+        .nav-group-custom-color {
+          position: relative;
+          display: grid;
+          place-items: center;
+          width: 20px;
+          height: 20px;
+          overflow: hidden;
+          border: 1px dashed var(--g-outline);
+          border-radius: 50%;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+        }
+        .nav-group-custom-color span { position: relative; z-index: 1; pointer-events: none; font-size: 14px; line-height: 1; }
+        .nav-group-custom-color input[type="color"] { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); padding: 0; border: 0; opacity: 0; cursor: pointer; }
+
+        .nav-add-group-confirm {
+          background: var(--g-blue);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 5px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        .nav-add-group-cancel {
+          background: none;
+          border: none;
+          color: var(--g-on-surface-variant);
+          font-size: 12px;
+          cursor: pointer;
+          padding: 5px 8px;
+        }
+
+        /* Chip กลุ่มบนตัวการ์ด reminder เอง (เฟส 3) */
+        .reminder-group-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          min-height: 20px;
+          padding: 2px 7px;
+          border-radius: 999px;
+          background: var(--g-background);
+        }
+
+        .reminder-group-chip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        /* Badge "ทำเสร็จแล้ว" บนการ์ด (migration plan v2 เฟส 4) */
+        .reminder-completed-badge {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--g-green);
+          margin-top: 2px;
+        }
+
+        .dashboard-body {
+          display: grid;
+          grid-template-columns: 260px 1fr 320px;
+          flex: 1;
+          min-height: 0;
+          overflow: hidden;
+          padding: 16px;
+          gap: 16px;
+        }
+
+        .timeline-panel {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          position: relative;
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+        }
+
+        .timeline-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+          background: var(--g-surface);
+          z-index: 20;
+        }
+
+        .timeline-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin: 0;
+        }
+
+        .zoom-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: var(--g-background);
+          border-radius: 20px;
+          padding: 2px 8px;
+          border: 1px solid var(--g-outline);
+        }
+
+        .zoom-btn {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .zoom-btn:disabled {
+          opacity: 0.3;
+          cursor: default;
+        }
+
+        .zoom-btn:not(:disabled):hover {
+          background: var(--g-outline-variant);
+        }
+
+        .zoom-display {
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--g-on-surface);
+          min-width: 65px;
+          text-align: center;
+        }
+
+        .timeline-viewport {
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .now-indicator {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 2px;
+          background: var(--timeline-now-color);
+          z-index: 15;
+          pointer-events: none;
+        }
+
+        .now-indicator::before {
+          content: "";
+          position: absolute;
+          left: 54px;
+          top: -4px;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--timeline-now-color);
+        }
+
+        .now-indicator-clock {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          padding: 3px 6px;
+          border-radius: 4px;
+          background: var(--g-surface);
+          border: 1px solid color-mix(in srgb, var(--timeline-now-color) 48%, var(--g-outline-variant));
+          color: var(--timeline-now-color);
+          font-family: 'Roboto Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          letter-spacing: .02em;
+          font-variant-numeric: tabular-nums;
+          box-shadow: 0 1px 3px rgba(60, 64, 67, .18);
+          white-space: nowrap;
+        }
+
+        .timeline-activity-status {
+          position: absolute;
+          left: 50%;
+          top: 12px;
+          transform: translateX(-50%);
+          z-index: 20;
+          display: inline-flex;
+          align-items: baseline;
+          gap: 6px;
+          max-width: calc(100% - 32px);
+          padding: 7px 12px;
+          border-radius: 999px;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline-variant);
+          border-left: 4px solid var(--timeline-status-color);
+          box-shadow: 0 3px 10px rgba(60, 64, 67, 0.22);
+          color: var(--timeline-status-color);
+          font-size: 12px;
+          line-height: 1.2;
+          pointer-events: none;
+        }
+
+        .timeline-activity-status-title {
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 700;
+        }
+
+        .timeline-activity-status strong {
+          flex-shrink: 0;
+          color: var(--timeline-status-color);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .tape-scroll-container {
+          height: 100%;
+          overflow: auto;
+          position: relative;
+          scroll-behavior: auto;
+          -webkit-overflow-scrolling: touch;
+          will-change: scroll-position;
+          transform: translateZ(0);
+          overscroll-behavior: contain;
+        }
+
+        .tape-track-wrapper {
+          position: relative;
+          min-width: 100%;
+        }
+
+        .color-picker-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding-top: 4px;
+        }
+
+        .color-swatch-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          padding: 0;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+          transition: transform 0.1s ease, border-color 0.1s ease;
+        }
+
+        .color-swatch-btn:hover {
+          transform: scale(1.1);
+        }
+
+        .color-swatch-btn.selected {
+          border-color: var(--g-on-surface, #202124);
+          box-shadow: 0 0 0 2px var(--g-surface, #fff), 0 0 0 4px currentColor;
+        }
+
+        .color-swatch-custom {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px dashed var(--g-outline, #dadce0);
+          background-image: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+          overflow: hidden;
+        }
+
+        .color-swatch-custom input[type="color"] {
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+          border: none;
+          padding: 0;
+        }
+
+        .tape-spacer {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .time-row {
+          position: relative;
+          /* Every scheduled reminder row sits above the Activity Mode
+             background layer. Pointer events are restored only on its
+             reminder chips, so empty row space still reaches the activity
+             button underneath. */
+          z-index: 20;
+          pointer-events: none;
+          border-bottom: 1px solid var(--g-outline-variant);
+          padding-left: 12px;
+          display: flex;
+          align-items: center;
+          user-select: none;
+          content-visibility: auto;
+          contain-intrinsic-size: 0 var(--row-height, 32px);
+        }
+
+        .time-row.major-hour {
+          border-bottom-color: var(--g-outline);
+          background-color: var(--g-major-hour-tint);
+        }
+
+        .time-label {
+          flex: 0 0 60px;
+          font-family: 'Roboto Mono', monospace;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          text-align: right;
+          margin-right: 12px;
+        }
+
+        .time-row.major-hour .time-label {
+          font-weight: 700;
+          color: var(--g-blue);
+        }
+
+        .event-chip-group {
+          position: absolute;
+          left: 84px;
+          right: 8px;
+          top: 3px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          overflow: visible;
+          pointer-events: auto;
+        }
+
+        .event-chip {
+          border: 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+          padding: 3px 10px;
+          border-radius: 6px;
+          white-space: nowrap;
+          flex-shrink: 0;
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 500;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+        }
+
+        .event-chip:hover,
+        .event-chip:focus-visible {
+          filter: brightness(0.95);
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
+        }
+
+        .event-chip.disabled {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
+        }
+
+        .chip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--g-blue);
+          flex-shrink: 0;
+        }
+
+        .event-chip.disabled .chip-dot {
+          background: var(--g-on-surface-variant);
+        }
+
+        .main-panel {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+          min-height: 0;
+        }
+
+        .main-panel-toolbar {
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+        }
+
+        .main-panel-toolbar h2 {
+          font-size: 20px;
+          font-weight: 500;
+          margin: 0 0 4px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        /* Chip แสดงตัวกรองประเภทที่กำลังใช้อยู่ (migration plan v2 เฟส 2) */
+        .active-filter-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          font-size: 12px;
+          font-weight: 500;
+          padding: 3px 6px 3px 10px;
+          border-radius: 14px;
+        }
+
+        .active-filter-chip button {
+          background: none;
+          border: none;
+          color: inherit;
+          cursor: pointer;
+          font-size: 12px;
+          padding: 2px 4px;
+          line-height: 1;
+        }
+
+        .toolbar-subtitle {
+          font-size: 13px;
+          color: var(--g-on-surface-variant);
+          margin: 0;
+        }
+
+        .add-reminder-btn {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          border: none;
+          padding: 10px 20px;
+          border-radius: 24px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+        }
+
+        .add-reminder-btn:hover {
+          background: var(--g-blue-light-hover);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+
+        .add-reminder-btn.is-open {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
+        }
+
+        .add-reminder-btn-icon {
+          display: inline-block;
+          transition: transform 0.15s;
+        }
+
+        .add-reminder-btn.is-open .add-reminder-btn-icon {
+          transform: rotate(45deg);
+        }
+
+        /* Tab bar — เพิ่มเข้ามาแทน section-header คั่นหัวข้อเดิม (migration
+           plan v2 เฟส 1.2) .section-header เดิมด้านล่างยังเก็บไว้เผื่อจุด
+           อื่นในอนาคตอ้างถึง แต่ไม่ได้ใช้ในรายการหลักแล้วตอนนี้ */
+        .tab-bar {
+          display: flex;
+          gap: 4px;
+          padding: 0 16px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          flex-shrink: 0;
+        }
+
+        .reminder-status-tab {
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          padding: 10px 4px;
+          margin-bottom: -1px;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .reminder-status-tab:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        .reminder-status-tab.is-active {
+          color: var(--g-blue);
+          border-bottom-color: var(--g-blue);
+        }
+
+        .reminder-status-tab-count {
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          background: var(--g-background);
+          border-radius: 10px;
+          padding: 1px 7px;
+        }
+
+        .reminder-status-tab.is-active .reminder-status-tab-count {
+          color: var(--g-blue);
+        }
+
+        .reminders-scroll-area {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 12px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .section-header {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          color: var(--g-on-surface-variant);
+          text-transform: uppercase;
+          margin: 4px 0 0 4px;
+          position: sticky;
+          top: 0;
+          background: var(--g-surface);
+          padding: 4px 0;
+          z-index: 1;
+        }
+
+        .empty-state {
+          font-size: 13px;
+          color: var(--g-on-surface-variant);
+          text-align: center;
+          padding: 32px 16px;
+          margin: 0;
+        }
+
+        .reminder-card {
+          display: grid;
+          grid-template-columns: 28px 1fr auto auto;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: 1px solid var(--g-outline-variant);
+          border-left-width: 4px;
+          background: var(--g-surface);
+          transition: all 0.2s ease;
+        }
+
+        .reminder-card:hover {
+          border-color: var(--g-outline);
+          box-shadow: 0 2px 6px rgba(60,64,67,0.08);
+        }
+
+        .reminder-card.active {
+          background: var(--g-active-bg);
+          border-color: var(--g-active-border);
+        }
+
+        /* dropdown-backdrop เป็น fixed layer (z-index: 40) สำหรับปิดเมนู
+           เมื่อคลิกด้านนอก. การ์ดที่เปิดเมนูต้องยกทั้ง stacking context
+           ขึ้นเหนือมัน มิฉะนั้น backdrop จะดักคลิกปุ่ม แก้ไข/ลบ ทั้งหมด. */
+        .reminder-card.menu-open {
+          position: relative;
+          z-index: 45;
+        }
+
+        /* icon กล่องสี่เหลี่ยมมุมโค้ง (เดิมเป็นวงกลม) พื้นหลังคือสีประจำ
+           ประเภท (TYPE_ACCENT_COLOR, ตั้งค่าผ่าน inline style ต่อการ์ด) —
+           ไม่ผูกกับ enabled/disabled อีกต่อไป (เดิมมีกฎ .active
+           .reminder-type-icon แยกสำหรับ enabled state — เอาออกเพราะตอนนี้
+           สีสื่อ "ประเภท" เสมอ ส่วนสถานะ enabled/disabled สื่อผ่านความจาง
+           ของทั้ง icon แทน ดูกฎถัดไป) */
+        .reminder-type-icon {
+          width: 26px;
+          height: 26px;
+          padding: 0;
+          border: 0;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 11px;
+          flex-shrink: 0;
+          cursor: pointer;
+        }
+
+        .reminder-type-icon:focus-visible,
+        .reminder-info:focus-visible {
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
+        }
+
+        .reminder-card:not(.active) .reminder-type-icon {
+          opacity: 0.55;
+        }
+
+        .reminder-info {
+          min-width: 0;
+          cursor: pointer;
+          display: grid;
+          gap: 4px;
+        }
+
+        .reminder-card-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .reminder-info .title {
+          flex: 1 1 auto;
+          min-width: 0;
+          font-size: 14px;
+          font-weight: 700;
+          margin: 0;
+          color: var(--g-on-surface);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .reminder-priority {
+          flex: 0 0 auto;
+          padding: 3px 7px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+
+        .reminder-priority--next,
+        .reminder-priority--active {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .reminder-priority--due {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .reminder-priority--paused,
+        .reminder-priority--waiting {
+          background: var(--g-background);
+          color: var(--g-on-surface-variant);
+        }
+
+        .reminder-priority--completed {
+          background: color-mix(in srgb, var(--g-green) 14%, var(--g-surface));
+          color: var(--g-green);
+        }
+
+        .reminder-schedule-detail {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .reminder-weekly-days-detail {
+          display: flex;
+          gap: 4px;
+          margin: -1px 0 0;
+          color: var(--g-on-surface-variant);
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
+        .reminder-weekly-days-detail span {
+          color: var(--g-on-surface);
+          font-weight: 700;
+        }
+
+        .reminder-card-metadata {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .reminder-type-chip {
+          display: inline-flex;
+          align-items: center;
+          min-height: 20px;
+          padding: 2px 7px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--g-on-surface) 7%, transparent);
+          color: var(--g-on-surface-variant);
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .btn-action-small {
+          margin-top: 4px;
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+          border: none;
+          padding: 3px 8px;
+          border-radius: 10px;
+          font-size: 11px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .day-selector { display: flex; gap: 6px; margin-top: 6px; }
+        .day-btn {
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          border: 1px solid var(--g-outline);
+          background: transparent;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .day-btn.selected { background: var(--g-blue); color: white; border-color: var(--g-blue); }
+
+        .toggle-switch {
+          width: 36px;
+          height: 20px;
+          border-radius: 10px;
+          background: var(--g-toggle-off);
+          border: none;
+          position: relative;
+          cursor: pointer;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+
+        .toggle-switch.on {
+          background: var(--g-blue);
+        }
+
+        .toggle-switch::after {
+          content: "";
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #ffffff;
+          transition: transform 0.2s;
+        }
+
+        .toggle-switch.on::after {
+          transform: translateX(16px);
+        }
+
+        .stopwatch-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .btn-stopwatch {
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 6px 12px;
+          border-radius: 14px;
+          border: none;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .btn-stopwatch.start {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .btn-stopwatch.start:hover {
+          background: var(--g-blue-light-hover);
+        }
+
+        .btn-stopwatch.stop {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .btn-stopwatch.stop:hover {
+          background: var(--g-red-light-hover);
+        }
+
+        .form-hint {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          margin: 0 0 12px 0;
+          line-height: 1.5;
+        }
+
+        .reminder-card-actions {
+          position: relative;
+          display: flex;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+
+        .reminder-card:hover .reminder-card-actions,
+        .reminder-card:focus-within .reminder-card-actions,
+        .reminder-card-actions.menu-open {
+          opacity: 1;
+        }
+
+        .card-dropdown-menu {
+          position: fixed;
+          top: var(--card-menu-y);
+          left: var(--card-menu-x);
+          z-index: 1000;
+          background: var(--bg-muted);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 110px;
+          max-width: calc(100vw - 16px);
+          max-height: calc(100vh - 16px);
+          overflow: auto;
+        }
+
+        .card-dropdown-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--text-primary);
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .card-dropdown-menu button:hover {
+          background: var(--hover);
+        }
+
+        .card-dropdown-menu button.is-danger {
+          color: var(--red);
+        }
+
+        .icon-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+          flex-shrink: 0;
+        }
+
+        .icon-btn:hover {
+          background: var(--g-outline-variant);
+        }
+
+        .composer-card {
+          border: 1px solid var(--g-outline);
+          border-radius: 12px;
+          padding: 14px;
+          background: var(--g-background);
+          flex-shrink: 0;
+          animation: composer-expand 0.15s ease;
+        }
+
+        @keyframes composer-expand {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-field {
+          margin-bottom: 10px;
+        }
+
+        .form-field label {
+          display: block;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          margin-bottom: 6px;
+        }
+
+        .form-input, .form-select {
+          width: 100%;
+          font-family: inherit;
+          font-size: 14px;
+          padding: 8px 12px;
+          border: 1px solid var(--g-outline);
+          border-radius: 8px;
+          background: var(--g-surface);
+          color: var(--g-on-surface);
+          outline: none;
+          transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus {
+          border-color: var(--g-blue);
+          box-shadow: 0 0 0 1px var(--g-blue);
+        }
+
+        .composer-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .interval-window-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 34px;
+          padding: 6px 10px;
+          border: 1px solid var(--g-outline);
+          border-radius: 9px;
+          background: var(--g-surface);
+          color: var(--g-on-surface);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .interval-window-toggle:hover { border-color: var(--g-blue); }
+        .interval-window-toggle.is-active { border-color: var(--g-blue); background: color-mix(in srgb, var(--g-blue) 12%, var(--g-surface)); color: var(--g-blue); }
+        .interval-window-toggle-track { position: relative; width: 30px; height: 17px; border-radius: 99px; background: var(--g-toggle-off); }
+        .interval-window-toggle-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform .16s ease; }
+        .interval-window-toggle.is-active .interval-window-toggle-track { background: var(--g-blue); }
+        .interval-window-toggle.is-active .interval-window-toggle-track::after { transform: translateX(13px); }
+
+        .freq-inline-group {
+          display: flex;
+          gap: 8px;
+        }
+
+        .freq-inline-group input {
+          width: 80px;
+        }
+
+        .composer-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-top: 14px;
+        }
+
+        .btn-text {
+          background: transparent;
+          border: none;
+          color: var(--g-blue);
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          padding: 8px 16px;
+          border-radius: 20px;
+          cursor: pointer;
+        }
+
+        .btn-text:hover {
+          background: var(--g-blue-light);
+        }
+
+        .btn-text.btn-delete-reminder,
+        .btn-text.btn-delete-reminder:hover {
+          color: var(--g-red-dark);
+        }
+
+        .btn-text.btn-delete-reminder:hover {
+          background: var(--g-red-light);
+        }
+
+        .btn-contained {
+          background: var(--g-blue);
+          border: none;
+          color: white;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          padding: 8px 20px;
+          border-radius: 20px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .btn-contained:hover {
+          background: var(--g-blue-hover);
+        }
+
+        @media (max-width: 900px) {
+          .dashboard-body {
+            grid-template-columns: 1fr;
+            overflow-y: auto;
+          }
+          .nav-sidebar {
+            height: auto;
+            max-height: 240px;
+          }
+          .timeline-panel {
+            min-height: 360px;
+          }
+          .topbar-omnibar-wrap {
+            display: none;
+          }
+        }

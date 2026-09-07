@@ -14,6 +14,7 @@ notifications/
 
 - Telegram API: ดูสถานะ, เชื่อมต่อ, ส่งข้อความทดสอบ และส่งแจ้งเตือน Activity/Reminder
 - Telegram preferences: เปิด/ปิดการส่งจากเบราว์เซอร์นี้ แยกตาม user ID โดยคง storage key เดิม
+- `telegram/hooks/use-activity-telegram-notifications.js`: ตรวจเวลาเริ่ม Activity และส่ง Telegram ขณะเว็บเปิด
 - Push API/hook: ลงทะเบียนและยกเลิก FCM token ตามพฤติกรรมเดิม
 - ทั้งสอง API ใช้ `src/shared/api/client.js` ร่วมกับ `src/api.js` สำหรับ Firebase ID token, HTTP request และ error handling
 

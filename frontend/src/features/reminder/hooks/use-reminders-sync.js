@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchReminders, saveReminder, deleteReminderRemote } from "../../../api.js";
+import { fetchReminders, saveReminder, deleteReminderRemote } from "../api/reminders.js";
 
 /**
  * เบื้องต้น sync แค่ "วัน/เวลา" ของ reminder เข้า Firebase — ดู

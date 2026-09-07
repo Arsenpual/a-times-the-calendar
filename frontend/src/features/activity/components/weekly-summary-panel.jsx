@@ -1,5 +1,5 @@
 import React from "react";
-import { dateForWeekdayLabel, getWeekRange } from "../../../date-utils.js";
+import { dateForWeekdayLabel, getWeekRange } from "../../../shared/lib/date-utils.js";
 import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
 const WEEKDAY_FULL = {

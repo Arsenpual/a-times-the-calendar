@@ -1,30 +1,32 @@
-import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import loginGuideStep1 from "../public/login-guide-step1.jpg";
-import loginGuideStep2 from "../public/login-guide-step2.jpg";
-import loginGuideStep3 from "../public/login-guide-step3.jpg";
-import ActivityModeWeekSpine from "./features/activity/components/activity-mode-week-spine.jsx";
-import TagSearchResults from "./features/activity/components/tag-search-results.jsx";
-import WeeklySummaryPanel from "./features/activity/components/weekly-summary-panel.jsx";
-import MiniTimelinePanel from "./features/activity/components/mini-timeline-panel.jsx";
-import ActivityModal from "./features/activity/components/activity-modal.jsx";
-import ReminderMode from "./features/reminder/components/reminder-mode.jsx";
-import AnnouncementTicker from "./components/announcement-ticker.jsx";
-import SettingsDrawer from "./features/settings/components/settings-drawer.jsx";
-import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";
-import { normalizeActivityId } from "./id-utils.js";
-import { createAiActivityDraft, getAnnouncement } from "./api.js";
-import { sendTelegramActivity } from "./features/notifications/telegram/api.js";
-import { areTelegramNotificationsEnabled } from "./features/notifications/telegram/telegram-notification-preferences.js";
-import { useAuth } from "./features/auth/hooks/use-auth.js";
-import { useWeekNavigation } from "./features/activity/hooks/use-week-navigation.js";
-import { useCalendarData } from "./features/activity/hooks/use-calendar-data.js";
-import { useTagSearch } from "./features/activity/hooks/use-tag-search.js";
-import { useActivityModal } from "./features/activity/hooks/use-activity-modal.js";
-import { useActivityMutations } from "./features/activity/hooks/use-activity-mutations.js";
-import { useActivityOnboarding } from "./features/activity/hooks/use-activity-onboarding.js";
-import ActivityModeMockupPreview from "./components/activity-mode-mockup-preview.jsx";
+import React, { useCallback, useEffect, useMemo } from "react";
+import loginGuideStep1 from "../../public/login-guide-step1.jpg";
+import loginGuideStep2 from "../../public/login-guide-step2.jpg";
+import loginGuideStep3 from "../../public/login-guide-step3.jpg";
+import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
+import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
+import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
+import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
+import ActivityModal from "../features/activity/components/activity-modal.jsx";
+import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
+import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
+import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
+import { formatWeekLabel, toDateInputValue } from "../shared/lib/date-utils.js";
+import { normalizeActivityId } from "../shared/lib/id-utils.js";
+import { createAiActivityDraft } from "../features/activity/api/activity-draft.js";
+import { useAuth } from "../features/auth/hooks/use-auth.js";
+import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
+import { useCalendarData } from "../features/activity/hooks/use-calendar-data.js";
+import { useTagSearch } from "../features/activity/hooks/use-tag-search.js";
+import { useActivityModal } from "../features/activity/hooks/use-activity-modal.js";
+import { useActivityMutations } from "../features/activity/hooks/use-activity-mutations.js";
+import { useActivityOnboarding } from "../features/activity/hooks/use-activity-onboarding.js";
+import { useArchivedActivityIds } from "../features/activity/hooks/use-archived-activity-ids.js";
+import { useActivityTelegramNotifications } from "../features/notifications/telegram/hooks/use-activity-telegram-notifications.js";
+import { useAnnouncementMessage } from "../features/announcements/hooks/use-announcement-message.js";
+import ActivityModeMockupPreview from "../dev/mockups/activity-mode-mockup-preview.jsx";
+import { useAppShellUi } from "./hooks/use-app-shell-ui.js";
 
-const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/activity-mode-*-mockup.jsx", { eager: true }))
+const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/activity-mode-*-mockup.jsx", { eager: true }))
   .map(([path, module]) => {
     const id = (path.split("/").pop() || "mockup.jsx").replace(/\.jsx$/, "");
     return { id, label: id.replace(/^activity-mode-/, "").replace(/-mockup$/, "").replace(/-/g, " "), Component: module.default };
@@ -34,10 +36,8 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/acti
 // Fallback only: after sign-in the app replaces this with the announcement
 // configured through the authorised Telegram command. It remains useful when
 // no remote announcement has ever been set or the backend is temporarily down.
-const ANNOUNCEMENT_MESSAGE = "🎉 อัปเดตเวอร์ชันใหม่ — เพิ่มการรองรับกิจกรรมข้ามเที่ยงคืน และปรับปรุงการแสดงผลไทม์ไลน์";
 const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
-const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
@@ -79,28 +79,6 @@ export default function App() {
  * and render.
  */
 function MainApp() {
-  const [isActivityReading, setIsActivityReading] = useState(false);
-  const [announcementMessage, setAnnouncementMessage] = useState(ANNOUNCEMENT_MESSAGE);
-  const activityDashboardRef = useRef(null);
-  const sentTelegramActivityKeysRef = useRef(new Set());
-  const activityNotificationCursorRef = useRef(Date.now() - 30_000);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [weekSpineHoursPerCell, setWeekSpineHoursPerCell] = useState(() => {
-    try {
-      const savedValue = Number(window.localStorage.getItem(WEEK_SPINE_HOURS_PER_CELL_KEY));
-      return [1, 2, 4].includes(savedValue) ? savedValue : 2;
-    } catch {
-      return 2;
-    }
-  });
-  const accountMenuRef = useRef(null);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(WEEK_SPINE_HOURS_PER_CELL_KEY, String(weekSpineHoursPerCell));
-    } catch {
-      // The default grid remains available when local storage is unavailable.
-    }
-  }, [weekSpineHoursPerCell]);
   useEffect(() => {
     const openMockupMode = (event) => {
       const target = event.target;
@@ -132,58 +110,8 @@ function MainApp() {
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
 
-  // Announcement updates are loaded after Firebase authentication. Refreshing
-  // again when the tab regains focus keeps it current without a polling loop
-  // that would create unnecessary Firestore reads for every open client.
-  useEffect(() => {
-    let cancelled = false;
-    const loadAnnouncement = async () => {
-      if (!firebaseUser) {
-        if (!cancelled) setAnnouncementMessage(ANNOUNCEMENT_MESSAGE);
-        return;
-      }
-      try {
-        const announcement = await getAnnouncement();
-        if (!cancelled) {
-          setAnnouncementMessage(announcement.configured ? (announcement.message || "") : ANNOUNCEMENT_MESSAGE);
-        }
-      } catch {
-        // Keep the local fallback visible if a transient backend failure occurs.
-        if (!cancelled) setAnnouncementMessage(ANNOUNCEMENT_MESSAGE);
-      }
-    };
-
-    loadAnnouncement();
-    window.addEventListener("focus", loadAnnouncement);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", loadAnnouncement);
-    };
-  }, [firebaseUser]);
-
-  // The archive is per-account local visibility state. Keep one shared set
-  // here so every Activity Mode surface reads the same filtered data.
-  const [archivedActivityIds, setArchivedActivityIds] = useState(() => new Set());
-  useEffect(() => {
-    const archiveStorageKey = `times-activity-archive:${firebaseUser?.uid || "guest"}`;
-    const refreshArchivedActivityIds = () => {
-      try {
-        const archive = JSON.parse(window.localStorage.getItem(archiveStorageKey) || "[]");
-        setArchivedActivityIds(new Set(
-          (Array.isArray(archive) ? archive : [])
-            .flatMap((item) => item.calendarId ? [item.calendarId, normalizeActivityId(item.calendarId)] : [])
-        ));
-      } catch {
-        setArchivedActivityIds(new Set());
-      }
-    };
-    refreshArchivedActivityIds();
-    const onArchiveChanged = (event) => {
-      if (event.detail?.userId === firebaseUser?.uid) refreshArchivedActivityIds();
-    };
-    window.addEventListener("times-activity-archive-changed", onArchiveChanged);
-    return () => window.removeEventListener("times-activity-archive-changed", onArchiveChanged);
-  }, [firebaseUser?.uid]);
+  const archivedActivityIds = useArchivedActivityIds(firebaseUser);
+  const announcementMessage = useAnnouncementMessage(firebaseUser);
 
   useEffect(() => {
     if (!error) return undefined;
@@ -220,6 +148,17 @@ function MainApp() {
     openDay,
     closeDay
   } = nav;
+  const {
+    isActivityReading,
+    setIsActivityReading,
+    accountMenuOpen,
+    setAccountMenuOpen,
+    accountMenuRef,
+    activityDashboardRef,
+    weekSpineHoursPerCell,
+    setWeekSpineHoursPerCell,
+    handleActivityDashboardScroll
+  } = useAppShellUi({ mode, userId: firebaseUser?.uid });
   const brandWordmarkSrc = theme === "dark" ? BRAND_WORDMARK_DARK_SRC : BRAND_WORDMARK_LIGHT_SRC;
 
   // Reminder timeline has one unambiguous reference day: "today" (its now
@@ -377,86 +316,7 @@ function MainApp() {
     [activityCategoryMap, onboardingCategoryMap]
   );
 
-  useEffect(() => {
-    sentTelegramActivityKeysRef.current.clear();
-    activityNotificationCursorRef.current = Date.now() - 30_000;
-  }, [firebaseUser?.uid]);
-
-  // Like reminder notifications, activity start alerts operate only while
-  // the web app is open. A session key prevents repeat sends if React
-  // re-renders or calendar data refreshes during the same occurrence.
-  useEffect(() => {
-    if (!firebaseUser) return undefined;
-
-    const notifyActivitiesStartingNow = () => {
-      const now = Date.now();
-      const previousCheck = activityNotificationCursorRef.current;
-      activityNotificationCursorRef.current = now;
-
-      activities.forEach((activity) => {
-        if (!activity.start?.dateTime) return; // All-day activities do not have a precise alert time.
-        const activityStart = activityDate(activity.start)?.getTime();
-        const normalizedId = normalizeActivityId(activity.id);
-        const isArchived = archivedActivityIds.has(activity.id) || archivedActivityIds.has(normalizedId);
-        if (!Number.isFinite(activityStart) || isArchived || activityStart <= previousCheck || activityStart > now) return;
-
-        const notificationKey = `${normalizedId}:${activityStart}`;
-        if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramActivityKeysRef.current.has(notificationKey)) return;
-        sentTelegramActivityKeysRef.current.add(notificationKey);
-        sendTelegramActivity(activity.summary || "(Untitled activity)", `activity:${notificationKey}`).catch(() => {
-          // Telegram may be disconnected; activity interaction must remain available.
-        });
-      });
-    };
-
-    notifyActivitiesStartingNow();
-    const intervalId = window.setInterval(notifyActivitiesStartingNow, 15_000);
-    return () => window.clearInterval(intervalId);
-  }, [firebaseUser, activities, archivedActivityIds]);
-
-
-  useEffect(() => {
-    if (mode !== "activity") setIsActivityReading(false);
-  }, [mode]);
-
-  // Activity Mode is an overview-first screen. Every entry to the mode starts
-  // from the header and week spine rather than restoring a stale reading
-  // position near the archive/details section below.
-  useEffect(() => {
-    if (mode !== "activity") return undefined;
-    const frameId = window.requestAnimationFrame(() => {
-      activityDashboardRef.current?.scrollTo({ top: 0, behavior: "auto" });
-      window.scrollTo({ top: 0, behavior: "auto" });
-      setIsActivityReading(false);
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [mode, firebaseUser?.uid]);
-
-  useEffect(() => {
-    if (!accountMenuOpen) return undefined;
-    const closeAccountMenu = (event) => {
-      if (!(event.target instanceof Node) || !accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
-    };
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") setAccountMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", closeAccountMenu, true);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeAccountMenu, true);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [accountMenuOpen]);
-
-  const handleActivityDashboardScroll = (event) => {
-    const dashboard = event.currentTarget;
-    // A small downward scroll is enough to enter reading mode. The separate
-    // return threshold prevents the header from flickering as it collapses.
-    setIsActivityReading((reading) => reading
-      ? dashboard.scrollTop > 4
-      : dashboard.scrollTop >= 12
-    );
-  };
+  useActivityTelegramNotifications({ firebaseUser, activities, archivedActivityIds });
 
   return (
     <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>

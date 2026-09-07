@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { activityDate } from "../../../date-utils.js";
+import { activityDate } from "../../../shared/lib/date-utils.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import ActivityPopup from "./activity-popup.jsx";
 import { SNAP_MINUTES, minutesOfDay, minutesFromDayStart, layoutOverlaps, getOutgoingSpillover, getIncomingSpillover } from "../lib/timeline-layout.js";
 import { downloadDayTimelineImage } from "../lib/export-day-image.js";
-import { normalizeActivityId } from "../../../id-utils.js";
-import AutoShrinkText from "../../../components/auto-shrink-text.jsx";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
+import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
 
 const EDIT_HOUR_HEIGHT = 52; // px per hour row
 const EDIT_DAY_START_HOUR = 0; // full 24h day, top to bottom

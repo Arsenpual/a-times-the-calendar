@@ -4,7 +4,7 @@
 // layout as timeline-editor.jsx (via the shared timeline-layout.js), just
 // onto an offscreen <canvas> instead of DOM elements, since there's no
 // image-export library available in this project's dependency set.
-import { activityDate, formatTime, formatMonthYear } from "../../../date-utils.js";
+import { activityDate, formatTime, formatMonthYear } from "../../../shared/lib/date-utils.js";
 import { getDisplayColor } from "./activity-colors.js";
 import { SNAP_MINUTES, minutesOfDay, minutesFromDayStart, layoutOverlaps, getIncomingSpillover } from "./timeline-layout.js";
 

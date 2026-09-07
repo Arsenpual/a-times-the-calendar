@@ -6,4 +6,6 @@
 
 หน้าล็อกอินและ account menu ยังประกอบใน `app.jsx` ตามเดิม ไม่มีการเปลี่ยน OAuth configuration หรือ storage key ในรอบนี้
 
+`styles/auth.css` เป็นเจ้าของ style ของหน้า login และ login guide โดย `src/index.css` import ให้ตามลำดับเดิม
+
 หลัง build ผ่าน ให้ทดสอบ login/logout, refresh หน้า, การคง session และการเชื่อม Calendar ด้วยบัญชีจริง

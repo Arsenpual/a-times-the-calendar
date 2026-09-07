@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useLanguage, SUPPORTED_LANGUAGES } from "../../../i18n.jsx";
+import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
 
 /**
  * Slide-over settings drawer, opened from the ⚙️ icon in the header — in

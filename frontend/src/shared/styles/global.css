@@ -1,0 +1,102 @@
+:root {
+  /* Brand palette — derived from the TIMES wordmark.  Keep these as the
+     source of truth; the legacy semantic aliases below preserve existing
+     component styles while giving both modes the same visual identity. */
+  --brand-ink: #1C1C1A;
+  --brand-accent: #D85A30;
+  --brand-muted: #8A8A85;
+  --brand-divider: #E4E2DC;
+  --blue: var(--brand-accent);
+  --blue-dark: #B74623;
+  --blue-tint: #F9E8E1;
+  --red: #b71c1c;
+  --red-tint: #fce8e6;
+  --border: var(--brand-divider);
+  --text-primary: var(--brand-ink);
+  --text-secondary: var(--brand-muted);
+  --bg: #F7F6F2;
+  --bg-muted: #ffffff;
+  --hover: #F0EEE8;
+  --today: var(--brand-accent);
+  font-family: "Google Sans", "Roboto", Arial, sans-serif;
+}
+
+/* Dark mode — toggled via the Settings drawer (see app.jsx's `theme`
+   state), applied as a data-theme attribute on <html> rather than a class
+   on some inner wrapper, so it can't accidentally miss anything rendered
+   outside the main .app tree (e.g. a future portal/toast). Overrides only
+   the core surface/text/border variables above — accent colors (--blue,
+   --red) are intentionally left close to their light-mode values since
+   they're already legible on dark backgrounds and retuning them would
+   need re-checking contrast at every place they're used as text vs. fill.
+   Hardcoded hex colors elsewhere in this file (error/warning banners,
+   spillover indicators, etc. that don't yet reference these variables)
+   are NOT covered by this block — a separate pass. */
+html[data-theme="dark"] {
+  --brand-ink: #F2F1ED;
+  --brand-accent: #E8703F;
+  --brand-muted: #9C9C97;
+  --brand-divider: #3A3A38;
+  --blue-dark: #F08A60;
+  --blue-tint: #4A2920;
+  --red-tint: #3c1c1c;
+  --border: var(--brand-divider);
+  --text-primary: var(--brand-ink);
+  --text-secondary: var(--brand-muted);
+  --bg: #20201E;
+  --bg-muted: #292927;
+  --hover: #353532;
+  --today: var(--brand-accent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+html.screen-reader-mode body {
+  background: #f8f8f4;
+  color: #111111;
+  font-size: 1.12rem;
+  line-height: 1.7;
+}
+
+html.screen-reader-mode .app,
+html.screen-reader-mode .dashboard,
+html.screen-reader-mode .agenda-view,
+html.screen-reader-mode .tag-search-wrap,
+html.screen-reader-mode .activity-popup,
+html.screen-reader-mode .modal-content {
+  letter-spacing: 0.02em;
+}
+
+html.screen-reader-mode button,
+html.screen-reader-mode input,
+html.screen-reader-mode select,
+html.screen-reader-mode textarea {
+  min-height: 42px;
+  font-size: 1rem;
+}
+
+html.screen-reader-mode .btn-icon {
+  width: 38px;
+  height: 38px;
+}
+
+html.screen-reader-mode .app-header {
+  gap: 12px;
+}
+
+html.screen-reader-mode .tag-search-wrap {
+  gap: 8px;
+}
+
+html.screen-reader-mode .tag-search-input {
+  min-width: 120px;
+}
+

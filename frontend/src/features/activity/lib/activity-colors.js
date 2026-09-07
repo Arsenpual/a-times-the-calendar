@@ -1,6 +1,6 @@
 // Activity colors are owned exclusively by the app's life-area categories.
 // Uncategorized activities intentionally share one neutral color.
-import { normalizeActivityId } from "../../../id-utils.js";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 // Gray shown for activities with no assigned life-area category — must stay
 // in sync with UNCATEGORIZED.color in backend/routes/summary.js so the

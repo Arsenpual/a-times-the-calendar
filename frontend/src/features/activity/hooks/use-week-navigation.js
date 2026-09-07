@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getWeekRange } from "../../../date-utils.js";
+import { getWeekRange } from "../../../shared/lib/date-utils.js";
 
 const THEME_STORAGE_KEY = "theme";
 const REMINDER_TIMELINE_COLORS_STORAGE_KEY = "reminder-timeline-colors";

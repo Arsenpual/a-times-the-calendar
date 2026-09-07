@@ -6,19 +6,12 @@ import {
   fetchRecurringInstances,
   isCalendarAuthExpiredError
 } from "../../calendar-connection/api/google-calendar.js";
-import {
-  createCategory,
-  deleteCategory,
-  assignActivityCategory,
-  setActivityTags,
-  fetchActivityCategoryMap,
-  fetchLockedActivities,
-  setActivityLocked,
-  saveActivityNotification,
-  deleteActivityNotification
-} from "../../../api.js";
-import { activityDate } from "../../../date-utils.js";
-import { normalizeActivityId } from "../../../id-utils.js";
+import { createCategory, deleteCategory, assignActivityCategory, fetchActivityCategoryMap } from "../api/categories.js";
+import { setActivityTags } from "../api/tags.js";
+import { fetchLockedActivities, setActivityLocked } from "../api/locks.js";
+import { saveActivityNotification, deleteActivityNotification } from "../api/notifications.js";
+import { activityDate } from "../../../shared/lib/date-utils.js";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 /**
  * Every handler that writes an activity or its metadata — the biggest,

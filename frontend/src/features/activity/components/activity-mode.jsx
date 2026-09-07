@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { getWeekRange, isSameDay, activityDate, weekdayShortLabels } from "../../../date-utils.js";
+import { getWeekRange, isSameDay, activityDate, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
-import { useLanguage } from "../../../i18n.jsx";
+import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import TimelineEditor from "./timeline-editor.jsx";
 
 /** Minutes covered by an activity, treating all-day/zero-length as 30min (mirrors the backend). */

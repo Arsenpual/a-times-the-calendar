@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { getActivity } from "../../calendar-connection/api/google-calendar.js";
-import { normalizeActivityId } from "../../../id-utils.js";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 /**
  * Owns ActivityModal's open/closed state and the three ways it gets

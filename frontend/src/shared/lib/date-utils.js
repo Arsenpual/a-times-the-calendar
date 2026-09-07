@@ -5,7 +5,7 @@
 // เองอีกต่อไป ฟังก์ชันที่ไม่เกี่ยวกับการแสดงผล (isSameDay, getWeekRange,
 // activityDate, toDateInputValue ฯลฯ) ไม่ต้องรับ lang เพราะทำงานกับ Date
 // object/ISO string ล้วนๆ ไม่มีข้อความให้แปล
-import { MONTHS, MONTHS_SHORT, WEEKDAYS_SHORT, displayYear, DEFAULT_LANGUAGE } from "./i18n.jsx";
+import { MONTHS, MONTHS_SHORT, WEEKDAYS_SHORT, displayYear, DEFAULT_LANGUAGE } from "../i18n/i18n.jsx";
 
 export function formatMonthYear(date, lang = DEFAULT_LANGUAGE) {
   return `${MONTHS[lang][date.getMonth()]} ${displayYear(date.getFullYear(), lang)}`;

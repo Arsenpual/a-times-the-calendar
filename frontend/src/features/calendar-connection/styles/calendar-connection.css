@@ -1,0 +1,37 @@
+.token-expiry-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(32 33 36 / 58%);
+  backdrop-filter: blur(2px);
+}
+
+/* Heads-up for the Google Calendar token — amber/warning tone (not the red
+   .error-banner) even in the "already expired" wording, since this is
+   still a recoverable one-click fix, not a hard failure. Small card,
+   top-left corner, sitting on top of .token-expiry-backdrop above. */
+.token-expiry-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, 100%);
+  padding: 10px 12px;
+  background: #fef7e0;
+  color: #7a5c00;
+  border: 1px solid #f9d97a;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(60, 64, 67, 0.18);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.token-expiry-renew-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+

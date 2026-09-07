@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { activityDate, formatTime, isSameDay } from "../../../date-utils.js";
+import { activityDate, formatTime, isSameDay } from "../../../shared/lib/date-utils.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import { getIncomingSpillover } from "../lib/timeline-layout.js";
 import { downloadDayTimelineImage } from "../lib/export-day-image.js";
-import AutoShrinkText from "../../../components/auto-shrink-text.jsx";
+import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
 
 const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const WEEKDAY_FULL = {

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { activityDate, formatTime, getWeekRange, isSameDay, weekdayShortLabels } from "../../../date-utils.js";
+import { activityDate, formatTime, getWeekRange, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
-import { useLanguage } from "../../../i18n.jsx";
-import { normalizeActivityId } from "../../../id-utils.js";
+import { useLanguage } from "../../../shared/i18n/i18n.jsx";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import ActivityPopup from "./activity-popup.jsx";
-import AutoShrinkText from "../../../components/auto-shrink-text.jsx";
-import { deleteActivityArchiveItem, fetchActivityArchive, saveActivityArchiveItem } from "../../../api.js";
+import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
+import { deleteActivityArchiveItem, fetchActivityArchive, saveActivityArchiveItem } from "../api/archive.js";
 
 const DAY_START_HOUR = 0;
 const DAY_END_HOUR = 24;
