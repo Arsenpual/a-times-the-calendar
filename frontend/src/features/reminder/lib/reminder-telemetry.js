@@ -1,4 +1,4 @@
-import { firebaseApp } from "./firebase-config.js";
+import { firebaseApp } from "../../../firebase-config.js";
 
 let analyticsPromise;
 

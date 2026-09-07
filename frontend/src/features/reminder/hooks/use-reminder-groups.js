@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchReminderGroups, createReminderGroup, deleteReminderGroup } from "../api.js";
+import { fetchReminderGroups, createReminderGroup, deleteReminderGroup } from "../../../api.js";
 
 /**
  * Owns reminder groups/projects (migration plan v2 เฟส 3) — โหลดจาก backend

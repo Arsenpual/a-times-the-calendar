@@ -1,21 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
-import { usePushNotifications } from "../hooks/use-push-notifications.js";
+import { usePushNotifications } from "../../../hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
-import { getReminderFeatureFlags, logReminderEvent } from "../reminder-telemetry.js";
-import { parseReminderQuickInput } from "../reminder-quick-parse.js";
+import { getReminderFeatureFlags, logReminderEvent } from "../lib/reminder-telemetry.js";
+import { parseReminderQuickInput } from "../lib/reminder-quick-parse.js";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
-import ActivityPopup from "../features/activity/components/activity-popup.jsx";
-import AutoShrinkText from "./auto-shrink-text.jsx";
-import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../reminder-stats.js";
-import { activityDate } from "../date-utils.js";
-import { normalizeActivityId } from "../id-utils.js";
-import { getDisplayColor } from "../features/activity/lib/activity-colors.js";
-import { layoutOverlaps } from "../features/activity/lib/timeline-layout.js";
-import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder } from "../api.js";
-import { areTelegramNotificationsEnabled, setTelegramNotificationsEnabled } from "../telegram-notification-preferences.js";
-import { useLanguage } from "../i18n.jsx";
+import ActivityPopup from "../../activity/components/activity-popup.jsx";
+import AutoShrinkText from "../../../components/auto-shrink-text.jsx";
+import { appendReminderStat, buildReminderStats, loadReminderStats, saveReminderStats } from "../lib/reminder-stats.js";
+import { activityDate } from "../../../date-utils.js";
+import { normalizeActivityId } from "../../../id-utils.js";
+import { getDisplayColor } from "../../activity/lib/activity-colors.js";
+import { layoutOverlaps } from "../../activity/lib/timeline-layout.js";
+import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder } from "../../../api.js";
+import { areTelegramNotificationsEnabled, setTelegramNotificationsEnabled } from "../../../telegram-notification-preferences.js";
+import { useLanguage } from "../../../i18n.jsx";
 import "../styles/reminder-material.css";
 import {
   REMINDER_TYPE,
@@ -27,7 +27,7 @@ import {
   isMinuteWithinWindow,
   computeNextDueAt,
   isReminderDue
-} from "../reminder-due-logic.js";
+} from "../lib/reminder-due-logic.js";
 
 const STORAGE_KEY = "times-reminders-v1";
 

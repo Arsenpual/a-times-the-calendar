@@ -7,7 +7,7 @@ import TagSearchResults from "./features/activity/components/tag-search-results.
 import WeeklySummaryPanel from "./features/activity/components/weekly-summary-panel.jsx";
 import MiniTimelinePanel from "./features/activity/components/mini-timeline-panel.jsx";
 import ActivityModal from "./features/activity/components/activity-modal.jsx";
-import ReminderMode from "./components/reminder-mode.jsx";
+import ReminderMode from "./features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
 import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";

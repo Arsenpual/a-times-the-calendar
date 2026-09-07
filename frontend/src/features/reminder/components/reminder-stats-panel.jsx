@@ -1,5 +1,5 @@
 import React from "react";
-import { formatStatsDuration } from "../reminder-stats.js";
+import { formatStatsDuration } from "../lib/reminder-stats.js";
 
 export default function ReminderStatsPanel({ isOpen, onClose, stats }) {
   if (!isOpen) return null;

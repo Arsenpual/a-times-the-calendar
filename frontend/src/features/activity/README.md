@@ -10,7 +10,7 @@
 
 ## จุดเชื่อม
 
-`src/app.jsx` ประกอบหน้าจอและเรียก hooks จากฟีเจอร์นี้ ส่วน `src/components/reminder-mode.jsx` ยังใช้ ActivityPopup, activity-colors และ timeline-layout ผ่านตำแหน่งใหม่ เพื่อคงการแสดงและแก้ไขกิจกรรมใน Reminder Timeline
+`src/app.jsx` ประกอบหน้าจอและเรียก hooks จากฟีเจอร์นี้ ส่วน `src/features/reminder/components/reminder-mode.jsx` ยังใช้ ActivityPopup, activity-colors และ timeline-layout ผ่านตำแหน่งใหม่ เพื่อคงการแสดงและแก้ไขกิจกรรมใน Reminder Timeline
 
 ไฟล์ส่วนกลาง (`api.js`, `google-calendar.js`, `date-utils.js`, `id-utils.js`, `i18n.jsx`, `components/auto-shrink-text.jsx`) ยังอยู่ตำแหน่งเดิม CSS ยังคงอยู่ใน `src/index.css` และ component เดิม
 
