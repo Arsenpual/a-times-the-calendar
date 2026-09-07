@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
-const { telegramAuthDoc, telegramLinkDoc, announcementDoc } = require("../firestore-db.js");
+const { db, telegramAuthDoc, telegramLinkDoc, announcementDoc } = require("../firestore-db.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -44,6 +44,28 @@ async function sendTelegram(chatId, text, options = {}) {
   });
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(`Telegram ส่งข้อความไม่สำเร็จ: ${data.description || response.status}`);
+}
+
+/**
+ * Claims a one-time Telegram delivery across every open client. Browser-side
+ * Set/refs only prevent repeats inside one tab; Pi + laptop need Firestore's
+ * transaction to decide which device wins the same scheduled occurrence.
+ */
+async function claimDelivery(userId, notificationKey, notificationKind, title) {
+  if (typeof notificationKey !== "string" || !notificationKey || notificationKey.length > 500) return null;
+  const deliveryId = crypto.createHash("sha256").update(notificationKey).digest("base64url");
+  const ref = telegramAuthDoc(userId).collection("deliveries").doc(deliveryId);
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return null;
+    transaction.set(ref, {
+      notificationKey,
+      notificationKind,
+      title: String(title || "").slice(0, 500),
+      createdAt: new Date().toISOString()
+    });
+    return ref;
+  });
 }
 
 async function registerBotCommands() {
@@ -93,6 +115,7 @@ router.post("/test", async (req, res, next) => {
 });
 
 router.post("/notify", async (req, res, next) => {
+  let claimedDeliveryRef = null;
   try {
     // Telegram is an optional delivery channel. A local development setup
     // commonly omits its production-only bot secret, which must not turn an
@@ -109,9 +132,16 @@ router.post("/notify", async (req, res, next) => {
       : notificationKind === "interval"
         ? "Reminder แบบช่วงเวลา"
         : "reminder";
+    claimedDeliveryRef = await claimDelivery(req.userId, req.body?.notificationKey, notificationKind, title);
+    if (req.body?.notificationKey && !claimedDeliveryRef) return res.json({ sent: false, deduplicated: true });
     await sendTelegram(data.chatId, `🔔 ถึงเวลาของ${notificationLabel}: ${title}`);
     res.json({ sent: true });
-  } catch (error) { next(error); }
+  } catch (error) {
+    // Allow a later retry if Telegram itself failed after this process won
+    // the claim. Do not leave a permanent "sent" marker for a failed send.
+    if (claimedDeliveryRef) await claimedDeliveryRef.delete().catch(() => {});
+    next(error);
+  }
 });
 
 module.exports = router;

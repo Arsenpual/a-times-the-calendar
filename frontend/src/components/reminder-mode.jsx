@@ -660,7 +660,7 @@ export default function ReminderDashboard({
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
         if (sentTelegramReminderKeysRef.current.has(key)) return;
         sentTelegramReminderKeysRef.current.add(key);
-        sendTelegramReminder(reminder.title).catch(() => {
+        sendTelegramReminder(reminder.title, "reminder", key).catch(() => {
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
         });
       });
@@ -682,7 +682,7 @@ export default function ReminderDashboard({
         }
         if (previousSlot.slotKey === slot.slotKey) return;
         intervalTelegramSlotRef.current.set(reminder.id, slot);
-        sendTelegramReminder(reminder.title, "interval").catch(() => {
+        sendTelegramReminder(reminder.title, "interval", `interval:${reminder.id}:${slot.slotKey}`).catch(() => {
           // Telegram is optional; an unavailable bot must not alter the
           // interval schedule or interrupt the timeline.
         });

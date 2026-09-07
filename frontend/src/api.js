@@ -85,13 +85,13 @@ export async function sendTelegramTest() {
   return handleResponse(await apiRequest("/api/telegram/test", { method: "POST" }), "POST /api/telegram/test");
 }
 
-export async function sendTelegramReminder(title, notificationKind = "reminder") {
-  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind }) }), "POST /api/telegram/notify");
+export async function sendTelegramReminder(title, notificationKind = "reminder", notificationKey = null) {
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind, notificationKey }) }), "POST /api/telegram/notify");
 }
 
 /** Sends an Activity Mode start notification through the connected Telegram bot. */
-export async function sendTelegramActivity(title) {
-  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "activity" }) }), "POST /api/telegram/notify");
+export async function sendTelegramActivity(title, notificationKey = null) {
+  return handleResponse(await apiRequest("/api/telegram/notify", { method: "POST", body: JSON.stringify({ title, notificationKind: "activity", notificationKey }) }), "POST /api/telegram/notify");
 }
 
 /** Ask the low-cost Gemini model to propose one activity; it never saves it. */

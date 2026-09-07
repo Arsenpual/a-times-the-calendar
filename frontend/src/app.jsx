@@ -401,7 +401,7 @@ function MainApp() {
         const notificationKey = `${normalizedId}:${activityStart}`;
         if (sentTelegramActivityKeysRef.current.has(notificationKey)) return;
         sentTelegramActivityKeysRef.current.add(notificationKey);
-        sendTelegramActivity(activity.summary || "(Untitled activity)").catch(() => {
+        sendTelegramActivity(activity.summary || "(Untitled activity)", `activity:${notificationKey}`).catch(() => {
           // Telegram may be disconnected; activity interaction must remain available.
         });
       });
