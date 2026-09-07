@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchActivities, isCalendarAuthExpiredError } from "../google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../../../google-calendar.js";
 import {
   fetchCategories,
   fetchActivityCategoryMap,
   fetchActivityTagMap,
   fetchLockedActivities,
   fetchWeeklySummary
-} from "../api.js";
-import { getWeekRange, activityDate, toDateInputValue } from "../date-utils.js";
+} from "../../../api.js";
+import { getWeekRange, activityDate, toDateInputValue } from "../../../date-utils.js";
 
 /**
  * Owns everything read (not written — see useActivityMutations for

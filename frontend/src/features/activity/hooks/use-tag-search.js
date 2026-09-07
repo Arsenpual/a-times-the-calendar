@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchActivities, isCalendarAuthExpiredError } from "../google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../../../google-calendar.js";
 
 /**
  * Owns tag-search state: the entered search terms, the ±3-month wide

@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from "react"
 import loginGuideStep1 from "../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../public/login-guide-step3.jpg";
-import ActivityModeWeekSpine from "./components/activity-mode-week-spine.jsx";
-import TagSearchResults from "./components/tag-search-results.jsx";
-import WeeklySummaryPanel from "./components/weekly-summary-panel.jsx";
-import MiniTimelinePanel from "./components/mini-timeline-panel.jsx";
-import ActivityModal from "./components/activity-modal.jsx";
+import ActivityModeWeekSpine from "./features/activity/components/activity-mode-week-spine.jsx";
+import TagSearchResults from "./features/activity/components/tag-search-results.jsx";
+import WeeklySummaryPanel from "./features/activity/components/weekly-summary-panel.jsx";
+import MiniTimelinePanel from "./features/activity/components/mini-timeline-panel.jsx";
+import ActivityModal from "./features/activity/components/activity-modal.jsx";
 import ReminderMode from "./components/reminder-mode.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
 import SettingsDrawer from "./components/settings-drawer.jsx";
@@ -15,12 +15,12 @@ import { normalizeActivityId } from "./id-utils.js";
 import { createAiActivityDraft, getAnnouncement, sendTelegramActivity } from "./api.js";
 import { areTelegramNotificationsEnabled } from "./telegram-notification-preferences.js";
 import { useAuth } from "./hooks/use-auth.js";
-import { useWeekNavigation } from "./hooks/use-week-navigation.js";
-import { useCalendarData } from "./hooks/use-calendar-data.js";
-import { useTagSearch } from "./hooks/use-tag-search.js";
-import { useActivityModal } from "./hooks/use-activity-modal.js";
-import { useActivityMutations } from "./hooks/use-activity-mutations.js";
-import { useActivityOnboarding } from "./hooks/use-activity-onboarding.js";
+import { useWeekNavigation } from "./features/activity/hooks/use-week-navigation.js";
+import { useCalendarData } from "./features/activity/hooks/use-calendar-data.js";
+import { useTagSearch } from "./features/activity/hooks/use-tag-search.js";
+import { useActivityModal } from "./features/activity/hooks/use-activity-modal.js";
+import { useActivityMutations } from "./features/activity/hooks/use-activity-mutations.js";
+import { useActivityOnboarding } from "./features/activity/hooks/use-activity-onboarding.js";
 import ActivityModeMockupPreview from "./components/activity-mode-mockup-preview.jsx";
 
 const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("./components/activity-mode-*-mockup.jsx", { eager: true }))

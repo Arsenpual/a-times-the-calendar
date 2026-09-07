@@ -5,7 +5,7 @@ import {
   deleteActivity,
   fetchRecurringInstances,
   isCalendarAuthExpiredError
-} from "../google-calendar.js";
+} from "../../../google-calendar.js";
 import {
   createCategory,
   deleteCategory,
@@ -16,9 +16,9 @@ import {
   setActivityLocked,
   saveActivityNotification,
   deleteActivityNotification
-} from "../api.js";
-import { activityDate } from "../date-utils.js";
-import { normalizeActivityId } from "../id-utils.js";
+} from "../../../api.js";
+import { activityDate } from "../../../date-utils.js";
+import { normalizeActivityId } from "../../../id-utils.js";
 
 /**
  * Every handler that writes an activity or its metadata — the biggest,

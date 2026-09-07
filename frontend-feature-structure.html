@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T.i.M.E.S. — Frontend Feature Structure</title>
+<style>
+:root{color-scheme:light;--bg:#f7f6f2;--surface:#fff;--text:#1c1c1a;--muted:#75756f;--line:#e4e2dc;--accent:#d85a30;--soft:#f9e8e1}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 system-ui,sans-serif}header,main,footer{max-width:1120px;margin:auto;padding:28px}header{padding-top:48px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;font-weight:700}h1{font-size:clamp(28px,5vw,46px);letter-spacing:-1.5px;line-height:1.2;margin:14px 0}p{margin:8px 0}.muted,small{color:var(--muted)}.badge{display:inline-block;background:var(--soft);color:var(--accent);border-radius:30px;padding:5px 12px;font-size:12px}.intro{max-width:760px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}button{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer}button:hover{border-color:var(--accent)}button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}.panel{border:1px solid var(--line);border-radius:18px;background:var(--surface);overflow:hidden}.panel-title{padding:16px 20px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700}.tree{padding:16px 20px;overflow:auto}details{margin:7px 0}summary{cursor:pointer;list-style-position:outside;margin-left:17px;font-weight:600}summary small{display:block;font-weight:400;margin-left:0}.children{border-left:1px solid var(--line);margin:10px 0 14px 18px;padding-left:18px}.file{font:12px/1.9 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;color:var(--muted)}.folder{font:600 14px/1.8 ui-monospace,Consolas,monospace}.note{padding:20px}.note+.note{border-top:1px solid var(--line)}h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:0 0 6px}.number{color:var(--accent);font:600 12px ui-monospace,monospace}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}.step{padding:20px;border-top:2px solid var(--accent);background:var(--surface);border-radius:0 0 12px 12px}code{font-size:12px;overflow-wrap:anywhere}.table-wrap{overflow:auto;margin-top:24px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:14px 18px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--soft)}footer{font-size:12px;color:var(--muted)}@media(max-width:760px){.grid,.steps{grid-template-columns:1fr}header,main,footer{padding:20px}header{padding-top:32px}}@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#20201e;--surface:#292927;--text:#f2f1ed;--muted:#aaa9a2;--line:#3a3a38;--accent:#e8703f;--soft:#402b23}}@media print{button{display:none}.grid{display:block}.panel{margin-bottom:16px}body{font-size:12px}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">T.i.M.E.S. / ARCHITECTURE PREVIEW</div>
+<h1>หาไฟล์จากฟีเจอร์<br>ที่กำลังทำงานอยู่</h1>
+<div class="intro"><p>ตัวอย่างโครงสร้างใหม่สำหรับ <strong>frontend/</strong> อ้างอิงชื่อไฟล์ที่มีในโปรเจกต์ปัจจุบัน แบ่งตามหน้าที่ของแต่ละฟีเจอร์ และแยกจุดประกอบแอพกับโค้ดส่วนกลางให้ชัดเจน</p><p class="muted">นี่เป็นแบบเสนอให้ดู ยังไม่มีการย้ายไฟล์หรือเปลี่ยนการทำงานของแอพ</p></div>
+<div class="toolbar"><button id="expand">ขยายทุกโฟลเดอร์</button><button id="collapse">ย่อทุกโฟลเดอร์</button><span class="badge">เริ่มจาก frontend เท่านั้น</span></div>
+</header>
+<main>
+<div class="grid">
+<section class="panel" aria-label="ตัวอย่างโครงสร้างโฟลเดอร์">
+<div class="panel-title">โครงสร้างที่เสนอ · กดชื่อโฟลเดอร์เพื่อเปิด/ปิด</div>
+<div class="tree"><div class="folder">frontend/</div><div class="children"><div class="file">public/ · ไฟล์สาธารณะและโลโก้</div><div class="folder">src/</div><div class="children"><div class="file">main.jsx</div>
+<details open><summary><span class="folder">app/</span><small>ประกอบหน้าจอและเชื่อมการทำงานข้ามฟีเจอร์</small></summary><div class="children"><div class="file">app.jsx<br>app.css<br>components/ · header, account menu, mode switch<br>hooks/ · ตัวประสาน Activity ↔ Reminder</div></div></details>
+<details open><summary><span class="folder">features/</span><small>เจ้าของข้อมูล หน้าจอ และ logic ของแต่ละฟีเจอร์</small></summary><div class="children">
+<details open><summary><span class="folder">activity/</span><small>กิจกรรม ปฏิทิน คลัง และสรุปประจำสัปดาห์</small></summary><div class="children"><div class="folder">components/</div><div class="children file">activity-mode-week-spine.jsx<br>activity-modal.jsx<br>activity-popup.jsx<br>timeline-editor.jsx<br>mini-timeline-panel.jsx<br>weekly-summary-panel.jsx<br>tag-search-results.jsx</div><div class="folder">hooks/</div><div class="children file">use-calendar-data.js<br>use-activity-mutations.js<br>use-activity-modal.js<br>use-activity-onboarding.js<br>use-week-navigation.js<br>use-tag-search.js</div><div class="folder">lib/</div><div class="children file">week-spine-data.js<br>timeline-layout.js<br>activity-colors.js<br>rrule-utils.js<br>export-day-image.js</div><div class="file">api/ · activity, archive, categories, tags<br>styles/ · CSS ที่เป็นของ Activity</div></div></details>
+<details open><summary><span class="folder">reminder/</span><small>กำหนดเตือน ประเภท กลุ่ม และสถิติ</small></summary><div class="children"><div class="folder">components/</div><div class="children file">reminder-mode.jsx<br>reminder-stats-panel.jsx</div><div class="folder">hooks/</div><div class="children file">use-reminder-store.js<br>use-reminders-sync.js<br>use-reminder-groups.js</div><div class="folder">lib/</div><div class="children file">reminder-due-logic.js<br>reminder-quick-parse.js<br>reminder-stats.js<br>reminder-telemetry.js</div><div class="file">api/ · reminder และกลุ่ม<br>styles/reminder-material.css</div></div></details>
+<details><summary><span class="folder">auth/</span><small>เข้าสู่ระบบและสถานะผู้ใช้</small></summary><div class="children file">hooks/use-auth.js<br>components/ · หน้าล็อกอินเมื่อแยกจาก app.jsx</div></details>
+<details><summary><span class="folder">notifications/</span><small>การส่งแจ้งเตือนที่ทั้งสองโหมดใช้</small></summary><div class="children file">telegram/api.js<br>telegram/telegram-notification-preferences.js<br>telegram/components/ · ปุ่มเชื่อมต่อและเปิด/ปิด<br>push/hooks/use-push-notifications.js<br>runtime/ · วงรอบส่งแจ้งเตือน (แยกในรอบถัดไป)</div></details>
+<details><summary><span class="folder">calendar-connection/</span><small>การเชื่อม Google Calendar และขอสิทธิ์</small></summary><div class="children file">api/google-calendar.js<br>api/calendar-auth.js<br>components/ · หน้าต่างเชื่อมต่อเมื่อแยกออก</div></details>
+<details><summary><span class="folder">settings/</span></summary><div class="children file">components/settings-drawer.jsx</div></details>
+<details><summary><span class="folder">announcements/</span></summary><div class="children file">components/announcement-ticker.jsx<br>api/announcement.js</div></details>
+<details><summary><span class="folder">ai-activity/</span><small>การขอร่างกิจกรรมด้วย AI</small></summary><div class="children file">api/activity-draft.js<br>lib/ · แปลงผลลัพธ์เป็นร่างกิจกรรม</div></details>
+</div></details>
+<details open><summary><span class="folder">shared/</span><small>ใช้หลายฟีเจอร์และไม่ผูกกับกฎของโหมดใด</small></summary><div class="children file">ui/auto-shrink-text.jsx<br>lib/date-utils.js<br>lib/id-utils.js<br>api/client.js · HTTP, authorization, error handling<br>config/firebase-config.js<br>i18n/i18n.jsx<br>styles/ · theme, reset, design tokens</div></details>
+<details><summary><span class="folder">dev/mockups/</span><small>ต้นแบบสำหรับเทียบหน้าตา</small></summary><div class="children file">activity-mode-week-spine-mockup.jsx<br>activity-mode-focus-rail-mockup.jsx<br>reminder-dashboard-mockup.jsx<br>activity-mode-mockup-preview.jsx<br>activity-mode-mockup-support.css</div></details>
+</div><div class="file">package.json<br>vite.config.* · คงไฟล์ตั้งค่าที่ราก frontend</div></div></div>
+</section>
+<aside class="panel">
+<div class="note"><span class="number">01 / OWNERSHIP</span><h2>หนึ่งฟีเจอร์ มีเจ้าของชัดเจน</h2><p>เมื่อแก้ Week Spine ให้เริ่มที่ <code>features/activity/</code> ส่วนกำหนดเตือนและสถิติอยู่ใน <code>features/reminder/</code> ไม่ต้องไล่ค้นทั้งโฟลเดอร์ components รวม</p></div>
+<div class="note"><span class="number">02 / CONNECTION</span><h2>สองโหมดเชื่อมกันที่ app</h2><p><code>app/</code> ส่งกิจกรรมและ callback ให้ Reminder Timeline เหมือนแนวทางปัจจุบัน โดย Activity ยังเป็นเจ้าของการแก้ไขกิจกรรม ช่วยเลี่ยงการ import วนระหว่างสองโหมด</p></div>
+<div class="note"><span class="number">03 / SHARED</span><h2>ส่วนกลางมีเฉพาะของที่ใช้ร่วมจริง</h2><p>ฟังก์ชันวันที่ ระบบภาษา และตัวเรียก HTTP อยู่ใน shared ส่วนกฎ reminder ถึงกำหนดหรือกฎวางกิจกรรมซ้อนอยู่กับฟีเจอร์เจ้าของ</p><p class="muted">shared ไม่ควร import กลับไปหา app หรือ features</p></div>
+<div class="note"><span class="number">04 / RUNTIME</span><h2>แจ้งเตือนทำงานเหนือหน้าจอ</h2><p>เป้าหมายในรอบ refactor คือให้ app เรียก runtime แจ้งเตือนจาก notifications โดยรับข้อมูล Activity และ Reminder เพื่อทำงานได้แม้สลับโหมด</p><p class="muted">ปัจจุบันยังเก็บ Reminder Mode mounted ไว้เพื่อให้วงรอบทำงาน การแยก runtime เป็นงานถัดไปหลังย้ายไฟล์สำเร็จ</p></div>
+<div class="note"><span class="number">05 / SCOPE</span><h2>โครงนี้เป็นตัวอย่าง ไม่ใช่คำสั่งย้ายทันที</h2><p>ชื่อไฟล์ที่ระบุชัดอ้างอิงไฟล์ที่มีจริง ส่วนโฟลเดอร์ api, runtime และ component ย่อยบางส่วนเป็นตำแหน่งที่เสนอให้แยกในอนาคต</p><p class="muted">ไฟล์ activity-mode.jsx รุ่นอื่นต้องตรวจจุดเรียกใช้ก่อนตัดสินใจย้ายหรือเลิกใช้ ไม่สรุปจากชื่อไฟล์เพียงอย่างเดียว</p></div>
+</aside>
+</div>
+<section class="panel table-wrap" aria-label="ตัวอย่างตำแหน่งไฟล์ก่อนและหลัง"><table><thead><tr><th>ตำแหน่งเดิมใน src/</th><th>ตำแหน่งที่เสนอใน src/</th></tr></thead><tbody>
+<tr><td><code>components/reminder-mode.jsx</code></td><td><code>features/reminder/components/reminder-mode.jsx</code></td></tr>
+<tr><td><code>hooks/use-activity-mutations.js</code></td><td><code>features/activity/hooks/use-activity-mutations.js</code></td></tr>
+<tr><td><code>components/auto-shrink-text.jsx</code></td><td><code>shared/ui/auto-shrink-text.jsx</code></td></tr>
+<tr><td><code>api.js</code></td><td>ค่อยแยก endpoint ตามฟีเจอร์ และใช้ <code>shared/api/client.js</code> ร่วมกัน</td></tr>
+<tr><td><code>index.css</code></td><td>ค่อยแยก theme ส่วนกลาง, layout ของ app และ CSS ของแต่ละฟีเจอร์</td></tr>
+</tbody></table></section>
+<div class="steps"><article class="step"><span class="number">STEP 1</span><h3>เก็บจุดเริ่มต้น</h3><p>Build และบันทึก commit ก่อนย้าย ตรวจ dependency ของไฟล์ที่เกี่ยวข้อง</p></article><article class="step"><span class="number">STEP 2</span><h3>ย้ายทีละฟีเจอร์</h3><p>รักษาชื่อไฟล์และ logic เดิม แก้ import แล้วตรวจหน้าจอและ build ทุกชุด</p></article><article class="step"><span class="number">STEP 3</span><h3>ค่อยแยกไฟล์ใหญ่</h3><p>แยก API, CSS และ runtime หลังโครงใหม่ทำงานได้แล้ว ใช้ commit แยกจากการย้าย</p></article></div>
+</main>
+<footer>T.i.M.E.S. · Frontend feature structure proposal · เปิดไฟล์นี้ได้โดยตรง ไม่ต้องรัน server หรือเชื่อมต่ออินเทอร์เน็ต</footer>
+<script>
+document.getElementById('expand').addEventListener('click',()=>document.querySelectorAll('details').forEach(item=>item.open=true));
+document.getElementById('collapse').addEventListener('click',()=>document.querySelectorAll('details').forEach(item=>item.open=false));
+</script>
+</body>
+</html>

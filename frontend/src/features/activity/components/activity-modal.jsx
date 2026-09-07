@@ -4,7 +4,7 @@ import {
   toTimeInputValue,
   combineDateAndTime,
   activityDate
-} from "../date-utils.js";
+} from "../../../date-utils.js";
 import {
   defaultRepeatState,
   parseRRule,
@@ -12,8 +12,8 @@ import {
   describeRepeat,
   isRuleEditable,
   RRULE_WEEKDAYS
-} from "../rrule-utils.js";
-import { normalizeActivityId } from "../id-utils.js";
+} from "../lib/rrule-utils.js";
+import { normalizeActivityId } from "../../../id-utils.js";
 
 const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 

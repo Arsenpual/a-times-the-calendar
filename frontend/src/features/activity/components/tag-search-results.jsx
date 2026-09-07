@@ -1,7 +1,7 @@
 import React from "react";
-import { activityDate, formatTime, formatMonthYear } from "../date-utils.js";
-import { getDisplayColor } from "../activity-colors.js";
-import { normalizeActivityId } from "../id-utils.js";
+import { activityDate, formatTime, formatMonthYear } from "../../../date-utils.js";
+import { getDisplayColor } from "../lib/activity-colors.js";
+import { normalizeActivityId } from "../../../id-utils.js";
 
 /**
  * แสดงผลลัพธ์การค้นหาด้วย tag เป็นรายการเรียงตามวันที่ (ไม่ใช่กริด 7 วันแบบ

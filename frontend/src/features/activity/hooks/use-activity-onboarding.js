@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getWeekRange } from "../date-utils.js";
+import { getWeekRange } from "../../../date-utils.js";
 
 const ONBOARDING_VERSION = 1;
 const ONBOARDING_ROLLOUT_AT = Date.parse("2026-08-21T00:00:00+07:00");
