@@ -485,6 +485,22 @@ html.screen-reader-mode .tag-search-input {
   overflow-y: auto;
 }
 
+/* Reminder Mode stays mounted while Activity Mode is visible so its local
+   Telegram due-check can continue. That runtime wrapper must take the same
+   constrained flex space as the former direct child; otherwise the inner
+   100vh dashboard sits below the app header and creates an unnecessary page
+   overflow at the bottom. */
+.app-main > .reminder-mode-runtime {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-main > .reminder-mode-runtime > .reminder-app-container {
+  height: 100%;
+  max-height: 100%;
+}
+
 /* Scrolling announcement strip below the header in calendar mode — see
    AnnouncementTicker. Deliberately quiet/small: thin strip, small text,
    muted colors, so it reads as ambient info rather than an alert. Scrolls

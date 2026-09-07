@@ -248,6 +248,55 @@
   background: var(--md-ref-state-hover);
 }
 
+.reminder-app-container .telegram-connection-toast {
+  position: fixed;
+  z-index: 10010;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 13px 12px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container-high, var(--md-sys-color-surface));
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-ref-elevation-3);
+}
+
+.reminder-app-container .telegram-connection-toast.is-connected {
+  border-color: color-mix(in srgb, #34a853 55%, var(--md-sys-color-outline-variant));
+}
+
+.reminder-app-container .telegram-connection-toast-icon {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #229ed9;
+  color: #fff;
+  font-weight: 700;
+}
+
+.reminder-app-container .telegram-connection-toast.is-connected .telegram-connection-toast-icon { background: #34a853; }
+.reminder-app-container .telegram-connection-toast strong { font-size: 0.88rem; }
+.reminder-app-container .telegram-connection-toast p { margin: 2px 0 0; font-size: 0.82rem; line-height: 1.35; }
+.reminder-app-container .telegram-connection-toast small { display: block; margin-top: 5px; color: var(--md-sys-color-on-surface-variant); font-size: 0.72rem; }
+.reminder-app-container .telegram-connection-toast-close {
+  margin-left: auto;
+  border: 0;
+  padding: 0 3px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .reminder-app-container .btn-mark-done {
   min-height: 36px;
   border-radius: var(--md-ref-radius-pill);

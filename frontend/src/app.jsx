@@ -13,6 +13,7 @@ import SettingsDrawer from "./components/settings-drawer.jsx";
 import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
 import { createAiActivityDraft, getAnnouncement, sendTelegramActivity } from "./api.js";
+import { areTelegramNotificationsEnabled } from "./telegram-notification-preferences.js";
 import { useAuth } from "./hooks/use-auth.js";
 import { useWeekNavigation } from "./hooks/use-week-navigation.js";
 import { useCalendarData } from "./hooks/use-calendar-data.js";
@@ -399,7 +400,7 @@ function MainApp() {
         if (!Number.isFinite(activityStart) || isArchived || activityStart <= previousCheck || activityStart > now) return;
 
         const notificationKey = `${normalizedId}:${activityStart}`;
-        if (sentTelegramActivityKeysRef.current.has(notificationKey)) return;
+        if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramActivityKeysRef.current.has(notificationKey)) return;
         sentTelegramActivityKeysRef.current.add(notificationKey);
         sendTelegramActivity(activity.summary || "(Untitled activity)", `activity:${notificationKey}`).catch(() => {
           // Telegram may be disconnected; activity interaction must remain available.
@@ -716,7 +717,7 @@ function MainApp() {
           // explicitly returned to Reminder Mode. `hidden` removes only its
           // visual layout; state, Firebase sync, and the notification loop
           // continue while this browser tab remains open.
-          <div hidden={mode !== "reminder"} aria-hidden={mode !== "reminder"}>
+          <div className="reminder-mode-runtime" hidden={mode !== "reminder"} aria-hidden={mode !== "reminder"}>
             <ReminderMode
               firebaseUser={firebaseUser}
               activities={visibleActivities}

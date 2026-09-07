@@ -13,7 +13,8 @@ import { activityDate } from "../date-utils.js";
 import { normalizeActivityId } from "../id-utils.js";
 import { getDisplayColor } from "../activity-colors.js";
 import { layoutOverlaps } from "../timeline-layout.js";
-import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder, sendTelegramTest } from "../api.js";
+import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder } from "../api.js";
+import { areTelegramNotificationsEnabled, setTelegramNotificationsEnabled } from "../telegram-notification-preferences.js";
 import { useLanguage } from "../i18n.jsx";
 import "../styles/reminder-material.css";
 import {
@@ -456,7 +457,8 @@ export default function ReminderDashboard({
   const [dueReminders, setDueReminders] = useState([]);
   const sentTelegramReminderKeysRef = useRef(new Set());
   const intervalTelegramSlotRef = useRef(new Map());
-  const [telegramConnection, setTelegramConnection] = useState({ isConnected: false, isLoading: false, statusMessage: "" });
+  const [telegramConnection, setTelegramConnection] = useState({ isConnected: false, isLoading: false, statusMessage: "", linkExpiresAt: null });
+  const [areTelegramAlertsEnabled, setAreTelegramAlertsEnabled] = useState(() => areTelegramNotificationsEnabled(firebaseUser?.uid));
   const [activityContextMenu, setActivityContextMenu] = useState(null);
   const [omnibarEnabled, setOmnibarEnabled] = useState(false);
   const [omnibarInput, setOmnibarInput] = useState("");
@@ -499,7 +501,7 @@ export default function ReminderDashboard({
 
   useEffect(() => {
     if (!firebaseUser) {
-      setTelegramConnection({ isConnected: false, isLoading: false, statusMessage: "" });
+      setTelegramConnection({ isConnected: false, isLoading: false, statusMessage: "", linkExpiresAt: null });
       return;
     }
     getTelegramStatus()
@@ -507,30 +509,71 @@ export default function ReminderDashboard({
       .catch(() => {});
   }, [firebaseUser]);
 
+  useEffect(() => {
+    setAreTelegramAlertsEnabled(areTelegramNotificationsEnabled(firebaseUser?.uid));
+  }, [firebaseUser?.uid]);
+
+  // The bot writes the linked chat ID to Firestore after the user presses
+  // Start. Poll briefly so the web page confirms success by itself instead
+  // of making the person guess whether they should return and refresh.
+  useEffect(() => {
+    if (!firebaseUser || telegramConnection.isConnected || !telegramConnection.linkExpiresAt) return undefined;
+    const checkConnection = async () => {
+      if (Date.now() >= telegramConnection.linkExpiresAt) {
+        setTelegramConnection((previous) => ({ ...previous, linkExpiresAt: null, statusMessage: "ลิงก์เชื่อมต่อหมดอายุแล้ว — กดปุ่ม Telegram เพื่อลองใหม่" }));
+        return;
+      }
+      try {
+        const { connected } = await getTelegramStatus();
+        if (connected) {
+          setTelegramConnection({ isConnected: true, isLoading: false, statusMessage: "เชื่อม Telegram สำเร็จแล้ว ✓", linkExpiresAt: null });
+        }
+      } catch {
+        // A temporary backend wake-up must not terminate the valid link.
+      }
+    };
+    checkConnection();
+    const intervalId = window.setInterval(checkConnection, 3_000);
+    return () => window.clearInterval(intervalId);
+  }, [firebaseUser, telegramConnection.isConnected, telegramConnection.linkExpiresAt]);
+
   const handleTelegramConnection = async () => {
     // เปิดหน้าต่างจาก user gesture โดยตรง เพื่อไม่ให้ browser บล็อก popup.
     const telegramDesktopWindow = window.open("about:blank", "_blank");
     try {
       setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
-      const { connectUrl, appConnectUrl } = await beginTelegramConnection();
+      const { connectUrl, appConnectUrl, expiresAt } = await beginTelegramConnection();
       const telegramDestination = appConnectUrl || connectUrl;
       if (telegramDesktopWindow) telegramDesktopWindow.location.replace(telegramDestination);
       else window.location.assign(telegramDestination);
-      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: t("reminder.telegramOpen") }));
+      setTelegramConnection((previous) => ({
+        ...previous,
+        isLoading: false,
+        linkExpiresAt: expiresAt || null,
+        statusMessage: "เปิด Telegram แล้ว — กด Start ในแชตกับ MR.Zettascale เพื่อเชื่อมต่อ"
+      }));
     } catch (error) {
       telegramDesktopWindow?.close();
       setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
     }
   };
 
-  const handleTelegramTestMessage = async () => {
-    try {
-      setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
-      await sendTelegramTest();
-      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: t("reminder.telegramTestSent") }));
-    } catch (error) {
-      setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
+  const handleTelegramAlertToggle = () => {
+    if (!telegramConnection.isConnected) {
+      handleTelegramConnection();
+      return;
     }
+    const nextEnabled = !areTelegramAlertsEnabled;
+    const question = nextEnabled
+      ? "ต้องการเปิดการแจ้งเตือนผ่าน Telegram อีกครั้งใช่ไหม?"
+      : "ต้องการปิดการแจ้งเตือนผ่าน Telegram บนอุปกรณ์นี้ใช่ไหม?";
+    if (!window.confirm(question)) return;
+    setTelegramNotificationsEnabled(firebaseUser?.uid, nextEnabled);
+    setAreTelegramAlertsEnabled(nextEnabled);
+    setTelegramConnection((previous) => ({
+      ...previous,
+      statusMessage: nextEnabled ? "เปิดการแจ้งเตือนผ่าน Telegram แล้ว" : "ปิดการแจ้งเตือนผ่าน Telegram บนอุปกรณ์นี้แล้ว"
+    }));
   };
 
   const omnibarPreview = useMemo(() => parseReminderQuickInput(omnibarInput), [omnibarInput]);
@@ -658,7 +701,7 @@ export default function ReminderDashboard({
       // ใช้ due timestamp เป็น key เพื่อกัน tick ทุกวินาทีส่งข้อความซ้ำ.
       due.forEach((reminder) => {
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
-        if (sentTelegramReminderKeysRef.current.has(key)) return;
+        if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramReminderKeysRef.current.has(key)) return;
         sentTelegramReminderKeysRef.current.add(key);
         sendTelegramReminder(reminder.title, "reminder", key).catch(() => {
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
@@ -680,7 +723,7 @@ export default function ReminderDashboard({
           intervalTelegramSlotRef.current.set(reminder.id, slot);
           return;
         }
-        if (previousSlot.slotKey === slot.slotKey) return;
+        if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || previousSlot.slotKey === slot.slotKey) return;
         intervalTelegramSlotRef.current.set(reminder.id, slot);
         sendTelegramReminder(reminder.title, "interval", `interval:${reminder.id}:${slot.slotKey}`).catch(() => {
           // Telegram is optional; an unavailable bot must not alter the
@@ -695,7 +738,7 @@ export default function ReminderDashboard({
     checkDue();
     const interval = setInterval(checkDue, 1000);
     return () => clearInterval(interval);
-  }, [reminders]);
+  }, [reminders, firebaseUser?.uid]);
 
 
   const minutesPerRow = ZOOM_LEVELS_MINUTES[zoomIndex];
@@ -1943,6 +1986,18 @@ export default function ReminderDashboard({
 
         .topbar-telegram-btn {
           color: #229ed9;
+          position: relative;
+          transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+        }
+
+        .topbar-telegram-btn.is-active {
+          background: color-mix(in srgb, #229ed9 18%, transparent);
+          color: #168bc3;
+        }
+
+        .topbar-telegram-btn.is-muted {
+          color: var(--g-on-surface-variant);
+          opacity: 0.62;
         }
 
         .topbar-telegram-btn svg {
@@ -3233,11 +3288,12 @@ export default function ReminderDashboard({
         <div className="topbar-actions">
           <button
             type="button"
-            className="topbar-icon-btn topbar-telegram-btn"
+            className={`topbar-icon-btn topbar-telegram-btn${areTelegramAlertsEnabled ? " is-active" : " is-muted"}`}
             disabled={telegramConnection.isLoading}
-            onClick={telegramConnection.isConnected ? handleTelegramTestMessage : handleTelegramConnection}
-            title={telegramConnection.statusMessage || (telegramConnection.isConnected ? t("reminder.sendTelegramTest") : t("reminder.connectTelegram"))}
-            aria-label={telegramConnection.isConnected ? t("reminder.sendTelegramTest") : t("reminder.connectTelegram")}
+            onClick={handleTelegramAlertToggle}
+            aria-pressed={telegramConnection.isConnected ? areTelegramAlertsEnabled : undefined}
+            title={telegramConnection.statusMessage || (telegramConnection.isConnected ? (areTelegramAlertsEnabled ? "ปิดการแจ้งเตือน Telegram" : "เปิดการแจ้งเตือน Telegram") : t("reminder.connectTelegram"))}
+            aria-label={telegramConnection.isConnected ? (areTelegramAlertsEnabled ? "ปิดการแจ้งเตือน Telegram" : "เปิดการแจ้งเตือน Telegram") : t("reminder.connectTelegram")}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M21.4 3.2 2.9 10.3c-1.26.5-1.25 1.2-.23 1.51l4.75 1.48 1.84 5.64c.22.61.11.85.76.85.5 0 .72-.23 1-.5l2.3-2.24 4.78 3.53c.88.49 1.52.24 1.74-.82l3.15-14.85c.33-1.3-.5-1.89-1.57-1.42ZM8.4 12.8l10.72-6.77c.54-.33 1.03-.15.62.22l-9.19 8.3-.36 3.87-1.79-5.62Z" />
@@ -3257,6 +3313,23 @@ export default function ReminderDashboard({
           <button type="button" className="topbar-icon-btn" onClick={() => setIsStatsOpen(true)} title={t("reminder.viewStats")}>📊</button>
         </div>
       </header>
+
+      {telegramConnection.statusMessage && (
+        <div className={`telegram-connection-toast${telegramConnection.isConnected ? " is-connected" : ""}`} role="status">
+          <span className="telegram-connection-toast-icon" aria-hidden="true">{telegramConnection.isConnected ? "✓" : "✈"}</span>
+          <div>
+            <strong>Telegram</strong>
+            <p>{telegramConnection.statusMessage}</p>
+            {!telegramConnection.isConnected && telegramConnection.linkExpiresAt && <small>หน้าต่างนี้จะยืนยันการเชื่อมต่อให้อัตโนมัติ</small>}
+          </div>
+          <button
+            type="button"
+            className="telegram-connection-toast-close"
+            aria-label="ปิดข้อความ Telegram"
+            onClick={() => setTelegramConnection((previous) => ({ ...previous, statusMessage: "", linkExpiresAt: null }))}
+          >×</button>
+        </div>
+      )}
 
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => setIsStatsOpen(false)} stats={reminderStats} />
 
