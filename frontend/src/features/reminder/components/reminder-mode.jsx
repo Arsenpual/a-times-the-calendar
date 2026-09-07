@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
-import { usePushNotifications } from "../../../hooks/use-push-notifications.js";
+import { usePushNotifications } from "../../notifications/push/hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { getReminderFeatureFlags, logReminderEvent } from "../lib/reminder-telemetry.js";
 import { parseReminderQuickInput } from "../lib/reminder-quick-parse.js";
@@ -13,8 +13,8 @@ import { activityDate } from "../../../date-utils.js";
 import { normalizeActivityId } from "../../../id-utils.js";
 import { getDisplayColor } from "../../activity/lib/activity-colors.js";
 import { layoutOverlaps } from "../../activity/lib/timeline-layout.js";
-import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder } from "../../../api.js";
-import { areTelegramNotificationsEnabled, setTelegramNotificationsEnabled } from "../../../telegram-notification-preferences.js";
+import { beginTelegramConnection, getTelegramStatus, sendTelegramReminder } from "../../notifications/telegram/api.js";
+import { areTelegramNotificationsEnabled, setTelegramNotificationsEnabled } from "../../notifications/telegram/telegram-notification-preferences.js";
 import { useLanguage } from "../../../i18n.jsx";
 import "../styles/reminder-material.css";
 import {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { firebaseApp, firebaseConfig } from "../firebase-config.js";
+import { firebaseApp, firebaseConfig } from "../../../../firebase-config.js";
 import { registerFcmToken, unregisterFcmToken } from "../api.js";
 
 // ⚠️ SCAFFOLD — เขียนโครงไว้ก่อนตามที่ผู้ใช้ขอ (migration plan v2 เฟส 5)
