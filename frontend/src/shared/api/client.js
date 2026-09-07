@@ -10,7 +10,7 @@
 // currently-valid token without us needing to track expiry ourselves
 // (unlike the Google Calendar access token in google-calendar.js, which is
 // NOT auto-refreshed by Firebase and needs its own reauth flow).
-import { auth } from "../../google-calendar.js";
+import { auth } from "../config/firebase-auth.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 

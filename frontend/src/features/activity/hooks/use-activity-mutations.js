@@ -5,7 +5,7 @@ import {
   deleteActivity,
   fetchRecurringInstances,
   isCalendarAuthExpiredError
-} from "../../../google-calendar.js";
+} from "../../calendar-connection/api/google-calendar.js";
 import {
   createCategory,
   deleteCategory,

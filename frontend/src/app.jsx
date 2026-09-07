@@ -9,13 +9,13 @@ import MiniTimelinePanel from "./features/activity/components/mini-timeline-pane
 import ActivityModal from "./features/activity/components/activity-modal.jsx";
 import ReminderMode from "./features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "./components/announcement-ticker.jsx";
-import SettingsDrawer from "./components/settings-drawer.jsx";
+import SettingsDrawer from "./features/settings/components/settings-drawer.jsx";
 import { activityDate, formatWeekLabel, toDateInputValue } from "./date-utils.js";
 import { normalizeActivityId } from "./id-utils.js";
 import { createAiActivityDraft, getAnnouncement } from "./api.js";
 import { sendTelegramActivity } from "./features/notifications/telegram/api.js";
 import { areTelegramNotificationsEnabled } from "./features/notifications/telegram/telegram-notification-preferences.js";
-import { useAuth } from "./hooks/use-auth.js";
+import { useAuth } from "./features/auth/hooks/use-auth.js";
 import { useWeekNavigation } from "./features/activity/hooks/use-week-navigation.js";
 import { useCalendarData } from "./features/activity/hooks/use-calendar-data.js";
 import { useTagSearch } from "./features/activity/hooks/use-tag-search.js";
