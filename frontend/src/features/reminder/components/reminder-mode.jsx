@@ -402,7 +402,8 @@ export default function ReminderDashboard({
   // Runtime reminder state belongs to a person, not to this browser. The
   // previous shared key exposed the prior account's reminders after logout.
   const userStorageKey = `${STORAGE_KEY}:${firebaseUser?.uid || "guest"}`;
-  const { reminders, setReminders, updateReminders, syncError } = useReminderStore({
+  const [isExporting, setIsExporting] = useState(false);
+  const { reminders, setReminders, updateReminders, getExportReminders, syncError } = useReminderStore({
     firebaseUser,
     storageKey: userStorageKey,
     defaultReminders: DEFAULT_REMINDERS,
@@ -1937,18 +1938,27 @@ export default function ReminderDashboard({
                 type="button"
                 className="timeline-export-btn"
                 title="บันทึกภาพ timeline reminder"
-                onClick={() => downloadReminderTimelineImage({
+                disabled={isExporting}
+                onClick={async () => {
+                  setIsExporting(true);
+                  try {
+                    const latestReminders = await getExportReminders();
+                    await downloadReminderTimelineImage({
                   date: selectedDate,
-                  reminders: visibleEnabledReminders,
+                  reminders: latestReminders,
                   activities,
                   categories,
                   activityCategoryMap,
                   groups,
                   activeTypeFilter,
                   activeGroupFilter
-                })}
+                    });
+                  } catch (error) {
+                    window.alert(`สร้างภาพไม่สำเร็จ: ${error.message}`);
+                  } finally { setIsExporting(false); }
+                }}
               >
-                ⇩ <span>PNG</span>
+                ⇩ <span>{isExporting ? "…" : "PNG"}</span>
               </button>
               <div className="zoom-controls">
                 <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title={t("reminder.zoomOut")}>−</button>

@@ -7,7 +7,7 @@ import { apiRequest, handleResponse } from "../../../shared/api/client.js";
  * startedAt/accumulatedMs ของ countdown/stopwatch ที่กำลังทำงานอยู่
  */
 export async function fetchReminders() {
-  const res = await apiRequest("/api/reminders");
+  const res = await apiRequest("/api/reminders", { cache: "no-store" });
   return handleResponse(res, "GET /api/reminders");
 }
 

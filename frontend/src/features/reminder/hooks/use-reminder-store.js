@@ -16,7 +16,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
   const owner = useRef(storageKey);
   const ready = useRef(false);
   const [syncError, setSyncError] = useState(null);
-  const { remoteReminders, loadError, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
+  const { remoteReminders, loadError, syncScheduleFields, deleteRemoteReminder, fetchLatestReminders } = useRemindersSync({ firebaseUser });
   const setReminders = useCallback(update => {
     const next = typeof update === "function" ? update(stateRef.current) : update;
     stateRef.current = next;
@@ -76,5 +76,15 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
       if (failure) setSyncError("บันทึก Reminder บน cloud ไม่สำเร็จ: " + failure.reason.message);
     });
   }, [firebaseUser, storageKey, setReminders, extractScheduleFields, syncScheduleFields, deleteRemoteReminder]);
-  return { reminders, setReminders, updateReminders, syncError: syncError || loadError };
+  const getExportReminders = useCallback(async () => {
+    if (!firebaseUser) return stateRef.current;
+    if (syncError) throw new Error(syncError);
+    const latest = await fetchLatestReminders();
+    return Object.entries(latest).map(([id, fields]) => ({
+      ...fields, id,
+      ...(fields.type === "countdown" && Number.isFinite(fields.nextDueAt)
+        ? { startedAt: fields.nextDueAt - fields.durationMs } : {})
+    }));
+  }, [firebaseUser, syncError, fetchLatestReminders]);
+  return { reminders, setReminders, updateReminders, getExportReminders, syncError: syncError || loadError };
 }

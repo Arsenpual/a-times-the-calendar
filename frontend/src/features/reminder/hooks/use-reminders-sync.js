@@ -39,6 +39,15 @@ export function useRemindersSync({ firebaseUser }) {
     enqueue(id, () => saveReminder(id, fields)), [enqueue]);
   const deleteRemoteReminder = useCallback(id =>
     enqueue(id, () => deleteReminderRemote(id)), [enqueue]);
+  const fetchLatestReminders = useCallback(async () => {
+    while ([...queues.current.keys()].some(key => key.startsWith(uid + ":"))) {
+      await Promise.all([...queues.current.entries()].filter(([key]) => key.startsWith(uid + ":")).map(([, pending]) => pending));
+    }
+    if (currentUid.current !== uid) throw new Error("บัญชีผู้ใช้เปลี่ยนแล้ว กรุณาลองใหม่");
+    const data = await fetchReminders();
+    if (currentUid.current !== uid) throw new Error("บัญชีผู้ใช้เปลี่ยนแล้ว กรุณาลองใหม่");
+    return data;
+  }, [uid]);
   return { remoteReminders: loaded.uid === uid ? loaded.data : null,
-    loadError, syncScheduleFields, deleteRemoteReminder };
+    loadError, syncScheduleFields, deleteRemoteReminder, fetchLatestReminders };
 }
