@@ -303,7 +303,7 @@ function describeReminder(reminder, nowMs) {
       return `ครั้งเดียว · ${dateLabel} ${timeLabel}`;
     }
     case REMINDER_TYPE.COUNTDOWN: {
-      if (!reminder.enabled || reminder.completedAt || (activeTypeFilter && reminder.type !== activeTypeFilter) || (activeGroupFilter && reminder.groupId !== activeGroupFilter) || !reminder.startedAt) {
+      if (!reminder.enabled || reminder.completedAt || !reminder.startedAt) {
         const mins = Math.round(reminder.durationMs / 60000);
         return `นับถอยหลัง · ตั้งไว้ ${mins} นาที`;
       }
@@ -704,7 +704,9 @@ export default function ReminderDashboard({
     const pixelsPerMinute = ROW_HEIGHT_PX / minutesPerRow;
 
     return reminders.flatMap((reminder) => {
-      if (!reminder.enabled || !reminder.startedAt) return [];
+      if (!reminder.enabled || reminder.completedAt || !reminder.startedAt ||
+          (activeTypeFilter && reminder.type !== activeTypeFilter) ||
+          (activeGroupFilter && reminder.groupId !== activeGroupFilter)) return [];
       const isCountdown = reminder.type === REMINDER_TYPE.COUNTDOWN;
       const isStopwatch = reminder.type === REMINDER_TYPE.STOPWATCH;
       if (!isCountdown && !isStopwatch) return [];
