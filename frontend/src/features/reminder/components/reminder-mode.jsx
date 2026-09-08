@@ -1,3 +1,4 @@
+import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
@@ -334,18 +335,12 @@ function describeReminder(reminder, nowMs) {
 // Reminder Mode can send one Telegram message when that slot changes.
 function getIntervalTelegramSlot(reminder, nowMs) {
   if (!reminder.enabled || reminder.completedAt || reminder.type !== REMINDER_TYPE.INTERVAL) return null;
-  const stepMinutes = Number(reminder.amount) * (reminder.unit === "hours" ? 60 : 1);
-  if (!Number.isFinite(stepMinutes) || stepMinutes <= 0) return null;
-
   const now = new Date(nowMs);
-  const currentMinute = now.getHours() * 60 + now.getMinutes();
-  if (hasWindow(reminder) && !isMinuteWithinWindow(currentMinute, reminder.windowStart, reminder.windowEnd)) return null;
-
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
-  const slotMinute = Math.floor(currentMinute / stepMinutes) * stepMinutes;
-  const scheduleSignature = `${stepMinutes}:${reminder.windowStart || "all-day"}:${reminder.windowEnd || "all-day"}`;
-  return { scheduleSignature, slotKey: `${scheduleSignature}:${dayStart.getTime()}:${slotMinute}` };
+  const minute = now.getHours() * 60 + now.getMinutes();
+  const slots = intervalScheduleMinutes(reminder);
+  const scheduleSignature = `${reminder.amount}:${reminder.unit}:${reminder.windowStart || "all-day"}:${reminder.windowEnd || "all-day"}`;
+  const active = slots.includes(minute);
+  return { active, scheduleSignature, slotKey: active ? `${scheduleSignature}:${localDateKey(now)}:${minute}` : "idle" };
 }
 
 // คืนค่ารายการ "นาทีของวัน" (0-1439) ที่ reminder ประเภทนี้ควรถูกปักหมุดแสดงบน timeline
@@ -542,6 +537,7 @@ export default function ReminderDashboard({
         }
         if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || previousSlot.slotKey === slot.slotKey) return;
         intervalTelegramSlotRef.current.set(reminder.id, slot);
+        if (!slot.active) return;
         sendTelegramReminder(reminder.title, "interval", `interval:${reminder.id}:${slot.slotKey}`).catch(() => {
           // Telegram is optional; an unavailable bot must not alter the
           // interval schedule or interrupt the timeline.

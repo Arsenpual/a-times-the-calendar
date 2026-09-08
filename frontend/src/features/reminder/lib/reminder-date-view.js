@@ -1,4 +1,5 @@
-import { hasWindow, isMinuteWithinWindow, minutesFromHHMM } from './reminder-due-logic.js';
+import { intervalScheduleMinutes } from "./interval-schedule.js";
+import { minutesFromHHMM } from './reminder-due-logic.js';
 
 export function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -17,15 +18,7 @@ export function reminderSlotsOnDate(reminder, date) {
     case 'weekly':
       return reminder.days?.includes(date.getDay())
         ? [...new Set((reminder.times?.length ? reminder.times : [reminder.time]).filter(Boolean).map(minutesFromHHMM))] : [];
-    case 'interval': {
-      const step = Number(reminder.amount) * (reminder.unit === 'hours' ? 60 : 1);
-      if (!Number.isFinite(step) || step < 1) return [];
-      const slots = [];
-      for (let minute = 0; minute < 1440; minute += step) {
-        if (!hasWindow(reminder) || isMinuteWithinWindow(minute, reminder.windowStart, reminder.windowEnd)) slots.push(minute);
-      }
-      return slots;
-    }
+    case 'interval': return intervalScheduleMinutes(reminder);
     case 'once-at': return at(reminder.atMs);
     case 'countdown': return at(reminder.startedAt ? reminder.startedAt + reminder.durationMs : null);
     case 'event-anchored': return at(reminder.nextDueAt);

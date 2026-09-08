@@ -1,3 +1,4 @@
+import { nextIntervalDue } from "./interval-schedule.js";
 // Pure due-date calculation logic สำหรับ reminder mode — แยกออกมาจาก
 // reminder-mode.jsx (migration plan v2 เฟส 5, prerequisite 5.1)
 //
@@ -133,10 +134,7 @@ export function computeNextDueAt(reminder, from) {
       return Infinity;
     case REMINDER_TYPE.INTERVAL:
     default: {
-      const next = from + intervalMs(reminder);
-      return hasWindow(reminder)
-        ? snapToNextWindowStart(next, reminder.windowStart, reminder.windowEnd)
-        : nextAllDayIntervalDue(reminder, from);
+      return nextIntervalDue(reminder, from);
     }
   }
 }
