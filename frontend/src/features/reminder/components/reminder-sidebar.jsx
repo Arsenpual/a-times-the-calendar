@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 const GROUP_COLOR_PALETTE = ["#4285f4", "#34a853", "#ea4335", "#f9ab00", "#a142f4", "#00bcd4", "#e91e63", "#8d6e63"];
-export default function ReminderSidebar({ reminders, groups, groupsError, addGroup, handleDeleteGroup, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleGroupFilter, toggleTypeFilter, typeFilterOptions }) {
+export default function ReminderSidebar({ reminders, groups, groupsError, addGroup, handleDeleteGroup, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleGroupFilter, toggleTypeFilter, typeFilterOptions, dateView, setDateView, selectedDateKey, selectDate }) {
 const { t } = useLanguage();
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -27,8 +27,9 @@ return (
             <p className="nav-section-title">{t("reminder.primaryViews")}</p>
             <button
               type="button"
-              className={`nav-item ${activeTypeFilter === null && activeGroupFilter === null ? "is-active" : ""}`}
+              className={`nav-item ${dateView === "all" && activeTypeFilter === null && activeGroupFilter === null ? "is-active" : ""}`}
               onClick={() => {
+                setDateView("all");
                 setActiveTypeFilter(null);
                 setActiveGroupFilter(null);
               }}
@@ -36,9 +37,13 @@ return (
               <span>{t("reminder.all")}</span>
               <span className="nav-item-count">{reminders.length}</span>
             </button>
-            <button type="button" className="nav-item" disabled title="เร็วๆ นี้: ระบบมุมมอง">
+            <button type="button" className={`nav-item ${dateView === "today" ? "is-active" : ""}`} onClick={() => setDateView("today")} aria-pressed={dateView === "today"}>
               <span>{t("reminder.today")}</span>
             </button>
+            <label className="nav-item reminder-date-picker">
+              <span>📅 {selectedDateKey}</span>
+              <input type="date" aria-label="เลือกวันที่ / Select date" value={selectedDateKey} onChange={(event) => selectDate(event.target.value)} onClick={(event) => event.currentTarget.showPicker?.()} />
+            </label>
           </div>
 
           <div>
@@ -145,4 +150,3 @@ return (
         </nav>
 );
 }
-

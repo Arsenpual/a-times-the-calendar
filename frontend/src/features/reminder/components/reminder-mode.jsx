@@ -20,6 +20,8 @@ import { layoutOverlaps } from "../../activity/lib/timeline-layout.js";
 import { sendTelegramReminder } from "../../notifications/telegram/api.js";
 import { areTelegramNotificationsEnabled } from "../../notifications/telegram/telegram-notification-preferences.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
+import { reminderSlotsOnDate, localDateKey } from "../lib/reminder-date-view.js";
+import { downloadReminderTimelineImage } from "../lib/export-reminder-image.js";
 import "../styles/reminder-material.css";
 import "../styles/reminder-mode.css";
 import {
@@ -300,7 +302,7 @@ function describeReminder(reminder, nowMs) {
       return `ครั้งเดียว · ${dateLabel} ${timeLabel}`;
     }
     case REMINDER_TYPE.COUNTDOWN: {
-      if (!reminder.enabled || !reminder.startedAt) {
+      if (!reminder.enabled || reminder.completedAt || (activeTypeFilter && reminder.type !== activeTypeFilter) || (activeGroupFilter && reminder.groupId !== activeGroupFilter) || !reminder.startedAt) {
         const mins = Math.round(reminder.durationMs / 60000);
         return `นับถอยหลัง · ตั้งไว้ ${mins} นาที`;
       }
@@ -354,51 +356,8 @@ function getIntervalTelegramSlot(reminder, nowMs) {
 // - COUNTDOWN: ปักที่เวลาสิ้นสุดของการนับถอยหลัง (ถ้าอยู่ในวันเดียวกับวันนี้)
 // - STOPWATCH: จับเวลาต่อเนื่องไม่มีเวลาตายตัว จึงไม่ปักหมุดตามเวลาเช่นกัน (เหมือน EVENT_ANCHORED/ROUTINE)
 // - EVENT_ANCHORED / ROUTINE: ไม่มีเวลาตายตัวในแต่ละวัน (ขึ้นกับ event ภายนอก) จึงไม่ปักหมุดตามเวลา
-function getReminderTimeSlots(reminder, startOfTodayMs) {
-  // Snooze is a temporary replacement for the normal schedule. For example,
-  // a weekly 09:00 reminder snoozed at 09:12 for 5 minutes must appear at
-  // 09:17, not continue showing its original 09:00 slot on the timeline.
-  if (reminder.snoozedUntil === reminder.nextDueAt && Number.isFinite(reminder.nextDueAt)) {
-    const dueDay = new Date(reminder.nextDueAt);
-    dueDay.setHours(0, 0, 0, 0);
-    return dueDay.getTime() === startOfTodayMs ? [minuteOfDayAt(reminder.nextDueAt)] : [];
-  }
-  switch (reminder.type) {
-    case REMINDER_TYPE.INTERVAL: {
-      const stepMinutes = reminder.amount * (reminder.unit === "hours" ? 60 : 1);
-      if (!stepMinutes || stepMinutes <= 0) return [];
-      const slots = [];
-      for (let m = 0; m < 1440; m += stepMinutes) {
-        if (!hasWindow(reminder) || isMinuteWithinWindow(m, reminder.windowStart, reminder.windowEnd)) {
-          slots.push(m);
-        }
-      }
-      return slots;
-    }
-    case REMINDER_TYPE.WEEKLY: {
-      return (reminder.times?.length ? reminder.times : [reminder.time]).filter(Boolean).map(minutesFromHHMM);
-    }
-    case REMINDER_TYPE.ONCE_AT: {
-      if (!reminder.atMs) return [];
-      const dayStart = new Date(reminder.atMs);
-      dayStart.setHours(0, 0, 0, 0);
-      if (dayStart.getTime() !== startOfTodayMs) return [];
-      return [minuteOfDayAt(reminder.atMs)];
-    }
-    case REMINDER_TYPE.COUNTDOWN: {
-      if (!reminder.startedAt || !reminder.durationMs) return [];
-      const endMs = reminder.startedAt + reminder.durationMs;
-      const dayStart = new Date(endMs);
-      dayStart.setHours(0, 0, 0, 0);
-      if (dayStart.getTime() !== startOfTodayMs) return [];
-      return [minuteOfDayAt(endMs)];
-    }
-    case REMINDER_TYPE.EVENT_ANCHORED:
-    case REMINDER_TYPE.ROUTINE:
-    case REMINDER_TYPE.STOPWATCH:
-    default:
-      return [];
-  }
+function getReminderTimeSlots(reminder, dateMs) {
+  return reminderSlotsOnDate(reminder, new Date(dateMs));
 }
 
 const ROW_HEIGHT_PX = 32;
@@ -486,7 +445,7 @@ export default function ReminderDashboard({
   // ทีละ tab แบบ mockup "completed" ยังเป็น placeholder เฉยๆ (รอ field
   // completedAt จริงจากเฟส 4) กด disabled ไว้ก่อน
   // สถานะของรายการที่กำลังแสดง ไม่ใช่ "active" ของ UI ทั่วไป.
-  const { reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(reminders);
+  const { dateView, setDateView, selectedDateKey, selectedDate, selectDate, reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(reminders);
 
   // ฟอร์มสร้างกลุ่มใหม่แบบ inline ใน nav sidebar — เปิด/ปิดด้วยปุ่ม "+
   // เพิ่มกลุ่มใหม่" เก็บแค่ชื่อ (สีสุ่ม/วนจาก GROUP_COLOR_PALETTE อัตโนมัติ
@@ -611,7 +570,7 @@ export default function ReminderDashboard({
 
   const tapeRows = useMemo(() => {
     const rows = [];
-    const now = new Date();
+    const now = selectedDate;
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
     // Timeline ใช้ filter ชุดเดียวกับ nav-sidebar/main-panel: แสดงเฉพาะ
@@ -658,7 +617,7 @@ export default function ReminderDashboard({
     }
 
     return rows;
-  }, [reminders, minutesPerRow, totalRows, activeTypeFilter, activeGroupFilter]);
+  }, [reminders, minutesPerRow, totalRows, activeTypeFilter, activeGroupFilter, selectedDateKey]);
 
   // ให้ track กว้างตามจำนวน reminder ที่อยู่เวลาเดียวกัน เพื่อให้ผู้ใช้
   // เลื่อนดูทุก chip ทางแนวนอนได้ แทนการซ่อนรายการส่วนเกินในแต่ละแถว.
@@ -673,7 +632,7 @@ export default function ReminderDashboard({
   // เวลาเริ่ม/จบจริง (รองรับกิจกรรมข้ามเที่ยงคืนด้วย) โดยไม่สร้างสำเนาข้อมูล
   // activity ไว้ใน reminder store อีกชุดหนึ่ง
   const calendarTimelineBlocks = useMemo(() => {
-    const dayStart = new Date(nowTick);
+    const dayStart = new Date(selectedDateKey + "T00:00:00");
     dayStart.setHours(0, 0, 0, 0);
     const dayStartMs = dayStart.getTime();
     const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
@@ -736,13 +695,13 @@ export default function ReminderDashboard({
       titleBelow: lanes[block.id]?.titleBelow || false,
       titleOffsetMinutes: lanes[block.id]?.titleOffsetMinutes || 0
     }));
-  }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX]);
+  }, [activities, activityCategoryMap, categories, minutesPerRow, nowTick, SPACER_HEIGHT_PX, selectedDateKey]);
 
   // แถบสีของ Timer/Stopwatch เป็นคนละ layer กับ now-indicator และ Activity:
   // countdown แสดงช่วงเริ่มจนถึงเวลาสิ้นสุด, stopwatch แสดงช่วงเริ่มจนถึง
   // เวลาปัจจุบันเท่านั้น จึงไม่ไปเปลี่ยนความหมายของเส้น now-indicator เลย.
   const runningReminderSpans = useMemo(() => {
-    const dayStart = new Date(nowTick);
+    const dayStart = new Date(selectedDateKey + "T00:00:00");
     dayStart.setHours(0, 0, 0, 0);
     const dayStartMs = dayStart.getTime();
     const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
@@ -776,7 +735,7 @@ export default function ReminderDashboard({
         color: reminder.lineColor || DEFAULT_LINE_COLOR
       }];
     });
-  }, [reminders, nowTick, minutesPerRow, SPACER_HEIGHT_PX]);
+  }, [reminders, nowTick, minutesPerRow, SPACER_HEIGHT_PX, selectedDateKey, activeTypeFilter, activeGroupFilter]);
 
   // ข้อความบน now-indicator สงวนไว้ให้สถานะของ Activity เท่านั้น:
   // ถ้ามีกิจกรรมกำลังทำให้ความสำคัญกับเวลาที่เหลือก่อนจบ; ถ้าไม่มีจึงแสดง
@@ -829,7 +788,7 @@ export default function ReminderDashboard({
 
     const tick = (frameTime) => {
       if (tapeScrollRef.current) {
-        if (isUserInteractingRef.current) {
+        if (selectedDateKey !== localDateKey() || isUserInteractingRef.current) {
           // ผู้ใช้กำลังลาก/ไถอยู่: ไม่ขยับเอง แต่รีเซ็ต lastFrameTime ไว้ กันไม่ให้กระโดดตอนปล่อยมือ
           lastFrameTime = null;
         } else if (!hasSnappedInitiallyRef.current) {
@@ -861,7 +820,7 @@ export default function ReminderDashboard({
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [minutesPerRow, singleDayHeight]);
+  }, [minutesPerRow, singleDayHeight, selectedDateKey]);
 
   const handleUserInteraction = () => {
     isUserInteractingRef.current = true;
@@ -887,7 +846,7 @@ export default function ReminderDashboard({
     const container = tapeScrollRef.current;
     if (!container || !reminder.enabled || reminder.completedAt) return;
 
-    const now = new Date();
+    const now = selectedDate;
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const slots = getReminderTimeSlots(reminder, startOfToday);
     if (slots.length === 0) return; // routine/stopwatch ไม่มีเวลาตายตัวบน timeline
@@ -1645,6 +1604,10 @@ export default function ReminderDashboard({
             wired จริงทั้งคู่แล้ว "ของวันนี้" ยังเป็น placeholder รอระบบ
             มุมมองในอนาคต count ทุกจุดคำนวณจาก reminders/groups จริงเสมอ */}
         <ReminderSidebar
+          dateView={dateView}
+          setDateView={setDateView}
+          selectedDateKey={selectedDateKey}
+          selectDate={selectDate}
           reminders={reminders}
           groups={groups}
           groupsError={groupsError}
@@ -1974,16 +1937,35 @@ export default function ReminderDashboard({
             ให้ตรงกับ 3-column grid ใหม่เท่านั้น */}
         <aside className="timeline-panel">
           <div className="timeline-header">
-            <p className="timeline-title">{t("reminder.timeline24h")}</p>
-            <div className="zoom-controls">
-              <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title={t("reminder.zoomOut")}>−</button>
-              <span className="zoom-display">{t("reminder.minutesPerSlot", { minutes: minutesPerRow })}</span>
-              <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title={t("reminder.zoomIn")}>+</button>
+            <p className="timeline-title">{t("reminder.timeline24h")} · {selectedDateKey}</p>
+            <div className="timeline-header-actions">
+              <button
+                type="button"
+                className="timeline-export-btn"
+                title="บันทึกภาพ timeline reminder"
+                onClick={() => downloadReminderTimelineImage({
+                  date: selectedDate,
+                  reminders: visibleEnabledReminders,
+                  activities,
+                  categories,
+                  activityCategoryMap,
+                  groups,
+                  activeTypeFilter,
+                  activeGroupFilter
+                })}
+              >
+                ⇩ <span>PNG</span>
+              </button>
+              <div className="zoom-controls">
+                <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title={t("reminder.zoomOut")}>−</button>
+                <span className="zoom-display">{t("reminder.minutesPerSlot", { minutes: minutesPerRow })}</span>
+                <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title={t("reminder.zoomIn")}>+</button>
+              </div>
             </div>
           </div>
 
           <div className="timeline-viewport">
-            {activityNowStatus && (
+            {selectedDateKey === localDateKey() && activityNowStatus && (
               <div
                 className="timeline-activity-status"
                 title={activityNowStatus.title}
@@ -1997,7 +1979,7 @@ export default function ReminderDashboard({
                   <strong>{activityNowStatus.text}</strong>
               </div>
             )}
-            <div className="now-indicator" aria-label={`เวลาปัจจุบัน ${formatDigitalClock(nowTick)}`}>
+            <div hidden={selectedDateKey !== localDateKey()} className="now-indicator" aria-label={`เวลาปัจจุบัน ${formatDigitalClock(nowTick)}`}>
               <span className="now-indicator-clock">{formatDigitalClock(nowTick)}</span>
             </div>
 

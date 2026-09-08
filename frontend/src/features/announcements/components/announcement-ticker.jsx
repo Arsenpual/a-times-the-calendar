@@ -1,126 +1,91 @@
-import React, { useLayoutEffect, useEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef } from "react";
+import { animate, scrambleText } from "animejs";
 
-const SCROLL_SPEED_PX_PER_SEC = 60; // constant scroll speed regardless of message length
-const HIDDEN_DURATION_MS = 5 * 60 * 1000; // 5 minutes between each pass
+const HIDDEN_DURATION_MS = 5 * 60 * 1000;
+const REVEAL_DURATION_MS = 1200;
+const HOLD_DURATION_MS = 1800;
+const SCROLL_SPEED_PX_PER_SEC = 60;
 
-/**
- * Thin scrolling ticker for one-way announcements to the user (version
- * updates, maintenance notices, etc.) — shown just below the app header in
- * calendar (dashboard) mode. Not dismissible and not fetched from a
- * backend: the message is a hardcoded prop set directly in app.jsx, so
- * changing it means editing that value and redeploying.
- *
- * Cycle: visible immediately on mount (page load/refresh), scrolls through
- * exactly one full pass of the message left, then hides completely for
- * HIDDEN_DURATION_MS before showing (and scrolling) again — repeating for
- * as long as the component stays mounted. This is deliberately a single
- * pass per visible period, not a continuous loop: the earlier version
- * scrolled forever, which meant a person glancing at the header at a
- * random moment might catch the message mid-sentence; showing one full
- * pass then a real gap makes each appearance a complete, readable unit.
- *
- * The single-pass duration is derived from the message's actual rendered
- * width (measured via ref) divided by a constant scroll speed, rather than
- * a fixed animation duration — so a short message and a long message both
- * scroll at the same visual speed instead of a long one racing by to fit
- * the same time budget a short one used.
- *
- * Text is deliberately small (11px, matches the app's other secondary-text
- * sizes like .agenda-weekday) so it reads as a quiet strip, not a banner
- * demanding attention — unlike ReminderModeMockup's .mockup-banner, which
- * is a static warning meant to be noticed immediately.
- *
- * @param {string} message the announcement text
- */
+// React owns the layout; Anime.js owns only the empty display span and transform.
 export default function AnnouncementTicker({ message }) {
-  const [visible, setVisible] = useState(true);
-  const [durationMs, setDurationMs] = useState(null);
   const containerRef = useRef(null);
+  const itemRef = useRef(null);
   const textRef = useRef(null);
-  const timerRef = useRef(null);
 
-  // Measure the actual scroll distance — the container's own width (the
-  // gap the text crosses while entering from fully off-screen right) plus
-  // the message's rendered text width (the distance needed to then fully
-  // exit past the left edge) — to derive how long a single pass should
-  // take at a constant speed. Both are needed: using only the text width
-  // would make the animation cover the true (container + text) distance
-  // in too little time, making it visibly faster than
-  // SCROLL_SPEED_PX_PER_SEC and inconsistent across different viewport
-  // widths (since the container's width, and therefore the true
-  // distance, changes with the window). Redone whenever `message`
-  // changes (e.g. a future version fetches this from a backend and it
-  // changes without a remount) — a stale duration from a previous
-  // message would make the animation and the show/hide timers fall out
-  // of sync.
   useLayoutEffect(() => {
-    if (!message) return;
-    const containerEl = containerRef.current;
-    const textEl = textRef.current;
-    if (!containerEl || !textEl) return;
-    const containerWidthPx = containerEl.getBoundingClientRect().width;
-    const textWidthPx = textEl.getBoundingClientRect().width;
-    const totalDistancePx = containerWidthPx + textWidthPx;
-    setDurationMs(Math.max(1000, (totalDistancePx / SCROLL_SPEED_PX_PER_SEC) * 1000));
+    if (!message) return undefined;
+    const container = containerRef.current;
+    const item = itemRef.current;
+    const text = textRef.current;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let cancelled = false;
+    let timer;
+    let animation;
+
+    const hide = () => {
+      if (cancelled) return;
+      container.style.visibility = "hidden";
+      timer = window.setTimeout(play, HIDDEN_DURATION_MS);
+    };
+    const scroll = () => {
+      if (cancelled) return;
+      // Measure after revealing; include the container padding in the exit distance.
+      const distance = item.getBoundingClientRect().right - container.getBoundingClientRect().left + 2;
+      container.dataset.phase = "scroll";
+      animation = animate(item, {
+        translateX: -distance,
+        duration: Math.max(1000, distance / SCROLL_SPEED_PX_PER_SEC * 1000),
+        ease: "linear",
+        onComplete: hide
+      });
+    };
+    const hold = () => {
+      if (cancelled) return;
+      text.textContent = message;
+      container.dataset.phase = "hold";
+      timer = window.setTimeout(motion.matches ? hide : scroll,
+        motion.matches ? Math.max(6000, message.length * 80) : HOLD_DURATION_MS);
+    };
+    function play() {
+      if (cancelled) return;
+      container.style.visibility = "visible";
+      container.dataset.phase = "reveal";
+      item.style.transform = "translateX(0)";
+      text.textContent = message;
+      if (motion.matches) { hold(); return; }
+      // Animate a plain object, then copy via textContent: announcement strings
+      // (including <, >, &) must never be interpreted as HTML.
+      const target = { textContent: message, innerHTML: "" };
+      animation = animate(target, {
+        innerHTML: scrambleText({ text: message, duration: REVEAL_DURATION_MS, from: "left" }),
+        ease: "linear",
+        onUpdate: () => { text.textContent = target.innerHTML; },
+        onComplete: hold
+      });
+      text.textContent = target.innerHTML;
+    }
+    const restart = () => {
+      animation?.cancel();
+      window.clearTimeout(timer);
+      play();
+    };
+    play();
+    motion.addEventListener("change", restart);
+    return () => {
+      cancelled = true;
+      animation?.cancel();
+      window.clearTimeout(timer);
+      motion.removeEventListener("change", restart);
+    };
   }, [message]);
 
-  // Drives the show → scroll-once → hide → wait → show cycle. Starts
-  // visible (matches "on page load/refresh, show immediately"). Each time
-  // `visible` flips true, schedule hiding it after exactly one scroll
-  // pass (durationMs); each time it flips false, schedule showing it
-  // again after the cooldown. Cleared and rescheduled whenever durationMs
-  // changes (e.g. resolves from null to a real value after the first
-  // measurement) so the very first pass uses the correct measured
-  // duration rather than a guess.
-  useEffect(() => {
-    if (!message || durationMs === null) return;
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(
-      () => setVisible((prev) => !prev),
-      visible ? durationMs : HIDDEN_DURATION_MS
-    );
-    return () => clearTimeout(timerRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, durationMs, message]);
-
   if (!message) return null;
-
   return (
-    <div
-      className="announcement-ticker"
-      role="status"
-      aria-label="ประกาศ"
-      style={{ visibility: visible ? "visible" : "hidden" }}
-      ref={containerRef}
-    >
-      <div
-        className="announcement-ticker-track"
-        // Restarting the CSS animation each time it becomes visible again
-        // needs a fresh element instance — otherwise the browser just
-        // resumes/no-ops since the animation already technically
-        // "finished" and the element never unmounted. Keying on `visible`
-        // forces React to remount the track (and therefore restart the
-        // animation from 0%) on every new pass. Also keyed on whether
-        // durationMs is known yet: rendering the track with the CSS
-        // default 0s duration on the very first paint (before
-        // useLayoutEffect measures the text) would let that animation
-        // "finish" instantly, and simply updating animation-duration
-        // afterward on an already-finished animation doesn't restart it
-        // in most browsers — remounting via this key sidesteps that.
-        key={`${visible}-${durationMs !== null}`}
-      >
-        <span
-          className="announcement-ticker-item"
-          style={{ animationDuration: `${durationMs || 1}ms` }}
-        >
-          {/* The outer .announcement-ticker-item carries the off-screen
-              starting offset (padding-left: 100%, see CSS) — measuring
-              *that* element's width would include the padding itself,
-              making the duration calculation wildly wrong. This inner
-              span has no padding, so its width is exactly the rendered
-              text, which is what SCROLL_SPEED_PX_PER_SEC should divide
-              into. */}
-          <span ref={textRef}>{message}</span>
+    <div className="announcement-ticker" ref={containerRef} role="status" aria-label={message}>
+      <div className="announcement-ticker-track" aria-hidden="true">
+        <span className="announcement-ticker-item" ref={itemRef}>
+          <span className="announcement-ticker-measure">{message}</span>
+          <span className="announcement-ticker-display" ref={textRef} />
         </span>
       </div>
     </div>

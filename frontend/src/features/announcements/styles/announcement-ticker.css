@@ -1,24 +1,19 @@
-/* Scrolling announcement strip below the header in calendar mode — see
-   AnnouncementTicker. Deliberately quiet/small: thin strip, small text,
-   muted colors, so it reads as ambient info rather than an alert. Scrolls
-   through exactly one pass per visible period (animation-duration is set
-   inline per-instance, from the message's measured width), then the
-   component hides itself entirely for a cooldown before the next pass —
-   see the JS side for that show/hide cycle; this CSS only handles a
-   single left-to-right-to-gone pass. */
 .announcement-ticker {
+  --announcement-accent: var(--accent, #3b6fd6);
+
   position: fixed;
   top: 72px;
   left: 50%;
   z-index: 8700;
-  width: min(680px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
   transform: translateX(-50%);
   overflow: hidden;
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 0;
-  box-shadow: 0 6px 20px rgba(60, 64, 67, .24);
+  border-left: 3px solid var(--announcement-accent);
+  border-radius: 10px;
+  padding: 9px 16px;
+  box-shadow: 0 2px 10px rgba(20, 22, 26, .08);
   pointer-events: none;
 }
 
@@ -44,42 +39,18 @@
 }
 
 .announcement-ticker-item {
+  position: relative;
+  display: block;
+  width: 100%;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
+  letter-spacing: .01em;
+  line-height: 1.4;
   color: var(--text-primary);
-  white-space: nowrap;
-  /* Starts fully off-screen to the right (see the keyframes' `from`,
-     which positions by translateX(100%) relative to this element's own
-     width) so the very first frame shows nothing, not the message
-     already sitting mid-strip. */
-  padding-left: 100%;
-  animation-name: announcement-ticker-scroll;
-  animation-timing-function: linear;
-  animation-iteration-count: 1;
-  animation-fill-mode: forwards;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-
-@keyframes announcement-ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    /* -100% of the item's own box width (which includes the
-       padding-left: 100% above) moves it left by exactly one container
-       width plus the text's own width — enough to carry the text from
-       its start position (just off the right edge, via the padding) to
-       fully past the left edge. Percentages in translateX resolve
-       against the transformed element's own box, not the container's. */
-    transform: translateX(-100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .announcement-ticker-item {
-    animation: none;
-  }
-  .announcement-ticker-item {
-    padding-left: 0;
-  }
-}
+.announcement-ticker-measure { visibility: hidden; }
+.announcement-ticker-display { position: absolute; inset: 0; }
+.announcement-ticker:not([data-phase="scroll"])::after { opacity: 0; }
