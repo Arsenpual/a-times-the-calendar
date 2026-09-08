@@ -1,4 +1,4 @@
-import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
+import { getIntervalWorkSummary, intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
@@ -435,6 +435,76 @@ export default function ReminderDashboard({
 
   const [editingId, setEditingId] = useState(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false); // composer เริ่มต้นแบบพับเก็บ ประหยัดพื้นที่
+
+  const composerPreview = useMemo(() => {
+    const title = draft.title.trim() || "Reminder ใหม่";
+    const typeLabel = t(TYPE_FILTER_OPTIONS.find((option) => option.type === draft.type)?.labelKey);
+    const field = (label, value) => ({ label, value });
+    // This is a schedule estimate, not the delivery counter itself.  The
+    // backend remains the final guard because another open device can send a
+    // notification between opening this form and saving it.
+    const quotaDate = new Date();
+    const quotaDateKey = localDateKey(quotaDate);
+    const existingReminderCount = reminders
+      .filter((reminder) => reminder.id !== editingId && reminder.enabled && !reminder.completedAt)
+      .reduce((total, reminder) => total + reminderSlotsOnDate(reminder, quotaDate).length, 0);
+    // Activity notifications are sent only for timed activities, never
+    // all-day items. `activities` has already excluded archived activities
+    // in App, so the same collection drives the estimate and live delivery.
+    const activityNotificationCount = activities.filter((activity) => {
+      if (!activity.start?.dateTime) return false;
+      const start = activityDate(activity.start);
+      return start && localDateKey(start) === quotaDateKey;
+    }).length;
+    const amount = Math.max(1, Number(draft.amount) || 1);
+    const unit = draft.unit === "hours" ? "ชม." : "นาที";
+    const draftForQuota = {
+      type: draft.type,
+      amount,
+      unit: draft.unit,
+      windowStart: draft.runAllDay ? null : draft.windowStart,
+      windowEnd: draft.runAllDay ? null : draft.windowEnd,
+      days: draft.days,
+      time: draft.time,
+      times: draft.times,
+      atMs: draft.atDate && draft.atTime ? new Date(`${draft.atDate}T${draft.atTime}:00`).getTime() : null,
+      startedAt: draft.type === REMINDER_TYPE.COUNTDOWN ? Date.now() : null,
+      durationMs: Math.max(1, Number(draft.countdownMinutes) || 1) * 60 * 1000
+    };
+    const draftNotificationCount = reminderSlotsOnDate(draftForQuota, quotaDate).length;
+    const projectedNotificationCount = existingReminderCount + activityNotificationCount + draftNotificationCount;
+    const notificationQuota = {
+      limit: 720,
+      existingReminderCount,
+      activityNotificationCount,
+      draftNotificationCount,
+      projectedNotificationCount,
+      isAtLimit: projectedNotificationCount >= 720
+    };
+    const withNotificationQuota = (preview) => ({ ...preview, notificationQuota });
+    if (draft.type === REMINDER_TYPE.INTERVAL) {
+      const intervalDraft = { amount, unit: draft.unit, windowStart: draft.runAllDay ? null : draft.windowStart, windowEnd: draft.runAllDay ? null : draft.windowEnd };
+      const schedule = getIntervalWorkSummary(intervalDraft);
+      const slots = intervalScheduleMinutes(intervalDraft);
+      const hours = schedule.workMinutes / 60;
+      const clock = (minute) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+      return withNotificationQuota({ title, typeLabel, fields: [
+        field("ช่วงทำงาน", schedule.range || "ตลอดวัน (24 ชม.)"),
+        field("ความถี่", `ทุก ${amount} ${unit}`),
+        field("แจ้งเตือน", `${schedule.notificationCount} รอบ/การทำงาน`)
+      ], footnote: `เวลา: ${slots.slice(0, 6).map(clock).join(" · ")}${slots.length > 6 ? ` · +${slots.length - 6}` : ""}${schedule.range ? ` (${hours} ชม.)` : ""}` });
+    }
+    if (draft.type === REMINDER_TYPE.WEEKLY) {
+      const days = DAYS_OF_WEEK.filter((day) => draft.days.includes(day.value)).map((day) => t(day.labelKey));
+      const times = (draft.times || []).filter(Boolean);
+      return withNotificationQuota({ title, typeLabel, fields: [field("วัน", days.length ? days.join(" · ") : "ยังไม่ได้เลือก"), field("เวลา", times.length ? times.join(" · ") : "ยังไม่ได้กำหนด"), field("รวม", `${days.length * times.length} รอบ/สัปดาห์`)] });
+    }
+    if (draft.type === REMINDER_TYPE.EVENT_ANCHORED) return withNotificationQuota({ title, typeLabel, fields: [field("เหตุการณ์", draft.eventName.trim() || "ยังไม่ได้ระบุ"), field("แจ้งเตือน", `หลังเหตุการณ์ ${Math.max(1, Number(draft.afterAmount) || 1)} ${draft.afterUnit === "hours" ? "ชม." : "นาที"}`)] });
+    if (draft.type === REMINDER_TYPE.ROUTINE) { const count = draft.routineSteps.split(",").map((item) => item.trim()).filter(Boolean).length; return withNotificationQuota({ title, typeLabel, fields: [field("ขั้นตอน", count ? `${count} ขั้นตอน` : "ยังไม่ได้ระบุ")], footnote: draft.routineSteps || undefined }); }
+    if (draft.type === REMINDER_TYPE.ONCE_AT) return withNotificationQuota({ title, typeLabel, fields: [field("กำหนด", `${draft.atDate || "ยังไม่ได้เลือกวัน"} · ${draft.atTime || "ยังไม่ได้เลือกเวลา"}`)] });
+    if (draft.type === REMINDER_TYPE.COUNTDOWN) return withNotificationQuota({ title, typeLabel, fields: [field("ระยะเวลา", `${Math.max(1, Number(draft.countdownMinutes) || 1)} นาที`), field("เริ่ม", "ทันทีหลังบันทึก")] });
+    return withNotificationQuota({ title, typeLabel, fields: [field("การทำงาน", "เริ่มจับเวลาเมื่อกด Start")], footnote: "หยุดและเริ่มใหม่ได้โดยไม่รีเซ็ตเวลาสะสม" });
+  }, [activities, draft, editingId, reminders, t]);
 
   // Tab ของรายการ reminder (migration plan v2 เฟส 1.2) — เดิมแสดง
   // active/paused พร้อมกันทั้งคู่คั่นด้วย section header, ตอนนี้เลือกดูได้
@@ -1309,6 +1379,11 @@ export default function ReminderDashboard({
     const weeklyDaysLabel = reminder.type === REMINDER_TYPE.WEEKLY
       ? DAYS_OF_WEEK.filter((day) => reminder.days?.includes(day.value)).map((day) => t(day.labelKey)).join(" · ")
       : null;
+    const intervalWorkSummary = reminder.type === REMINDER_TYPE.INTERVAL
+      ? getIntervalWorkSummary(reminder)
+      : null;
+    const intervalHours = intervalWorkSummary && intervalWorkSummary.workMinutes / 60;
+    const intervalWorkLabel = intervalHours % 1 === 0 ? `${intervalHours} ชม.` : `${intervalWorkSummary.workMinutes} นาที`;
     return (
       <div
       key={reminder.id}
@@ -1362,6 +1437,16 @@ export default function ReminderDashboard({
           <span className="reminder-completed-badge">
             ✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}
           </span>
+        )}
+        {intervalWorkSummary && (
+          <p
+            className="reminder-interval-summary"
+            title={`ช่วงทำงาน ${intervalWorkSummary.range || "ตลอดวัน"} · แจ้งเตือน ${intervalWorkSummary.notificationCount} ครั้ง`}
+          >
+            <span>{intervalWorkLabel}</span>
+            <span aria-hidden="true">·</span>
+            <strong>{intervalWorkSummary.notificationCount} รอบ</strong>
+          </p>
         )}
         <div className="reminder-card-metadata">
           <span className="reminder-type-chip">{typeLabel}</span>
@@ -1865,6 +1950,36 @@ export default function ReminderDashboard({
                   </div>
                 </>
               )}
+
+              <section className="reminder-composer-preview" aria-live="polite">
+                <p className="reminder-composer-preview-label">สรุปก่อนบันทึก</p>
+                <div className="reminder-composer-preview-heading">
+                  <strong>{composerPreview.title}</strong>
+                  <span>{composerPreview.typeLabel}</span>
+                </div>
+                <div className="reminder-composer-preview-fields">
+                  {composerPreview.fields.map(({ label, value }) => (
+                    <div key={label}><span>{label}</span><strong>{value}</strong></div>
+                  ))}
+                </div>
+                {composerPreview.footnote && <p className="reminder-composer-preview-note">{composerPreview.footnote}</p>}
+                <div className={`reminder-composer-quota${composerPreview.notificationQuota.isAtLimit ? " is-at-limit" : ""}`} role={composerPreview.notificationQuota.isAtLimit ? "alert" : undefined}>
+                  <div className="reminder-composer-quota-heading">
+                    <span>โควตาแจ้งเตือนวันนี้</span>
+                    <strong>{composerPreview.notificationQuota.projectedNotificationCount} / {composerPreview.notificationQuota.limit}</strong>
+                  </div>
+                  <p>
+                    Reminder เดิม {composerPreview.notificationQuota.existingReminderCount} · Activity {composerPreview.notificationQuota.activityNotificationCount} · รายการนี้ {composerPreview.notificationQuota.draftNotificationCount}
+                  </p>
+                  {composerPreview.notificationQuota.isAtLimit && (
+                    <p className="reminder-composer-quota-warning">
+                      {composerPreview.notificationQuota.projectedNotificationCount > composerPreview.notificationQuota.limit
+                        ? `เกินขีดจำกัด ${composerPreview.notificationQuota.projectedNotificationCount - composerPreview.notificationQuota.limit} ครั้ง — ระบบจะไม่ส่งรายการที่เกิน 720 ครั้ง/วัน`
+                        : "ถึงขีดจำกัด 720 ครั้ง/วันแล้ว — การแจ้งเตือนรายการถัดไปอาจไม่ถูกส่ง"}
+                    </p>
+                  )}
+                </div>
+              </section>
 
               <div className="composer-actions">
                 {editingId && (

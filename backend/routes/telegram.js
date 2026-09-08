@@ -6,6 +6,7 @@ const router = express.Router();
 const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
+const DAILY_NOTIFICATION_LIMIT = 720;
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
 const CUSTOM_COMMAND_KEYBOARD = {
@@ -46,25 +47,51 @@ async function sendTelegram(chatId, text, options = {}) {
   if (!response.ok || !data.ok) throw new Error(`Telegram ส่งข้อความไม่สำเร็จ: ${data.description || response.status}`);
 }
 
+function bangkokDayKey(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(now);
+}
+
 /**
  * Claims a one-time Telegram delivery across every open client. Browser-side
  * Set/refs only prevent repeats inside one tab; Pi + laptop need Firestore's
  * transaction to decide which device wins the same scheduled occurrence.
  */
 async function claimDelivery(userId, notificationKey, notificationKind, title) {
-  if (typeof notificationKey !== "string" || !notificationKey || notificationKey.length > 500) return null;
-  const deliveryId = crypto.createHash("sha256").update(notificationKey).digest("base64url");
-  const ref = telegramAuthDoc(userId).collection("deliveries").doc(deliveryId);
+  const hasKey = typeof notificationKey === "string" && notificationKey.length > 0 && notificationKey.length <= 500;
+  const deliveryId = hasKey ? crypto.createHash("sha256").update(notificationKey).digest("base64url") : null;
+  const authRef = telegramAuthDoc(userId);
+  const deliveryRef = deliveryId ? authRef.collection("deliveries").doc(deliveryId) : null;
+  const dayKey = bangkokDayKey();
+  const limitRef = authRef.collection("notification-limits").doc(dayKey);
   return db.runTransaction(async (transaction) => {
-    const existing = await transaction.get(ref);
-    if (existing.exists) return null;
-    transaction.set(ref, {
-      notificationKey,
-      notificationKind,
-      title: String(title || "").slice(0, 500),
-      createdAt: new Date().toISOString()
+    const [existing, limit] = await Promise.all([
+      deliveryRef ? transaction.get(deliveryRef) : Promise.resolve(null),
+      transaction.get(limitRef)
+    ]);
+    if (existing?.exists) return { status: "deduplicated" };
+    const count = Number(limit.data()?.count || 0);
+    if (count >= DAILY_NOTIFICATION_LIMIT) return { status: "limited", dayKey, count };
+    if (deliveryRef) transaction.set(deliveryRef, {
+      notificationKey, notificationKind, title: String(title || "").slice(0, 500),
+      createdAt: new Date().toISOString(), dayKey
     });
-    return ref;
+    transaction.set(limitRef, {
+      count: count + 1, limit: DAILY_NOTIFICATION_LIMIT, dayKey,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return { status: "claimed", deliveryRef, limitRef, dayKey, remaining: DAILY_NOTIFICATION_LIMIT - count - 1 };
+  });
+}
+
+async function releaseDeliveryClaim(claim) {
+  if (!claim || claim.status !== "claimed") return;
+  await db.runTransaction(async (transaction) => {
+    const limit = await transaction.get(claim.limitRef);
+    const count = Number(limit.data()?.count || 0);
+    if (claim.deliveryRef) transaction.delete(claim.deliveryRef);
+    transaction.set(claim.limitRef, { count: Math.max(0, count - 1), updatedAt: new Date().toISOString() }, { merge: true });
   });
 }
 
@@ -115,7 +142,7 @@ router.post("/test", async (req, res, next) => {
 });
 
 router.post("/notify", async (req, res, next) => {
-  let claimedDeliveryRef = null;
+  let deliveryClaim = null;
   try {
     // Telegram is an optional delivery channel. A local development setup
     // commonly omits its production-only bot secret, which must not turn an
@@ -132,14 +159,17 @@ router.post("/notify", async (req, res, next) => {
       : notificationKind === "interval"
         ? "Reminder แบบช่วงเวลา"
         : "reminder";
-    claimedDeliveryRef = await claimDelivery(req.userId, req.body?.notificationKey, notificationKind, title);
-    if (req.body?.notificationKey && !claimedDeliveryRef) return res.json({ sent: false, deduplicated: true });
+    deliveryClaim = await claimDelivery(req.userId, req.body?.notificationKey, notificationKind, title);
+    if (deliveryClaim.status === "deduplicated") return res.json({ sent: false, deduplicated: true });
+    if (deliveryClaim.status === "limited") {
+      return res.json({ sent: false, rateLimited: true, limit: DAILY_NOTIFICATION_LIMIT, remaining: 0, dayKey: deliveryClaim.dayKey });
+    }
     await sendTelegram(data.chatId, `🔔 ถึงเวลาของ${notificationLabel}: ${title}`);
-    res.json({ sent: true });
+    res.json({ sent: true, limit: DAILY_NOTIFICATION_LIMIT, remaining: deliveryClaim.remaining, dayKey: deliveryClaim.dayKey });
   } catch (error) {
     // Allow a later retry if Telegram itself failed after this process won
     // the claim. Do not leave a permanent "sent" marker for a failed send.
-    if (claimedDeliveryRef) await claimedDeliveryRef.delete().catch(() => {});
+    await releaseDeliveryClaim(deliveryClaim).catch(() => {});
     next(error);
   }
 });

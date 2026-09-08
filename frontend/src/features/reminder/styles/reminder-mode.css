@@ -1291,6 +1291,25 @@
           gap: 5px;
         }
 
+        .reminder-interval-summary {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 5px;
+          width: fit-content;
+          margin: 1px 0 0;
+          padding: 3px 7px;
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--g-blue) 10%, transparent);
+          color: var(--g-on-surface-variant);
+          font-size: 11px;
+          line-height: 1.25;
+        }
+
+        .reminder-interval-summary strong {
+          color: var(--g-blue-hover);
+          font-weight: 700;
+        }
+
         .reminder-type-chip {
           display: inline-flex;
           align-items: center;
@@ -1554,6 +1573,34 @@
         .freq-inline-group input {
           width: 80px;
         }
+
+        .reminder-composer-preview {
+          display: grid;
+          gap: 8px;
+          margin: 14px 0 12px;
+          padding: 12px;
+          border: 1px solid color-mix(in srgb, var(--g-blue) 26%, var(--g-outline));
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--g-blue) 6%, var(--g-surface));
+        }
+        .reminder-composer-preview-label { margin: 0; color: var(--g-blue-hover); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+        .reminder-composer-preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--g-on-surface); }
+        .reminder-composer-preview-heading strong { font-size: 15px; overflow-wrap: anywhere; }
+        .reminder-composer-preview-heading span { color: var(--g-on-surface-variant); font-size: 11px; white-space: nowrap; }
+        .reminder-composer-preview-fields { display: grid; gap: 5px; }
+        .reminder-composer-preview-fields > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+        .reminder-composer-preview-fields span { color: var(--g-on-surface-variant); }
+        .reminder-composer-preview-fields strong { color: var(--g-on-surface); overflow-wrap: anywhere; }
+        .reminder-composer-preview-note { margin: 0; color: var(--g-on-surface-variant); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+        .reminder-composer-quota { display: grid; gap: 4px; margin-top: 2px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--g-blue) 22%, var(--g-outline)); border-radius: 9px; background: color-mix(in srgb, var(--g-surface) 88%, var(--g-blue)); }
+        .reminder-composer-quota-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+        .reminder-composer-quota-heading span { color: var(--g-on-surface-variant); }
+        .reminder-composer-quota-heading strong { color: var(--g-on-surface); font-variant-numeric: tabular-nums; }
+        .reminder-composer-quota p { margin: 0; color: var(--g-on-surface-variant); font-size: 11px; line-height: 1.4; }
+        .reminder-composer-quota.is-at-limit { border-color: color-mix(in srgb, var(--g-red-dark) 62%, var(--g-outline)); background: color-mix(in srgb, var(--g-red-light) 52%, var(--g-surface)); }
+        .reminder-composer-quota.is-at-limit .reminder-composer-quota-heading strong,
+        .reminder-composer-quota-warning { color: var(--g-red-dark); }
+        .reminder-composer-quota-warning { font-weight: 650; }
 
         .composer-actions {
           display: flex;

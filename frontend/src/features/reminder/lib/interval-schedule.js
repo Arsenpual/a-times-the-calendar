@@ -21,6 +21,25 @@ export function intervalScheduleMinutes(reminder) {
   return [...new Set(slots)].sort((a, b) => a - b);
 }
 
+/** Compact card data. `notificationCount` is the actual number of scheduled
+ * slots, including a configured end boundary when the interval lands on it. */
+export function getIntervalWorkSummary(reminder) {
+  const parse = value => {
+    if (!/^\d{2}:\d{2}$/.test(value || '')) return null;
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours < 24 && minutes < 60 ? hours * 60 + minutes : null;
+  };
+  const start = parse(reminder.windowStart);
+  const end = parse(reminder.windowEnd);
+  const allDay = start === null || end === null || start === end;
+  const workMinutes = allDay ? 1440 : (end - start + 1440) % 1440;
+  return {
+    workMinutes,
+    notificationCount: intervalScheduleMinutes(reminder).length,
+    range: allDay ? null : `${reminder.windowStart}–${reminder.windowEnd}`
+  };
+}
+
 export function nextIntervalDue(reminder, from) {
   const slots = intervalScheduleMinutes(reminder);
   for (let day = 0; day < 2; day++) {
