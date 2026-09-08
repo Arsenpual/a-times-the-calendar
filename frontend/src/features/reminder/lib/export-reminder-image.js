@@ -8,6 +8,21 @@ const TOP = 160;
 const FONT = "'Noto Sans Thai', 'Segoe UI', sans-serif";
 const timeLabel = (minute) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(Math.floor(minute % 60)).padStart(2, "0")}`;
 
+// Export-only limits; normal scheduling and Telegram are unaffected.
+export function isReminderAllowedInExport(reminder, date, now = new Date()) {
+  if (reminder.type !== "interval") return true;
+  const step = Number(reminder.amount) * (reminder.unit === "hours" ? 60 : 1);
+  if (!Number.isFinite(step) || step < 60) return false;
+  const first = new Date(now);
+  first.setHours(0, 0, 0, 0);
+  first.setDate(first.getDate() - 1);
+  const afterLast = new Date(first);
+  afterLast.setDate(afterLast.getDate() + 3);
+  const selected = new Date(date);
+  selected.setHours(0, 0, 0, 0);
+  return selected >= first && selected < afterLast;
+}
+
 function text(ctx, value, x, y, width, size = 14, color = "#1c1c1a") {
   ctx.fillStyle = color;
   ctx.font = `500 ${size}px ${FONT}`;
@@ -27,7 +42,8 @@ export function renderReminderTimelineToCanvas({
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
   const minute = (ms) => (ms - dayStart.getTime()) / 60000;
-  const entries = reminders.filter(r => r.enabled && !r.completedAt && r.type !== "interval" &&
+  const exportNow = new Date();
+  const entries = reminders.filter(r => r.enabled && !r.completedAt && isReminderAllowedInExport(r, date, exportNow) &&
     (!activeTypeFilter || r.type === activeTypeFilter) &&
     (!activeGroupFilter || r.groupId === activeGroupFilter))
     .flatMap(reminder => reminderSlotsOnDate(reminder, date).map(at => ({ reminder, at })))
