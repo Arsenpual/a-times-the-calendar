@@ -402,7 +402,7 @@ export default function ReminderDashboard({
   // Runtime reminder state belongs to a person, not to this browser. The
   // previous shared key exposed the prior account's reminders after logout.
   const userStorageKey = `${STORAGE_KEY}:${firebaseUser?.uid || "guest"}`;
-  const { reminders, setReminders, syncScheduleFields, deleteRemoteReminder } = useReminderStore({
+  const { reminders, setReminders, updateReminders, syncError } = useReminderStore({
     firebaseUser,
     storageKey: userStorageKey,
     defaultReminders: DEFAULT_REMINDERS,
@@ -879,7 +879,7 @@ export default function ReminderDashboard({
     const snoozedUntil = typeof snoozeMinutes === "number"
       ? Date.now() + snoozeMinutes * 60 * 1000
       : null;
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (typeof snoozeMinutes === "number") {
@@ -908,7 +908,7 @@ export default function ReminderDashboard({
    *     scheduleNext(id) แบบไม่ระบุ snooze
    */
   const markCompleted = (reminderId) => {
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         if (isOneShotType(r.type)) {
@@ -925,7 +925,7 @@ export default function ReminderDashboard({
 
   const triggerAnchorEvent = (reminderId) => {
     const now = Date.now();
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         const updated = { ...r, lastTriggeredAt: now, enabled: true };
@@ -935,7 +935,7 @@ export default function ReminderDashboard({
   };
 
   const advanceRoutine = (reminderId) => {
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
         const nextIdx = (r.currentIndex || 0) + 1;
@@ -964,7 +964,7 @@ export default function ReminderDashboard({
   // - Stop: บวกเวลาที่ผ่านไปตั้งแต่ startedAt เข้ากับ accumulatedMs แล้วหยุด (enabled=false, startedAt=null)
   //   ทำให้กด Start ใหม่ได้และเวลานับต่อจากเดิมได้ ไม่รีเซ็ตทุกครั้งที่หยุด
   const toggleStopwatch = (reminderId) => {
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
 
@@ -986,7 +986,7 @@ export default function ReminderDashboard({
 
   // รีเซ็ต stopwatch กลับเป็น 0 (หยุดด้วย ถ้ากำลังทำงานอยู่)
   const resetStopwatch = (reminderId) => {
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
         return { ...r, enabled: false, accumulatedMs: 0, startedAt: null };
@@ -995,7 +995,7 @@ export default function ReminderDashboard({
   };
 
   const toggle = (reminderId) => {
-    setReminders((prev) =>
+    updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
 
@@ -1143,17 +1143,14 @@ export default function ReminderDashboard({
     }
 
     if (editingId) {
-      setReminders((prev) => prev.map((r) => (r.id === editingId ? { ...r, ...newReminder } : r)));
+      updateReminders((prev) => prev.map((r) => (r.id === editingId ? { ...r, ...newReminder } : r)));
       setEditingId(null);
     } else {
-      setReminders((prev) => [...prev, newReminder]);
+      updateReminders((prev) => [...prev, newReminder]);
       logReminderEvent("reminder_created", { reminder_type: newReminder.type });
     }
 
-    // Sync schedule fields ขึ้น Firebase — immediate: true เพราะนี่คือ
-    // ตอน submit ฟอร์มจริง (กดปุ่ม "สร้าง"/"บันทึกการแก้ไข") ไม่ใช่ตอน
-    // พิมพ์ใน draft ระหว่างทาง จึงไม่ต้อง debounce
-    syncScheduleFields(newReminder.id, extractScheduleFields(newReminder), { immediate: true });
+    // updateReminders sends only the changed reminder from this user action.
 
     setDraft(createBlankDraft());
     setIsComposerOpen(false); // บันทึกเสร็จแล้วพับ composer กลับ คืนพื้นที่ให้ list
@@ -1198,15 +1195,13 @@ export default function ReminderDashboard({
     reminder.nextDueAt = reminder.type === REMINDER_TYPE.INTERVAL
       ? null
       : computeNextDueAt(reminder, now);
-    setReminders((prev) => [...prev, reminder]);
-    syncScheduleFields(reminder.id, extractScheduleFields(reminder), { immediate: true });
+    updateReminders((prev) => [...prev, reminder]);
     logReminderEvent("reminder_created", { reminder_type: reminder.type, creation_method: "omnibar" });
     setOmnibarInput("");
   };
 
   const deleteReminder = (reminderId) => {
-    setReminders((prev) => prev.filter((r) => r.id !== reminderId));
-    deleteRemoteReminder(reminderId);
+    updateReminders((prev) => prev.filter((r) => r.id !== reminderId));
   };
 
   const deleteEditingReminder = () => {
@@ -1595,6 +1590,7 @@ export default function ReminderDashboard({
       {/* Main Body Grid — 3 คอลัมน์: nav ซ้าย / list กลาง / timeline ขวา
           (เดิม 2 คอลัมน์: timeline ซ้าย / list ขวา — ย้าย timeline ไปขวาสุด
           ตาม reminder-dashboard-mockup.jsx, migration plan v2 เฟส 1.1) */}
+      {syncError && <p className="error-banner" role="alert">{syncError}</p>}
       <div className="dashboard-body">
         {/* Left Nav — "ตัวกรองประเภท" (เฟส 2) และ "กลุ่ม/โปรเจกต์" (เฟส 3)
             wired จริงทั้งคู่แล้ว "ของวันนี้" ยังเป็น placeholder รอระบบ

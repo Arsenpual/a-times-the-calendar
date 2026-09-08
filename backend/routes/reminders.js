@@ -217,8 +217,9 @@ router.put("/:reminderId", async (req, res, next) => {
     }
 
     const { reminderId } = req.params;
-    await remindersCol(req.userId).doc(reminderId).set(cleaned);
-    res.json({ id: reminderId, ...cleaned });
+    const saved = { ...cleaned, updatedAt: Date.now() };
+    await remindersCol(req.userId).doc(reminderId).set(saved);
+    res.json({ id: reminderId, ...saved });
   } catch (err) {
     next(err);
   }

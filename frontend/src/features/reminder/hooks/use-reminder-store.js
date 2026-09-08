@@ -1,82 +1,80 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRemindersSync } from "./use-reminders-sync.js";
 
-/**
- * เจ้าของ state หลักของ reminder: localStorage, merge จาก cloud และ mirror
- * schedule fields กลับ Firestore. แยกจาก UI เพื่อให้ ReminderDashboard
- * เพิ่ม panel/feature ใหม่ได้โดยไม่ต้องรวม lifecycle ข้อมูลไว้ไฟล์เดียว.
- */
+function readCache(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(value) ? value : fallback;
+  } catch { return fallback; }
+}
+
+// Local state updates (hydration/timers) never write to the API.
+// Only updateReminders, called by user handlers, generates mutations.
 export function useReminderStore({ firebaseUser, storageKey, defaultReminders, extractScheduleFields }) {
-  const [reminders, setReminders] = useState(() => {
+  const [reminders, setState] = useState(() => readCache(storageKey, defaultReminders));
+  const stateRef = useRef(reminders);
+  const owner = useRef(storageKey);
+  const ready = useRef(false);
+  const [syncError, setSyncError] = useState(null);
+  const { remoteReminders, loadError, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
+  const setReminders = useCallback(update => {
+    const next = typeof update === "function" ? update(stateRef.current) : update;
+    stateRef.current = next;
+    setState(next);
+  }, []);
+  useEffect(() => {
+    owner.current = storageKey;
+    ready.current = false;
+    setSyncError(null);
+    setReminders(readCache(storageKey, defaultReminders));
+  }, [storageKey, setReminders]);
+
+  useEffect(() => {
+    if (remoteReminders === null || ready.current) return;
+    // Keep a recoverable snapshot of legacy local-only records; never upload
+    // them automatically, as they may be records deleted by another device.
     try {
-      const saved = localStorage.getItem(storageKey);
-      if (!saved) return defaultReminders;
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : defaultReminders;
-    } catch {
-      return defaultReminders;
-    }
-  });
-  const { remoteReminders, syncScheduleFields, deleteRemoteReminder } = useRemindersSync({ firebaseUser });
-  const hasMergedRemoteRef = useRef(false);
-  const [hasMergedRemote, setHasMergedRemote] = useState(false);
-  const lastSyncedScheduleRef = useRef(new Map());
-  const syncedUserIdRef = useRef(null);
-
-  // localStorage อาจมี nextDueAt ของรอบก่อนหน้า ขณะที่ Cloud Run เลื่อนไป
-  // รอบใหม่แล้ว ห้ามให้ effect sync ด้านล่างเขียนค่าท้องถิ่นเก่าทับ remote
-  // ก่อนการ merge เสร็จ มิฉะนั้น interval จะถูก lastNotifiedAt guard ข้าม
-  // และแจ้งได้เพียงรอบแรก.
-  useEffect(() => {
-    hasMergedRemoteRef.current = false;
-    setHasMergedRemote(false);
-  }, [firebaseUser?.uid]);
+      const backupKey = storageKey + ":before-cloud-first";
+      if (!localStorage.getItem(backupKey)) localStorage.setItem(backupKey, JSON.stringify(stateRef.current));
+    } catch { /* Storage quota must not block loading cloud data. */ }
+    const cached = new Map(stateRef.current.map(item => [item.id, item]));
+    setReminders(Object.entries(remoteReminders).map(([id, fields]) => ({
+      ...cached.get(id), ...fields, id
+    })));
+    ready.current = true;
+  }, [remoteReminders, storageKey, setReminders]);
 
   useEffect(() => {
-    if (!remoteReminders || hasMergedRemoteRef.current) return;
-    hasMergedRemoteRef.current = true;
-    const remoteIds = Object.keys(remoteReminders);
-    if (remoteIds.length === 0) {
-      setHasMergedRemote(true);
-      return;
-    }
-
-    setReminders((previous) => {
-      const byId = new Map(previous.map((reminder) => [reminder.id, reminder]));
-      for (const id of remoteIds) {
-        const remoteFields = remoteReminders[id];
-        const local = byId.get(id);
-        byId.set(id, local ? { ...local, ...remoteFields } : { id, ...remoteFields });
-      }
-      return Array.from(byId.values());
-    });
-    setHasMergedRemote(true);
-  }, [remoteReminders]);
-
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(reminders));
+    if (owner.current !== storageKey) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(stateRef.current)); } catch {}
   }, [reminders, storageKey]);
 
-  useEffect(() => {
-    if (!firebaseUser || remoteReminders === null || !hasMergedRemote) return;
-    if (syncedUserIdRef.current !== firebaseUser.uid) {
-      lastSyncedScheduleRef.current.clear();
-      syncedUserIdRef.current = firebaseUser.uid;
+  const updateReminders = useCallback(update => {
+    if (owner.current !== storageKey || (firebaseUser && !ready.current)) {
+      setSyncError("ยังโหลดข้อมูล Reminder ไม่สำเร็จ กรุณารีเฟรชแล้วลองอีกครั้ง");
+      return;
     }
-    const presentIds = new Set();
-    reminders.forEach((reminder) => {
-      const fields = extractScheduleFields(reminder);
-      const snapshot = JSON.stringify(fields);
-      presentIds.add(reminder.id);
-      if (lastSyncedScheduleRef.current.get(reminder.id) !== snapshot) {
-        lastSyncedScheduleRef.current.set(reminder.id, snapshot);
-        syncScheduleFields(reminder.id, fields);
+    const before = stateRef.current;
+    const next = typeof update === "function" ? update(before) : update;
+    setReminders(next);
+    if (!firebaseUser) return;
+    const ownerKey = storageKey;
+    const previous = new Map(before.map(item => [item.id, item]));
+    const nextIds = new Set(next.map(item => item.id));
+    const requests = [];
+    for (const item of next) {
+      const fields = extractScheduleFields(item);
+      const old = previous.get(item.id);
+      if (!old || JSON.stringify(extractScheduleFields(old)) !== JSON.stringify(fields)) {
+        requests.push(syncScheduleFields(item.id, fields));
       }
-    });
-    for (const id of lastSyncedScheduleRef.current.keys()) {
-      if (!presentIds.has(id)) lastSyncedScheduleRef.current.delete(id);
     }
-  }, [firebaseUser, remoteReminders, hasMergedRemote, reminders, extractScheduleFields, syncScheduleFields]);
-
-  return { reminders, setReminders, syncScheduleFields, deleteRemoteReminder };
+    for (const item of before) if (!nextIds.has(item.id)) requests.push(deleteRemoteReminder(item.id));
+    if (requests.length) Promise.allSettled(requests).then(results => {
+      if (owner.current !== ownerKey) return;
+      const failure = results.find(result => result.status === "rejected");
+      if (failure) setSyncError("บันทึก Reminder บน cloud ไม่สำเร็จ: " + failure.reason.message);
+    });
+  }, [firebaseUser, storageKey, setReminders, extractScheduleFields, syncScheduleFields, deleteRemoteReminder]);
+  return { reminders, setReminders, updateReminders, syncError: syncError || loadError };
 }
