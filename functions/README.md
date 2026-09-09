@@ -11,6 +11,8 @@
 
 The shared ESM domain lives within the Functions deployment source, so deployment includes it without copying. It has no Firebase or browser dependencies.
 
+Technical debt and the future shared-package migration are tracked in [Reminder technical debt](../z-project-document/REMINDER-TECHNICAL-DEBT.md).
+
 ## Storage
 
 Reminders: `users/{uid}/modes/reminder-mode/reminders/{id}`.

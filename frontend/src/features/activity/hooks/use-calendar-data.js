@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchActivities, isCalendarAuthExpiredError } from "../../calendar-connection/api/google-calendar.js";
 import { fetchCategories, fetchActivityCategoryMap } from "../api/categories.js";
 import { fetchActivityTagMap } from "../api/tags.js";
@@ -36,7 +36,14 @@ import { getWeekRange, activityDate, toDateInputValue } from "../../../shared/li
  * updates via the setters, then calls loadActivities() to reconcile with
  * the server after a write.
  */
-export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds = new Set() }) {
+const EMPTY_ARCHIVED_IDS = new Set();
+export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds = EMPTY_ARCHIVED_IDS }) {
+  const uid = firebaseUser?.uid;
+  const [startOfWeek, endOfWeek] = getWeekRange(cursorDate).map(date => date.getTime());
+  const scope = `${uid || "guest"}:${startOfWeek}:${endOfWeek}:${calendarAccessToken || ""}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const loadVersion = useRef(0);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -54,19 +61,29 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
   // (not calendarAccessToken) since api.js only needs the Firebase ID
   // token, which it pulls fresh from auth.currentUser itself.
   useEffect(() => {
-    if (!firebaseUser) return;
-    fetchCategories().then(setCategories).catch((e) => setError(e.message));
-    fetchActivityCategoryMap().then(setActivityCategoryMap).catch((e) => setError(e.message));
-    fetchActivityTagMap().then(setActivityTagMap).catch((e) => setError(e.message));
-    fetchLockedActivities().then(setLockedActivities).catch((e) => setError(e.message));
-  }, [firebaseUser, setError]);
+    let cancelled = false;
+    setActivities([]);
+    setCategories([]); setActivityCategoryMap({}); setActivityTagMap({}); setLockedActivities({});
+    if (!uid) return;
+    const load = (fetcher, setter) => fetcher()
+      .then(value => { if (!cancelled) setter(value); })
+      .catch(e => { if (!cancelled) setError(e.message); });
+    load(fetchCategories, setCategories);
+    load(fetchActivityCategoryMap, setActivityCategoryMap);
+    load(fetchActivityTagMap, setActivityTagMap);
+    load(fetchLockedActivities, setLockedActivities);
+    return () => { cancelled = true; };
+  }, [uid, setError]);
 
   const loadActivities = useCallback(async () => {
-    if (!calendarAccessToken) return;
+    if (!uid || !calendarAccessToken) return;
+    const version = ++loadVersion.current;
+    const isCurrent = () => currentScope.current === scope && loadVersion.current === version;
     setLoading(true);
     setError(null);
     try {
-      const [weekStart, rangeEnd] = getWeekRange(cursorDate);
+      const weekStart = new Date(startOfWeek);
+      const rangeEnd = new Date(endOfWeek);
       // Fetch from one day before the visible week starts — not because
       // that extra day is shown anywhere, but so an activity that began
       // the night before the week is available to render as a dimmed
@@ -74,8 +91,9 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
       const rangeStart = new Date(weekStart);
       rangeStart.setDate(rangeStart.getDate() - 1);
       const items = await fetchActivities(calendarAccessToken, rangeStart, rangeEnd);
-      setActivities(items);
+      if (isCurrent()) setActivities(items);
     } catch (e) {
+      if (!isCurrent()) return;
       setError(e.message);
       // Clear the token so app.jsx's renew banner (gated on
       // `!calendarAccessToken`) actually shows up alongside this error —
@@ -85,20 +103,21 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
       }
       throw e;
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [calendarAccessToken, cursorDate, setError, setCalendarAccessToken]);
+  }, [uid, calendarAccessToken, startOfWeek, endOfWeek, scope, setError, setCalendarAccessToken]);
 
   // Keep the visible week synchronized with Google Calendar. When the
   // access token has expired, loadActivities clears it and app.jsx presents
   // the blocking re-authentication overlay before the user can continue.
   useEffect(() => {
-    if (!firebaseUser || !calendarAccessToken) return;
+    if (!uid || !calendarAccessToken) { setActivities([]); setLoading(false); return; }
     loadActivities().catch(() => {
       // The hook has already published the error and cleared an expired
       // token when appropriate. Avoid an unhandled rejection from the effect.
     });
-  }, [firebaseUser, calendarAccessToken, cursorDate, loadActivities]);
+    return () => { loadVersion.current++; };
+  }, [uid, calendarAccessToken, loadActivities]);
 
   // Recompute the weekly summary from our backend whenever the activities
   // for the visible week (or their category assignments) change. activities
@@ -106,16 +125,18 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
   // overnight-spillover indicator, so filter it back to the visible Sunday–
   // Saturday range before sending it to the summary API.
   useEffect(() => {
-    const [weekStart, weekEnd] = getWeekRange(cursorDate);
+    const weekStart = new Date(startOfWeek);
+    const weekEnd = new Date(endOfWeek);
     const weeklyActivities = activities.filter((activity) => {
       if (archivedActivityIds.has(activity.id)) return false;
       const start = activityDate(activity.start);
       return start && start >= weekStart && start <= weekEnd;
     });
 
-    if (!firebaseUser || weeklyActivities.length === 0) {
+    if (!uid || weeklyActivities.length === 0) {
       setSummary(null);
       setSummaryLoading(false);
+      setSummaryError(null);
       return;
     }
 
@@ -143,7 +164,7 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
       })
       .filter(Boolean);
 
-    fetchWeeklySummary(payload)
+    const timer = setTimeout(() => { fetchWeeklySummary(payload)
       .then((nextSummary) => {
         if (!cancelled) setSummary(nextSummary);
       })
@@ -152,15 +173,17 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
       })
       .finally(() => {
         if (!cancelled) setSummaryLoading(false);
-      });
+      }); }, 150);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [firebaseUser, activities, activityCategoryMap, cursorDate, archivedActivityIds]);
+  }, [uid, activities, activityCategoryMap, startOfWeek, endOfWeek, archivedActivityIds]);
 
   /** Clears everything this hook owns — called from app.jsx's handleLogout. */
   const resetOnLogout = useCallback(() => {
+    loadVersion.current++;
     setActivities([]);
     setSummary(null);
     setCategories([]);

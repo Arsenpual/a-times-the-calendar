@@ -1,5 +1,4 @@
-import { auth } from "../../../shared/config/firebase-auth.js";
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+import { apiRequest } from "../../../shared/api/client.js";
 
 /**
  * True if `error` came from calendarRequest()'s 401 branch — i.e. the
@@ -17,14 +16,7 @@ export function isCalendarAuthExpiredError(error) {
 }
 
 async function backendCalendarRequest(path, options = {}) {
-  if (!auth.currentUser) throw new Error("ยังไม่ได้เข้าสู่ระบบ — กรุณาเข้าสู่ระบบก่อนใช้งาน");
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${await auth.currentUser.getIdToken()}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {})
-    }
-  });
+  const response = await apiRequest(path, options);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 428) {

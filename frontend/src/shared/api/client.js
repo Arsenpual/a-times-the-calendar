@@ -11,21 +11,11 @@
 // (unlike the Google Calendar access token in google-calendar.js, which is
 // NOT auto-refreshed by Firebase and needs its own reauth flow).
 import { auth } from "../config/firebase-auth.js";
+import { createInFlightReads } from "./in-flight-reads.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
-
-/**
- * Fetches a fresh Firebase ID token for the signed-in user. Throws a clear
- * error if nobody is signed in rather than silently sending a request with
- * no Authorization header (which would just come back as an opaque 401
- * from the backend).
- */
-async function getIdTokenOrThrow() {
-  if (!auth.currentUser) {
-    throw new Error("ยังไม่ได้เข้าสู่ระบบ — กรุณาเข้าสู่ระบบก่อนใช้งาน");
-  }
-  return auth.currentUser.getIdToken();
-}
+const reads = createInFlightReads();
+let readOwner;
 
 /**
  * Shared fetch wrapper for every backend call below — attaches the
@@ -36,15 +26,37 @@ async function getIdTokenOrThrow() {
  * @param {RequestInit} [options]
  */
 export async function apiRequest(path, options = {}) {
-  const idToken = await getIdTokenOrThrow();
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers
-    }
-  });
+  const user = auth.currentUser;
+  if (!user) throw new Error("ยังไม่ได้เข้าสู่ระบบ — กรุณาเข้าสู่ระบบก่อนใช้งาน");
+  if (readOwner !== user) {
+    reads.clear();
+    readOwner = user;
+  }
+  const method = (options.method || "GET").toUpperCase();
+  const isRead = method === "GET";
+  const send = async () => {
+    const idToken = await user.getIdToken();
+    if (auth.currentUser !== user) throw new Error("บัญชีผู้ใช้เปลี่ยนแล้ว กรุณาลองใหม่");
+    return fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...Object.fromEntries(new Headers(options.headers))
+      }
+    });
+  };
+  if (!isRead) {
+    reads.clear();
+    try { return await send(); } finally { reads.clear(); }
+  }
+  // Each abortable request retains independent cancellation semantics.
+  if (options.signal) return send();
+  const headers = [...new Headers(options.headers).entries()];
+  const key = JSON.stringify([path, { ...options, headers }]);
+  const response = await reads.get(key, send);
+  if (auth.currentUser !== user) throw new Error("บัญชีผู้ใช้เปลี่ยนแล้ว กรุณาลองใหม่");
+  return response.clone(); // Response bodies cannot be consumed twice.
 }
 
 export async function handleResponse(res, label) {
@@ -72,4 +84,3 @@ export async function handleResponse(res, label) {
     throw new Error(`[${label}] response ไม่ใช่ JSON ที่ถูกต้อง: ${text.slice(0, 200)}`);
   }
 }
-
