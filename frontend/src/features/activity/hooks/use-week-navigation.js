@@ -106,7 +106,7 @@ export function useWeekNavigation() {
     });
   }, []);
 
-  // เปลี่ยนวันโดยยึดวันที่ที่กำลังเปิด mini timeline อยู่เป็นหลัก; ถ้ายังไม่
+  // เปลี่ยนวันโดยยึดวันที่ที่กำลังอ่านใน Daily Gantt อยู่เป็นหลัก; ถ้ายังไม่
   // เคยเลือกวัน ให้เริ่มจากวันของ cursor ปัจจุบันแทน `cursorDate` จะเปลี่ยน
   // เฉพาะเมื่อข้ามสัปดาห์เท่านั้น: การเลื่อนวันภายในสัปดาห์เดิมต้องเปลี่ยน
   // แค่ expandedDate มิฉะนั้นจะไป re-fetch Calendar และคำนวณ summary ใหม่
@@ -116,9 +116,9 @@ export function useWeekNavigation() {
     const next = new Date(baseDate);
     next.setDate(next.getDate() + direction);
 
-    // เปลี่ยน expandedDate เฉพาะตอนมี mini-timeline เปิดอยู่แล้วเท่านั้น —
-    // ถ้ายังไม่เคยเลือกวันไหนเลย (expandedDate เป็น null) ↑/↓ ไม่ควรเปิด
-    // mini-timeline ขึ้นมาเอง มิฉะนั้นการกดลูกศรครั้งแรกหลังล็อกอิน (ก่อน
+    // เปลี่ยน expandedDate เฉพาะตอนผู้ใช้เคยเลือกวันแล้วเท่านั้น —
+    // ถ้ายังไม่เคยเลือกวันไหนเลย (expandedDate เป็น null) ↑/↓ ไม่ควรเปลี่ยน
+    // Daily Gantt ขึ้นมาเอง มิฉะนั้นการกดลูกศรครั้งแรกหลังล็อกอิน (ก่อน
     // คลิกเลือกวันใดๆ) จะดันไปเปิดมันขึ้นมาโดยไม่ได้ตั้งใจ
     if (expandedDate) {
       setExpandedDate(next);

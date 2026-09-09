@@ -47,7 +47,7 @@ export function renderDayTimelineToCanvas({ day, activities, allActivities, cate
   // Activity that started the day before `day` and whose end time bleeds
   // into `day` — drawn as a dimmed block at the top of the grid (see
   // drawing loop below), mirroring the same indicator TimelineEditor and
-  // MiniTimelinePanel already show in the live UI. Looked up from
+  // The live daily Activity view already shows these colors. Looked up from
   // `allActivities` (the caller's full fetched range) rather than
   // `activities` (already filtered to just `day`), since by definition
   // this activity's own start date is yesterday, not `day` — `activities`
@@ -140,7 +140,7 @@ export function renderDayTimelineToCanvas({ day, activities, allActivities, cate
   // Incoming spillover blocks (activities carried over from the day
   // before) — drawn first, dimmed via globalAlpha and with a dashed
   // border, matching the same "carryover from last night" visual
-  // convention TimelineEditor and MiniTimelinePanel use in the live UI.
+  // convention TimelineEditor and ActivityDayGantt use in the live UI.
   // Always anchored at the top of the grid (top === gridTop) since by
   // definition they start at minute 0 of `day`.
   for (const { activity, spilloverEndMin } of incomingSpillover) {

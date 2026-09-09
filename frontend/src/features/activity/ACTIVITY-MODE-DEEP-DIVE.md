@@ -42,10 +42,9 @@ src/app/app.jsx
 │  ├─ Week view (แก้ไขได้)
 │  ├─ Cycle view 4 สัปดาห์ (ภาพรวม)
 │  ├─ ActivityPopup
-│  ├─ week-spine-detail
+│  ├─ ActivityDayGantt (แผนกิจกรรมของวันที่เลือก)
 │  └─ activity archive
 ├─ WeeklySummaryPanel / CycleSummaryPanel
-├─ MiniTimelinePanel
 └─ ActivityModal
 
 features/activity/
@@ -206,7 +205,7 @@ Cycle คือ 4 สัปดาห์ต่อเนื่อง (28 วัน
 
 ---
 
-## 8. Weekly Summary และ Mini Timeline
+## 8. Weekly Summary และ Daily Gantt
 
 พื้นที่ summary สลับตาม context:
 
@@ -214,16 +213,18 @@ Cycle คือ 4 สัปดาห์ต่อเนื่อง (28 วัน
 |---|---|
 | คลิกพื้นหลัง Week Spine ใน Week view | `WeeklySummaryPanel` |
 | คลิกพื้นหลัง Week Spine ใน Cycle view | `CycleSummaryPanel` |
-| คลิกวัน | `MiniTimelinePanel` |
+| คลิกวัน | เลือกวันให้ `ActivityDayGantt` ด้านล่าง Week Spine |
 | คลิกชื่อสัปดาห์ใน Cycle | `WeeklySummaryPanel` ของสัปดาห์นั้น |
 
 พื้นหลัง Week Spine มี hover effect เพื่อบอกว่าคลิกกลับไป summary ได้ แต่ปุ่ม, track และ block ไม่ trigger โดยไม่ตั้งใจ
 
-### Mini Timeline
+### Daily Gantt
 
-- แสดงวัน/เดือน, เวลาเริ่ม–จบ และชื่อกิจกรรม
-- spillover จากเมื่อคืนเป็นรายการสีจาง
-- กลุ่มกิจกรรมที่ทับกันแสดง lane เดียวกัน พร้อม badge `⧉ N`
+- อยู่ใต้ Week Spine และแสดงกิจกรรมของวันที่เลือกในแกนนอน 00:00–24:00
+- ใช้สีของหมวดหมู่จริง และนำแถบที่ทับเวลาไปวางในได้สูงสุด 3 track
+- กิจกรรมที่ซ้อนเกิน 3 รายการแสดงเป็น `+1` เพื่อไม่ให้ panel สูงเกินไป
+- ปุ่ม ย่อ/ปกติ/ขยาย เปลี่ยน scale ของเวลาเฉพาะการอ่านข้อมูล
+- คลิกแถบกิจกรรมเปิด `ActivityModal` เดิม จึงไม่มี editor หรือข้อมูลซ้ำชุดใหม่
 - แสดง lane พร้อมกันสูงสุด 3 รายการ; ที่เกินใช้ `+N`
 - คลิกกิจกรรมเพื่อ focus และหรี่กิจกรรมอื่น
 - ปุ่มกล้อง export แผนวันเป็น PNG ผ่าน `lib/export-day-image.js`
@@ -287,7 +288,7 @@ Fullscreen เป็น overlay ของแอป (`timelineFullscreen`) ไม
 - ปิดด้วยปุ่มหรือ Escape
 - ถ้ามาจาก Cycle view จะ restore กลับ Cycle เดิม
 
-`week-spine-detail` และ `activity-archive` แยกจาก card Week Spine และอยู่ต่อด้านล่างเต็มความกว้างสำหรับอ่าน/scroll
+`ActivityDayGantt` อยู่ใต้ Week Spine เฉพาะคอลัมน์ timeline ส่วน `activity-archive` อยู่ล่างสุดเต็มความกว้างสำหรับอ่าน/scroll
 
 ### Onboarding และ AI draft
 
@@ -326,10 +327,10 @@ Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `src/app/app.jsx` | ประกอบ state/hook และเลือก Week/Cycle/Summary view |
-| `components/activity-mode-week-spine.jsx` | Week Spine, Cycle, drag, fullscreen, detail, archive |
+| `components/activity-mode-week-spine.jsx` | Week Spine, Cycle, drag, fullscreen และ archive |
+| `components/activity-day-gantt.jsx` | Gantt รายวันใต้ Week Spine, track overlap และเปิด ActivityModal |
 | `components/activity-modal.jsx` | ฟอร์ม create/edit และ validation |
 | `components/activity-popup.jsx` | popup คลิกขวา |
-| `components/mini-timeline-panel.jsx` | timeline รายวันและ overlap lanes |
 | `components/weekly-summary-panel.jsx` | สรุปรายสัปดาห์ |
 | `components/cycle-summary-panel.jsx` | สรุป 4 สัปดาห์ |
 | `hooks/use-activity-mutations.js` | Calendar writes, metadata, notification sync |
@@ -338,6 +339,6 @@ Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 | `lib/week-spine-data.js` | แปลง event เป็น daily segments |
 | `lib/timeline-layout.js` | snap, overlap layout/max-3, spillover |
 | `lib/rrule-utils.js` | recurrence และ limit 28 occurrences |
-| `lib/export-day-image.js` | export Mini Timeline เป็น PNG |
+| `lib/export-day-image.js` | export กำหนดการรายวันเป็น PNG |
 | `api/archive.js` | Firestore-backed archive API |
 | `styles/activity-mode.css` | CSS ของ Activity Mode |

@@ -109,6 +109,7 @@ export default function ActivityModeWeekSpine({
   onFocusOverviewSummary,
   onFocusWeekSummary,
   onCycleDataChange,
+  dayGantt,
 }) {
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
@@ -236,9 +237,6 @@ export default function ActivityModeWeekSpine({
   const timelineSegments = timedSegments.filter((segment) => !archivedCalendarIds.has(segment.calendarId) || restoringCalendarIds.has(segment.calendarId));
   const visibleAllDayActivities = allDayActivities.filter((activity) => !archivedCalendarIds.has(activity.calendarId) || restoringCalendarIds.has(activity.calendarId));
   const visibleSelectedDay = weekDays.find((day) => isSameDay(day, selectedDay)) || weekDays[0];
-  const selectedSegments = timelineSegments
-    .filter((segment) => isSameDay(segment.day, visibleSelectedDay))
-    .sort((a, b) => a.start - b.start);
   const labels = weekdayShortLabels(language);
   const today = new Date();
 
@@ -544,7 +542,7 @@ export default function ActivityModeWeekSpine({
   const toggleTimelineFullscreen = () => setTimelineFullscreen((open) => !open);
 
   const isSummaryBackgroundTarget = (target) => target instanceof Element
-    && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .week-spine-detail, .activity-archive");
+    && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .activity-archive");
 
   const focusSummaryFromWeekSpine = (event) => {
     const target = event.target;
@@ -917,16 +915,7 @@ export default function ActivityModeWeekSpine({
       </>}
       </section>
       {viewMode !== "four-weeks" && <>
-      <section className="week-spine-detail" aria-live="polite">
-        <h3>{labels[visibleSelectedDay.getDay()]} {visibleSelectedDay.getDate()}</h3>
-        {selectedSegments.length === 0 ? <p>ยังไม่มีกิจกรรมตามเวลาในวันนี้</p> : selectedSegments.map((segment) => (
-          <button className="week-spine-detail-item" type="button" key={segment.segmentId} onClick={() => openSegmentEditor(segment)} onContextMenu={(event) => openContextMenu(event, segment)}>
-            <span className="week-spine-detail-dot" style={{ backgroundColor: segment.color.border }} />
-            <span className="week-spine-detail-title"><span>{segment.title}{segment.continuesFromPreviousDay ? " ←" : ""}{segment.continuesIntoNextDay ? " →" : ""}{segment.isLocked ? " 🔒" : ""}</span>{(activityTagMap?.[normalizeActivityId(segment.calendarId)] || []).map((tag) => <small className="activity-inline-tag" key={tag}>#{tag}</small>)}</span>
-            <time>{formatTime(segment.start, language)} – {formatTime(segment.end, language)}</time>
-          </button>
-        ))}
-      </section>
+      {dayGantt}
       <section className="activity-archive" aria-label="คลังกิจกรรม">
         <div className="activity-archive-heading"><h3>คลังกิจกรรม</h3><span>{activityArchive.length} รายการ</span><button type="button" className="activity-archive-add" onClick={addArchiveDraft}>+ เพิ่มกิจกรรม</button></div>
         {activityArchive.length === 0 ? <p>ยังไม่มีกิจกรรมที่เก็บไว้</p> : (

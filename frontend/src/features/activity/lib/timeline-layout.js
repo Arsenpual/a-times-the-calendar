@@ -1,6 +1,6 @@
 // Shared layout math for anything that renders activities as absolutely-
 // positioned blocks on a 24-hour day grid (timeline-editor.jsx's drag-editor
-// grid, and mini-timeline-panel.jsx's read-only mini timeline). Centralized
+// grid, and activity-day-gantt.jsx's read-only daily Gantt). Centralized
 // here so both views compute overlap columns identically — copy-pasting this
 // into each file risked the same drift problem normalizeActivityId had
 // before it was centralized in id-utils.js.

@@ -157,7 +157,7 @@ export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, f
           summary: activity.summary,
           start: start.toISOString(),
           end: end.toISOString(),
-          // Keep the browser-local day that ActivityMode and MiniTimelinePanel
+          // Keep the browser-local day that Activity Mode and the Daily Gantt
           // use, rather than relying on the server's timezone for grouping.
           startDate: toDateInputValue(start)
         };

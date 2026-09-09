@@ -6,7 +6,7 @@ import ActivityModeWeekSpine from "../features/activity/components/activity-mode
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
 import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
-import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
+import ActivityDayGantt from "../features/activity/components/activity-day-gantt.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
@@ -787,9 +787,7 @@ function MainApp() {
             {firebaseUser && (
               <div ref={activityDashboardRef} className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
                 <div className="summary-column">
-                  <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
-                    <div className="flip-face flip-face-summary">
-                      {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
+                  {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
                         anchorDate={cycleAnchorDate}
                         activities={cycleSummaryData.activities}
                         loading={cycleSummaryData.loading}
@@ -806,19 +804,6 @@ function MainApp() {
                         onSelectDay={openDay}
                         categories={categories}
                       />}
-                    </div>
-                    <div className="flip-face flip-face-timeline">
-                      <MiniTimelinePanel
-                        activities={visibleActivities}
-                        categories={categories}
-                        activityCategoryMap={activityCategoryMap}
-                        userId={firebaseUser.uid}
-                        expandedDate={expandedDate}
-                        onClose={closeDay}
-                        onEditActivity={openEditActivity}
-                      />
-                    </div>
-                  </div>
                 </div>
                 {isSearchingTags ? (
                   <TagSearchResults
@@ -882,6 +867,13 @@ function MainApp() {
                     onFocusOverviewSummary={focusCycleSummary}
                     onFocusWeekSummary={focusWeeklySummary}
                     onCycleDataChange={setCycleSummaryData}
+                    dayGantt={weekSpineViewMode === "week" ? <ActivityDayGantt
+                      day={expandedDate || cursorDate}
+                      activities={visibleActivities}
+                      categories={categories}
+                      activityCategoryMap={activityCategoryMap}
+                      onEditActivity={openEditActivity}
+                    /> : null}
                   />
                 )}
               </div>
