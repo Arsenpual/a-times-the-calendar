@@ -115,14 +115,14 @@ async function processUserDueReminders(userId, dueReminders, now, { computeNextD
         // เก็บ token ที่ส่งไม่สำเร็จเพราะไม่ valid แล้ว (unregistered/
         // expired) ไปลบทิ้งจาก fcmTokens — กัน token เก่าค้างอยู่เรื่อยๆ
         // ทำให้ sendEachForMulticast เสียเวลา/error ซ้ำในรอบถัดไปเปล่าๆ
-        response.responses.forEach((r, idx) => {
+        await Promise.all(response.responses.map(async (r, idx) => {
           if (!r.success && (r.error?.code === "messaging/registration-token-not-registered")) {
             const deadToken = tokens[idx];
-            db.collection("users").doc(userId).collection("modes").doc("reminder-mode")
+            await db.collection("users").doc(userId).collection("modes").doc("reminder-mode")
               .collection("fcmTokens").doc(encodeURIComponent(deadToken)).delete()
               .catch((e) => console.error(`[checkDueReminders] ลบ dead token ไม่สำเร็จ:`, e));
           }
-        });
+        }));
       } catch (err) {
         console.error(`[checkDueReminders] ส่ง push ให้ user ${userId} ล้มเหลว:`, err);
         // ส่ง push ล้มเหลวไม่ควรบล็อกการ update nextDueAt ด้านล่าง — ผู้ใช้
