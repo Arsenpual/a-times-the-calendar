@@ -1,5 +1,6 @@
 import { getIntervalWorkSummary, intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { animate } from "animejs";
 import { createPortal } from "react-dom";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 import { usePushNotifications } from "../../notifications/push/hooks/use-push-notifications.js";
@@ -435,6 +436,19 @@ export default function ReminderDashboard({
 
   const [editingId, setEditingId] = useState(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false); // composer เริ่มต้นแบบพับเก็บ ประหยัดพื้นที่
+  const composerCardRef = useRef(null);
+
+  useEffect(() => {
+    if (!isComposerOpen || !composerCardRef.current) return undefined;
+    const animation = animate(composerCardRef.current, {
+      opacity: [0, 1],
+      translateY: [-18, 0],
+      scale: [0.98, 1],
+      duration: 500,
+      ease: "out(4)",
+    });
+    return () => animation?.pause?.();
+  }, [isComposerOpen]);
 
   const composerPreview = useMemo(() => {
     const title = draft.title.trim() || "Reminder ใหม่";
@@ -1766,7 +1780,7 @@ export default function ReminderDashboard({
                 เมื่อกด "เพิ่ม Reminder" หรือกด "แก้ไข" การ์ดใดการ์ดหนึ่ง จะดันลงมาแสดงแทนที่ */}
             {isComposerOpen && (
               <div className="composer-backdrop" onMouseDown={cancelEditing}>
-              <form className="composer-card" onMouseDown={(event) => event.stopPropagation()} onSubmit={submitReminderForm}>
+              <form ref={composerCardRef} className="composer-card" onMouseDown={(event) => event.stopPropagation()} onSubmit={submitReminderForm}>
               <div className="form-field">
                 <label htmlFor="reminder-title">{t("reminder.title")}</label>
                 <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder={t("reminder.titlePlaceholder")} />

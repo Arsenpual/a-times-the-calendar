@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { animate } from "animejs";
 import {
   toDateInputValue,
   toTimeInputValue,
@@ -98,6 +99,22 @@ export default function ActivityModal({
   onClose
 }) {
   const isEditing = !!initialActivity;
+  const modalBoxRef = useRef(null);
+
+  // Anime.js modal example adapted to the existing React dialog. The 500ms
+  // entrance is deliberately scoped to the add-activity popup so editing
+  // interactions and the underlying timeline are not animated.
+  useEffect(() => {
+    if (!open || !modalBoxRef.current) return undefined;
+    const animation = animate(modalBoxRef.current, {
+      opacity: [0, 1],
+      translateY: [-18, 0],
+      scale: [0.98, 1],
+      duration: 500,
+      ease: "out(4)",
+    });
+    return () => animation?.pause?.();
+  }, [open]);
 
   const initialStart = initialActivity ? activityDate(initialActivity.start) : defaultDate || new Date();
   const initialEnd = initialActivity
@@ -519,7 +536,7 @@ export default function ActivityModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalBoxRef} className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">{isEditing ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</h2>
           <div className="modal-header-actions">

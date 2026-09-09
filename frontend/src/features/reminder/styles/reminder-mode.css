@@ -1499,7 +1499,7 @@
           padding: 14px;
           background: var(--g-background);
           flex-shrink: 0;
-          animation: composer-expand 0.15s ease;
+          /* Entrance is driven by Anime.js in reminder-mode.jsx (500ms). */
         }
 
         @keyframes composer-expand {

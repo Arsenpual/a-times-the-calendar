@@ -1,5 +1,11 @@
 /* Dashboard layout */
 
+/* Shared visual rhythm for the activity workspace. */
+.activity-dashboard {
+  scrollbar-gutter: stable;
+  scroll-padding-block: 16px;
+}
+
 .dashboard {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -32,6 +38,7 @@
      match .agenda-view's full-row height beside it — see .dashboard's
      comment above for why align-items moved off the grid shorthand. */
   align-self: start;
+  min-width: 0;
 }
 
 /* Agenda view */
@@ -418,7 +425,7 @@
   background: var(--bg-muted);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -434,6 +441,7 @@
   font-size: 24px;
   font-weight: 500;
   margin: -8px 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .summary-loading,
@@ -2422,3 +2430,101 @@ html[data-theme="dark"] .new-category-name-input {
 @media (max-width: 780px) { .activity-dashboard { grid-template-columns: 1fr; }.week-spine-detail, .activity-archive { grid-column: 1; }.week-spine { padding: 14px; }.week-spine-header { align-items: flex-start; }.week-spine-days { gap: 3px; }.week-spine-hours, .week-spine-track { height: 560px; }.week-spine-detail-item { grid-template-columns: 8px 1fr; }.week-spine-detail-item time { grid-column: 2; }.activity-archive-list li { grid-template-columns: 8px minmax(0, 1fr) auto; }.activity-archive-field { grid-column: 2 / -1; }.activity-archive-actions { grid-column: 2 / -1; }.activity-archive-delete { grid-column: 3; grid-row: 1; } }
 @media (max-width: 780px) { .week-spine-timeline-surface.is-two-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-two-hour-grid .week-spine-track { height: 280px; } }
 @media (max-width: 780px) { .week-spine-timeline-surface.is-four-hour-grid .week-spine-hours, .week-spine-timeline-surface.is-four-hour-grid .week-spine-track { height: 140px; } }
+
+/* Activity workspace polish: do not change the timeline's time geometry. */
+.week-spine-fullscreen-btn,
+.activity-archive-add,
+.day-timeline-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 8px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.week-spine-fullscreen-btn:hover,
+.activity-archive-add:hover {
+  background: var(--hover);
+  border-color: var(--today);
+}
+
+.week-spine-save-bar {
+  max-width: calc(100% - 48px);
+  flex-wrap: wrap;
+  row-gap: 6px;
+  box-sizing: border-box;
+}
+
+.week-spine-save-bar > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.week-spine-save-bar button {
+  min-height: 30px;
+  padding-inline: 10px;
+  flex-shrink: 0;
+}
+
+.week-spine-detail h3,
+.activity-archive h3 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.week-spine-detail-item {
+  min-height: 44px;
+  padding-inline: 8px;
+  border-radius: 6px;
+}
+
+.week-spine-detail-item time,
+.mini-timeline-time,
+.mini-timeline-event-range {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-archive-heading {
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.activity-archive-heading h3 { margin-bottom: 0; }
+.activity-archive-heading > span { font-variant-numeric: tabular-nums; }
+.activity-archive-list { padding-bottom: 6px; }
+.activity-archive-list li { border-radius: 6px; }
+.activity-archive-list li:hover,
+.activity-archive-list li:focus-within { background: var(--hover); }
+.activity-archive-title-row { overflow-x: auto; padding-block: 3px; }
+.activity-archive-title-input { min-width: 100px; }
+.activity-archive-tag-add { min-height: 28px; white-space: nowrap; }
+.activity-archive-field input,
+.activity-archive-category select { min-height: 30px; box-sizing: border-box; }
+.activity-archive-actions { gap: 6px; }
+.activity-archive-actions button { width: 32px; height: 32px; }
+
+/* Explicit keyboard feedback, also scoped to the fullscreen timeline. */
+.week-spine-timeline-surface button:focus-visible,
+.week-spine-detail-item:focus-visible,
+.activity-archive :is(button, input, select):focus-visible,
+.activity-dashboard .summary-column button:focus-visible {
+  outline: 2px solid var(--today);
+  outline-offset: 2px;
+}
+
+.week-spine-timeline-surface button:disabled,
+.activity-archive button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .week-spine-fullscreen-btn,
+  .activity-archive-add,
+  .day-timeline-nav,
+  .week-spine-edge-nav button { transition: none; }
+}
