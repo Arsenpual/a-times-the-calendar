@@ -758,6 +758,17 @@
   border-bottom: 1px dashed var(--border);
 }
 
+/* Activity Mode only: compact 24-hour braid used in MiniTimelinePanel.
+   Reminder Mode retains its own block timeline and does not use these rules. */
+.mini-braid-panel { gap: 9px; }
+.mini-braid-canvas { position: relative; min-height: 384px; margin: 2px 2px 0 35px; }
+.mini-braid-hours { position: absolute; top: 0; bottom: 0; left: -35px; width: 30px; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
+.mini-braid-hours span { position: absolute; right: 0; transform: translateY(-50%); }.mini-braid-hours span:first-child { transform: none; }.mini-braid-hours span:last-child { transform: translateY(-100%); }
+.mini-braid-svg { display: block; width: 100%; height: 384px; overflow: visible; }.mini-braid-hour-line { stroke: color-mix(in srgb, var(--border) 80%, transparent); stroke-width: 1; }.mini-braid-trunk { stroke: color-mix(in srgb, var(--text-secondary) 45%, transparent); stroke-width: 1; stroke-dasharray: 2 4; }
+.mini-braid-ribbon { cursor: pointer; transition: opacity 150ms ease, filter 150ms ease, stroke-width 150ms ease; }.mini-braid-ribbon:hover, .mini-braid-ribbon:focus-visible, .mini-braid-ribbon.is-focused { filter: brightness(1.14) drop-shadow(0 0 2px color-mix(in srgb, var(--text-primary) 42%, transparent)); outline: none; }.mini-braid-ribbon.is-dimmed { opacity: .23; }.mini-braid-ribbon.is-spillover { opacity: .52; stroke-dasharray: 2 2; }
+.mini-braid-overflow { position: absolute; right: 0; display: inline-flex; min-width: 24px; justify-content: center; padding: 2px 5px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; line-height: 1.1; transform: translateY(-50%); }.mini-braid-hint { margin: 0; color: var(--text-secondary); font-size: 10px; line-height: 1.35; }
+.mini-braid-detail { display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 8px 9px; border: 1px solid color-mix(in srgb, var(--today) 38%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--today) 7%, var(--bg)); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }.mini-braid-detail:hover { background: color-mix(in srgb, var(--today) 13%, var(--bg)); }.mini-braid-detail-color { align-self: stretch; border-radius: 999px; }.mini-braid-detail strong, .mini-braid-detail small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.mini-braid-detail strong { font-size: 12px; }.mini-braid-detail small { margin-top: 2px; color: var(--text-secondary); font-size: 11px; }
+
 /* Timeline editor mode: a draggable hour grid for adjusting one day's event
    times, plus a small list below for category/edit access. Entered via the
    ⚙ button in the mini timeline header, exited with "ยกเลิก" or "บันทึก". */

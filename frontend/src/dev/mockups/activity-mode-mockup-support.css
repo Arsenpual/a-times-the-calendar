@@ -1,7 +1,7 @@
 /* Scoped Tailwind-like utilities used by Activity Mode mockup files only. */
 .mockup-preview-mode { min-height: 100vh; padding: 24px; background: #f3f4f6; color: #111827; }
 .mockup-preview-canvas { font-family: Roboto, Arial, sans-serif; }
-.mockup-preview-toggle, .mockup-preview-picker { position: fixed; z-index: 2147483646; right: 20px; border: 1px solid #d1d5db; background: #fff; color: #374151; box-shadow: 0 8px 24px rgb(0 0 0 / 12%); }.mockup-preview-toggle { z-index: 2147483647; }
+.mockup-preview-toggle, .mockup-preview-picker { position: fixed; z-index: 2147483646; top: 20px; left: 20px; right: auto; border: 1px solid #d1d5db; background: #fff; color: #374151; box-shadow: 0 8px 24px rgb(0 0 0 / 12%); }.mockup-preview-toggle { z-index: 2147483647; }
 .mockup-preview-toggle { top: 20px; padding: 10px 14px; border-radius: 999px; font: inherit; cursor: grab; touch-action: none; user-select: none; }.mockup-preview-toggle:active { cursor: grabbing; }
 .mockup-preview-picker { top: 68px; display: grid; gap: 6px; padding: 12px; border-radius: 12px; font-size: 13px; }
 .mockup-preview-picker select { min-width: 190px; padding: 7px; border: 1px solid #d1d5db; border-radius: 7px; font: inherit; }
