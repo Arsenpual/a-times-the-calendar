@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import loginGuideStep1 from "../../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../../public/login-guide-step3.jpg";
@@ -10,7 +10,7 @@ import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { formatWeekLabel, toDateInputValue } from "../shared/lib/date-utils.js";
+import { formatWeekLabel, getWeekRange, toDateInputValue, totalWeeksInYear, weekOfYear } from "../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../shared/lib/id-utils.js";
 import { createAiActivityDraft } from "../features/activity/api/activity-draft.js";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
@@ -38,6 +38,14 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/ac
 // no remote announcement has ever been set or the backend is temporarily down.
 const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
+
+function formatCycleLabel(date) {
+  const [cycleStart] = getWeekRange(date);
+  const cycleNumber = Math.floor((weekOfYear(cycleStart) - 1) / 4) + 1;
+  const totalCycles = Math.ceil(totalWeeksInYear(cycleStart.getFullYear()) / 4);
+  const dateLabel = cycleStart.toLocaleDateString("th-TH", { day: "numeric", month: "long" });
+  return `${dateLabel} cycle ที่ ${cycleNumber}/${totalCycles} ของปี`;
+}
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
@@ -79,6 +87,11 @@ export default function App() {
  * and render.
  */
 function MainApp() {
+  const [weekSpineViewMode, setWeekSpineViewMode] = useState("week");
+  // This deliberately stays separate from cursorDate. In Cycle view, users
+  // may inspect any of its four weeks without moving the visible Cycle.
+  const [cycleAnchorDate, setCycleAnchorDate] = useState(() => new Date());
+  const [weekSpineFullscreenRequest, setWeekSpineFullscreenRequest] = useState(0);
   useEffect(() => {
     const openMockupMode = (event) => {
       const target = event.target;
@@ -144,10 +157,31 @@ function MainApp() {
     navigateWeek,
     navigateDay,
     goToday,
+    selectWeek,
     focusDate,
     openDay,
     closeDay
   } = nav;
+  const setWeekSpineView = useCallback((nextView) => {
+    if (nextView === "four-weeks") setCycleAnchorDate(new Date(cursorDate));
+    setWeekSpineViewMode(nextView);
+  }, [cursorDate]);
+  const navigateCycle = useCallback((direction) => {
+    setCycleAnchorDate((current) => {
+      const next = new Date(current);
+      next.setDate(next.getDate() + direction * 28);
+      return next;
+    });
+    navigateWeek(direction * 4);
+  }, [navigateWeek]);
+  const openCycleWeekEditor = useCallback((date) => {
+    selectWeek(date);
+    setWeekSpineViewMode("week");
+    setWeekSpineFullscreenRequest((request) => request + 1);
+  }, [selectWeek]);
+  const activityHeaderTitle = weekSpineViewMode === "four-weeks"
+    ? formatCycleLabel(cycleAnchorDate)
+    : formatWeekLabel(cursorDate);
   const {
     isActivityReading,
     setIsActivityReading,
@@ -364,7 +398,11 @@ function MainApp() {
                     ▼
                   </button>
                 </div>
-                <h1 className="app-title">{formatWeekLabel(cursorDate)}</h1>
+                <h1 className="app-title">{activityHeaderTitle}</h1>
+                <div className="header-week-spine-view-switch" role="group" aria-label="มุมมอง Activity Mode">
+                  <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
+                  <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Cycle</button>
+                </div>
               </>
             )}
           </div>
@@ -793,6 +831,14 @@ function MainApp() {
                     onReauthCalendar={handleReauthCalendar}
                     hoursPerCell={weekSpineHoursPerCell}
                     onHoursPerCellChange={setWeekSpineHoursPerCell}
+                    calendarAccessToken={calendarAccessToken}
+                    viewMode={weekSpineViewMode}
+                    cycleStartDate={cycleAnchorDate}
+                    fullscreenRequestId={weekSpineFullscreenRequest}
+                    onSelectOverviewWeek={selectWeek}
+                    onSelectOverviewDay={focusDate}
+                    onNavigateCycle={navigateCycle}
+                    onOpenOverviewWeekEditor={openCycleWeekEditor}
                   />
                 )}
               </div>

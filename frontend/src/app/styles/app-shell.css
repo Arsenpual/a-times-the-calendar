@@ -58,6 +58,10 @@
   color: var(--text-primary);
 }
 
+.header-week-spine-view-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.header-week-spine-view-switch button { min-height: 28px; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font: 600 11px/1 inherit; cursor: pointer; }
+.header-week-spine-view-switch button.is-active { background: var(--today); color: #fff; }
+
 /* Mode switch (Dashboard / Reminder tabs, header left side) — a pill-
    shaped segmented control. Both tabs share a fixed min-width so they
    read as equal-size buttons regardless of label length ("Dashboard" vs

@@ -132,6 +132,11 @@ export function useWeekNavigation() {
   }, [cursorDate, expandedDate]);
 
   const goToday = useCallback(() => setCursorDate(new Date()), []);
+  const selectWeek = useCallback((date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return;
+    setCursorDate(new Date(date));
+    setExpandedDate(null);
+  }, []);
   // Used when an activity is restored from the archive: unlike openDay(),
   // this deliberately moves the visible week as well as selecting its day.
   const focusDate = useCallback((date) => {
@@ -211,6 +216,7 @@ export function useWeekNavigation() {
     navigateWeek,
     navigateDay,
     goToday,
+    selectWeek,
     focusDate,
     openDay,
     closeDay

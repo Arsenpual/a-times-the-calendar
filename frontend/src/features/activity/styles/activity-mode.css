@@ -2443,6 +2443,35 @@ html[data-theme="dark"] .new-category-name-input {
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
+.week-spine:has(.week-spine-four-week) { padding-bottom: 30px; }
+.week-spine-four-week { position: relative; min-width: 0; }
+.week-spine-four-week-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.week-spine-overview-cycle-nav button { position: absolute; z-index: 2; top: 50%; display: grid; place-items: center; width: 34px; height: 54px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--bg-muted) 92%, transparent); box-shadow: 0 4px 16px rgb(0 0 0 / 16%); color: var(--text-primary); font-size: 29px; line-height: 1; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(-50%); transition: opacity 140ms ease, background 140ms ease; }
+.week-spine-overview-cycle-nav button:first-child { left: 8px; }.week-spine-overview-cycle-nav button:last-child { right: 8px; }
+.week-spine-four-week:hover .week-spine-overview-cycle-nav button, .week-spine-overview-cycle-nav button:focus-visible { opacity: 1; pointer-events: auto; }
+.week-spine-overview-cycle-nav button:hover { background: var(--bg); }
+.week-spine-overview-week { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-muted); }
+.week-spine-overview-week-header { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.week-spine-overview-week h3 { flex: 1; min-width: 0; margin: 0; }
+.week-spine-overview-week h3 button { width: 100%; padding: 2px 0; border: 0; background: transparent; color: var(--text-primary); font: 600 13px/1.4 inherit; text-align: left; cursor: pointer; }
+.week-spine-overview-week h3 button:hover { color: var(--today); }
+.week-spine-overview-fullscreen-btn { display: grid; flex: 0 0 auto; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text-primary); font: inherit; cursor: pointer; }
+.week-spine-overview-fullscreen-btn:hover { border-color: var(--today); background: var(--hover); }
+.week-spine-overview-all-day { display: flex; gap: 4px; min-height: 20px; margin-bottom: 7px; overflow: hidden; }
+.week-spine-overview-all-day span { display: block; width: 18px; height: 6px; border-radius: 2px; background: var(--activity-color); }
+.week-spine-overview-all-day small { color: var(--text-secondary); font-size: 10px; }
+.week-spine-overview-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.week-spine-overview-day { min-width: 0; min-height: 156px; padding: 4px; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 6px; background: var(--bg); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.week-spine-overview-day:hover { border-color: var(--today); background: var(--hover); }
+.week-spine-overview-day header { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; margin-bottom: 4px; color: var(--text-secondary); font-size: 10px; }
+.week-spine-overview-day header strong { color: var(--text-primary); font-size: 11px; }
+.week-spine-overview-day.is-today { border-color: var(--today); box-shadow: inset 0 2px 0 var(--today); }
+.week-spine-overview-tabs { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; min-height: 13px; }
+.week-spine-overview-tabs > span { display: block; width: 100%; height: 6px; border-radius: 2px; background: var(--activity-color); opacity: .88; }
+.week-spine-overview-day small { display: block; color: var(--text-secondary); font-size: 10px; }
+.week-spine-overview-state { padding: 24px 0; color: var(--text-secondary); text-align: center; }
+.week-spine-overview-state.is-error { color: var(--red); }
+
 .week-spine-fullscreen-btn:hover,
 .activity-archive-add:hover {
   background: var(--hover);
@@ -2527,4 +2556,9 @@ html[data-theme="dark"] .new-category-name-input {
   .activity-archive-add,
   .day-timeline-nav,
   .week-spine-edge-nav button { transition: none; }
+}
+
+@media (max-width: 780px) {
+  .week-spine-four-week-grid { grid-template-columns: 1fr; }
+  .week-spine-overview-day { min-height: 100px; }
 }
