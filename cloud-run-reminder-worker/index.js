@@ -11,13 +11,15 @@ async function removeInvalidTokens(userId, tokens, response) {
   const removals = response.responses.flatMap((result, index) =>
     result.success || result.error?.code !== "messaging/registration-token-not-registered"
       ? []
-      : [db.collection("users").doc(userId).collection("fcmTokens").doc(encodeURIComponent(tokens[index])).delete()]
+      : [db.collection("users").doc(userId).collection("modes").doc("reminder-mode")
+        .collection("fcmTokens").doc(encodeURIComponent(tokens[index])).delete()]
   );
   await Promise.all(removals);
 }
 
 async function processUserDueReminders(userId, reminders, now) {
-  const tokenDocs = await db.collection("users").doc(userId).collection("fcmTokens").get();
+  const tokenDocs = await db.collection("users").doc(userId)
+    .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
   const tokens = tokenDocs.docs.map((doc) => doc.data().token).filter(Boolean);
   const updates = [];
 
@@ -53,7 +55,7 @@ async function processUserDueReminders(userId, reminders, now) {
 
 async function main() {
   const now = Date.now();
-  const reminderSnapshot = await db.collectionGroup("reminder-mode")
+  const reminderSnapshot = await db.collectionGroup("reminders")
     .where("enabled", "==", true)
     .where("nextDueAt", "<=", now)
     .get();
@@ -70,7 +72,8 @@ async function main() {
     // ไม่ต้อง scan, ส่ง FCM หรือเขียน runtime ทุกนาที.
     if (reminder.type === "interval" || reminder.type === "routine" || reminder.type === "stopwatch") continue;
     if ((reminder[RENOTIFY_GUARD_FIELD] || 0) >= reminder.nextDueAt) continue;
-    const userId = doc.ref.parent.parent?.id;
+    // Collection groups also find legacy backups; only dispatch current mode paths.
+    const userId = /^users\/([^/]+)\/modes\/(?:reminder-mode\/reminders|activity-mode\/activity-notifications)\/[^/]+$/.exec(doc.ref.path)?.[1];
     if (!userId) continue;
     if (!byUser.has(userId)) byUser.set(userId, []);
     byUser.get(userId).push({ ref: doc.ref, reminder });

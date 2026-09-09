@@ -1,7 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "reminder-mode",
+      "collectionGroup": "reminders",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "enabled", "order": "ASCENDING" },

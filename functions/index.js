@@ -45,16 +45,10 @@ const RENOTIFY_GUARD_FIELD = "lastNotifiedAt";
  * options ด้านล่าง) เช็ค reminder ทุก user ที่ due แล้วส่ง FCM push
  *
  * Query strategy: ใช้ Firestore Collection Group Query ข้าม user ทุกคน
- * (ต้องเปิด collection group index สำหรับ "reminder-mode" ก่อน — ทำผ่าน
- * Firebase Console > Firestore > Indexes > Collection Group tab หรือ
- * firestore.indexes.json ในโปรเจกต์หลัก) filter แค่ enabled==true ผ่าน
- * query โดยตรง (Firestore query ตรงๆ ได้) ส่วนเงื่อนไขอื่น (completedAt,
- * nextDueAt<=now, ไม่ใช่ routine/stopwatch) filter ต่อใน memory หลัง query
- * กลับมา เพราะ Firestore ไม่รองรับ compound inequality หลายฟิลด์พร้อมกัน
- * ง่ายๆ (nextDueAt<=now ผสมกับเงื่อนไข equality อื่นต้องมี composite index
- * เฉพาะเจาะจง — เริ่มจาก filter ใน memory ก่อนเพื่อความง่าย ค่อยย้ายไป
- * query ฝั่ง Firestore ทั้งหมดทีหลังถ้าจำนวน reminder ทั้งระบบเยอะขึ้นจน
- * filter ใน memory ไม่ไหว)
+ * ใช้ collection group "reminders" และ composite index
+ * (enabled ASC, nextDueAt ASC) จาก firestore.indexes.json.
+ * อ่านเฉพาะ enabled=true และ nextDueAt<=now แล้วตรวจสถานะที่เหลือใน memory.
+ * รับเฉพาะ users/{uid}/modes/reminder-mode/reminders/{id} ตาม schema ปัจจุบัน.
  */
 exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
   const now = Date.now();
@@ -63,7 +57,7 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
   // firestore.indexes.json เพื่ออ่านเฉพาะ reminder ที่ถึงเวลาแล้ว แทนการ
   // โหลด reminder enabled ทั้งระบบมา filter ใน memory.
   const snapshot = await db
-    .collectionGroup("reminder-mode")
+    .collectionGroup("reminders")
     .where("enabled", "==", true)
     .where("nextDueAt", "<=", now)
     .get();
@@ -84,10 +78,8 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
     const lastNotifiedAt = reminder[RENOTIFY_GUARD_FIELD] || 0;
     if (lastNotifiedAt >= reminder.nextDueAt) continue;
 
-    // doc.ref.parent.parent คือ users/{userId} document (โครงสร้างจริง:
-    // users/{userId}/reminder-mode/{reminderId} — ดู firestore-db.js's
-    // remindersCol) ถ้าโครงสร้างพาธเปลี่ยนในอนาคต ต้องแก้บรรทัดนี้ด้วย
-    const userId = doc.ref.parent.parent?.id;
+    // Validate the full path: the immediate parent document is a mode, not a user.
+    const userId = /^users\/([^/]+)\/modes\/reminder-mode\/reminders\/[^/]+$/.exec(doc.ref.path)?.[1];
     if (!userId) {
       console.warn(`[checkDueReminders] reminder ${doc.id} ไม่มี parent user document ที่คาดไว้ — ข้าม`);
       continue;
@@ -108,7 +100,8 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
 });
 
 async function processUserDueReminders(userId, dueReminders, now) {
-  const tokensSnapshot = await db.collection("users").doc(userId).collection("fcmTokens").get();
+  const tokensSnapshot = await db.collection("users").doc(userId)
+    .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((d) => d.data().token).filter(Boolean);
 
   if (tokens.length === 0) {
@@ -140,7 +133,8 @@ async function processUserDueReminders(userId, dueReminders, now) {
         response.responses.forEach((r, idx) => {
           if (!r.success && (r.error?.code === "messaging/registration-token-not-registered")) {
             const deadToken = tokens[idx];
-            db.collection("users").doc(userId).collection("fcmTokens").doc(encodeURIComponent(deadToken)).delete()
+            db.collection("users").doc(userId).collection("modes").doc("reminder-mode")
+              .collection("fcmTokens").doc(encodeURIComponent(deadToken)).delete()
               .catch((e) => console.error(`[checkDueReminders] ลบ dead token ไม่สำเร็จ:`, e));
           }
         });

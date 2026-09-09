@@ -3,6 +3,14 @@
 This replaces the scheduled Firebase Function. It runs once, finds due reminders
 in Firestore, sends FCM data messages, updates `nextDueAt`, then exits.
 
+Current schema: `users/{uid}/modes/reminder-mode/reminders/{id}` and
+`users/{uid}/modes/activity-mode/activity-notifications/{id}`. FCM tokens are in
+`users/{uid}/modes/reminder-mode/fcmTokens/{tokenId}`. Legacy backup paths are skipped.
+Both collection groups (`reminders`, `activity-notifications`) require the
+`enabled ASC, nextDueAt ASC` composite indexes in `firestore.indexes.json`.
+Deploy indexes separately with `firebase deploy --only firestore:indexes` and wait
+until they are ready before running the worker. This does not resume a paused scheduler.
+
 ## One-time Cloud Shell setup and deployment
 
 Run these commands from the repository root in Cloud Shell. They use Bangkok for

@@ -34,7 +34,7 @@
 ## ต้องทำอะไรก่อน deploy จริง
 
 1. `cd functions && npm install`
-2. สร้าง Firestore **collection group index** สำหรับ `reminder-mode` + field `enabled` (Firebase Console > Firestore > Indexes > Collection Group tab) — ถ้าไม่มี query จะ throw error พร้อมลิงก์สร้างให้อัตโนมัติตอนรันครั้งแรก
+2. Deploy index ด้วย `firebase deploy --only firestore:indexes`: ใช้ collection group `reminders` กับ `enabled ASC` + `nextDueAt ASC` และรอ index พร้อมใช้งาน ข้อมูลอยู่ที่ `users/{uid}/modes/reminder-mode/reminders/{id}` และ FCM token อยู่ที่ `users/{uid}/modes/reminder-mode/fcmTokens/{tokenId}` ไม่อ่าน collection เก่าที่เก็บเป็น backup
 3. ทดสอบผ่าน `firebase emulators:start --only functions,firestore` ก่อน ใส่ reminder ตัวอย่างที่ `nextDueAt` เป็นอดีตลง Firestore emulator ตรงๆ แล้วเรียกผ่าน `firebase functions:shell`
 4. ตั้งค่า `VITE_FIREBASE_VAPID_KEY` ฝั่ง frontend (`.env`) และเติมค่า Firebase config จริงใน `frontend/public/firebase-messaging-sw.js` (ตอนนี้เป็น `"TODO_ใส่ค่าจริงตอน_deploy"` ทั้งหมด)
 5. ยืนยัน `region` ใน `setGlobalOptions()` ให้ตรงกับที่ต้องการ (ตอนนี้ตั้งไว้ที่ `asia-southeast1` แบบเดา — ยังไม่ได้ยืนยันกับ project จริง)
