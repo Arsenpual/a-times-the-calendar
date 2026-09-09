@@ -12,6 +12,13 @@ import { fetchLockedActivities, setActivityLocked } from "../api/locks.js";
 import { saveActivityNotification, deleteActivityNotification } from "../api/notifications.js";
 import { activityDate } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
+import { exceedsOverlapLimit } from "../lib/timeline-layout.js";
+
+const overlapEntriesFromActivities = (items) => items.map((activity) => ({
+  id: activity.id,
+  start: activityDate(activity.start),
+  end: activityDate(activity.end)
+}));
 
 /**
  * Every handler that writes an activity or its metadata — the biggest,
@@ -184,6 +191,21 @@ export function useActivityMutations({
   const handleSaveActivity = async ({ activityBody, categoryId, tags, existingId, knownUpdated }) => {
     if (!calendarAccessToken) return false;
 
+    // A locked neighbour still counts toward the visual maximum of three,
+    // but never makes an otherwise-valid overlap forbidden. Only the
+    // activity being edited is subject to its own lock guard elsewhere.
+    const candidateEntries = overlapEntriesFromActivities(
+      activities.filter((activity) => activity.id !== existingId)
+    );
+    candidateEntries.push({
+      id: existingId || "new-activity",
+      start: activityDate(activityBody.start),
+      end: activityDate(activityBody.end)
+    });
+    if (exceedsOverlapLimit(candidateEntries)) {
+      throw new Error("บันทึกไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
+    }
+
     let conflictDetected = false;
     if (existingId && knownUpdated) {
       try {
@@ -259,6 +281,15 @@ export function useActivityMutations({
   const handleSaveTimes = async (changes) => {
     if (!calendarAccessToken) return false;
     if (changes.length === 0) return true;
+    const changesById = new Map(changes.map((change) => [change.id, change]));
+    const candidateEntries = overlapEntriesFromActivities(activities).map((entry) => {
+      const change = changesById.get(entry.id);
+      return change ? { ...entry, start: change.start, end: change.end } : entry;
+    });
+    if (exceedsOverlapLimit(candidateEntries)) {
+      setError("บันทึกไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
+      return false;
+    }
     const failures = [];
     let anySkippedLocked = false;
     let anyConflicts = false;

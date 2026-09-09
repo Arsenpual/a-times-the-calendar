@@ -9,6 +9,32 @@ export const SNAP_MINUTES = 15;
 export const MAX_OVERLAP_STACKS = 3;
 const TITLE_CLEARANCE_MINUTES = 30;
 
+/**
+ * Returns true only when four or more timed entries occupy the same instant.
+ * Endpoints that merely touch (09:00–10:00 followed by 10:00–11:00) are not
+ * an overlap. Lock state is intentionally absent here: a lock protects the
+ * entry itself, never the empty/occupied time around it.
+ * @param {Array<{start: Date, end: Date}>} entries
+ */
+export function exceedsOverlapLimit(entries, limit = MAX_OVERLAP_STACKS) {
+  const edges = [];
+  for (const entry of entries) {
+    const start = entry?.start instanceof Date ? entry.start.getTime() : NaN;
+    const end = entry?.end instanceof Date ? entry.end.getTime() : NaN;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    edges.push({ time: start, delta: 1 }, { time: end, delta: -1 });
+  }
+  // At the same timestamp, process an ending event first. This keeps
+  // back-to-back activities valid instead of treating them as overlapping.
+  edges.sort((a, b) => a.time - b.time || a.delta - b.delta);
+  let active = 0;
+  for (const edge of edges) {
+    active += edge.delta;
+    if (active > limit) return true;
+  }
+  return false;
+}
+
 /** Minutes since local midnight, clamped to the 0–1440 day range. */
 export function minutesOfDay(date) {
   return Math.min(1440, Math.max(0, date.getHours() * 60 + date.getMinutes()));

@@ -6,6 +6,53 @@
 // ourselves.
 
 const RRULE_WEEKDAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+export const MAX_REPEAT_OCCURRENCES = 28;
+
+function toDateOnly(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Last permitted date for an UNTIL rule, so it cannot bypass COUNT's cap. */
+export function maxRepeatUntil(state, startDate, limit = MAX_REPEAT_OCCURRENCES) {
+  const start = toDateOnly(startDate);
+  const interval = Math.max(1, Number(state?.interval) || 1);
+  if (state?.freq === "DAILY") {
+    const end = new Date(start);
+    end.setDate(end.getDate() + (limit - 1) * interval);
+    return toDateInputValue(end);
+  }
+  if (state?.freq === "MONTHLY") {
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + (limit - 1) * interval);
+    return toDateInputValue(end);
+  }
+
+  const weekdays = new Set(state?.byDay?.length ? state.byDay : [RRULE_WEEKDAYS[start.getDay()]]);
+  const initialWeek = new Date(start);
+  initialWeek.setDate(initialWeek.getDate() - initialWeek.getDay());
+  const cursor = new Date(start);
+  let occurrences = 0;
+  for (let guard = 0; guard < 10000; guard += 1) {
+    const cursorWeek = new Date(cursor);
+    cursorWeek.setDate(cursorWeek.getDate() - cursorWeek.getDay());
+    const weeksApart = Math.round((cursorWeek - initialWeek) / (7 * 24 * 60 * 60 * 1000));
+    if (weeksApart % interval === 0 && weekdays.has(RRULE_WEEKDAYS[cursor.getDay()])) {
+      occurrences += 1;
+      if (occurrences === limit) return toDateInputValue(cursor);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return toDateInputValue(start);
+}
 const THAI_WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const THAI_WEEKDAY_FULL = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
 
@@ -37,7 +84,7 @@ export function defaultRepeatState(startDate) {
 }
 
 /** Builds a single RRULE string (no "RRULE:" prefix needed — caller adds it) from a RepeatState. */
-export function buildRRule(state) {
+export function buildRRule(state, startDate = new Date()) {
   if (!state || state.mode !== "custom") return null;
 
   const parts = [`FREQ=${state.freq}`];
@@ -48,11 +95,13 @@ export function buildRRule(state) {
     parts.push(`BYDAY=${state.byDay.join(",")}`);
   }
   if (state.end === "count" && state.count > 0) {
-    parts.push(`COUNT=${state.count}`);
+    parts.push(`COUNT=${Math.min(MAX_REPEAT_OCCURRENCES, state.count)}`);
   } else if (state.end === "until" && state.until) {
     // RRULE UNTIL wants a bare date or UTC datetime; a bare YYYYMMDD is
     // valid and avoids timezone ambiguity for an "on this calendar day" cutoff.
-    const compact = state.until.replaceAll("-", "");
+    const permittedUntil = maxRepeatUntil(state, startDate);
+    const safeUntil = state.until > permittedUntil ? permittedUntil : state.until;
+    const compact = safeUntil.replaceAll("-", "");
     parts.push(`UNTIL=${compact}`);
   }
   return `RRULE:${parts.join(";")}`;

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { animate } from "animejs";
 import { activityDate, formatTime, formatWeekRange, getWeekRange, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
@@ -33,15 +34,15 @@ function FourWeekOverview({ weekStart, activities, categories, activityCategoryM
     <div className="week-spine-four-week-grid">
       {weeks.map((week) => <section className="week-spine-overview-week" key={week.start.toISOString()}>
         <header className="week-spine-overview-week-header">
-          <h3><button type="button" onClick={() => onSelectWeek?.(week.start)}>{formatWeekRange(week.start, language)}</button></h3>
-          <button type="button" className="week-spine-overview-fullscreen-btn" onClick={() => onOpenWeekEditor?.(week.start)} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatWeekRange(week.start, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
+          <h3><button type="button" onClick={(event) => { event.stopPropagation(); onSelectWeek?.(week.start); }}>{formatWeekRange(week.start, language)}</button></h3>
+          <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.start); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatWeekRange(week.start, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
         </header>
         {week.allDayActivities.length > 0 && <div className="week-spine-overview-all-day">{week.allDayActivities.slice(0, 3).map((activity) => <span key={activity.calendarId} style={{ "--activity-color": activity.color.border }} title={`กิจกรรมทั้งวัน: ${activity.title}`} />)}{week.allDayActivities.length > 3 && <small>+{week.allDayActivities.length - 3}</small>}</div>}
         <div className="week-spine-overview-days">
           {Array.from({ length: 7 }, (_, offset) => {
             const day = new Date(week.start); day.setDate(day.getDate() + offset);
             const items = week.timedSegments.filter((segment) => isSameDay(segment.day, day)).sort((a, b) => a.start - b.start);
-            return <button type="button" className={`week-spine-overview-day${isSameDay(day, new Date()) ? " is-today" : ""}`} key={day.toISOString()} onClick={() => onSelectDay?.(day)} aria-label={`เปิดรายการกิจกรรม ${labels[day.getDay()]} ${day.getDate()}`}>
+            return <button type="button" className={`week-spine-overview-day${isSameDay(day, new Date()) ? " is-today" : ""}`} key={day.toISOString()} onClick={(event) => { event.stopPropagation(); onSelectDay?.(day); }} aria-label={`เปิดรายการกิจกรรม ${labels[day.getDay()]} ${day.getDate()}`}>
               <header><span>{labels[day.getDay()]}</span><strong>{day.getDate()}</strong></header>
               <div className="week-spine-overview-tabs">{items.map((item) => <span key={item.segmentId} style={{ "--activity-color": item.color.border }} title={`${formatTime(item.start, language)} ${item.title}`} />)}</div>
             </button>;
@@ -100,10 +101,14 @@ export default function ActivityModeWeekSpine({
   viewMode = "week",
   cycleStartDate,
   fullscreenRequestId = 0,
+  onTimelineFullscreenChange,
   onSelectOverviewWeek,
   onSelectOverviewDay,
   onNavigateCycle,
   onOpenOverviewWeekEditor,
+  onFocusOverviewSummary,
+  onFocusWeekSummary,
+  onCycleDataChange,
 }) {
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
@@ -122,7 +127,16 @@ export default function ActivityModeWeekSpine({
   const dragStartedAt = useRef(null);
   const shouldSuppressBlockClick = useRef(false);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
-  const handledFullscreenRequestRef = useRef(0);
+  const timelineFullscreenSurfaceRef = useRef(null);
+  const weekSpineGridRef = useRef(null);
+  // A visual ruler shown only while pulling an activity's bottom edge.
+  // `top` is measured from the grid wrapper, so it crosses the time scale
+  // and all seven day tracks instead of stopping in the activity's column.
+  const [resizeAlignmentGuide, setResizeAlignmentGuide] = useState(null);
+  const [isSummaryTargetHovered, setIsSummaryTargetHovered] = useState(false);
+  // A request id belongs to one deliberate click. Initialise from the prop so
+  // remounting Activity Mode cannot replay an old fullscreen request.
+  const handledFullscreenRequestRef = useRef(fullscreenRequestId);
   const [fourWeekActivities, setFourWeekActivities] = useState([]);
   const [fourWeekLoading, setFourWeekLoading] = useState(false);
   const [fourWeekError, setFourWeekError] = useState("");
@@ -150,6 +164,18 @@ export default function ActivityModeWeekSpine({
     document.body.classList.toggle("week-spine-fullscreen-active", timelineFullscreen);
     return () => document.body.classList.remove("week-spine-fullscreen-active");
   }, [timelineFullscreen]);
+  useEffect(() => {
+    onTimelineFullscreenChange?.(timelineFullscreen);
+    if (!timelineFullscreen || !timelineFullscreenSurfaceRef.current) return undefined;
+    const animation = animate(timelineFullscreenSurfaceRef.current, {
+      opacity: [0, 1],
+      translateY: [-18, 0],
+      scale: [0.98, 1],
+      duration: 500,
+      ease: "out(4)"
+    });
+    return () => animation.cancel();
+  }, [timelineFullscreen, onTimelineFullscreenChange]);
   useEffect(() => {
     if (viewMode === "four-weeks" && timelineFullscreen) setTimelineFullscreen(false);
   }, [viewMode, timelineFullscreen]);
@@ -182,7 +208,6 @@ export default function ActivityModeWeekSpine({
       .finally(() => { if (!cancelled) setFourWeekLoading(false); });
     return () => { cancelled = true; };
   }, [viewMode, calendarAccessToken, cycleStart.getTime(), fourWeekEnd.getTime()]);
-
   const timelineActivities = useMemo(() => activities.map((activity) => {
     const pending = pendingTimeChanges.get(activity.id);
     if (!pending) return activity;
@@ -200,6 +225,14 @@ export default function ActivityModeWeekSpine({
     () => new Set(activityArchive.map((item) => item.calendarId).filter(Boolean)),
     [activityArchive]
   );
+  useEffect(() => {
+    if (viewMode !== "four-weeks") return;
+    onCycleDataChange?.({
+      activities: fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id)),
+      loading: fourWeekLoading,
+      error: fourWeekError
+    });
+  }, [viewMode, fourWeekActivities, fourWeekLoading, fourWeekError, archivedCalendarIds, onCycleDataChange]);
   const timelineSegments = timedSegments.filter((segment) => !archivedCalendarIds.has(segment.calendarId) || restoringCalendarIds.has(segment.calendarId));
   const visibleAllDayActivities = allDayActivities.filter((activity) => !archivedCalendarIds.has(activity.calendarId) || restoringCalendarIds.has(activity.calendarId));
   const visibleSelectedDay = weekDays.find((day) => isSameDay(day, selectedDay)) || weekDays[0];
@@ -510,6 +543,23 @@ export default function ActivityModeWeekSpine({
 
   const toggleTimelineFullscreen = () => setTimelineFullscreen((open) => !open);
 
+  const isSummaryBackgroundTarget = (target) => target instanceof Element
+    && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .week-spine-detail, .activity-archive");
+
+  const focusSummaryFromWeekSpine = (event) => {
+    const target = event.target;
+    // Background clicks are a lightweight way back to the relevant summary.
+    // Do not steal the click from any timeline editing/control surface.
+    if (!isSummaryBackgroundTarget(target)) return;
+    if (viewMode === "four-weeks") onFocusOverviewSummary?.();
+    else onFocusWeekSummary?.();
+  };
+
+  const updateSummaryHover = (event) => {
+    const nextValue = isSummaryBackgroundTarget(event.target);
+    setIsSummaryTargetHovered((current) => current === nextValue ? current : nextValue);
+  };
+
   const navigateWeekBy = (delta) => {
     const nextSelectedDay = new Date(visibleSelectedDay);
     nextSelectedDay.setDate(nextSelectedDay.getDate() + delta * 7);
@@ -523,6 +573,18 @@ export default function ActivityModeWeekSpine({
     const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
     const raw = DAY_START_HOUR * 60 + ratio * DAY_SPAN_MINUTES;
     return Math.min(DAY_END_HOUR * 60 - SNAP_MINUTES, Math.max(DAY_START_HOUR * 60, Math.round(raw / SNAP_MINUTES) * SNAP_MINUTES));
+  };
+
+  const updateResizeAlignmentGuide = (endMinutes, day) => {
+    const grid = weekSpineGridRef.current;
+    const dayIndex = weekDays.findIndex((candidate) => isSameDay(candidate, day));
+    const track = dayIndex >= 0 ? grid?.querySelector(`.week-spine-track[data-day-index="${dayIndex}"]`) : null;
+    if (!grid || !track) return;
+    const gridRect = grid.getBoundingClientRect();
+    const trackRect = track.getBoundingClientRect();
+    setResizeAlignmentGuide({
+      top: trackRect.top - gridRect.top + (Math.min(DAY_END_HOUR * 60, Math.max(0, endMinutes)) / DAY_SPAN_MINUTES) * trackRect.height
+    });
   };
 
   const dateAtMinutes = (day, minutes) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(minutes / 60), minutes % 60);
@@ -542,7 +604,9 @@ export default function ActivityModeWeekSpine({
     try {
       const saved = await onSaveTimes?.(changes);
       if (saved === false) {
-        setInteractionWarning("บันทึกการปรับเวลาไม่สำเร็จ — กรุณาแก้เวลาที่ชนกันก่อน");
+        // A locked *other* activity never blocks an overlap. Locks only
+        // protect their own activity from being changed, moved or deleted.
+        setInteractionWarning("บันทึกการปรับเวลาไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง");
         return false;
       }
       setPendingTimeChanges(new Map());
@@ -638,6 +702,7 @@ export default function ActivityModeWeekSpine({
       durationMinutes: endMinutes - startMinutes,
       pointerOffsetMinutes: Math.max(0, Math.round((pointerMinutes - startMinutes) / SNAP_MINUTES) * SNAP_MINUTES),
     });
+    if (mode === "resize") updateResizeAlignmentGuide(endMinutes, day);
   };
 
   const beginDuplicatePlacement = (activity) => {
@@ -671,24 +736,27 @@ export default function ActivityModeWeekSpine({
     const targetDay = dayForTrack(track);
     if (!targetDay) return;
     const pointerMinutes = snapPointerToMinutes(event, track);
+    if (dragged.type === "resize") {
+      // Selection does not affect moving. It only lets the resize handle
+      // apply one shared end-time delta to all selected activities.
+      const selectedDurations = isSelectionMode && selectedActivityIds.has(dragged.calendarId)
+        ? timelineSegments
+          .filter((segment) => selectedActivityIds.has(segment.calendarId) && !segment.isLocked && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay)
+          .map((segment) => Math.round((segment.end - segment.start) / 60000))
+        : [dragged.durationMinutes];
+      const shortestDuration = Math.min(...selectedDurations, dragged.durationMinutes);
+      const smallestAllowedEnd = Math.max(
+        dragged.startMinutes + SNAP_MINUTES,
+        dragged.endMinutes - Math.max(0, shortestDuration - SNAP_MINUTES)
+      );
+      const endMinutes = Math.min(DAY_END_HOUR * 60, Math.max(smallestAllowedEnd, pointerMinutes + SNAP_MINUTES));
+      updateResizeAlignmentGuide(endMinutes, dragged.day);
+      setDragged((current) => current && ({ ...current, endMinutes }));
+      return;
+    }
     setDragged((current) => {
       if (!current) return current;
       const activeDrag = current.pointerId === null ? { ...current, pointerId: event.pointerId } : current;
-      if (activeDrag.type === "resize") {
-        // Selection does not affect moving. It only lets the resize handle
-        // apply one shared end-time delta to all selected activities.
-        const selectedDurations = isSelectionMode && selectedActivityIds.has(activeDrag.calendarId)
-          ? timelineSegments
-            .filter((segment) => selectedActivityIds.has(segment.calendarId) && !segment.isLocked && !segment.continuesFromPreviousDay && !segment.continuesIntoNextDay)
-            .map((segment) => Math.round((segment.end - segment.start) / 60000))
-          : [activeDrag.durationMinutes];
-        const shortestDuration = Math.min(...selectedDurations, activeDrag.durationMinutes);
-        const smallestAllowedEnd = Math.max(
-          activeDrag.startMinutes + SNAP_MINUTES,
-          activeDrag.endMinutes - Math.max(0, shortestDuration - SNAP_MINUTES)
-        );
-        return { ...activeDrag, endMinutes: Math.min(DAY_END_HOUR * 60, Math.max(smallestAllowedEnd, pointerMinutes + SNAP_MINUTES)) };
-      }
       const startMinutes = Math.max(DAY_START_HOUR * 60, Math.min(DAY_END_HOUR * 60 - activeDrag.durationMinutes, pointerMinutes - activeDrag.pointerOffsetMinutes));
       return { ...activeDrag, day: targetDay, startMinutes, endMinutes: startMinutes + activeDrag.durationMinutes };
     });
@@ -699,6 +767,7 @@ export default function ActivityModeWeekSpine({
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const completed = dragged;
     setDragged(null);
+    setResizeAlignmentGuide(null);
     dragStartedAt.current = null;
     if (!shouldSuppressBlockClick.current) {
       // In selection mode, a press/release toggles selection; a true drag is
@@ -741,14 +810,14 @@ export default function ActivityModeWeekSpine({
 
   return (
     <div className="week-spine-layout">
-      <section className="week-spine" aria-label="Activity Week Spine">
+      <section className={`week-spine${isSummaryTargetHovered ? " is-summary-target-hovered" : ""}`} aria-label="Activity Week Spine" onClick={focusSummaryFromWeekSpine} onPointerMove={updateSummaryHover} onPointerLeave={() => setIsSummaryTargetHovered(false)}>
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
               : <FourWeekOverview weekStart={cycleStart} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} />
         ) : <>
         {visibleAllDayActivities.length > 0 && <div className="week-spine-all-day"><strong>กิจกรรมทั้งวัน</strong>{visibleAllDayActivities.map((activity) => <span key={activity.calendarId}>{activity.title}</span>)}</div>}
-        <section className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
+        <section ref={timelineFullscreenSurfaceRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>
         {pendingTimeChanges.size > 0 && <div className="week-spine-save-bar" role="status">
           <span>มีการปรับเวลา {pendingTimeChanges.size} รายการ</span>
@@ -761,7 +830,7 @@ export default function ActivityModeWeekSpine({
         </div>
         {interactionWarning && <p className="error-banner" role="alert">{interactionWarning}</p>}
         {timelineFullscreen && tokenNearingExpiry && <div className="week-spine-token-prompt" role="alert"><span>สิทธิ์ Google Calendar ใกล้หมดอายุ</span><button type="button" onClick={onReauthCalendar}>ต่ออายุตอนนี้</button></div>}
-      <div className="week-spine-grid-wrap">
+      <div ref={weekSpineGridRef} className="week-spine-grid-wrap">
         {!timelineFullscreen && <div className="week-spine-density-control" role="group" aria-label="ความละเอียด Week Spine">
           <button type="button" className={hoursPerCell === 1 ? "is-active" : ""} onClick={() => onHoursPerCellChange?.(1)} aria-pressed={hoursPerCell === 1} title="1 ชั่วโมงต่อช่อง">1h</button>
           <button type="button" className={hoursPerCell === 2 ? "is-active" : ""} onClick={() => onHoursPerCellChange?.(2)} aria-pressed={hoursPerCell === 2} title="2 ชั่วโมงต่อช่อง">2h</button>
@@ -770,6 +839,7 @@ export default function ActivityModeWeekSpine({
         <div className="week-spine-hours" aria-hidden="true" style={{ "--week-spine-hour-cell-count": (DAY_END_HOUR - DAY_START_HOUR) / effectiveHoursPerCell }}>
           {hourMarks.map((hour) => <span key={hour} style={{ top: `${((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100}%` }}>{String(hour).padStart(2, "0")}:00</span>)}
         </div>
+        {resizeAlignmentGuide && <span className="week-spine-resize-alignment-guide" aria-hidden="true" style={{ top: `${resizeAlignmentGuide.top}px` }} />}
         <div className="week-spine-days">
           {weekDays.map((day, index) => {
             const daySegments = timelineSegments.filter((segment) => isSameDay(segment.day, day));
@@ -791,7 +861,7 @@ export default function ActivityModeWeekSpine({
               >
                 <span className="week-spine-day-label">{labels[index]}</span>
                 <strong><span>{day.getDate()}</span></strong>
-                <span className="week-spine-track" data-day-index={index} onPointerDown={(event) => beginDraft(event, day)} onPointerMove={(event) => { updateDraft(event); updateExistingDrag(event); }} onPointerUp={(event) => { finishDraft(event); finishExistingDrag(event); }} onPointerCancel={() => { setDraft(null); setDragged(null); }}>
+                <span className="week-spine-track" data-day-index={index} onPointerDown={(event) => beginDraft(event, day)} onPointerMove={(event) => { updateDraft(event); updateExistingDrag(event); }} onPointerUp={(event) => { finishDraft(event); finishExistingDrag(event); }} onPointerCancel={() => { setDraft(null); setDragged(null); setResizeAlignmentGuide(null); }}>
                   {daySegments.map((segment) => {
                     const start = Math.max(DAY_START_HOUR * 60, minutesSinceDayStart(segment.start, day));
                     const end = Math.min(DAY_END_HOUR * 60, minutesSinceDayStart(segment.end, day));
@@ -844,6 +914,9 @@ export default function ActivityModeWeekSpine({
         onArchive={() => archiveActivity(contextMenu.segment)}
       />}
         </section>
+      </>}
+      </section>
+      {viewMode !== "four-weeks" && <>
       <section className="week-spine-detail" aria-live="polite">
         <h3>{labels[visibleSelectedDay.getDay()]} {visibleSelectedDay.getDate()}</h3>
         {selectedSegments.length === 0 ? <p>ยังไม่มีกิจกรรมตามเวลาในวันนี้</p> : selectedSegments.map((segment) => (
@@ -868,7 +941,6 @@ export default function ActivityModeWeekSpine({
         )}
       </section>
       </>}
-      </section>
     </div>
   );
 }

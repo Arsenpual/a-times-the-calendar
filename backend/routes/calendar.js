@@ -3,6 +3,66 @@ const { getFreshAccessToken, CalendarReauthRequiredError } = require("../calenda
 
 const router = express.Router();
 const EVENTS_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const MAX_REPEAT_OCCURRENCES = 28;
+const RRULE_WEEKDAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+function dateOnly(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function occurrenceCountUntil(fields, startValue, limit) {
+  const start = dateOnly(startValue);
+  const untilDigits = String(fields.UNTIL || "").slice(0, 8);
+  if (!start || !/^\d{8}$/.test(untilDigits)) return limit + 1;
+  const until = new Date(Number(untilDigits.slice(0, 4)), Number(untilDigits.slice(4, 6)) - 1, Number(untilDigits.slice(6, 8)));
+  const interval = Math.max(1, Number(fields.INTERVAL) || 1);
+  const frequency = fields.FREQ;
+  let count = 0;
+  const cursor = new Date(start);
+
+  if (frequency === "DAILY" || frequency === "MONTHLY") {
+    while (cursor <= until && count <= limit) {
+      count += 1;
+      if (frequency === "DAILY") cursor.setDate(cursor.getDate() + interval);
+      else cursor.setMonth(cursor.getMonth() + interval);
+    }
+    return count;
+  }
+
+  if (frequency !== "WEEKLY") return limit + 1;
+  const weekdays = new Set((fields.BYDAY || RRULE_WEEKDAYS[start.getDay()]).split(","));
+  const initialWeek = new Date(start);
+  initialWeek.setDate(initialWeek.getDate() - initialWeek.getDay());
+  while (cursor <= until && count <= limit) {
+    const cursorWeek = new Date(cursor);
+    cursorWeek.setDate(cursorWeek.getDate() - cursorWeek.getDay());
+    const weeksApart = Math.round((cursorWeek - initialWeek) / (7 * 24 * 60 * 60 * 1000));
+    if (weeksApart % interval === 0 && weekdays.has(RRULE_WEEKDAYS[cursor.getDay()])) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+function assertRepeatOccurrenceLimit(event) {
+  if (!Array.isArray(event?.recurrence)) return;
+  const line = event.recurrence.find((rule) => typeof rule === "string" && rule.startsWith("RRULE:"));
+  if (!line) return;
+  const fields = Object.fromEntries(line.slice("RRULE:".length).split(";").map((part) => part.split("=")));
+  const count = Number(fields.COUNT);
+  if (Number.isFinite(count) && count > MAX_REPEAT_OCCURRENCES) {
+    const error = new Error(`กิจกรรมทำซ้ำได้สูงสุด ${MAX_REPEAT_OCCURRENCES} ครั้งต่อชุด`);
+    error.status = 400;
+    throw error;
+  }
+  if (fields.UNTIL && occurrenceCountUntil(fields, event?.start?.dateTime || event?.start?.date, MAX_REPEAT_OCCURRENCES) > MAX_REPEAT_OCCURRENCES) {
+    const error = new Error(`วันที่สิ้นสุดนี้ทำให้กิจกรรมเกิดเกิน ${MAX_REPEAT_OCCURRENCES} ครั้ง`);
+    error.status = 400;
+    throw error;
+  }
+}
 
 async function calendarRequest(userId, url, options = {}) {
   const accessToken = await getFreshAccessToken(userId);
@@ -42,11 +102,11 @@ router.get("/events/:eventId", async (req, res, next) => {
 });
 
 router.post("/events", async (req, res, next) => {
-  try { res.status(201).json(await calendarRequest(req.userId, EVENTS_BASE, { method: "POST", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
+  try { assertRepeatOccurrenceLimit(req.body); res.status(201).json(await calendarRequest(req.userId, EVENTS_BASE, { method: "POST", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
 });
 
 router.patch("/events/:eventId", async (req, res, next) => {
-  try { res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
+  try { assertRepeatOccurrenceLimit(req.body); res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
 });
 
 router.delete("/events/:eventId", async (req, res, next) => {

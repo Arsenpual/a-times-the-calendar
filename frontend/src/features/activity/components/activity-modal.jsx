@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { animate } from "animejs";
 import {
   toDateInputValue,
@@ -12,7 +12,9 @@ import {
   buildRRule,
   describeRepeat,
   isRuleEditable,
-  RRULE_WEEKDAYS
+  RRULE_WEEKDAYS,
+  MAX_REPEAT_OCCURRENCES,
+  maxRepeatUntil
 } from "../lib/rrule-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
@@ -21,14 +23,14 @@ const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 // ปิดฟังก์ชัน "ทำซ้ำไม่มีวันสิ้นสุด" ไว้ก่อน + จำกัดจำนวนครั้งสูงสุดที่ทำซ้ำ
 // ได้ (ดู normalizeRepeatState ด้านล่าง และ defaultRepeatState/parseRRule ใน
 // rrule-utils.js ที่ปรับ default ให้สอดคล้องกัน)
-const MAX_REPEAT_COUNT = 20;
+const MAX_REPEAT_COUNT = MAX_REPEAT_OCCURRENCES;
 
 /**
  * บังคับ RepeatState ที่ได้จาก defaultRepeatState()/parseRRule() ให้ไม่ตกไป
  * อยู่ในสถานะที่ถูกปิดใช้งานแล้ว — สองกรณีที่ต้องกันไว้:
  *   1. end === "never" (ฟังก์ชัน "ไม่มีวันสิ้นสุด" ถูกปิดไว้ก่อน) → fallback
  *      เป็น "count" พร้อม count เริ่มต้นที่ปลอดภัย (ไม่เกิน MAX_REPEAT_COUNT)
- *   2. count > MAX_REPEAT_COUNT (เช่น กิจกรรมเก่าที่เคยตั้งไว้เกิน 20 ครั้ง
+ *   2. count > MAX_REPEAT_COUNT (เช่น กิจกรรมเก่าที่เคยตั้งไว้เกิน 28 ครั้ง
  *      ก่อนจะมีข้อจำกัดนี้) → clamp ลงมาไม่ให้เกิน
  * ทำที่นี่อีกชั้นเพื่อความปลอดภัย แม้ rrule-utils.js จะปรับ default ให้แล้ว
  * ก็ตาม เผื่อกรณี recurrence ของกิจกรรมจริงมี COUNT สูงกว่าที่ UI นี้อนุญาต
@@ -214,6 +216,10 @@ export default function ActivityModal({
   // เปลี่ยนจาก "ไม่มีวันสิ้นสุด" เป็น "จบใน 12 ครั้ง" ไปด้วย ไม่ใช่แค่ UI
   const wasUnlimitedRepeat = isEditing && rawInitialRepeat.end === "never";
   const [repeat, setRepeat] = useState(() => normalizeRepeatState(rawInitialRepeat));
+  const repeatMaximumUntil = useMemo(
+    () => maxRepeatUntil(repeat, combineDateAndTime(date, startTime || "00:00")),
+    [repeat, date, startTime]
+  );
 
   const [notesOpen, setNotesOpen] = useState(!!initialActivity?.description);
   const [notes, setNotes] = useState(initialActivity?.description || "");
@@ -440,7 +446,7 @@ export default function ActivityModal({
     body.end = { dateTime: end.toISOString(), timeZone };
 
     if (recurrenceEditable) {
-      const rrule = buildRRule(repeat);
+      const rrule = buildRRule(repeat, start);
       body.recurrence = rrule ? [rrule] : null;
     }
 
@@ -855,9 +861,11 @@ export default function ActivityModal({
                         type="date"
                         disabled={repeat.end !== "until"}
                         value={repeat.until}
-                        onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value }))}
+                        max={repeatMaximumUntil}
+                        onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value > repeatMaximumUntil ? repeatMaximumUntil : e.target.value }))}
                       />
                     </div>
+                    <p className="repeat-limit-note">จำกัดกิจกรรมทำซ้ำสูงสุด {MAX_REPEAT_COUNT} ครั้งต่อชุด{repeat.end === "until" ? ` · เลือกได้ไม่เกิน ${repeatMaximumUntil}` : ""}</p>
                   </div>
 
                   <p className="repeat-preview">

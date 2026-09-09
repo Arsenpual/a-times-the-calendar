@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import loginGuideStep1 from "../../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../../public/login-guide-step3.jpg";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
+import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
 import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
@@ -92,6 +93,9 @@ function MainApp() {
   // may inspect any of its four weeks without moving the visible Cycle.
   const [cycleAnchorDate, setCycleAnchorDate] = useState(() => new Date());
   const [weekSpineFullscreenRequest, setWeekSpineFullscreenRequest] = useState(0);
+  const [cycleSummaryData, setCycleSummaryData] = useState({ activities: [], loading: false, error: "" });
+  const [summaryPanelMode, setSummaryPanelMode] = useState("week");
+  const cycleViewToRestoreRef = useRef(null);
   useEffect(() => {
     const openMockupMode = (event) => {
       const target = event.target;
@@ -163,7 +167,12 @@ function MainApp() {
     closeDay
   } = nav;
   const setWeekSpineView = useCallback((nextView) => {
-    if (nextView === "four-weeks") setCycleAnchorDate(new Date(cursorDate));
+    if (nextView === "four-weeks") {
+      setCycleAnchorDate(new Date(cursorDate));
+      setCycleSummaryData({ activities: [], loading: true, error: "" });
+      setSummaryPanelMode("cycle");
+    }
+    if (nextView === "week") setSummaryPanelMode("week");
     setWeekSpineViewMode(nextView);
   }, [cursorDate]);
   const navigateCycle = useCallback((direction) => {
@@ -175,10 +184,31 @@ function MainApp() {
     navigateWeek(direction * 4);
   }, [navigateWeek]);
   const openCycleWeekEditor = useCallback((date) => {
+    cycleViewToRestoreRef.current = new Date(cycleAnchorDate);
     selectWeek(date);
     setWeekSpineViewMode("week");
     setWeekSpineFullscreenRequest((request) => request + 1);
+  }, [cycleAnchorDate, selectWeek]);
+  const handleTimelineFullscreenChange = useCallback((isFullscreen) => {
+    if (isFullscreen || !cycleViewToRestoreRef.current) return;
+    const cycleAnchor = cycleViewToRestoreRef.current;
+    cycleViewToRestoreRef.current = null;
+    setCycleAnchorDate(cycleAnchor);
+    setSummaryPanelMode("cycle");
+    setWeekSpineViewMode("four-weeks");
+  }, []);
+  const selectCycleWeek = useCallback((date) => {
+    selectWeek(date);
+    setSummaryPanelMode("week");
   }, [selectWeek]);
+  const focusCycleSummary = useCallback(() => {
+    closeDay();
+    setSummaryPanelMode("cycle");
+  }, [closeDay]);
+  const focusWeeklySummary = useCallback(() => {
+    closeDay();
+    setSummaryPanelMode("week");
+  }, [closeDay]);
   const activityHeaderTitle = weekSpineViewMode === "four-weeks"
     ? formatCycleLabel(cycleAnchorDate)
     : formatWeekLabel(cursorDate);
@@ -759,14 +789,23 @@ function MainApp() {
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
-                      <WeeklySummaryPanel
+                      {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
+                        anchorDate={cycleAnchorDate}
+                        activities={cycleSummaryData.activities}
+                        loading={cycleSummaryData.loading}
+                        error={cycleSummaryData.error}
+                        categories={categories}
+                        activityCategoryMap={activityCategoryMap}
+                        onSelectWeek={selectCycleWeek}
+                        onSelectDay={focusDate}
+                      /> : <WeeklySummaryPanel
                         anchorDate={cursorDate}
                         summary={summary}
                         loading={summaryLoading}
                         error={summaryError}
                         onSelectDay={openDay}
                         categories={categories}
-                      />
+                      />}
                     </div>
                     <div className="flip-face flip-face-timeline">
                       <MiniTimelinePanel
@@ -835,10 +874,14 @@ function MainApp() {
                     viewMode={weekSpineViewMode}
                     cycleStartDate={cycleAnchorDate}
                     fullscreenRequestId={weekSpineFullscreenRequest}
-                    onSelectOverviewWeek={selectWeek}
+                    onTimelineFullscreenChange={handleTimelineFullscreenChange}
+                    onSelectOverviewWeek={selectCycleWeek}
                     onSelectOverviewDay={focusDate}
                     onNavigateCycle={navigateCycle}
                     onOpenOverviewWeekEditor={openCycleWeekEditor}
+                    onFocusOverviewSummary={focusCycleSummary}
+                    onFocusWeekSummary={focusWeeklySummary}
+                    onCycleDataChange={setCycleSummaryData}
                   />
                 )}
               </div>

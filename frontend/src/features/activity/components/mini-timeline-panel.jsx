@@ -11,6 +11,23 @@ const WEEKDAY_FULL = {
   "พฤ": "พฤหัสบดี", "ศ": "ศุกร์", "ส": "เสาร์"
 };
 
+const MAX_VISIBLE_OVERLAP_LANES = 3;
+
+function groupOverlappingActivities(activities) {
+  return activities.reduce((groups, activity) => {
+    const start = activityDate(activity.start);
+    const end = activityDate(activity.end) || start;
+    const lastGroup = groups.at(-1);
+    if (!lastGroup || start >= lastGroup.end) {
+      groups.push({ start, end, activities: [activity] });
+      return groups;
+    }
+    lastGroup.activities.push(activity);
+    if (end > lastGroup.end) lastGroup.end = end;
+    return groups;
+  }, []);
+}
+
 /**
  * Mini timeline: a small read-only panel of a single day's activities. This
  * is the "back face" of the flip card shared with WeeklySummaryPanel (see
@@ -73,6 +90,7 @@ export default function MiniTimelinePanel({
       return start && isSameDay(start, expandedDate);
     })
     .sort((a, b) => activityDate(a.start) - activityDate(b.start));
+  const timedActivityGroups = groupOverlappingActivities(timedActivities);
 
   // Activity that started the day before expandedDate and bleeds into it —
   // shown as a single dimmed entry at the top of the list, separate from
@@ -169,41 +187,33 @@ export default function MiniTimelinePanel({
           incomingSpillover.length === 0 && <p className="day-timeline-empty">ไม่มีกิจกรรมตามเวลาในวันนี้</p>
         ) : (
           <ol className="mini-timeline">
-            {timedActivities.map((activity) => {
-              const start = activityDate(activity.start);
-              const end = activityDate(activity.end) || start;
-              const color = getDisplayColor(activity, activityCategoryMap, categories);
+            {timedActivityGroups.map((group) => {
+              const hasOverlap = group.activities.length > 1;
+              const visibleLanes = group.activities.slice(0, MAX_VISIBLE_OVERLAP_LANES);
               return (
-                <li key={activity.id} className={`mini-timeline-item${focusedActivityId === activity.id ? " is-focused" : ""}`}>
-                  <div className="mini-timeline-time">{formatTime(start)}</div>
+                <li key={group.activities.map((activity) => activity.id).join("-")} className={`mini-timeline-item${group.activities.some((activity) => focusedActivityId === activity.id) ? " is-focused" : ""}${hasOverlap ? " has-overlap" : ""}`}>
+                  <div className="mini-timeline-time">{formatTime(group.start)}{hasOverlap && <span className="mini-timeline-overlap-badge" title={`${group.activities.length} กิจกรรมทับช่วงเวลาเดียวกัน`}>⧉ {group.activities.length}</span>}</div>
                   <div className="mini-timeline-track">
-                    <span className="mini-timeline-dot" style={{ background: color.border }} />
+                    <span className="mini-timeline-dot" style={{ background: getDisplayColor(group.activities[0], activityCategoryMap, categories).border }} />
                     <span className="mini-timeline-line" />
                   </div>
-                  <div
-                    className="mini-timeline-event"
-                    style={{ background: color.bg, borderLeftColor: color.border }}
-                    title={activity.summary || "(ไม่มีชื่อ)"}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={focusedActivityId === activity.id}
-                    onClick={() => toggleFocusedActivity(activity.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        toggleFocusedActivity(activity.id);
-                      }
-                    }}
-                  >
-                    <AutoShrinkText
-                      text={activity.summary || "(ไม่มีชื่อ)"}
-                      className="mini-timeline-event-title"
-                      minScale={0.5}
-                      baseFontSize="12px"
-                    />
-                    <span className="mini-timeline-event-range">
-                      {formatTime(start)} – {formatTime(end)}
-                    </span>
+                  <div className={`mini-timeline-lanes${hasOverlap ? " is-overlapping" : ""}`}>
+                    {visibleLanes.map((activity) => {
+                      const start = activityDate(activity.start);
+                      const end = activityDate(activity.end) || start;
+                      const color = getDisplayColor(activity, activityCategoryMap, categories);
+                      const isFocused = focusedActivityId === activity.id;
+                      return <div key={activity.id} className={`mini-timeline-event${isFocused ? " is-focused" : ""}`} style={{ background: color.bg, borderLeftColor: color.border }} title={activity.summary || "(ไม่มีชื่อ)"} role="button" tabIndex={0} aria-pressed={isFocused} onClick={() => toggleFocusedActivity(activity.id)} onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleFocusedActivity(activity.id);
+                        }
+                      }}>
+                        <AutoShrinkText text={activity.summary || "(ไม่มีชื่อ)"} className="mini-timeline-event-title" minScale={0.5} baseFontSize="12px" />
+                        <span className="mini-timeline-event-range">{formatTime(start)} – {formatTime(end)}</span>
+                      </div>;
+                    })}
+                    {group.activities.length > MAX_VISIBLE_OVERLAP_LANES && <span className="mini-timeline-overflow-lane" title={`มีอีก ${group.activities.length - MAX_VISIBLE_OVERLAP_LANES} กิจกรรมที่ทับช่วงเวลาเดียวกัน`}>+{group.activities.length - MAX_VISIBLE_OVERLAP_LANES}</span>}
                   </div>
                 </li>
               );
