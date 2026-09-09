@@ -1,25 +1,7 @@
-// ⚠️⚠️⚠️ SCAFFOLD — ยังไม่เคย deploy หรือรันผ่าน Firebase Emulator เลย
-// สักครั้ง (migration plan v2 เฟส 5) — เขียน logic ไว้ครบตามแผน แต่
-// สภาพแวดล้อมที่เขียนโค้ดนี้ไม่มี Firebase CLI/credentials ให้ทดสอบจริง
-// ก่อนเอาไปใช้งานจริงต้อง:
-//   1. รัน `npm install` ในโฟลเดอร์นี้
-//   2. รัน `firebase emulators:start --only functions,firestore` แล้ว
-//      ทดสอบด้วยข้อมูลจำลองก่อน (ใส่ reminder ที่ nextDueAt เป็นอดีตลง
-//      Firestore emulator ตรงๆ แล้วเรียก checkDueReminders ผ่าน
-//      `firebase functions:shell` เพื่อดูว่า query/ส่ง FCM ทำงานถูกต้อง)
-//   3. ตรวจสอบว่า Firestore มี composite index ที่ query ด้านล่างต้องการ
-//      แล้ว (ดูคอมเมนต์เหนือ query) — ถ้าไม่มี Cloud Function จะ throw
-//      error บอก index ที่ขาดพร้อมลิงก์สร้างให้อัตโนมัติ (ปกติของ
-//      Firestore) ต้องคลิกลิงก์นั้นสร้าง index ก่อนถึงจะ deploy ใช้งานได้จริง
-//   4. เริ่ม deploy จริงด้วย schedule ที่ถี่น้อยกว่านี้ก่อน (เช่นทุก 5 นาที
-//      แทน 1 นาที) เพื่อประเมิน cost/invocation count จริงก่อนค่อยลดเวลาลง
-//      ตามที่แผนแนะนำไว้ (เฟส 5 risk note: "ควรประเมิน invocation count
-//      ต่อเดือนไว้ก่อน")
-
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
-const { computeNextDueAt, isOneShotType } = require("./reminder-due-logic.js");
+
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -51,6 +33,7 @@ const RENOTIFY_GUARD_FIELD = "lastNotifiedAt";
  * รับเฉพาะ users/{uid}/modes/reminder-mode/reminders/{id} ตาม schema ปัจจุบัน.
  */
 exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
+  const rules = await import("./domain/reminder-due-logic.js");
   const now = Date.now();
 
   // ใช้ index collection-group (enabled ASC, nextDueAt ASC) ที่ประกาศใน
@@ -64,22 +47,23 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
 
   console.log(`[checkDueReminders] พบ reminder enabled=true ทั้งหมด ${snapshot.size} รายการ ทุก user รวมกัน`);
 
+  const activities = await db.collectionGroup("activity-notifications")
+    .where("enabled", "==", true).where("nextDueAt", "<=", now).get();
+
   const dueDocsGroupedByUser = new Map(); // userId -> [{ ref, data }]
 
-  for (const doc of snapshot.docs) {
+  for (const doc of [...snapshot.docs, ...activities.docs]) {
     const reminder = doc.data();
 
     // filter เงื่อนไขที่เหลือใน memory (ดูเหตุผลใน docstring ด้านบน)
-    if (reminder.completedAt) continue;
-    if (reminder.type === "routine" || reminder.type === "stopwatch") continue;
-    if (!reminder.nextDueAt || reminder.nextDueAt > now) continue;
+    if (!rules.isReminderDue(reminder, now)) continue;
 
     // renotify guard — ข้ามถ้าเคยแจ้งรอบนี้ไปแล้ว (ดูคอมเมนต์ RENOTIFY_GUARD_FIELD ด้านบน)
     const lastNotifiedAt = reminder[RENOTIFY_GUARD_FIELD] || 0;
     if (lastNotifiedAt >= reminder.nextDueAt) continue;
 
     // Validate the full path: the immediate parent document is a mode, not a user.
-    const userId = /^users\/([^/]+)\/modes\/reminder-mode\/reminders\/[^/]+$/.exec(doc.ref.path)?.[1];
+    const userId = /^users\/([^/]+)\/modes\/(?:reminder-mode\/reminders|activity-mode\/activity-notifications)\/[^/]+$/.exec(doc.ref.path)?.[1];
     if (!userId) {
       console.warn(`[checkDueReminders] reminder ${doc.id} ไม่มี parent user document ที่คาดไว้ — ข้าม`);
       continue;
@@ -95,11 +79,11 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
   // reminder ที่ due พร้อมกันของ user คนนั้น ประหยัด Firestore read กว่า
   // ดึง token ซ้ำทุก reminder)
   for (const [userId, dueReminders] of dueDocsGroupedByUser) {
-    await processUserDueReminders(userId, dueReminders, now);
+    await processUserDueReminders(userId, dueReminders, now, rules);
   }
 });
 
-async function processUserDueReminders(userId, dueReminders, now) {
+async function processUserDueReminders(userId, dueReminders, now, { computeNextDueAt, isOneShotType }) {
   const tokensSnapshot = await db.collection("users").doc(userId)
     .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((d) => d.data().token).filter(Boolean);
@@ -108,7 +92,8 @@ async function processUserDueReminders(userId, dueReminders, now) {
     console.log(`[checkDueReminders] user ${userId} ไม่มี FCM token ลงทะเบียนไว้ — ข้ามการส่ง push แต่ยัง update nextDueAt/lastNotifiedAt ตามปกติ`);
   }
 
-  const batch = db.batch();
+  let batch = db.batch();
+  let pendingWrites = 0;
 
   for (const { ref, data: reminder } of dueReminders) {
     if (tokens.length > 0) {
@@ -150,7 +135,7 @@ async function processUserDueReminders(userId, dueReminders, now) {
     // (เหมือน markCompleted()/scheduleNext() ฝั่ง client ทำตอนผู้ใช้กด
     // "เตือนอีกครั้ง" — ที่นี่ทำอัตโนมัติแทนเพราะไม่มีใครเปิดแอปอยู่ให้กด)
     const updates = { [RENOTIFY_GUARD_FIELD]: now };
-    if (isOneShotType(reminder.type)) {
+    if (isOneShotType(reminder.type) || reminder.type === "activity-notification") {
       // one-shot ที่ยิงแล้วไม่มีใคร acknowledge — ปิด enabled เฉยๆ (ไม่ตั้ง
       // completedAt เพราะนั่นเป็น "ผู้ใช้กดทำเสร็จแล้ว" ไม่ใช่ระบบยิงเอง
       // ระวัง: completedAt ก็ไม่ sync ขึ้น backend ตาม design เดิมของเฟส 4
@@ -165,7 +150,12 @@ async function processUserDueReminders(userId, dueReminders, now) {
       updates.nextDueAt = null;
     }
     batch.update(ref, updates);
+    if (++pendingWrites === 450) {
+      await batch.commit();
+      batch = db.batch();
+      pendingWrites = 0;
+    }
   }
 
-  await batch.commit();
+  if (pendingWrites) await batch.commit();
 }

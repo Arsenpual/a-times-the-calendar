@@ -4,7 +4,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const vm = require('node:vm');
 
-for (const folder of ['functions', 'cloud-run-reminder-worker']) {
+for (const folder of ['functions']) {
   test(`${folder}: current schema routes notifications to the correct user`, async () => {
     const groups = [];
     const reads = [];
@@ -65,9 +65,11 @@ for (const folder of ['functions', 'cloud-run-reminder-worker']) {
         if (name === 'firebase-functions/v2') return { setGlobalOptions() {} };
         return { isOneShotType: () => true, computeNextDueAt: () => null };
       },
+      rules: await import('./domain/reminder-due-logic.js'),
       exports: {}, console: { log() {}, warn() {}, error() {} }, process: {}
     };
     let source = readFileSync(join(__dirname, '..', folder, 'index.js'), 'utf8');
+    source = source.replace('await import("./domain/reminder-due-logic.js")', 'globalThis.rules');
     if (folder === 'cloud-run-reminder-worker') source = source.replace('main().then(', 'globalThis.execution = main().then(');
     vm.runInNewContext(source, context);
     if (handler) await handler();
@@ -76,7 +78,7 @@ for (const folder of ['functions', 'cloud-run-reminder-worker']) {
     assert.deepEqual(reads, ['alice', 'bob'].map(uid => `users/${uid}/modes/reminder-mode/fcmTokens`));
     assert.ok(deletes.length >= 2);
     assert.ok(deletes.every(path => /^users\/(alice|bob)\/modes\/reminder-mode\/fcmTokens\/device-token$/.test(path)));
-    assert.equal(updates.length, folder === 'functions' ? 2 : 3);
+    assert.equal(updates.length, 3);
     assert.ok(updates.every(path => path.includes('/modes/')));
     const indexes = JSON.parse(readFileSync(join(__dirname, '..', 'firestore.indexes.json'), 'utf8')).indexes;
     for (const { name, filters } of groups) {

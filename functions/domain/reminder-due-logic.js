@@ -1,52 +1,6 @@
-// Wall-clock intervals anchored to the configured window, including an end
-// boundary only when the frequency lands on it. Overnight windows retain
-// their phase across midnight. An all-day schedule resets at midnight.
-function intervalScheduleMinutes(reminder) {
-  const step = Number(reminder.amount) * (reminder.unit === 'hours' ? 60 : 1);
-  if (!Number.isFinite(step) || step < 1) return [];
-  const parse = value => {
-    if (!/^\d{2}:\d{2}$/.test(value || '')) return null;
-    const [h, m] = value.split(':').map(Number);
-    return h < 24 && m < 60 ? h * 60 + m : null;
-  };
-  const start = parse(reminder.windowStart);
-  const end = parse(reminder.windowEnd);
-  const allDay = start === null || end === null || start === end;
-  const anchor = allDay ? 0 : start;
-  const duration = allDay ? 1440 : (end - start + 1440) % 1440;
-  const slots = [];
-  for (let offset = 0; allDay ? offset < duration : offset <= duration; offset += step) {
-    slots.push((anchor + offset) % 1440);
-  }
-  return [...new Set(slots)].sort((a, b) => a - b);
-}
-
-function nextIntervalDue(reminder, from) {
-  const slots = intervalScheduleMinutes(reminder);
-  for (let day = 0; day < 2; day++) {
-    for (const minute of slots) {
-      const target = new Date(from);
-      target.setDate(target.getDate() + day);
-      target.setHours(Math.floor(minute / 60), minute % 60, 0, 0);
-      if (+target > from) return +target;
-    }
-  }
-  return Infinity;
-}
-
-// ⚠️ สำเนา CommonJS ของ frontend/src/reminder-due-logic.js — ต้องแก้พร้อม
-// กันทั้งสองไฟล์เสมอ (migration plan v2 เฟส 5's known risk: "มีสองที่ที่
-// ต้องคำนวณ due-logic ตรงกัน") repo layout ปัจจุบันมี frontend/ กับ
-// functions/ เป็นคนละ npm package แยกกัน (Vite ESM bundle ฝั่งหนึ่ง,
-// Cloud Functions Node CommonJS อีกฝั่งหนึ่ง) จึง import ข้ามกันตรงๆ
-// ไม่ได้ในสถานะปัจจุบัน — ถ้าในอนาคตทำเป็น npm workspaces จริงจัง ควรรวม
-// เป็นแพ็กเกจกลางแล้วลบไฟล์นี้ทิ้ง ให้ทั้งสองฝั่ง import จากที่เดียวแทน
-//
-// ต้นฉบับที่ถือว่าถูกต้องที่สุดคือ frontend/src/reminder-due-logic.js —
-// ไฟล์นี้ port มาแบบ 1:1 (เปลี่ยนแค่ export syntax จาก ESM เป็น CommonJS)
-// ไม่ได้ปรับ logic ใดๆ เลย
-
-const REMINDER_TYPE = {
+import { nextIntervalDue } from "./interval-schedule.js";
+// Canonical scheduling rules, shared by the browser and Firebase Functions.
+export const REMINDER_TYPE = {
   INTERVAL: "interval",
   WEEKLY: "weekly",
   EVENT_ANCHORED: "event-anchored",
@@ -56,15 +10,15 @@ const REMINDER_TYPE = {
   STOPWATCH: "stopwatch"
 };
 
-function isOneShotType(type) {
+export function isOneShotType(type) {
   return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
 }
 
-function intervalMs(reminder) {
+export function intervalMs(reminder) {
   return reminder.amount * (reminder.unit === "hours" ? 60 * 60 * 1000 : 60 * 1000);
 }
 
-function hasWindow(reminder) {
+export function hasWindow(reminder) {
   return Boolean(reminder.windowStart && reminder.windowEnd);
 }
 
@@ -86,6 +40,12 @@ function isMinuteWithinWindow(minuteOfDay, windowStart, windowEnd) {
   if (start < end) return minuteOfDay >= start && minuteOfDay < end;
   return minuteOfDay >= start || minuteOfDay < end;
 }
+
+// สาม helper ด้านบน export ออกไปด้วย (นอกจากใช้ใน computeNextDueAt เอง)
+// เพราะ reminder-mode.jsx เอาไปใช้ต่อใน getReminderTimeSlots() สำหรับวาด
+// timeline visualization ด้วยเช่นกัน — ไม่ใช่แค่ due-checking — export
+// รวมไว้ที่นี่กันไม่ให้ reminder-mode.jsx ต้องมี copy ซ้ำของฟังก์ชันกลุ่มนี้
+export { minuteOfDayAt, minutesFromHHMM, isMinuteWithinWindow };
 
 function snapToNextWindowStart(ms, windowStart, windowEnd) {
   const minuteOfDay = minuteOfDayAt(ms);
@@ -109,7 +69,15 @@ function nextAllDayIntervalDue(reminder, from) {
     : dayStart.getTime() + nextOffset;
 }
 
-function computeNextDueAt(reminder, from) {
+/**
+ * คำนวณ timestamp ถัดไปที่ reminder นี้ควรยิง — ดู
+ * reminder-mode-deep-dive.md หัวข้อ 3 สำหรับคำอธิบาย logic แต่ละ type
+ * แบบละเอียด (ย้ายมาที่นี่ทั้งไฟล์ไม่ได้เปลี่ยน logic ใดๆ เลยจากต้นฉบับ
+ * ใน reminder-mode.jsx เดิม)
+ * @param {object} reminder
+ * @param {number} from timestamp เริ่มคำนวณจากจุดนี้ (ปกติคือ Date.now())
+ */
+export function computeNextDueAt(reminder, from) {
   switch (reminder.type) {
     case REMINDER_TYPE.WEEKLY: {
       const times = (reminder.times?.length ? reminder.times : [reminder.time]).filter(Boolean).sort();
@@ -142,6 +110,7 @@ function computeNextDueAt(reminder, from) {
     case REMINDER_TYPE.COUNTDOWN:
       return reminder.startedAt + reminder.durationMs;
     case REMINDER_TYPE.STOPWATCH:
+      // Stopwatch จับเวลาอย่างเดียว ไม่มีแจ้งเตือน จึงไม่มี "ถึงกำหนด" ตลอดไป
       return Infinity;
     case REMINDER_TYPE.INTERVAL:
     default: {
@@ -150,7 +119,20 @@ function computeNextDueAt(reminder, from) {
   }
 }
 
-function isReminderDue(reminder, now) {
+/**
+ * True ถ้า reminder นี้ควรปรากฏใน due-checking (banner/push) ตอนนี้ —
+ * รวม logic การกรองที่ checkDue() ใน reminder-mode.jsx ใช้ทั้งหมดไว้ที่นี่
+ * (enabled, ไม่ completedAt, ถึงเวลาแล้ว, ไม่ใช่ routine/stopwatch) เพื่อ
+ * ให้ Cloud Function (เฟส 5) เรียกใช้เงื่อนไขเดียวกันเป๊ะๆ กับ client แทน
+ * ที่จะคัดลอกเงื่อนไข if ซ้ำอีกที่
+ * @param {object} reminder
+ * @param {number} now
+ */
+export function isReminderDue(reminder, now) {
+  // A stale nextDueAt can arrive from an older local record or remote mirror
+  // after the user has edited weekly days. Never alert on a day outside the
+  // selected set, except an explicit user snooze which may intentionally
+  // land on another day.
   const weeklyDayMatches = reminder.type !== REMINDER_TYPE.WEEKLY ||
     reminder.snoozedUntil === reminder.nextDueAt ||
     reminder.days?.includes(new Date(reminder.nextDueAt).getDay());
@@ -160,16 +142,8 @@ function isReminderDue(reminder, now) {
     !!reminder.nextDueAt &&
     reminder.nextDueAt <= now &&
     weeklyDayMatches &&
+    reminder.type !== REMINDER_TYPE.INTERVAL &&
     reminder.type !== REMINDER_TYPE.ROUTINE &&
     reminder.type !== REMINDER_TYPE.STOPWATCH
   );
 }
-
-module.exports = {
-  REMINDER_TYPE,
-  isOneShotType,
-  intervalMs,
-  hasWindow,
-  computeNextDueAt,
-  isReminderDue
-};
