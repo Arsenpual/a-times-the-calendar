@@ -34,10 +34,9 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* Sits at its own natural (shorter) height instead of stretching to
-     match .agenda-view's full-row height beside it — see .dashboard's
-     comment above for why align-items moved off the grid shorthand. */
-  align-self: start;
+  /* Temporarily fill the complete dashboard row so the real height of the
+     redesigned daily panel can be judged without an inner scroll region. */
+  align-self: stretch;
   min-width: 0;
 }
 
@@ -596,8 +595,27 @@
   padding: 8px 2px;
 }
 
+/* Weekly/Cycle summary and Mini Timeline deliberately share one fixed slot
+   in the left column. A selected day flips that slot without shifting Week
+   Spine or the Daily Gantt below it. */
+.flip-card { position: relative; }.flip-face { transition: opacity 180ms ease, transform 180ms ease; }.flip-face-summary { opacity: 1; transform: scale(1); }.flip-face-timeline { position: absolute; inset: 0; opacity: 0; pointer-events: none; transform: scale(.98); }.flip-card.is-flipped .flip-face-summary { position: absolute; inset: 0; opacity: 0; pointer-events: none; transform: scale(.98); }.flip-card.is-flipped .flip-face-timeline { position: static; opacity: 1; pointer-events: auto; transform: scale(1); }.day-timeline-close { font-size: 14px; }
+
+/* Redesigned Mini Timeline, scoped to Activity Mode; Reminder Mode keeps its
+   own timeline untouched. `previewOnly` remains available for isolated UI work. */
+.mini-braid-panel { display: flex; flex-direction: column; gap: 9px; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); }.mini-braid-preview-label { padding: 3px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 10px; }.mini-braid-canvas { position: relative; min-height: 384px; margin: 2px 2px 0 35px; }.mini-braid-hours { position: absolute; top: 0; bottom: 0; left: -35px; width: 30px; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; }.mini-braid-hours span { position: absolute; right: 0; transform: translateY(-50%); }.mini-braid-hours span:first-child { transform: none; }.mini-braid-hours span:last-child { transform: translateY(-100%); }.mini-braid-svg { display: block; width: 100%; height: 384px; overflow: visible; }.mini-braid-hour-line { stroke: color-mix(in srgb, var(--border) 80%, transparent); stroke-width: 1; }.mini-braid-trunk { stroke: color-mix(in srgb, var(--text-secondary) 45%, transparent); stroke-width: 1; }.mini-braid-ribbon { cursor: pointer; transition: opacity 150ms ease, filter 150ms ease; }.mini-braid-ribbon:hover, .mini-braid-ribbon:focus-visible, .mini-braid-ribbon.is-focused { filter: brightness(1.14) drop-shadow(0 0 2px color-mix(in srgb, var(--text-primary) 42%, transparent)); outline: none; }.mini-braid-ribbon.is-dimmed { opacity: .23; }.mini-braid-ribbon.is-spillover { opacity: .52; stroke-dasharray: 2 2; }.mini-braid-overflow { position: absolute; right: 0; display: inline-flex; min-width: 24px; justify-content: center; padding: 2px 5px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; line-height: 1.1; transform: translateY(-50%); }.mini-braid-hint { margin: 0; color: var(--text-secondary); font-size: 10px; line-height: 1.35; }.mini-braid-detail { display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 8px 9px; border: 1px solid color-mix(in srgb, var(--today) 38%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--today) 7%, var(--bg)); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }.mini-braid-detail:hover { background: color-mix(in srgb, var(--today) 13%, var(--bg)); }.mini-braid-detail-color { align-self: stretch; border-radius: 999px; }.mini-braid-detail strong, .mini-braid-detail small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.mini-braid-detail strong { font-size: 12px; }.mini-braid-detail small { margin-top: 2px; color: var(--text-secondary); font-size: 11px; }
+
 /* Mini timeline: a vertical list of activities, each row with a time label,
    a dot-and-line "track" column, and an event chip. */
+
+/* Keep the reference braid's aspect ratio. A minimum drawing width avoids
+   SVG letterboxing that would otherwise separate hour labels from the grid. */
+.mini-braid-scroll { max-height: none; overflow: visible; padding: 8px 0; }
+.mini-braid-scroll .mini-braid-canvas { width: calc(100% - 37px); min-width: 0; margin: 0 2px 0 35px; }
+.mini-braid-scroll .mini-braid-svg { width: 100%; max-width: 100%; }
+.mini-braid-scroll .mini-braid-ribbon:hover,
+.mini-braid-scroll .mini-braid-ribbon:focus-visible,
+.mini-braid-scroll .mini-braid-ribbon.is-focused { filter: none; }
+.mini-braid-scroll .mini-braid-ribbon.is-dimmed { opacity: .35; }
 
 .mini-timeline {
   list-style: none;
