@@ -2,7 +2,9 @@
 .mini-start-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px; }
 .mini-start-item { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 4px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .mini-start-item:hover, .mini-start-item.is-active { background: color-mix(in srgb, var(--border) 55%, transparent); }
-.mini-start-dot { font-size: 23px; line-height: 1; }
+.mini-start-dot { display: inline-block; font-size: 23px; line-height: 1; }
+.mini-start-dot.is-live { animation: mini-led-pulse 1.15s ease-in-out infinite; text-shadow: 0 0 4px currentColor, 0 0 10px currentColor; }
+@keyframes mini-led-pulse { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.2); } }
 .mini-start-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .mini-start-time { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .mini-lanes-body { position: relative; margin: 8px 0 10px 42px; }
@@ -23,3 +25,4 @@
 .mini-lanes-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .mini-lanes-legend i { width: 8px; height: 8px; border-radius: 2px; }
 @media (prefers-reduced-motion: reduce) { .mini-lanes-block { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mini-start-dot.is-live { animation: none; text-shadow: 0 0 6px currentColor; } }

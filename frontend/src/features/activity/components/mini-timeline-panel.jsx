@@ -97,6 +97,12 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
   };
   const [archivedIds, setArchivedIds] = useState(readArchivedIds);
   const [focusedActivityId, setFocusedActivityId] = useState(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (previewOnly) return undefined;
@@ -137,6 +143,8 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
   if (!previewDate) return null;
   const displayDate = new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(previewDate);
   const focused = view.focusedCandidates.find((entry) => entry.activity.id === focusedActivityId) || null;
+  const visibleCategoryIds = new Set(view.timedActivities.map((activity) => previewCategoryMap[activity.id] || activity.categoryId).filter(Boolean));
+  const dayCategories = previewCategories.filter((category) => visibleCategoryIds.has(category.id));
 
   return <aside className="timeline-card mini-lanes-panel">
     <div className="day-timeline-header">
@@ -151,10 +159,13 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
       {view.timedActivities.map((activity) => {
         const color = getDisplayColor(activity, previewCategoryMap, previewCategories);
         const time = formatTime(activityDate(activity.start));
+        const startAt = activityDate(activity.start)?.getTime();
+        const endAt = activityDate(activity.end)?.getTime();
+        const isLive = Number.isFinite(startAt) && Number.isFinite(endAt) && nowTick >= startAt && nowTick < endAt;
         return <button type="button" className={`mini-start-item${focusedActivityId === activity.id ? " is-active" : ""}`} key={activity.id}
           onClick={() => setFocusedActivityId((current) => current === activity.id ? null : activity.id)}
           aria-pressed={focusedActivityId === activity.id}>
-          <span className="mini-start-dot" style={{ color: color.border }} aria-hidden="true">•</span>
+          <span className={`mini-start-dot${isLive ? " is-live" : ""}`} style={{ color: color.border }} aria-label={isLive ? "กำลังทำกิจกรรม" : undefined} aria-hidden="true">•</span>
           <span className="mini-start-name">{activity.summary || "(ไม่มีชื่อ)"}</span>
           <time className="mini-start-time">{time}</time>
         </button>;
@@ -162,9 +173,9 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
     </div>
     {view.timedActivities.length === 0 && <p className="day-timeline-empty">ไม่มีกิจกรรมตามเวลาในวันนี้</p>}
     <div className="mini-lanes-legend" aria-label="สีหมวดหมู่">
-      {previewCategories.map((category) => <span key={category.id}><i style={{ background: category.color }} />{category.name}</span>)}
+      {dayCategories.map((category) => <span key={category.id}><i style={{ background: category.color }} />{category.name}</span>)}
     </div>
-      {focused && <button type="button" className="mini-braid-detail" onClick={() => !previewOnly && onEditActivity?.(focused.activity)}>
+      {focused && <button type="button" className="mini-braid-detail mini-braid-detail-focused" onClick={() => !previewOnly && onEditActivity?.(focused.activity)}>
         <span className="mini-braid-detail-color" style={{ background: getDisplayColor(focused.activity, previewCategoryMap, previewCategories).border }} />
         <span><strong>{focused.activity.summary || "(ไม่มีชื่อ)"}</strong><small>{focused.spillover ? "ต่อเนื่องจากเมื่อคืน · " : ""}{formatTime(activityDate(focused.activity.start))} – {formatTime(activityDate(focused.activity.end))}</small></span><span aria-hidden>›</span>
       </button>}
