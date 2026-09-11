@@ -218,8 +218,8 @@ function MainApp() {
     setIsActivityReading,
     accountMenuOpen,
     setAccountMenuOpen,
-    weeklySummaryGlass,
-    setWeeklySummaryGlass,
+    summaryPanelGlassEnabled,
+    setSummaryPanelGlassEnabled,
     accountMenuRef,
     activityDashboardRef,
     weekSpineHoursPerCell,
@@ -801,6 +801,8 @@ function MainApp() {
                             activityCategoryMap={activityCategoryMap}
                             onSelectWeek={selectCycleWeek}
                             onSelectDay={focusDate}
+                            glass={summaryPanelGlassEnabled}
+                            theme={theme}
                           /> : <WeeklySummaryPanel
                             anchorDate={cursorDate}
                             summary={summary}
@@ -808,7 +810,7 @@ function MainApp() {
                             error={summaryError}
                             onSelectDay={openDay}
                             categories={categories}
-                            glass={weeklySummaryGlass}
+                            glass={summaryPanelGlassEnabled}
                             theme={theme}
                           />}
                     </div>
@@ -946,8 +948,8 @@ function MainApp() {
         onThemeChange={setTheme}
         reminderTimelineColors={reminderTimelineColors}
         onReminderTimelineColorsChange={setReminderTimelineColors}
-        weeklySummaryGlass={weeklySummaryGlass}
-        onWeeklySummaryGlassChange={setWeeklySummaryGlass}
+        summaryPanelGlassEnabled={summaryPanelGlassEnabled}
+        onSummaryPanelGlassChange={setSummaryPanelGlassEnabled}
       />
 
     </div>

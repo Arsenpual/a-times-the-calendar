@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { animate } from "animejs";
-import { activityDate, formatTime, formatWeekRange, getWeekRange, getYearCycle, isSameDay, toDateInputValue, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
+import { activityDate, formatTime, formatWeekRange, getWeekRange, getYearCycle, isSameDay, toDateInputValue, weekOfYear, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
@@ -28,7 +28,34 @@ const WEEK_SPINE_GLANCE_DEMO_DAYS = [
   { day: "อา.", date: "14", total: "1ชม. 30น.", free: "ว่าง 7ชม. 30น.", bars: [[15, "#377d5d"]] },
 ];
 
-function FourWeekOverview({ weekStart, weekCount = 4, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor }) {
+function defaultWeekName(weekStart) {
+  return `สัปดาห์ที่ ${weekOfYear(weekStart)} ของปี ${weekStart.getFullYear()}`;
+}
+
+function weekNameKey(weekStart) {
+  return toDateInputValue(weekStart);
+}
+
+function WeekNameField({ weekStart, weekNames, editingWeekKey, weekNameDraft, onStartEditing, onDraftChange, onCommit, onCancel, className }) {
+  const key = weekNameKey(weekStart);
+  const name = weekNames[key] || defaultWeekName(weekStart);
+  if (editingWeekKey === key) return <input
+    className={`${className} is-editing`}
+    value={weekNameDraft}
+    autoFocus
+    aria-label="ชื่อสัปดาห์"
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => onDraftChange(event.target.value)}
+    onBlur={onCommit}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") event.currentTarget.blur();
+      if (event.key === "Escape") { event.preventDefault(); onCancel(); }
+    }}
+  />;
+  return <button type="button" className={className} onClick={(event) => { event.stopPropagation(); onStartEditing(weekStart); }} title="คลิกเพื่อตั้งชื่อสัปดาห์">{name}</button>;
+}
+
+function FourWeekOverview({ weekStart, weekCount = 4, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, weekNames, editingWeekKey, weekNameDraft, onStartEditingWeekName, onWeekNameDraftChange, onCommitWeekName, onCancelWeekName, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor }) {
   const labels = weekdayShortLabels(language);
   const [focusedWeekStart] = getWeekRange(focusedWeekDate || weekStart);
   const weeks = useMemo(() => Array.from({ length: weekCount }, (_, offset) => {
@@ -49,6 +76,7 @@ function FourWeekOverview({ weekStart, weekCount = 4, focusedWeekDate, activitie
       {weeks.map((week) => <section className={`week-spine-overview-week${isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`} key={week.start.toISOString()} aria-current={isSameDay(week.start, focusedWeekStart) ? "true" : undefined}>
         <header className="week-spine-overview-week-header">
           <h3><button type="button" onClick={(event) => { event.stopPropagation(); onSelectWeek?.(week.start); }}>{formatWeekRange(week.start, language)}</button></h3>
+          <WeekNameField className="week-spine-overview-week-name" weekStart={week.start} weekNames={weekNames} editingWeekKey={editingWeekKey} weekNameDraft={weekNameDraft} onStartEditing={onStartEditingWeekName} onDraftChange={onWeekNameDraftChange} onCommit={onCommitWeekName} onCancel={onCancelWeekName} />
           <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.start); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatWeekRange(week.start, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
         </header>
         {week.allDayActivities.length > 0 && <div className="week-spine-overview-all-day">{week.allDayActivities.slice(0, 3).map((activity) => <span key={activity.calendarId} style={{ "--activity-color": activity.color.border }} title={`กิจกรรมทั้งวัน: ${activity.title}`} />)}{week.allDayActivities.length > 3 && <small>+{week.allDayActivities.length - 3}</small>}</div>}
@@ -159,6 +187,12 @@ export default function ActivityModeWeekSpine({
   const [fourWeekActivities, setFourWeekActivities] = useState([]);
   const [fourWeekLoading, setFourWeekLoading] = useState(false);
   const [fourWeekError, setFourWeekError] = useState("");
+  const weekNamesStorageKey = `times-activity-week-names:${userId || "guest"}`;
+  const [customWeekNames, setCustomWeekNames] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(weekNamesStorageKey) || "{}"); } catch { return {}; }
+  });
+  const [editingWeekNameKey, setEditingWeekNameKey] = useState(null);
+  const [weekNameDraft, setWeekNameDraft] = useState("");
   const archiveStorageKey = `times-activity-archive:${userId || "guest"}`;
   const [activityArchive, setActivityArchive] = useState([]);
   // Makes a restored item render immediately even while the archive write and
@@ -179,6 +213,39 @@ export default function ActivityModeWeekSpine({
   const [archiveTitleToFocus, setArchiveTitleToFocus] = useState(null);
   const effectiveHoursPerCell = timelineFullscreen ? 1 : hoursPerCell;
   useEffect(() => { pendingTimeChangesRef.current = pendingTimeChanges; }, [pendingTimeChanges]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(weekNamesStorageKey) || "{}");
+      setCustomWeekNames(saved && typeof saved === "object" ? saved : {});
+    } catch {
+      setCustomWeekNames({});
+    }
+  }, [weekNamesStorageKey]);
+  useEffect(() => {
+    try { window.localStorage.setItem(weekNamesStorageKey, JSON.stringify(customWeekNames)); } catch { /* preference remains in memory */ }
+  }, [customWeekNames, weekNamesStorageKey]);
+  const startEditingWeekName = (date) => {
+    const key = weekNameKey(date);
+    setWeekNameDraft(customWeekNames[key] || defaultWeekName(date));
+    setEditingWeekNameKey(key);
+  };
+  const commitWeekName = () => {
+    if (!editingWeekNameKey) return;
+    const date = new Date(`${editingWeekNameKey}T00:00:00`);
+    const fallback = defaultWeekName(date);
+    const trimmed = weekNameDraft.trim();
+    setCustomWeekNames((current) => {
+      const next = { ...current };
+      if (!trimmed || trimmed === fallback) delete next[editingWeekNameKey];
+      else next[editingWeekNameKey] = trimmed;
+      return next;
+    });
+    setEditingWeekNameKey(null);
+  };
+  const cancelWeekNameEdit = () => {
+    setEditingWeekNameKey(null);
+    setWeekNameDraft("");
+  };
   const hourMarks = useMemo(() => Array.from({ length: (DAY_END_HOUR - DAY_START_HOUR) / effectiveHoursPerCell + 1 }, (_, index) => DAY_START_HOUR + index * effectiveHoursPerCell), [effectiveHoursPerCell]);
   useEffect(() => {
     document.body.classList.toggle("week-spine-fullscreen-active", timelineFullscreen);
@@ -901,7 +968,7 @@ export default function ActivityModeWeekSpine({
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
-              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} />
+              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} />
         ) : <>
         <section ref={timelineFullscreenSurfaceRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>
@@ -924,16 +991,8 @@ export default function ActivityModeWeekSpine({
           <button type="button" className={hoursPerCell === 2 ? "is-active" : ""} onClick={() => onHoursPerCellChange?.(2)} aria-pressed={hoursPerCell === 2} title="2 ชั่วโมงต่อช่อง">2h</button>
           <button type="button" className={hoursPerCell === 4 ? "is-active" : ""} onClick={() => onHoursPerCellChange?.(4)} aria-pressed={hoursPerCell === 4} title="4 ชั่วโมงต่อช่อง">4h</button>
         </div>}
-        <aside className="week-spine-week-glance-demo" aria-label="ตัวอย่างแถบสถานะสัปดาห์">
-          <span className="week-spine-week-glance-demo-total">สัปดาห์นี้ <strong>29ชม. 45น.</strong></span>
-          <span className="week-spine-week-glance-demo-days" aria-label="สถานะรายวัน">
-            {WEEK_SPINE_GLANCE_DEMO_DAYS.map((item) => <span className="week-spine-week-glance-demo-day" key={item.day} title={`${item.day} ${item.date}: ${item.total}`}>
-              <i style={{ backgroundColor: item.bars[0][1] }} aria-hidden="true" />
-              <b>{item.day} {item.date}</b>
-              <small>{item.total}</small>
-            </span>)}
-          </span>
-          <span className="week-spine-week-glance-demo-today">วันนี้ <strong>6ชม.</strong></span>
+        <aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
+          <WeekNameField className="week-spine-week-name" weekStart={weekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
         </aside>
         <div className="week-spine-hours" aria-hidden="true" style={{ "--week-spine-hour-cell-count": (DAY_END_HOUR - DAY_START_HOUR) / effectiveHoursPerCell }}>
           {hourMarks.map((hour) => <span key={hour} style={{ top: `${((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100}%` }}>{String(hour).padStart(2, "0")}:00</span>)}

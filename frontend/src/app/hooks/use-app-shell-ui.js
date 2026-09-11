@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 
 const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
-const WEEKLY_SUMMARY_GLASS_KEY = "times-weekly-summary-glass";
+const SUMMARY_PANEL_GLASS_KEY = "times-summary-panel-glass";
 
 export function useAppShellUi({ mode, userId }) {
   const [isActivityReading, setIsActivityReading] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [weeklySummaryGlass, setWeeklySummaryGlass] = useState(() => {
+  const [summaryPanelGlassEnabled, setSummaryPanelGlassEnabled] = useState(() => {
     try {
-      return window.localStorage.getItem(WEEKLY_SUMMARY_GLASS_KEY) === "true";
+      const savedValue = window.localStorage.getItem(SUMMARY_PANEL_GLASS_KEY);
+      return (savedValue ?? window.localStorage.getItem("times-weekly-summary-glass")) === "true";
     } catch {
       return false;
     }
@@ -34,11 +35,11 @@ export function useAppShellUi({ mode, userId }) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(WEEKLY_SUMMARY_GLASS_KEY, String(weeklySummaryGlass));
+      window.localStorage.setItem(SUMMARY_PANEL_GLASS_KEY, String(summaryPanelGlassEnabled));
     } catch {
       // The visual preference still works for the current session.
     }
-  }, [weeklySummaryGlass]);
+  }, [summaryPanelGlassEnabled]);
 
   useEffect(() => {
     if (mode !== "activity") setIsActivityReading(false);
@@ -80,8 +81,8 @@ export function useAppShellUi({ mode, userId }) {
     setIsActivityReading,
     accountMenuOpen,
     setAccountMenuOpen,
-    weeklySummaryGlass,
-    setWeeklySummaryGlass,
+    summaryPanelGlassEnabled,
+    setSummaryPanelGlassEnabled,
     accountMenuRef,
     activityDashboardRef,
     weekSpineHoursPerCell,

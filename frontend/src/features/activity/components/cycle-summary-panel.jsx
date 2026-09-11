@@ -43,6 +43,42 @@ function SlowOverflowText({ children }) {
   </strong>;
 }
 
+function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, decorative = false }) {
+  return <>
+    <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
+    <p className="cycle-summary-range">{formatWeekRange(cycleStart)} – {formatWeekRange(new Date(cycleEnd))}</p>
+    {loading && <p className="summary-loading">กำลังคำนวณ Cycle...</p>}
+    {error && <p className="summary-error">{error}</p>}
+    {!loading && !error && <>
+      <div className="cycle-summary-stats">
+        <div><SlowOverflowText>{summary.totalActivities}</SlowOverflowText><span>กิจกรรม</span></div>
+        <div><SlowOverflowText>{formatHours(summary.totalMinutes)}</SlowOverflowText><span>เวลาที่วางแผน</span></div>
+        <div><SlowOverflowText>{summary.activeDays}</SlowOverflowText><span>วันที่มีกิจกรรม</span></div>
+      </div>
+
+      <section className="cycle-summary-weeks" aria-label="สรุปรายสัปดาห์ใน Cycle">
+        <p className="summary-breakdown-label">ภาพรวมแต่ละสัปดาห์</p>
+        <div>{summary.weeks.map((week, index) => <button type="button" key={week.start.toISOString()} disabled={decorative} tabIndex={decorative ? -1 : undefined} onClick={() => onSelectWeek?.(week.start)}>
+          <span>สัปดาห์ {index + 1}</span><strong>{week.count}</strong><small>{formatHours(week.minutes)}</small>
+        </button>)}</div>
+      </section>
+
+      {summary.byCategory.length > 0 && <section className="cycle-summary-categories">
+        <p className="summary-breakdown-label">สัดส่วนตามหมวดหมู่</p>
+        {summary.byCategory.map((category) => <div className="cycle-summary-category" key={category.categoryId || "uncategorized"}>
+          <span className="summary-dot" style={{ background: colorFor(category.categoryId, categories) }} />
+          <span>{category.name}</span><strong>{formatCategoryPercent(category.percent)}</strong><small>{formatHours(category.minutes)}</small>
+        </div>)}
+      </section>}
+
+      {summary.busiestDay && <button type="button" className="summary-busiest-btn" disabled={decorative} tabIndex={decorative ? -1 : undefined} onClick={() => onSelectDay?.(summary.busiestDay.date)}>
+        วันยุ่งที่สุด · {summary.busiestDay.date.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "short" })}
+        <strong>{summary.busiestDay.count} กิจกรรม</strong><span className="summary-busiest-arrow">→</span>
+      </button>}
+    </>}
+  </>;
+}
+
 /**
  * The four-week counterpart to WeeklySummaryPanel. It is intentionally
  * calculated in the browser from the exact activities rendered in Cycle,
@@ -57,7 +93,9 @@ export default function CycleSummaryPanel({
   categories = [],
   activityCategoryMap = {},
   onSelectWeek,
-  onSelectDay
+  onSelectDay,
+  glass = false,
+  theme = "light"
 }) {
   const cycle = getYearCycle(anchorDate);
   const cycleStart = cycle.start;
@@ -109,37 +147,13 @@ export default function CycleSummaryPanel({
     return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
   }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weekCount]);
 
-  return <aside className="summary-panel cycle-summary-panel">
-    <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
-    <p className="cycle-summary-range">{formatWeekRange(cycleStart)} – {formatWeekRange(new Date(cycleEnd))}</p>
-    {loading && <p className="summary-loading">กำลังคำนวณ Cycle...</p>}
-    {error && <p className="summary-error">{error}</p>}
-    {!loading && !error && <>
-      <div className="cycle-summary-stats">
-        <div><SlowOverflowText>{summary.totalActivities}</SlowOverflowText><span>กิจกรรม</span></div>
-        <div><SlowOverflowText>{formatHours(summary.totalMinutes)}</SlowOverflowText><span>เวลาที่วางแผน</span></div>
-        <div><SlowOverflowText>{summary.activeDays}</SlowOverflowText><span>วันที่มีกิจกรรม</span></div>
-      </div>
+  const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
+  if (!glass) return <aside className="summary-panel cycle-summary-panel"><CycleSummaryContent {...content} /></aside>;
 
-      <section className="cycle-summary-weeks" aria-label="สรุปรายสัปดาห์ใน Cycle">
-        <p className="summary-breakdown-label">ภาพรวมแต่ละสัปดาห์</p>
-        <div>{summary.weeks.map((week, index) => <button type="button" key={week.start.toISOString()} onClick={() => onSelectWeek?.(week.start)}>
-          <span>สัปดาห์ {index + 1}</span><strong>{week.count}</strong><small>{formatHours(week.minutes)}</small>
-        </button>)}</div>
-      </section>
-
-      {summary.byCategory.length > 0 && <section className="cycle-summary-categories">
-        <p className="summary-breakdown-label">สัดส่วนตามหมวดหมู่</p>
-        {summary.byCategory.map((category) => <div className="cycle-summary-category" key={category.categoryId || "uncategorized"}>
-          <span className="summary-dot" style={{ background: colorFor(category.categoryId, categories) }} />
-          <span>{category.name}</span><strong>{formatCategoryPercent(category.percent)}</strong><small>{formatHours(category.minutes)}</small>
-        </div>)}
-      </section>}
-
-      {summary.busiestDay && <button type="button" className="summary-busiest-btn" onClick={() => onSelectDay?.(summary.busiestDay.date)}>
-        วันยุ่งที่สุด · {summary.busiestDay.date.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "short" })}
-        <strong>{summary.busiestDay.count} กิจกรรม</strong><span className="summary-busiest-arrow">→</span>
-      </button>}
-    </>}
-  </aside>;
+  return <div className="summary-panel-glass-stack">
+    <aside className={`summary-panel cycle-summary-panel summary-panel--glass-wallpaper is-${theme === "dark" ? "light" : "dark"}`} aria-hidden="true">
+      <CycleSummaryContent {...content} decorative />
+    </aside>
+    <aside className="summary-panel cycle-summary-panel summary-panel--glass"><CycleSummaryContent {...content} /></aside>
+  </div>;
 }

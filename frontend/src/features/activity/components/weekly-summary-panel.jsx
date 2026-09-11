@@ -144,7 +144,7 @@ export default function WeeklySummaryPanel({
   const content = { summary, loading, error, categories, onOpenBusiestDay: openBusiestDay };
   if (!glass) return <aside className="summary-panel"><WeeklySummaryContent {...content} /></aside>;
 
-  return <div className="weekly-summary-glass-stack">
+  return <div className="summary-panel-glass-stack">
     <aside className={`summary-panel summary-panel--glass-wallpaper is-${theme === "dark" ? "light" : "dark"}`} aria-hidden="true">
       <WeeklySummaryContent {...content} decorative />
     </aside>
