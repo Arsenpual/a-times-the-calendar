@@ -82,6 +82,19 @@ function assertAllDayEventShape(event) {
   }
 }
 
+function clearTimedFieldsForAllDayPatch(event) {
+  if (!event?.start?.date || !event?.end?.date) return event;
+  // PATCH merges nested EventDateTime objects. When a timed event is being
+  // converted to all-day, omitting dateTime can leave the old dateTime and
+  // timeZone attached to the nested object, which Calendar rejects as an
+  // invalid start. Null explicitly clears those timed-only fields.
+  return {
+    ...event,
+    start: { ...event.start, dateTime: null, timeZone: null },
+    end: { ...event.end, dateTime: null, timeZone: null }
+  };
+}
+
 async function calendarRequest(userId, url, options = {}) {
   const accessToken = await getFreshAccessToken(userId);
   const response = await fetch(url, {
@@ -124,7 +137,12 @@ router.post("/events", async (req, res, next) => {
 });
 
 router.patch("/events/:eventId", async (req, res, next) => {
-  try { assertAllDayEventShape(req.body); assertRepeatOccurrenceLimit(req.body); res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
+  try {
+    const event = clearTimedFieldsForAllDayPatch(req.body);
+    assertAllDayEventShape(event);
+    assertRepeatOccurrenceLimit(event);
+    res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(event) }));
+  } catch (error) { next(error); }
 });
 
 router.delete("/events/:eventId", async (req, res, next) => {
