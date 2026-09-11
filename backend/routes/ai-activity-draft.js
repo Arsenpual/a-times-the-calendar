@@ -43,15 +43,18 @@ router.post("/activity-draft", async (req, res, next) => {
         title: { type: "STRING" },
         startLocal: { type: "STRING", description: "YYYY-MM-DDTHH:mm in the supplied timezone" },
         endLocal: { type: "STRING", description: "YYYY-MM-DDTHH:mm in the supplied timezone" },
+        allDay: { type: "BOOLEAN", description: "true only when the user explicitly asks for an all-day activity" },
         categoryName: { type: "STRING", description: "One exact category name from the supplied list, or empty string" },
         notes: { type: "STRING" }
       },
-      required: ["title", "startLocal", "endLocal", "categoryName", "notes"]
+      required: ["title", "startLocal", "endLocal", "allDay", "categoryName", "notes"]
     };
     const instruction = [
       "Convert the user's Thai/English request into exactly one calendar activity.",
       `Reference local date: ${referenceDate || "today"}. Timezone: ${timeZone}.`,
       "Infer a reasonable one-hour duration only if an end time or duration is absent.",
+      "Set allDay=true only when the user explicitly requests an all-day activity; otherwise set it to false.",
+      "For allDay=true, still provide local times 00:00 through 00:00 of the following day.",
       "Use only local datetime strings in YYYY-MM-DDTHH:mm; never use UTC/Z.",
       "If a date or time is genuinely missing, use the reference date and 09:00.",
       `Available category names: ${categories.join(", ") || "none"}.`,
@@ -88,7 +91,7 @@ router.post("/activity-draft", async (req, res, next) => {
       return res.status(502).json({ error: `สร้างร่างกิจกรรมไม่สำเร็จ: ${message}` });
     }
     const draft = jsonFromGemini(payload);
-    if (!draft?.title || !draft?.startLocal || !draft?.endLocal) {
+    if (!draft?.title || !draft?.startLocal || !draft?.endLocal || typeof draft.allDay !== "boolean") {
       return res.status(502).json({ error: "Gemini ส่งร่างกิจกรรมไม่ครบ" });
     }
     res.json(draft);

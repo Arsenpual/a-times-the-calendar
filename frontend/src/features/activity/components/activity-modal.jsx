@@ -241,6 +241,13 @@ export default function ActivityModal({
     next.setDate(next.getDate() + amount);
     return toDateInputValue(next);
   };
+  const canonicalAllDayDate = (dateValue) => {
+    const match = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+    const [, year, month, day] = match;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+    return Number.isNaN(parsed.getTime()) || toDateInputValue(parsed) !== dateValue ? "" : dateValue;
+  };
   const toggleAllDay = () => {
     setIsAllDay((current) => {
       const next = !current;
@@ -327,6 +334,16 @@ export default function ActivityModal({
       const hasStart = applyAiDateTime("start", draft.startLocal);
       const hasEnd = applyAiDateTime("end", draft.endLocal);
       if (!hasStart || !hasEnd) throw new Error("Gemini ส่งวันหรือเวลาในรูปแบบที่ใช้ไม่ได้");
+      if (draft.allDay) {
+        const startDate = normalizeAiDateTime(draft.startLocal)?.split("T")[0];
+        const proposedEndDate = normalizeAiDateTime(draft.endLocal)?.split("T")[0];
+        if (!startDate) throw new Error("Gemini ส่งวันเริ่มของกิจกรรมทั้งวันในรูปแบบที่ใช้ไม่ได้");
+        setIsAllDay(true);
+        setDate(startDate);
+        setEndDate(!proposedEndDate || proposedEndDate <= startDate ? datePlusDays(startDate, 1) : proposedEndDate);
+      } else {
+        setIsAllDay(false);
+      }
       if (typeof draft.notes === "string") {
         setNotes(draft.notes);
         setNotesOpen(Boolean(draft.notes));
@@ -454,16 +471,19 @@ export default function ActivityModal({
       description: notes.trim() || null
     };
 
-    const { start, end } = computeStartEnd();
     if (isAllDay) {
-      body.start = { date };
-      body.end = { date: endDate };
+      const startDate = canonicalAllDayDate(date);
+      const endDateExclusive = canonicalAllDayDate(endDate);
+      body.start = { date: startDate };
+      body.end = { date: endDateExclusive };
       if (recurrenceEditable) {
-        const rrule = buildRRule(repeat, start);
-        body.recurrence = rrule ? [rrule] : null;
+        const rrule = buildRRule(repeat, combineDateAndTime(startDate, "00:00"));
+        if (rrule) body.recurrence = [rrule];
+        else if (isEditing && initialActivity?.recurrence?.length) body.recurrence = [];
       }
       return body;
     }
+    const { start, end } = computeStartEnd();
     // Google Calendar requires an explicit IANA timeZone alongside dateTime —
     // it does NOT infer it from the offset embedded in an ISO string, even
     // one ending in "Z". Using the browser's local zone keeps the event
@@ -474,7 +494,8 @@ export default function ActivityModal({
 
     if (recurrenceEditable) {
       const rrule = buildRRule(repeat, start);
-      body.recurrence = rrule ? [rrule] : null;
+      if (rrule) body.recurrence = [rrule];
+      else if (isEditing && initialActivity?.recurrence?.length) body.recurrence = [];
     }
 
     return body;

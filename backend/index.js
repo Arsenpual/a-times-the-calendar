@@ -130,7 +130,8 @@ app.use((err, req, res, next) => {
   if (err.code === "CALENDAR_REAUTH_REQUIRED") {
     return res.status(428).json({ code: err.code, error: err.message });
   }
-  res.status(500).json({ error: "เกิดข้อผิดพลาดฝั่ง backend — ดู log เซิร์ฟเวอร์" });
+  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+  res.status(status).json({ error: err.message || "เกิดข้อผิดพลาดฝั่ง backend — ดู log เซิร์ฟเวอร์" });
 });
 
 // Phase 2: ตัด ensureDefaultCategories() ตอน startup ออก — ของเดิม (Phase

@@ -529,6 +529,10 @@ export default function ActivityModeWeekSpine({
       const track = trackAtPointer(event);
       const day = dayForTrack(track);
       if (!track || !day) return;
+      if (dragged.source?.start?.date && !dragged.source?.start?.dateTime) {
+        setDragged((current) => current?.isDuplicatePlacement ? { ...current, day } : current);
+        return;
+      }
       const pointerMinutes = snapPointerToMinutes(event, track);
       setDragged((current) => {
         if (!current?.isDuplicatePlacement) return current;
@@ -543,6 +547,22 @@ export default function ActivityModeWeekSpine({
       if (!track || !day) return;
       event.preventDefault();
       event.stopPropagation();
+      const isAllDaySource = Boolean(dragged.source?.start?.date && !dragged.source?.start?.dateTime);
+      if (isAllDaySource) {
+        const sourceStart = activityDate(dragged.source.start);
+        const sourceEnd = activityDate(dragged.source.end);
+        const durationDays = Math.max(1, Math.round((sourceEnd - sourceStart) / 86400000));
+        const startDay = new Date(day);
+        startDay.setHours(0, 0, 0, 0);
+        const endDay = new Date(startDay);
+        endDay.setDate(endDay.getDate() + durationDays);
+        setDragged(null);
+        onDuplicateActivity?.(dragged.source, {
+          start: { date: toDateInputValue(startDay) },
+          end: { date: toDateInputValue(endDay) }
+        }).catch((error) => setInteractionWarning(error?.message || "ทำสำเนากิจกรรมไม่สำเร็จ"));
+        return;
+      }
       const pointerMinutes = snapPointerToMinutes(event, track);
       const startMinutes = Math.max(DAY_START_HOUR * 60, Math.min(DAY_END_HOUR * 60 - dragged.durationMinutes, pointerMinutes - dragged.pointerOffsetMinutes));
       const start = dateAtMinutes(day, startMinutes);

@@ -64,6 +64,24 @@ function assertRepeatOccurrenceLimit(event) {
   }
 }
 
+function assertAllDayEventShape(event) {
+  const isAllDay = Boolean(event?.start?.date || event?.end?.date);
+  if (!isAllDay) return;
+  const startDate = event?.start?.date;
+  const endDate = event?.end?.date;
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(startDate || "") || !datePattern.test(endDate || "") || endDate <= startDate) {
+    const error = new Error("กิจกรรมทั้งวันต้องมีวันเริ่มและวันสิ้นสุดที่มากกว่าวันเริ่มอย่างน้อย 1 วัน");
+    error.status = 400;
+    throw error;
+  }
+  if (event.start?.dateTime || event.end?.dateTime) {
+    const error = new Error("กิจกรรมทั้งวันต้องใช้ start.date และ end.date เท่านั้น");
+    error.status = 400;
+    throw error;
+  }
+}
+
 async function calendarRequest(userId, url, options = {}) {
   const accessToken = await getFreshAccessToken(userId);
   const response = await fetch(url, {
@@ -102,11 +120,11 @@ router.get("/events/:eventId", async (req, res, next) => {
 });
 
 router.post("/events", async (req, res, next) => {
-  try { assertRepeatOccurrenceLimit(req.body); res.status(201).json(await calendarRequest(req.userId, EVENTS_BASE, { method: "POST", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
+  try { assertAllDayEventShape(req.body); assertRepeatOccurrenceLimit(req.body); res.status(201).json(await calendarRequest(req.userId, EVENTS_BASE, { method: "POST", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
 });
 
 router.patch("/events/:eventId", async (req, res, next) => {
-  try { assertRepeatOccurrenceLimit(req.body); res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
+  try { assertAllDayEventShape(req.body); assertRepeatOccurrenceLimit(req.body); res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(req.body) })); } catch (error) { next(error); }
 });
 
 router.delete("/events/:eventId", async (req, res, next) => {

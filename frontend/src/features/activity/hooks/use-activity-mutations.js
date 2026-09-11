@@ -519,10 +519,14 @@ export function useActivityMutations({
    */
   const handleDuplicateActivity = async (activity, timeOverride = null) => {
     if (!calendarAccessToken) return;
+    const isAllDay = Boolean(activity?.start?.date && !activity?.start?.dateTime);
+    const safeTimeOverride = isAllDay && timeOverride?.start?.dateTime
+      ? null
+      : timeOverride;
     const body = {
       summary: nextCopySummary(activity.summary),
-      start: timeOverride?.start || activity.start,
-      end: timeOverride?.end || activity.end
+      start: safeTimeOverride?.start || activity.start,
+      end: safeTimeOverride?.end || activity.end
     };
     let created;
     try {
