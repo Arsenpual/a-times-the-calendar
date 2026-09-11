@@ -572,15 +572,32 @@ export function useActivityMutations({
 
     // The caller may have just flushed local timeline changes. React state
     // refreshes asynchronously, so use that just-saved snapshot here too.
-    const savedTimes = new Map(savedTimeChanges.map(({ id, start, end }) => [id, { start: new Date(start), end: new Date(end) }]));
-    const savedCurrentTime = savedTimes.get(rawId);
-    const oldStart = savedCurrentTime?.start || activityDate(activity.start);
-    const oldEnd = savedCurrentTime?.end || activityDate(activity.end);
-    const durationMs = oldEnd - oldStart;
-    const newStart = new Date(y, m - 1, d, oldStart.getHours(), oldStart.getMinutes(), oldStart.getSeconds());
-    const newEnd = new Date(newStart.getTime() + durationMs);
+    const isAllDay = Boolean(activity.start?.date && !activity.start?.dateTime);
+    let body;
 
-    const body = { start: { dateTime: newStart.toISOString() }, end: { dateTime: newEnd.toISOString() } };
+    if (isAllDay) {
+      // Google Calendar represents an all-day event with date-only values;
+      // its end date is exclusive.  Converting it to dateTime here made the
+      // API reject a normal "move to next day" request with a backend 500.
+      const [startYear, startMonth, startDay] = activity.start.date.split("-").map(Number);
+      const [endYear, endMonth, endDay] = (activity.end?.date || activity.start.date).split("-").map(Number);
+      const oldStartDay = Date.UTC(startYear, startMonth - 1, startDay);
+      const oldEndDay = Date.UTC(endYear, endMonth - 1, endDay);
+      const durationDays = Math.max(1, Math.round((oldEndDay - oldStartDay) / 86400000));
+      const newEnd = new Date(y, m - 1, d);
+      newEnd.setDate(newEnd.getDate() + durationDays);
+      const newEndDate = `${newEnd.getFullYear()}-${String(newEnd.getMonth() + 1).padStart(2, "0")}-${String(newEnd.getDate()).padStart(2, "0")}`;
+      body = { start: { date: dateStr }, end: { date: newEndDate } };
+    } else {
+      const savedTimes = new Map(savedTimeChanges.map(({ id, start, end }) => [id, { start: new Date(start), end: new Date(end) }]));
+      const savedCurrentTime = savedTimes.get(rawId);
+      const oldStart = savedCurrentTime?.start || activityDate(activity.start);
+      const oldEnd = savedCurrentTime?.end || activityDate(activity.end);
+      const durationMs = oldEnd - oldStart;
+      const newStart = new Date(y, m - 1, d, oldStart.getHours(), oldStart.getMinutes(), oldStart.getSeconds());
+      const newEnd = new Date(newStart.getTime() + durationMs);
+      body = { start: { dateTime: newStart.toISOString() }, end: { dateTime: newEnd.toISOString() } };
+    }
 
     const conflict = await checkConflict(rawId);
     try {

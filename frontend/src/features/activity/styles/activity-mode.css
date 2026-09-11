@@ -1794,6 +1794,25 @@ html[data-theme="dark"] .new-category-name-input {
   gap: 12px;
 }
 
+.all-day-activity-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.all-day-activity-toggle:hover { border-color: var(--today); color: var(--text-primary); }
+.all-day-activity-toggle.is-active { border-color: var(--today); background: color-mix(in srgb, var(--today) 13%, var(--bg-muted)); color: var(--today); font-weight: 600; }
+
 .modal-field-row .modal-field {
   flex: 1;
 }
@@ -2528,6 +2547,78 @@ html[data-theme="dark"] .new-category-name-input {
   min-height: 30px;
   padding-inline: 10px;
   flex-shrink: 0;
+}
+
+.week-spine-save-bar .week-spine-history-btn {
+  display: grid;
+  width: 30px;
+  place-items: center;
+  padding-inline: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.week-spine-all-day-track-block { overflow: hidden; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%); cursor: pointer; }
+.week-spine-all-day-track-block:hover { filter: brightness(1.08); }
+.week-spine-all-day-track-block.is-locked { cursor: not-allowed; opacity: .62; }
+
+/* Temporary, data-free status strip for the narrow space above the timeline. */
+.week-spine-week-glance-demo {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 25px;
+  gap: 10px;
+  margin-left: 42px;
+  margin-right: 42px;
+  padding: 0 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.week-spine-week-glance-demo-total,
+.week-spine-week-glance-demo-today { flex: 0 0 auto; }
+.week-spine-week-glance-demo strong { color: var(--text-primary); font-weight: 700; }
+
+.week-spine-week-glance-demo-days {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.week-spine-week-glance-demo-day {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 3px;
+  color: var(--text-secondary);
+}
+
+.week-spine-week-glance-demo-day i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.week-spine-week-glance-demo-day b { color: var(--text-primary); font-weight: 600; }
+.week-spine-week-glance-demo-day small { overflow: hidden; font-size: 9px; text-overflow: ellipsis; }
+
+.week-spine-grid-wrap > .week-spine-hours { grid-column: 1; grid-row: 2; }
+.week-spine-grid-wrap > .week-spine-days { grid-column: 2; grid-row: 2; }
+
+@media (max-width: 780px) {
+  .week-spine-week-glance-demo { gap: 6px; margin-left: 32px; margin-right: 36px; font-size: 9px; }
+  .week-spine-week-glance-demo-day small { display: none; }
 }
 
 .activity-archive h3 {

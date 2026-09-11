@@ -1,22 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-import "../styles/mini-timeline-lanes.css";
+import "../styles/mini-timeline-panel.css";
 import { activityDate, formatTime, isSameDay } from "../../../shared/lib/date-utils.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
-import { getIncomingSpillover, MAX_OVERLAP_STACKS } from "../lib/timeline-layout.js";
 import { downloadDayTimelineImage } from "../lib/export-day-image.js";
+import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const WEEKDAY_FULL = { "อา": "อาทิตย์", "จ": "จันทร์", "อ": "อังคาร", "พ": "พุธ", "พฤ": "พฤหัสบดี", "ศ": "ศุกร์", "ส": "เสาร์" };
-const DAY_START_MINUTES = 0;
-const DAY_END_MINUTES = 24 * 60;
-const DAY_MINUTES = DAY_END_MINUTES - DAY_START_MINUTES;
-// 0.475px/min = 28.5px per hour.
-const LANE_PIXELS_PER_MINUTE = 0.475;
-const LANE_HEIGHT = DAY_MINUTES * LANE_PIXELS_PER_MINUTE;
-
-// This first reintroduction is intentionally a visual preview only. Keeping
-// the sample data here lets us judge the new composition without Calendar,
-// archive, or edit side effects changing what is on screen.
+// Static data is used only when the component is opened through the mockup
+// preview. The normal Activity Mode always receives real calendar data.
 const PREVIEW_DATE = new Date(2026, 8, 10);
 const PREVIEW_CATEGORIES = [
   { id: "work", name: "งาน", color: "#3a5a7a" },
@@ -37,50 +29,12 @@ const PREVIEW_ACTIVITIES = [
   return { id, summary, start: { dateTime: at(start) }, end: { dateTime: at(end) }, categoryId };
 });
 
-function minutesFromDayStart(date, day) {
-  const start = new Date(day);
-  start.setHours(0, 0, 0, 0);
-  // Absolute minutes from midnight, independent of the displayed window.
-  return Math.max(0, Math.min(24 * 60, Math.round((date - start) / 60000)));
-}
-
-function clusterAndAssign(entries) {
-  const sorted = [...entries].sort((left, right) => left.startMinutes - right.startMinutes);
-  const clusters = [];
-  let cluster = null;
-  for (const entry of sorted) {
-    if (!cluster || entry.startMinutes >= cluster.endMinutes) {
-      cluster = { startMinutes: entry.startMinutes, endMinutes: entry.endMinutes, entries: [entry] };
-      clusters.push(cluster);
-    } else {
-      cluster.entries.push(entry);
-      cluster.endMinutes = Math.max(cluster.endMinutes, entry.endMinutes);
-    }
-  }
-
-  return clusters.map((current) => {
-    const laneEnds = Array(MAX_OVERLAP_STACKS).fill(-Infinity);
-    const placed = [];
-    const overflow = [];
-    current.entries.forEach((entry) => {
-      const lane = laneEnds.findIndex((end) => end <= entry.startMinutes);
-      if (lane === -1) overflow.push(entry);
-      else {
-        laneEnds[lane] = entry.endMinutes;
-        placed.push({ ...entry, lane });
-      }
-    });
-    const laneCount = Math.max(1, ...placed.map((entry) => entry.lane + 1));
-    return { ...current, entries: placed, laneCount, overflow };
-
-  });
-}
-
 /**
- * Compact, read-only daily activity view used only on Activity Mode's left
- * summary column. Reminder Mode deliberately keeps its existing timeline.
+ * Daily activity list in Activity Mode's summary column. It combines the
+ * start-time list, live-activity card, archive exclusion, blur controls and
+ * direct editing. Reminder Mode keeps its own timeline.
  */
-export default function MiniTimelinePanel({ activities = [], categories = [], activityCategoryMap = {}, expandedDate, onClose, onEditActivity, userId, previewOnly = false }) {
+export default function MiniTimelinePanel({ activities = [], categories = [], activityCategoryMap = {}, lockedActivities = {}, expandedDate, onClose, onEditActivity, userId, previewOnly = false }) {
   const previewDate = previewOnly ? PREVIEW_DATE : expandedDate;
   const previewActivities = previewOnly ? PREVIEW_ACTIVITIES : activities;
   const previewCategories = previewOnly ? PREVIEW_CATEGORIES : categories;
@@ -96,7 +50,7 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
     } catch { return new Set(); }
   };
   const [archivedIds, setArchivedIds] = useState(readArchivedIds);
-  const [focusedActivityId, setFocusedActivityId] = useState(null);
+  const [blurredActivityIds, setBlurredActivityIds] = useState(() => new Set());
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
@@ -111,73 +65,96 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
     window.addEventListener("times-activity-archive-changed", refresh);
     return () => window.removeEventListener("times-activity-archive-changed", refresh);
   }, [archiveStorageKey, userId, previewOnly]);
-  useEffect(() => setFocusedActivityId(null), [previewDate?.getTime()]);
+  useEffect(() => setBlurredActivityIds(new Set()), [previewDate?.getTime()]);
 
-  const view = useMemo(() => {
-    if (!previewDate) return { visibleActivities: [], timedActivities: [], clusters: [], focusedCandidates: [] };
+  const dayView = useMemo(() => {
+    if (!previewDate) return { visibleActivities: [], scheduledActivities: [] };
     const visibleActivities = previewActivities.filter((activity) => !archivedIds.has(activity.id));
-    const timedActivities = visibleActivities.filter((activity) => {
+    const scheduledActivities = visibleActivities.filter((activity) => {
       const start = activityDate(activity.start);
-      return activity.start?.dateTime && start && isSameDay(start, previewDate);
-    }).sort((left, right) => activityDate(left.start) - activityDate(right.start));
-    const incoming = visibleActivities.filter((activity) => activity.start?.dateTime).map((activity) => {
-      const start = activityDate(activity.start);
+      if (!start) return false;
+      const isAllDay = Boolean(activity.start?.date && !activity.start?.dateTime);
+      if (!isAllDay) return Boolean(activity.start?.dateTime) && isSameDay(start, previewDate);
       const end = activityDate(activity.end) || start;
-      const spill = getIncomingSpillover(start, end, previewDate);
-      return spill && spill.spilloverEndMin > DAY_START_MINUTES
-        ? { activity, startMinutes: DAY_START_MINUTES, endMinutes: Math.min(DAY_END_MINUTES, spill.spilloverEndMin), spillover: true }
-        : null;
-    }).filter(Boolean);
-    const regular = timedActivities.map((activity) => {
-      const start = activityDate(activity.start);
-      const end = activityDate(activity.end) || start;
-      const startMinutes = minutesFromDayStart(start, previewDate);
-      const endMinutes = Math.max(startMinutes + 1, minutesFromDayStart(end, previewDate));
-      if (endMinutes <= DAY_START_MINUTES || startMinutes >= DAY_END_MINUTES) return null;
-      return { activity, startMinutes: Math.max(DAY_START_MINUTES, startMinutes), endMinutes: Math.min(DAY_END_MINUTES, endMinutes), spillover: false };
-    }).filter(Boolean);
-    const clusters = clusterAndAssign([...incoming, ...regular]);
-    return { visibleActivities, timedActivities, clusters, focusedCandidates: [...incoming, ...regular] };
+      const dayStart = new Date(previewDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      // Google Calendar all-day end dates are exclusive, so a multi-day
+      // activity appears on every covered day but not on its end date.
+      return start < dayEnd && end > dayStart;
+    }).sort((left, right) => {
+      const leftAllDay = Boolean(left.start?.date && !left.start?.dateTime);
+      const rightAllDay = Boolean(right.start?.date && !right.start?.dateTime);
+      if (leftAllDay !== rightAllDay) return leftAllDay ? -1 : 1;
+      return activityDate(left.start) - activityDate(right.start);
+    });
+    return { visibleActivities, scheduledActivities };
   }, [previewActivities, archivedIds, previewDate]);
 
   if (!previewDate) return null;
-  const displayDate = new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(previewDate);
-  const focused = view.focusedCandidates.find((entry) => entry.activity.id === focusedActivityId) || null;
-  const visibleCategoryIds = new Set(view.timedActivities.map((activity) => previewCategoryMap[activity.id] || activity.categoryId).filter(Boolean));
-  const dayCategories = previewCategories.filter((category) => visibleCategoryIds.has(category.id));
+  const displayedDate = new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(previewDate);
+  const usedCategoryIds = new Set(dayView.scheduledActivities.map((activity) => previewCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId).filter(Boolean));
+  const usedCategories = previewCategories.filter((category) => usedCategoryIds.has(category.id));
 
-  return <aside className="timeline-card mini-lanes-panel">
+  return <aside className="timeline-card mini-timeline-panel">
     <div className="day-timeline-header">
-      <p className="day-timeline-title">{WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]]} ที่ {displayDate}</p>
-      {previewOnly ? <span className="mini-braid-preview-label">ตัวอย่าง</span> : <div className="day-timeline-header-actions">
-        <button type="button" className="day-timeline-nav" onClick={() => downloadDayTimelineImage({ day: previewDate, activities: view.timedActivities, allActivities: view.visibleActivities, categories: previewCategories, activityCategoryMap: previewCategoryMap })} aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ" title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)">📷</button>
+      <p className="day-timeline-title">{WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]]} ที่ {displayedDate}</p>
+      {previewOnly ? <span className="mini-timeline-preview-label">ตัวอย่าง</span> : <div className="day-timeline-header-actions">
+        <button type="button" className="day-timeline-nav" onClick={() => downloadDayTimelineImage({ day: previewDate, activities: dayView.scheduledActivities, allActivities: dayView.visibleActivities, categories: previewCategories, activityCategoryMap: previewCategoryMap })} aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ" title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)">📷</button>
         <button type="button" className="day-timeline-nav day-timeline-close" onClick={() => onClose?.()} aria-label="กลับไปหน้าสรุปสัปดาห์">✕</button>
       </div>}
     </div>
 
     <div className="mini-start-list" aria-label="รายการกิจกรรมตามเวลาเริ่ม">
-      {view.timedActivities.map((activity) => {
+      {dayView.scheduledActivities.map((activity) => {
         const color = getDisplayColor(activity, previewCategoryMap, previewCategories);
-        const time = formatTime(activityDate(activity.start));
+        const isAllDay = Boolean(activity.start?.date && !activity.start?.dateTime);
+        const time = isAllDay ? "ทั้งวัน" : formatTime(activityDate(activity.start));
         const startAt = activityDate(activity.start)?.getTime();
         const endAt = activityDate(activity.end)?.getTime();
         const isLive = Number.isFinite(startAt) && Number.isFinite(endAt) && nowTick >= startAt && nowTick < endAt;
-        return <button type="button" className={`mini-start-item${focusedActivityId === activity.id ? " is-active" : ""}`} key={activity.id}
-          onClick={() => setFocusedActivityId((current) => current === activity.id ? null : activity.id)}
-          aria-pressed={focusedActivityId === activity.id}>
-          <span className={`mini-start-dot${isLive ? " is-live" : ""}`} style={{ color: color.border }} aria-label={isLive ? "กำลังทำกิจกรรม" : undefined} aria-hidden="true">•</span>
-          <span className="mini-start-name">{activity.summary || "(ไม่มีชื่อ)"}</span>
-          <time className="mini-start-time">{time}</time>
-        </button>;
+        const remainingRatio = isLive ? Math.max(0, Math.min(1, (endAt - nowTick) / Math.max(1, endAt - startAt))) : 0;
+        const isLocked = Boolean(lockedActivities[activity.id]);
+        const isBlurred = blurredActivityIds.has(activity.id);
+        const toggleBlur = (event) => {
+          event.stopPropagation();
+          setBlurredActivityIds((current) => {
+            const next = new Set(current);
+            next.has(activity.id) ? next.delete(activity.id) : next.add(activity.id);
+            return next;
+          });
+        };
+        const openEditor = () => {
+          if (!isLocked && !previewOnly) onEditActivity?.(activity);
+        };
+        if (isLive) {
+          const energyPercent = Math.max(0, remainingRatio * 100);
+          return <div className={`mini-start-row${isBlurred ? " is-blurred" : ""}`} key={activity.id}>
+            <button type="button" className="mini-start-visibility" onClick={toggleBlur} aria-label={isBlurred ? "แสดงกิจกรรม" : "เบลอกิจกรรม"} title={isBlurred ? "แสดงกิจกรรม" : "เบลอกิจกรรม"}>👁</button>
+            <button type="button" className={`mini-braid-detail mini-start-live-detail${isLocked ? " is-locked" : ""}`} onClick={openEditor} disabled={isLocked} aria-label={isLocked ? "กิจกรรมถูกล็อก" : `แก้ไข ${activity.summary || "กิจกรรม"}`}>
+              <span className="mini-braid-detail-color" style={{ background: `linear-gradient(to top, ${color.border} 0%, ${color.border} ${energyPercent}%, transparent ${energyPercent}%, transparent 100%)` }} aria-label="พลังงานเวลาที่เหลือ" />
+              <span className="mini-start-live-copy">
+                <span className="mini-start-live-heading"><strong>{activity.summary || "(ไม่มีชื่อ)"}</strong><time>{isAllDay ? "ทั้งวัน" : `${time} – ${formatTime(activityDate(activity.end))}`}</time></span>
+                <small>เหลือ {Math.max(0, Math.ceil((endAt - nowTick) / 60000))} นาที</small>
+              </span>
+              <span aria-hidden>{isLocked ? "🔒" : "›"}</span>
+            </button>
+          </div>;
+        }
+        return <div className={`mini-start-row${isBlurred ? " is-blurred" : ""}`} key={activity.id}>
+          <button type="button" className="mini-start-visibility" onClick={toggleBlur} aria-label={isBlurred ? "แสดงกิจกรรม" : "เบลอกิจกรรม"} title={isBlurred ? "แสดงกิจกรรม" : "เบลอกิจกรรม"}>👁</button>
+          <button type="button" className={`mini-start-item${isLocked ? " is-locked" : ""}`} onClick={openEditor} disabled={isLocked} aria-label={isLocked ? "กิจกรรมถูกล็อก" : `แก้ไข ${activity.summary || "กิจกรรม"}`}>
+            <span className="mini-start-dot" style={{ color: color.border }} aria-hidden="true">•</span>
+            <span className="mini-start-name">{activity.summary || "(ไม่มีชื่อ)"}</span>
+            <time className="mini-start-time">{time}</time>
+          </button>
+        </div>;
       })}
     </div>
-    {view.timedActivities.length === 0 && <p className="day-timeline-empty">ไม่มีกิจกรรมตามเวลาในวันนี้</p>}
-    <div className="mini-lanes-legend" aria-label="สีหมวดหมู่">
-      {dayCategories.map((category) => <span key={category.id}><i style={{ background: category.color }} />{category.name}</span>)}
+    {dayView.scheduledActivities.length === 0 && <p className="day-timeline-empty">ไม่มีกิจกรรมตามเวลาในวันนี้</p>}
+    <div className="mini-timeline-category-legend" aria-label="สีหมวดหมู่">
+      {usedCategories.map((category) => <span key={category.id}><i style={{ background: category.color }} />{category.name}</span>)}
     </div>
-      {focused && <button type="button" className="mini-braid-detail mini-braid-detail-focused" onClick={() => !previewOnly && onEditActivity?.(focused.activity)}>
-        <span className="mini-braid-detail-color" style={{ background: getDisplayColor(focused.activity, previewCategoryMap, previewCategories).border }} />
-        <span><strong>{focused.activity.summary || "(ไม่มีชื่อ)"}</strong><small>{focused.spillover ? "ต่อเนื่องจากเมื่อคืน · " : ""}{formatTime(activityDate(focused.activity.start))} – {formatTime(activityDate(focused.activity.end))}</small></span><span aria-hidden>›</span>
-      </button>}
   </aside>;
 }

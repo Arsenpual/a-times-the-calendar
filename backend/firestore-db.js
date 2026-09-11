@@ -218,6 +218,8 @@ function activityNotificationsCol(userId) {
 const FEATURE_STORAGE_SCHEMA_VERSION = 1;
 const migratedUserIds = new Set();
 const migrationPromises = new Map();
+const repairedActivityCategoryUsers = new Set();
+const activityCategoryRepairPromises = new Map();
 
 function legacyFeatureCollections(userId) {
   const root = userDoc(userId);
@@ -278,6 +280,40 @@ async function migrateUserFeatureStorage(userId) {
     await migration;
   } finally {
     migrationPromises.delete(userId);
+  }
+}
+
+// Some accounts received the feature-storage schema marker before every
+// legacy activity-category mapping had been copied. This repair only fills
+// missing destination documents; current category choices are never replaced.
+async function repairLegacyActivityCategoryMappings(userId) {
+  if (repairedActivityCategoryUsers.has(userId)) return;
+  if (activityCategoryRepairPromises.has(userId)) return activityCategoryRepairPromises.get(userId);
+
+  const repair = (async () => {
+    const legacy = userDoc(userId).collection("activityCategories");
+    const destination = activityCategoriesCol(userId);
+    const [legacySnapshot, destinationSnapshot] = await Promise.all([legacy.get(), destination.get()]);
+    const existingIds = new Set(destinationSnapshot.docs.map((doc) => doc.id));
+    const missing = legacySnapshot.docs.filter((doc) => !existingIds.has(doc.id) && typeof doc.data().categoryId === "string" && doc.data().categoryId);
+
+    for (let start = 0; start < missing.length; start += 450) {
+      const batch = db.batch();
+      missing.slice(start, start + 450).forEach((legacyDoc) => {
+        batch.set(destination.doc(legacyDoc.id), { categoryId: legacyDoc.data().categoryId });
+      });
+      await batch.commit();
+    }
+
+    repairedActivityCategoryUsers.add(userId);
+    if (missing.length > 0) console.log(`[firestore-db] user ${userId}: กู้ ${missing.length} mapping หมวดหมู่ของกิจกรรมเก่า`);
+  })();
+
+  activityCategoryRepairPromises.set(userId, repair);
+  try {
+    await repair;
+  } finally {
+    activityCategoryRepairPromises.delete(userId);
   }
 }
 
@@ -357,6 +393,7 @@ async function ensureDefaultCategoriesForUser(userId) {
   if (seededUserIds.has(userId)) return;
 
   await migrateUserFeatureStorage(userId);
+  await repairLegacyActivityCategoryMappings(userId);
 
   const userRef = userDoc(userId);
   const col = categoriesCol(userId);
@@ -400,5 +437,6 @@ module.exports = {
   activityArchiveCol,
   activityNotificationsCol,
   migrateUserFeatureStorage,
+  repairLegacyActivityCategoryMappings,
   ensureDefaultCategoriesForUser
 };

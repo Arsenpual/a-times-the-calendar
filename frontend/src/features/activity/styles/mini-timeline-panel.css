@@ -1,0 +1,20 @@
+.mini-timeline-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 28px; min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); }
+.mini-start-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px; }
+.mini-start-row { display: grid; grid-template-columns: 25px minmax(0, 1fr); align-items: center; gap: 2px; }
+.mini-start-visibility { width: 25px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font: 14px/1 inherit; cursor: pointer; }
+.mini-start-visibility:hover { background: color-mix(in srgb, var(--border) 55%, transparent); color: var(--text-primary); }
+.mini-start-row.is-blurred > :not(.mini-start-visibility) { filter: blur(3px); }
+.mini-start-item { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 4px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.mini-start-item:hover { background: color-mix(in srgb, var(--border) 55%, transparent); }
+.mini-start-item.is-locked, .mini-start-live-detail.is-locked { cursor: not-allowed; opacity: .62; }
+.mini-start-dot { display: inline-block; font-size: 23px; line-height: 1; }
+.mini-start-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.mini-start-time { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mini-start-live-detail { min-height: 62px; margin: 3px 0; }
+.mini-start-live-copy { min-width: 0; }
+.mini-start-live-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(8px, .3fr); align-items: baseline; gap: 8px; min-width: 0; }
+.mini-start-live-heading strong { min-width: 0; }
+.mini-start-live-heading time { grid-column: 2; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mini-timeline-category-legend { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 10.5px; }
+.mini-timeline-category-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.mini-timeline-category-legend i { width: 8px; height: 8px; border-radius: 2px; }

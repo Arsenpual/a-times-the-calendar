@@ -17,7 +17,7 @@ export const UNCATEGORIZED_COLOR = { name: "ไม่ระบุหมวดห
  */
 
 export function getDisplayColor(activity, activityCategoryMap, categories) {
-  const categoryId = activityCategoryMap[normalizeActivityId(activity.id)];
+  const categoryId = activityCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId;
   if (categoryId) {
     const category = categories.find((c) => c.id === categoryId);
     if (category) {

@@ -131,6 +131,7 @@ export default function ActivityModal({
   const [endDate, setEndDate] = useState(missingFields.includes("end") ? "" : toDateInputValue(initialEnd));
   const [startTime, setStartTime] = useState(missingFields.includes("start") ? "" : toTimeInputValue(initialStart));
   const [endTime, setEndTime] = useState(missingFields.includes("end") ? "" : toTimeInputValue(initialEnd));
+  const [isAllDay, setIsAllDay] = useState(() => Boolean(initialActivity?.start?.date && !initialActivity?.start?.dateTime));
 
   const [categoryId, setCategoryId] = useState(
     (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || ""
@@ -234,6 +235,23 @@ export default function ActivityModal({
   const [editingTimesCleared, setEditingTimesCleared] = useState(false);
 
   const dateTimeValue = (dateValue, timeValue) => dateValue && timeValue ? `${dateValue}T${timeValue}` : "";
+  const datePlusDays = (dateValue, amount) => {
+    if (!dateValue) return "";
+    const next = new Date(`${dateValue}T12:00:00`);
+    next.setDate(next.getDate() + amount);
+    return toDateInputValue(next);
+  };
+  const toggleAllDay = () => {
+    setIsAllDay((current) => {
+      const next = !current;
+      if (next && date && (!endDate || endDate <= date)) setEndDate(datePlusDays(date, 1));
+      if (!next) {
+        if (!startTime) setStartTime("09:00");
+        if (!endTime) setEndTime("10:00");
+      }
+      return next;
+    });
+  };
   const updateDateTime = (kind, value) => {
     const [nextDate = "", nextTime = ""] = value.split("T");
     const shouldAutoSetEnd = !isEditing || missingFields.length > 0 || editingTimesCleared;
@@ -437,6 +455,15 @@ export default function ActivityModal({
     };
 
     const { start, end } = computeStartEnd();
+    if (isAllDay) {
+      body.start = { date };
+      body.end = { date: endDate };
+      if (recurrenceEditable) {
+        const rrule = buildRRule(repeat, start);
+        body.recurrence = rrule ? [rrule] : null;
+      }
+      return body;
+    }
     // Google Calendar requires an explicit IANA timeZone alongside dateTime —
     // it does NOT infer it from the offset embedded in an ISO string, even
     // one ending in "Z". Using the browser's local zone keeps the event
@@ -454,7 +481,9 @@ export default function ActivityModal({
   };
 
   const validate = () => {
+    if (!date || !endDate) return "กรุณาระบุวันเริ่มและวันสิ้นสุด";
     if (endDate < date) return "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม";
+    if (isAllDay && endDate <= date) return "กิจกรรมทั้งวันต้องสิ้นสุดอย่างน้อยวันถัดไป";
     // endTime <= startTime (เทียบ string "HH:mm") ไม่ใช่ error เสมอไป —
     // ตีความว่าเป็นกิจกรรมข้ามเที่ยงคืน (เช่น 23:00 - 00:30) แล้วเลื่อน
     // end ไปวันถัดไปให้ตอน buildActivityBody() แทนที่จะบล็อกไม่ให้บันทึก
@@ -466,6 +495,7 @@ export default function ActivityModal({
     if (repeat.mode === "custom" && repeat.end === "until" && !repeat.until) {
       return "กรุณาระบุวันที่สิ้นสุดการทำซ้ำ";
     }
+    if (isAllDay) return null;
 
     // เตือน (ไม่บล็อก) ถ้าการเลื่อน end ไปวันถัดไปแบบอัตโนมัติ (ดู
     // computeStartEnd) ทำให้กิจกรรมยาวผิดปกติ (> 18 ชม.) — เคสนี้มักเกิด
@@ -492,10 +522,12 @@ export default function ActivityModal({
       // (with the same date/time) passes validate() and actually saves.
       // Any other validation error leaves this false, so it keeps
       // blocking normally.
-      const { start: durationStart, end: durationEnd } = computeStartEnd();
-      const durationHours = (durationEnd - durationStart) / 3600000;
-      if (durationHours > 18) {
-        setOvernightWarningAcknowledged(true);
+      if (!isAllDay) {
+        const { start: durationStart, end: durationEnd } = computeStartEnd();
+        const durationHours = (durationEnd - durationStart) / 3600000;
+        if (durationHours > 18) {
+          setOvernightWarningAcknowledged(true);
+        }
       }
       return;
     }
@@ -576,17 +608,26 @@ export default function ActivityModal({
             />
           </label>
 
+          <button type="button" className={`all-day-activity-toggle${isAllDay ? " is-active" : ""}`} onClick={toggleAllDay} aria-pressed={isAllDay}>
+            <span aria-hidden="true">◷</span>
+            <span>กิจกรรมทั้งวัน</span>
+          </button>
+
           <div className="modal-field-row">
             <label className={`modal-field${startMissing ? " is-required-missing" : ""}`}>
-              <span className="field-label">วันและเวลาเริ่ม</span>
-              <input type="datetime-local" value={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />
+              <span className="field-label">{isAllDay ? "วันเริ่ม" : "วันและเวลาเริ่ม"}</span>
+              {isAllDay
+                ? <input type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!endDate || endDate <= e.target.value) setEndDate(datePlusDays(e.target.value, 1)); }} required />
+                : <input type="datetime-local" value={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />}
             </label>
             <label className={`modal-field${endMissing ? " is-required-missing" : ""}`}>
-              <span className="field-label">วันและเวลาสิ้นสุด</span>
-              <input type="datetime-local" value={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />
+              <span className="field-label">{isAllDay ? "วันสิ้นสุด" : "วันและเวลาสิ้นสุด"}</span>
+              {isAllDay
+                ? <input type="date" value={endDate} min={datePlusDays(date, 1)} onChange={(e) => setEndDate(e.target.value)} required />
+                : <input type="datetime-local" value={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />}
             </label>
           </div>
-          {endDate === date && endTime <= startTime && (
+          {isAllDay ? <p className="modal-hint">กิจกรรมทั้งวันใช้วันสิ้นสุดแบบไม่รวมวันนั้น เช่น 10 ก.ย. วันเดียว ระบบจะกำหนดสิ้นสุดเป็น 11 ก.ย.</p> : endDate === date && endTime <= startTime && (
             <p className="modal-hint">
               ⏰ เวลาสิ้นสุดอยู่ก่อนเวลาเริ่ม — ระบบจะถือว่ากิจกรรมนี้จบในวันถัดไป (ข้ามเที่ยงคืน)
             </p>

@@ -813,6 +813,7 @@ function MainApp() {
                         activities={visibleActivities}
                         categories={categories}
                         activityCategoryMap={activityCategoryMap}
+                        lockedActivities={lockedActivities}
                         userId={firebaseUser.uid}
                         expandedDate={expandedDate}
                         onClose={closeDay}
