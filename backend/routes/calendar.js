@@ -95,6 +95,17 @@ function clearTimedFieldsForAllDayPatch(event) {
   };
 }
 
+function clearAllDayFieldsForTimedPatch(event) {
+  if (!event?.start?.dateTime || !event?.end?.dateTime) return event;
+  // The inverse conversion needs the same treatment: remove the old
+  // date-only value before Calendar validates the new RFC3339 dateTime.
+  return {
+    ...event,
+    start: { ...event.start, date: null },
+    end: { ...event.end, date: null }
+  };
+}
+
 async function calendarRequest(userId, url, options = {}) {
   const accessToken = await getFreshAccessToken(userId);
   const response = await fetch(url, {
@@ -138,7 +149,7 @@ router.post("/events", async (req, res, next) => {
 
 router.patch("/events/:eventId", async (req, res, next) => {
   try {
-    const event = clearTimedFieldsForAllDayPatch(req.body);
+    const event = clearAllDayFieldsForTimedPatch(clearTimedFieldsForAllDayPatch(req.body));
     assertAllDayEventShape(event);
     assertRepeatOccurrenceLimit(event);
     res.json(await calendarRequest(req.userId, `${EVENTS_BASE}/${encodeURIComponent(req.params.eventId)}`, { method: "PATCH", body: JSON.stringify(event) }));
