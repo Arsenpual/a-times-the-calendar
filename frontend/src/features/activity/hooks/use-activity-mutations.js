@@ -79,9 +79,17 @@ export function useActivityMutations({
 
   // Firestore mirror ไม่ใช่ source of truth ของ activity: Google Calendar
   // save สำเร็จแล้วจึง mirror เฉพาะเวลาเริ่มเพื่อให้ Cloud Run แจ้งเตือนได้.
+  // All-day activities deliberately never enter this notification pipeline.
   const syncActivityNotification = async (activity) => {
+    if (!activity?.id) return;
+    if (activity.start?.date && !activity.start?.dateTime) {
+      // Also remove an old mirror when a timed activity is converted to
+      // all-day, so an already-queued notification cannot still fire.
+      await deleteActivityNotification(activity.id);
+      return;
+    }
     const startAt = activityDate(activity?.start)?.getTime();
-    if (!activity?.id || !Number.isFinite(startAt)) return;
+    if (!Number.isFinite(startAt)) return;
     const endAt = activityDate(activity.end)?.getTime();
     await saveActivityNotification({
       activityId: activity.id,

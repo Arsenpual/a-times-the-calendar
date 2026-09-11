@@ -5,7 +5,7 @@
 // เสมอ มิฉะนั้นกิจกรรมที่ทำซ้ำจะหาหมวดหมู่/lock ไม่เจอ
 //
 // เดิม logic นี้ถูก copy-paste ซ้ำใน activity-categories.js, summary.js,
-// activity-colors.js, timeline-editor.jsx — รวมเป็นไฟล์เดียวเพื่อไม่ให้จุดใหม่
+// activity-colors.js, week-spine-data.js — รวมเป็นไฟล์เดียวเพื่อไม่ให้จุดใหม่
 // ที่เพิ่มเข้ามาทีหลังลืม normalize (เกิดขึ้นแล้วใน activity-modal.jsx และ
 // app.jsx)
 export function normalizeActivityId(id) {

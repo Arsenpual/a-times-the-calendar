@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { animate } from "animejs";
-import { activityDate, formatTime, formatWeekRange, getWeekRange, isSameDay, toDateInputValue, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
+import { activityDate, formatTime, formatWeekRange, getWeekRange, getYearCycle, isSameDay, toDateInputValue, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
@@ -28,16 +28,17 @@ const WEEK_SPINE_GLANCE_DEMO_DAYS = [
   { day: "อา.", date: "14", total: "1ชม. 30น.", free: "ว่าง 7ชม. 30น.", bars: [[15, "#377d5d"]] },
 ];
 
-function FourWeekOverview({ weekStart, activities, categories, activityCategoryMap, lockedActivities, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor }) {
+function FourWeekOverview({ weekStart, weekCount = 4, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor }) {
   const labels = weekdayShortLabels(language);
-  const weeks = useMemo(() => Array.from({ length: 4 }, (_, offset) => {
+  const [focusedWeekStart] = getWeekRange(focusedWeekDate || weekStart);
+  const weeks = useMemo(() => Array.from({ length: weekCount }, (_, offset) => {
     const start = new Date(weekStart);
     start.setDate(start.getDate() + offset * 7);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     const { timedSegments, allDayActivities } = buildWeekSpineData({ activities, weekStart: start, weekEnd: end, activityCategoryMap, categories, lockedActivities });
     return { start, end, timedSegments, allDayActivities };
-  }), [weekStart.getTime(), activities, activityCategoryMap, categories, lockedActivities]);
+  }), [weekStart.getTime(), weekCount, activities, activityCategoryMap, categories, lockedActivities]);
 
   return <section className="week-spine-four-week" aria-label="Cycle สี่สัปดาห์ อ่านอย่างเดียว">
     <div className="week-spine-overview-cycle-nav" aria-label="เปลี่ยน Cycle">
@@ -45,7 +46,7 @@ function FourWeekOverview({ weekStart, activities, categories, activityCategoryM
       <button type="button" onClick={() => onNavigateCycle?.(1)} aria-label="Cycle ถัดไป">›</button>
     </div>
     <div className="week-spine-four-week-grid">
-      {weeks.map((week) => <section className="week-spine-overview-week" key={week.start.toISOString()}>
+      {weeks.map((week) => <section className={`week-spine-overview-week${isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`} key={week.start.toISOString()} aria-current={isSameDay(week.start, focusedWeekStart) ? "true" : undefined}>
         <header className="week-spine-overview-week-header">
           <h3><button type="button" onClick={(event) => { event.stopPropagation(); onSelectWeek?.(week.start); }}>{formatWeekRange(week.start, language)}</button></h3>
           <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.start); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatWeekRange(week.start, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
@@ -126,7 +127,8 @@ export default function ActivityModeWeekSpine({
 }) {
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
-  const [cycleStart] = getWeekRange(cycleStartDate || anchorDate);
+  const cycle = getYearCycle(cycleStartDate || anchorDate);
+  const cycleStart = cycle.start;
   const [selectedDay, setSelectedDay] = useState(anchorDate);
   const [draft, setDraft] = useState(null);
   const [dragged, setDragged] = useState(null);
@@ -207,12 +209,7 @@ export default function ActivityModeWeekSpine({
     day.setDate(day.getDate() + offset);
     return day;
   }), [weekStart.getTime()]);
-  const fourWeekEnd = useMemo(() => {
-    const end = new Date(cycleStart);
-    end.setDate(end.getDate() + 27);
-    end.setHours(23, 59, 59, 999);
-    return end;
-  }, [cycleStart.getTime()]);
+  const fourWeekEnd = cycle.end;
   useEffect(() => {
     if (viewMode !== "four-weeks" || !calendarAccessToken) return undefined;
     let cancelled = false;
@@ -904,7 +901,7 @@ export default function ActivityModeWeekSpine({
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
-              : <FourWeekOverview weekStart={cycleStart} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} />
+              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} />
         ) : <>
         <section ref={timelineFullscreenSurfaceRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>

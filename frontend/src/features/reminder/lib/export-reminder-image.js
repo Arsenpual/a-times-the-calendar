@@ -50,6 +50,9 @@ export function renderReminderTimelineToCanvas({
     .sort((a, b) => a.at - b.at);
   const blocks = activities.flatMap(activity => {
     if (activity.archived || activity.isArchived || activity.status === "cancelled") return [];
+    // The exported Reminder timeline follows Reminder Mode itself: date-only
+    // all-day events are managed in Activity Mode and are intentionally out.
+    if (!activity.start?.dateTime) return [];
     const start = activityDate(activity.start);
     const end = activityDate(activity.end);
     if (!start || !end || !Number.isFinite(+start) || !Number.isFinite(+end) ||

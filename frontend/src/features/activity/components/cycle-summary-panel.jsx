@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { activityDate, formatWeekRange, getWeekRange } from "../../../shared/lib/date-utils.js";
+import { activityDate, formatWeekRange, getYearCycle } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
@@ -59,16 +59,12 @@ export default function CycleSummaryPanel({
   onSelectWeek,
   onSelectDay
 }) {
-  const [cycleStart] = getWeekRange(anchorDate);
-  const cycleEnd = useMemo(() => {
-    const end = new Date(cycleStart);
-    end.setDate(end.getDate() + 27);
-    end.setHours(23, 59, 59, 999);
-    return end;
-  }, [cycleStart]);
+  const cycle = getYearCycle(anchorDate);
+  const cycleStart = cycle.start;
+  const cycleEnd = cycle.end;
 
   const summary = useMemo(() => {
-    const weeks = Array.from({ length: 4 }, (_, index) => {
+    const weeks = Array.from({ length: cycle.weekCount }, (_, index) => {
       const start = new Date(cycleStart);
       start.setDate(start.getDate() + index * 7);
       return { start, count: 0, minutes: 0 };
@@ -90,7 +86,7 @@ export default function CycleSummaryPanel({
       previous.count += 1;
       categoryStats.set(categoryId, previous);
 
-      const weekIndex = Math.min(3, Math.max(0, Math.floor((start - cycleStart) / (7 * 24 * 60 * 60 * 1000))));
+      const weekIndex = Math.min(cycle.weekCount - 1, Math.max(0, Math.floor((start - cycleStart) / (7 * 24 * 60 * 60 * 1000))));
       weeks[weekIndex].count += 1;
       weeks[weekIndex].minutes += minutes;
 
@@ -111,7 +107,7 @@ export default function CycleSummaryPanel({
       .sort((left, right) => right.minutes - left.minutes);
     const busiestDay = [...dayStats.values()].sort((left, right) => right.count - left.count)[0] || null;
     return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
-  }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd]);
+  }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weekCount]);
 
   return <aside className="summary-panel cycle-summary-panel">
     <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>

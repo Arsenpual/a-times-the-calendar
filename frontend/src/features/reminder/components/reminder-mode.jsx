@@ -721,6 +721,9 @@ export default function ReminderDashboard({
 
     const blocks = activities
       .map((activity) => {
+        // All-day activities belong only to Activity Mode. They have no
+        // concrete time-of-day and must not appear on Reminder's timeline.
+        if (!activity.start?.dateTime) return null;
         const start = activityDate(activity.start);
         if (!start || Number.isNaN(start.getTime())) return null;
 

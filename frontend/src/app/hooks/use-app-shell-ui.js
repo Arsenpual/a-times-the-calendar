@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
 const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
+const WEEKLY_SUMMARY_GLASS_KEY = "times-weekly-summary-glass";
 
 export function useAppShellUi({ mode, userId }) {
   const [isActivityReading, setIsActivityReading] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [weeklySummaryGlass, setWeeklySummaryGlass] = useState(() => {
+    try {
+      return window.localStorage.getItem(WEEKLY_SUMMARY_GLASS_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [weekSpineHoursPerCell, setWeekSpineHoursPerCell] = useState(() => {
     try {
       const savedValue = Number(window.localStorage.getItem(WEEK_SPINE_HOURS_PER_CELL_KEY));
@@ -23,6 +31,14 @@ export function useAppShellUi({ mode, userId }) {
       // The default grid remains available when local storage is unavailable.
     }
   }, [weekSpineHoursPerCell]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WEEKLY_SUMMARY_GLASS_KEY, String(weeklySummaryGlass));
+    } catch {
+      // The visual preference still works for the current session.
+    }
+  }, [weeklySummaryGlass]);
 
   useEffect(() => {
     if (mode !== "activity") setIsActivityReading(false);
@@ -64,6 +80,8 @@ export function useAppShellUi({ mode, userId }) {
     setIsActivityReading,
     accountMenuOpen,
     setAccountMenuOpen,
+    weeklySummaryGlass,
+    setWeeklySummaryGlass,
     accountMenuRef,
     activityDashboardRef,
     weekSpineHoursPerCell,

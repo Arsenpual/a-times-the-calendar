@@ -76,6 +76,42 @@ function CategoryPieChart({ byCategory, categories }) {
   );
 }
 
+function WeeklySummaryContent({ summary, loading, error, categories, onOpenBusiestDay, decorative = false }) {
+  return <>
+    <p className="summary-label">สรุปสัปดาห์นี้</p>
+
+    {loading && <p className="summary-loading">กำลังคำนวณ...</p>}
+    {error && <p className="summary-error">{error}</p>}
+
+    {summary && !loading && <>
+      <p className="summary-total">{summary.totalActivities} กิจกรรม</p>
+
+      {summary.byCategory.length > 0 && <div className="summary-breakdown">
+        <p className="summary-breakdown-label">สัดส่วนตามหมวดหมู่</p>
+        <div className="summary-pie-row">
+          <CategoryPieChart byCategory={summary.byCategory} categories={categories} />
+          <div className="summary-legend">
+            {summary.byCategory.map((c) => <div key={c.categoryId || "none"} className="summary-legend-item">
+              <span className="summary-dot" style={{ background: resolveCategoryColor(c.categoryId, categories) }} />
+              {c.name} {c.percent}%
+            </div>)}
+          </div>
+        </div>
+      </div>}
+
+      {summary.insight && <div className="summary-insight">{summary.insight}</div>}
+
+      {summary.busiestDay && <div>
+        <p className="summary-breakdown-label">วันที่ยุ่งที่สุด</p>
+        <button className="summary-busiest-btn" onClick={onOpenBusiestDay} disabled={decorative} tabIndex={decorative ? -1 : undefined}>
+          {WEEKDAY_FULL[summary.busiestDay.day] || summary.busiestDay.day} — {summary.busiestDay.count} กิจกรรม
+          <span className="summary-busiest-arrow">→</span>
+        </button>
+      </div>}
+    </>}
+  </>;
+}
+
 /**
  * Weekly stats card: totals, category breakdown (pie chart), insight, and a
  * shortcut to open the busiest day's timeline. Day selection otherwise
@@ -92,7 +128,9 @@ export default function WeeklySummaryPanel({
   loading,
   error,
   onSelectDay,
-  categories
+  categories,
+  glass = false,
+  theme = "light"
 }) {
   const [weekStart] = getWeekRange(anchorDate);
 
@@ -103,51 +141,15 @@ export default function WeeklySummaryPanel({
     onSelectDay?.(date);
   };
 
-  return (
-    <aside className="summary-panel">
-      <p className="summary-label">สรุปสัปดาห์นี้</p>
+  const content = { summary, loading, error, categories, onOpenBusiestDay: openBusiestDay };
+  if (!glass) return <aside className="summary-panel"><WeeklySummaryContent {...content} /></aside>;
 
-      {loading && <p className="summary-loading">กำลังคำนวณ...</p>}
-      {error && <p className="summary-error">{error}</p>}
-
-      {summary && !loading && (
-        <>
-          <p className="summary-total">{summary.totalActivities} กิจกรรม</p>
-
-          {summary.byCategory.length > 0 && (
-            <div className="summary-breakdown">
-              <p className="summary-breakdown-label">สัดส่วนตามหมวดหมู่</p>
-              <div className="summary-pie-row">
-                <CategoryPieChart byCategory={summary.byCategory} categories={categories} />
-                <div className="summary-legend">
-                  {summary.byCategory.map((c) => (
-                    <div key={c.categoryId || "none"} className="summary-legend-item">
-                      <span
-                        className="summary-dot"
-                        style={{ background: resolveCategoryColor(c.categoryId, categories) }}
-                      />
-                      {c.name} {c.percent}%
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {summary.insight && <div className="summary-insight">{summary.insight}</div>}
-
-          {summary.busiestDay && (
-            <div>
-              <p className="summary-breakdown-label">วันที่ยุ่งที่สุด</p>
-              <button className="summary-busiest-btn" onClick={openBusiestDay}>
-                {WEEKDAY_FULL[summary.busiestDay.day] || summary.busiestDay.day} —{" "}
-                {summary.busiestDay.count} กิจกรรม
-                <span className="summary-busiest-arrow">→</span>
-              </button>
-            </div>
-          )}
-        </>
-      )}
+  return <div className="weekly-summary-glass-stack">
+    <aside className={`summary-panel summary-panel--glass-wallpaper is-${theme === "dark" ? "light" : "dark"}`} aria-hidden="true">
+      <WeeklySummaryContent {...content} decorative />
     </aside>
-  );
+    <aside className="summary-panel summary-panel--glass">
+      <WeeklySummaryContent {...content} />
+    </aside>
+  </div>;
 }

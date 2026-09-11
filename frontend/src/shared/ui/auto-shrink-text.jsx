@@ -6,7 +6,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
  * width. A binary search finds the largest fitting continuous scale rather
  * than choosing from a few visibly-jumpy preset sizes.
  *
- * Used for activity titles in TimelineEditor and Week Spine, where a
+ * Used for activity titles in Week Spine and Mini Timeline, where a
  * long title being unreadable behind "..." was worse than a slightly
  * smaller (but fully legible) label — these are short single-line labels
  * where losing text isn't acceptable, unlike e.g. multi-line descriptions

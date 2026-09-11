@@ -27,8 +27,10 @@ export function useActivityContextMenu() {
     setActivityContextMenu({
       block,
       position: {
-        x: Math.min(event.clientX, window.innerWidth - 224),
-        y: Math.min(event.clientY, window.innerHeight - 252)
+        // ActivityPopup owns its final collision handling after it knows its
+        // actual rendered size. Keep the true pointer location here.
+        x: event.clientX,
+        y: event.clientY
       }
     });
   };

@@ -38,7 +38,9 @@ export default function SettingsDrawer({
   theme,
   onThemeChange,
   reminderTimelineColors,
-  onReminderTimelineColorsChange
+  onReminderTimelineColorsChange,
+  weeklySummaryGlass = false,
+  onWeeklySummaryGlassChange
 }) {
   const { language, setLanguage, t } = useLanguage();
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
@@ -88,6 +90,23 @@ export default function SettingsDrawer({
                 aria-checked={theme === "dark"}
                 aria-label={t("settings.darkMode")}
                 onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
+              >
+                <span className="settings-toggle-knob" />
+              </button>
+            </div>
+
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <span className="settings-row-title">{t("settings.weeklySummaryGlass")}</span>
+                <span className="settings-row-desc">{t("settings.weeklySummaryGlassDesc")}</span>
+              </div>
+              <button
+                type="button"
+                className={`settings-toggle${weeklySummaryGlass ? " is-on" : ""}`}
+                role="switch"
+                aria-checked={weeklySummaryGlass}
+                aria-label={t("settings.weeklySummaryGlass")}
+                onClick={() => onWeeklySummaryGlassChange?.(!weeklySummaryGlass)}
               >
                 <span className="settings-toggle-knob" />
               </button>

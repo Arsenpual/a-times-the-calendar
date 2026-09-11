@@ -163,6 +163,39 @@ export function totalWeeksInYear(year) {
   return weekOfYear(new Date(year, 11, 31));
 }
 
+/**
+ * Returns the fixed four-week Cycle that contains `date`.
+ *
+ * Cycles always begin with week 1 of the calendar year (the Sunday-start
+ * week containing 1 January), never with whichever week happened to be
+ * selected when the user opened Cycle view. The final Cycle may contain
+ * fewer than four weeks so it never leaks into the following year.
+ */
+export function getYearCycle(date, cycleWeeks = 4) {
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const year = safeDate.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const [firstWeekStart] = getWeekRange(jan1);
+  const [selectedWeekStart] = getWeekRange(safeDate);
+  const weekIndex = Math.max(0, Math.floor((selectedWeekStart - firstWeekStart) / (7 * 24 * 60 * 60 * 1000)));
+  const totalWeeks = totalWeeksInYear(year);
+  const cycleIndex = Math.min(Math.floor(weekIndex / cycleWeeks), Math.ceil(totalWeeks / cycleWeeks) - 1);
+  const start = new Date(firstWeekStart);
+  start.setDate(start.getDate() + cycleIndex * cycleWeeks * 7);
+  const weekCount = Math.min(cycleWeeks, totalWeeks - cycleIndex * cycleWeeks);
+  const end = new Date(start);
+  end.setDate(end.getDate() + weekCount * 7 - 1);
+  end.setHours(23, 59, 59, 999);
+  return {
+    year,
+    start,
+    end,
+    weekCount,
+    cycleNumber: cycleIndex + 1,
+    totalCycles: Math.ceil(totalWeeks / cycleWeeks)
+  };
+}
+
 /** e.g. "26 กรกฎาคม สัปดาห์ที่ 31/52 ของปี" (th) or "26 July, week 31/52 of the year" (en) — the first day of the week containing `date`. */
 export function formatWeekLabel(date, lang = DEFAULT_LANGUAGE) {
   const [weekStart] = getWeekRange(date);

@@ -17,7 +17,8 @@ function formatTimeLabel(date) {
 }
 
 /**
- * Popup แสดงการตั้งค่าของกิจกรรม เมื่อคลิกขวาใน TimelineEditor
+ * Popup แสดงการตั้งค่าของกิจกรรม เมื่อคลิกขวาใน Week Spine หรือ
+ * Activity Timeline ของ Reminder Mode
  *
  * สำหรับ recurring event จะมี flow "แก้ครั้งนี้ / แก้ทั้งชุด" ก่อนทำ
  * แต่ละ action ที่กระทบชุด (ลบ, แก้ไข) โดยมี limit เตือนที่ 20 instances
@@ -70,15 +71,34 @@ export default function ActivityPopup({
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
   // Both Timeline surfaces can open this popup near any viewport edge.
-  // Resolve its coordinates after layout because its height varies by mode.
+  // Resolve coordinates after layout because its height varies by mode. It
+  // opens beside/below the pointer where possible, then flips left/up when
+  // needed — and is always clamped inside the visible viewport.
   useLayoutEffect(() => {
-    const rect = popupRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const margin = 8;
-    const x = Math.max(margin, Math.min(position?.x ?? margin, window.innerWidth - rect.width - margin));
-    const y = Math.max(margin, Math.min(position?.y ?? margin, window.innerHeight - rect.height - margin));
-    setResolvedPosition((current) => current?.x === x && current?.y === y ? current : { x, y });
-  }, [position?.x, position?.y, mode, restrictedToLock]);
+    const resolvePosition = () => {
+      const rect = popupRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const margin = 10;
+      const gap = 10;
+      const anchorX = position?.x ?? margin;
+      const anchorY = position?.y ?? margin;
+      const maxX = Math.max(margin, window.innerWidth - rect.width - margin);
+      const maxY = Math.max(margin, window.innerHeight - rect.height - margin);
+      const preferredX = anchorX + gap;
+      const preferredY = anchorY + gap;
+      const x = Math.max(margin, Math.min(preferredX + rect.width <= window.innerWidth - margin ? preferredX : anchorX - rect.width - gap, maxX));
+      const y = Math.max(margin, Math.min(preferredY + rect.height <= window.innerHeight - margin ? preferredY : anchorY - rect.height - gap, maxY));
+      setResolvedPosition((current) => current?.x === x && current?.y === y ? current : { x, y });
+    };
+    resolvePosition();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resolvePosition);
+    if (popupRef.current && observer) observer.observe(popupRef.current);
+    window.addEventListener("resize", resolvePosition);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resolvePosition);
+    };
+  }, [position?.x, position?.y, mode, restrictedToLock, actionError]);
 
   // Escape ถอยกลับทีละขั้นให้ตรงกับปุ่ม "กลับ"/"ยกเลิก" ที่มีอยู่แล้วในแต่ละ
   // sub-mode — ลำดับชั้นจริงลึกกว่า 2 ระดับ (เช่น menu → recurring-action →
@@ -235,6 +255,7 @@ export default function ActivityPopup({
       className={`activity-popup${restrictedToLock ? " activity-popup--lock-only" : ""}`}
       style={{ top: resolvedPosition?.y ?? position?.y ?? 8, left: resolvedPosition?.x ?? position?.x ?? 8 }}
       onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* ───── Header ───── */}

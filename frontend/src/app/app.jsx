@@ -12,7 +12,7 @@ import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { formatWeekLabel, getWeekRange, toDateInputValue, totalWeeksInYear, weekOfYear } from "../shared/lib/date-utils.js";
+import { formatWeekLabel, getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../shared/lib/id-utils.js";
 import { createAiActivityDraft } from "../features/activity/api/activity-draft.js";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
@@ -42,11 +42,9 @@ const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
 
 function formatCycleLabel(date) {
-  const [cycleStart] = getWeekRange(date);
-  const cycleNumber = Math.floor((weekOfYear(cycleStart) - 1) / 4) + 1;
-  const totalCycles = Math.ceil(totalWeeksInYear(cycleStart.getFullYear()) / 4);
-  const dateLabel = cycleStart.toLocaleDateString("th-TH", { day: "numeric", month: "long" });
-  return `${dateLabel} cycle ที่ ${cycleNumber}/${totalCycles} ของปี`;
+  const cycle = getYearCycle(date);
+  const dateLabel = cycle.start.toLocaleDateString("th-TH", { day: "numeric", month: "long" });
+  return `${dateLabel} cycle ที่ ${cycle.cycleNumber}/${cycle.totalCycles} ของปี`;
 }
 
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
@@ -169,7 +167,7 @@ function MainApp() {
   } = nav;
   const setWeekSpineView = useCallback((nextView) => {
     if (nextView === "four-weeks") {
-      setCycleAnchorDate(new Date(cursorDate));
+      setCycleAnchorDate(getYearCycle(cursorDate).start);
       setCycleSummaryData({ activities: [], loading: true, error: "" });
       setSummaryPanelMode("cycle");
     }
@@ -177,13 +175,15 @@ function MainApp() {
     setWeekSpineViewMode(nextView);
   }, [cursorDate]);
   const navigateCycle = useCallback((direction) => {
-    setCycleAnchorDate((current) => {
-      const next = new Date(current);
-      next.setDate(next.getDate() + direction * 28);
-      return next;
-    });
-    navigateWeek(direction * 4);
-  }, [navigateWeek]);
+    const currentCycle = getYearCycle(cycleAnchorDate);
+    const pivot = new Date(direction > 0 ? currentCycle.end : currentCycle.start);
+    pivot.setDate(pivot.getDate() + (direction > 0 ? 1 : -1));
+    const nextCycle = getYearCycle(pivot);
+    // Browsing another Cycle must not silently change the user's focused
+    // week. The focus only changes after they deliberately click a week
+    // inside the Cycle; returning to 7-day view then restores that focus.
+    setCycleAnchorDate(nextCycle.start);
+  }, [cycleAnchorDate]);
   const openCycleWeekEditor = useCallback((date) => {
     cycleViewToRestoreRef.current = new Date(cycleAnchorDate);
     selectWeek(date);
@@ -218,6 +218,8 @@ function MainApp() {
     setIsActivityReading,
     accountMenuOpen,
     setAccountMenuOpen,
+    weeklySummaryGlass,
+    setWeeklySummaryGlass,
     accountMenuRef,
     activityDashboardRef,
     weekSpineHoursPerCell,
@@ -602,7 +604,7 @@ function MainApp() {
           click-to-dismiss — renewing is the only way out, there's no
           "cancel" that makes sense here), same idea as .modal-overlay but
           escalated: letting the token die mid-action (e.g. mid-drag in
-          TimelineEditor) risks losing unsaved work, so forcing a decision
+          Week Spine) risks losing unsaved work, so forcing a decision
           here is safer than leaving it easy to ignore.
 
           Persists across refresh in the "already expired" case: nothing
@@ -806,6 +808,8 @@ function MainApp() {
                             error={summaryError}
                             onSelectDay={openDay}
                             categories={categories}
+                            glass={weeklySummaryGlass}
+                            theme={theme}
                           />}
                     </div>
                     <div className="flip-face flip-face-timeline">
@@ -942,6 +946,8 @@ function MainApp() {
         onThemeChange={setTheme}
         reminderTimelineColors={reminderTimelineColors}
         onReminderTimelineColorsChange={setReminderTimelineColors}
+        weeklySummaryGlass={weeklySummaryGlass}
+        onWeeklySummaryGlassChange={setWeeklySummaryGlass}
       />
 
     </div>
