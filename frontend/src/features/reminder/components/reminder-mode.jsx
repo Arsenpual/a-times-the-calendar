@@ -100,7 +100,7 @@ export default function ReminderDashboard({
   // ทีละ tab แบบ mockup "completed" ยังเป็น placeholder เฉยๆ (รอ field
   // completedAt จริงจากเฟส 4) กด disabled ไว้ก่อน
   // สถานะของรายการที่กำลังแสดง ไม่ใช่ "active" ของ UI ทั่วไป.
-  const { reminderDateFilter, setReminderDateFilter, selectedDateKey, selectedDate, selectDate, todayReminderCount, reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(remindersForDisplay);
+  const { reminderDateFilter, setReminderDateFilter, selectedDateKey, selectedDate, selectDate, todayReminderCount, reminderStatusTab, setReminderStatusTab, reminderTimeSort, setReminderTimeSort, reminderListFilter, setReminderListFilter, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(remindersForDisplay);
 
   const reminderCalendar = useReminderCalendar({
     userId: firebaseUser?.uid, calendarAccessToken, selectedDateKey,
@@ -287,6 +287,10 @@ export default function ReminderDashboard({
           statusTab={reminderStatusTab}
           statusTabs={REMINDER_STATUS_TAB}
           onStatusTabChange={setReminderStatusTab}
+          reminderTimeSort={reminderTimeSort}
+          onReminderTimeSortChange={setReminderTimeSort}
+          reminderListFilter={reminderListFilter}
+          onReminderListFilterChange={setReminderListFilter}
           isComposerOpen={isComposerOpen}
           onToggleComposer={toggleComposer}
           composerProps={{

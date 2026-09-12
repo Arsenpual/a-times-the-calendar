@@ -1109,6 +1109,39 @@
           color: var(--g-blue);
         }
 
+        .tab-bar-sort {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          margin-left: auto;
+          padding: 5px 0;
+        }
+
+        .tab-bar-sort-button {
+          border: 1px solid transparent;
+          border-radius: 7px;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          font: 600 10px/1 inherit;
+          padding: 6px 7px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .tab-bar-sort-button:hover { background: var(--g-background); }
+        .tab-bar-sort-button.is-active { color: var(--g-blue); border-color: color-mix(in srgb, var(--g-blue) 35%, var(--g-outline)); background: color-mix(in srgb, var(--g-blue) 8%, var(--g-surface)); }
+        .tab-bar-filter-select {
+          max-width: 122px;
+          min-height: 28px;
+          border: 1px solid var(--g-outline);
+          border-radius: 7px;
+          background: var(--g-surface);
+          color: var(--g-on-surface-variant);
+          font: 600 10px/1 inherit;
+          padding: 0 6px;
+          cursor: pointer;
+        }
+
         .reminders-scroll-area {
           flex: 1;
           min-height: 0;

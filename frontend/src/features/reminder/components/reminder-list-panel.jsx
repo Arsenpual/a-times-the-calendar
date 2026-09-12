@@ -7,6 +7,7 @@ export default function ReminderListPanel({
   enabledReminders, pausedReminders, completedReminders,
   visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders,
   statusTab, statusTabs, onStatusTabChange, isComposerOpen, onToggleComposer,
+  reminderTimeSort, onReminderTimeSortChange, reminderListFilter, onReminderListFilterChange,
   composerProps, renderReminder, describeActiveFilters
 }) {
   const emptyMessage = (status) => {
@@ -37,6 +38,17 @@ export default function ReminderListPanel({
     </div>
     <div className="tab-bar" role="tablist">
       {tabs.map(([value, className, label, count]) => <button key={value} type="button" role="tab" aria-selected={statusTab === value} className={`reminder-status-tab reminder-status-tab--${className} ${statusTab === value ? "is-active" : ""}`} onClick={() => onStatusTabChange(value)}>{label} <span className="reminder-status-tab-count">{count}</span></button>)}
+      <span className="tab-bar-sort" aria-label={t("reminder.sortByTime")}>
+        <button type="button" className="tab-bar-sort-button is-active" onClick={() => onReminderTimeSortChange(reminderTimeSort === "nearest" ? "farthest" : "nearest")} title={t(reminderTimeSort === "nearest" ? "reminder.sortFarthest" : "reminder.sortNearest")}>
+          {reminderTimeSort === "nearest" ? "↑" : "↓"} {t("reminder.sortTime")}
+        </button>
+        <select className="tab-bar-filter-select" value={reminderListFilter} onChange={(event) => onReminderListFilterChange(event.target.value)} aria-label={t("reminder.listFilter")}>
+          <option value="all">{t("reminder.listFilterAll")}</option>
+          <option value="scheduled">{t("reminder.listFilterScheduled")}</option>
+          <option value="event-session">{t("reminder.listFilterEventSession")}</option>
+          <option value="unscheduled">{t("reminder.listFilterUnscheduled")}</option>
+        </select>
+      </span>
     </div>
     <div className="reminders-scroll-area">
       <ReminderComposer {...composerProps} open={isComposerOpen} groups={groups} typeOptions={composerTypeOptions} daysOfWeek={daysOfWeek} lineColorOptions={lineColorOptions} />
