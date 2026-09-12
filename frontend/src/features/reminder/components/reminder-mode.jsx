@@ -1,41 +1,31 @@
-import { getIntervalWorkSummary, intervalScheduleMinutes } from "../lib/interval-schedule.js";
-import React, { useMemo } from "react";
+import React from "react";
 import { useReminderMenus } from "../hooks/use-reminder-menus.js";
 import { useDueReminders } from "../hooks/use-due-reminders.js";
 import { useReminderComposerState } from "../hooks/use-reminder-composer-state.js";
 import { useReminderComposerActions } from "../hooks/use-reminder-composer-actions.js";
-import { createPortal } from "react-dom";
+import { useReminderActions } from "../hooks/use-reminder-actions.js";
+import { useReminderComposerPreview } from "../hooks/use-reminder-composer-preview.js";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 import { usePushNotifications } from "../../notifications/push/hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { useTelegramConnection } from "../hooks/use-telegram-connection.js";
 import { useReminderStats } from "../hooks/use-reminder-stats.js";
 import { useActivityContextMenu } from "../hooks/use-activity-context-menu.js";
-import { logReminderEvent } from "../lib/reminder-telemetry.js";
 import { useReminderOmnibar } from "../hooks/use-reminder-omnibar.js";
 import { useReminderFilters } from "../hooks/use-reminder-filters.js";
 import ReminderSidebar from "./reminder-sidebar.jsx";
+import ReminderComposer from "./reminder-composer.jsx";
+import ReminderCard from "./reminder-card.jsx";
+import ReminderTimelinePanel from "./reminder-timeline-panel.jsx";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
 import ActivityPopup from "../../activity/components/activity-popup.jsx";
-import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
-import { activityDate } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
-import { reminderSlotsOnDate, localDateKey } from "../lib/reminder-date-view.js";
 import { useReminderExport } from "../hooks/use-reminder-export.js";
 import { useReminderTimeline, ROW_HEIGHT_PX, ZOOM_LEVELS_MINUTES } from "../hooks/use-reminder-timeline.js";
 import "../styles/reminder-material.css";
 import "../styles/reminder-mode.css";
-import {
-  REMINDER_TYPE,
-  isOneShotType,
-  intervalMs,
-  hasWindow,
-  minuteOfDayAt,
-  minutesFromHHMM,
-  isMinuteWithinWindow,
-  computeNextDueAt
-} from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, hasWindow } from "../lib/reminder-due-logic.js";
 
 const STORAGE_KEY = "times-reminders-v1";
 
@@ -101,29 +91,6 @@ const REMINDER_STATUS_TAB = Object.freeze({
 
 // REMINDER_TYPE ย้ายไป ../reminder-due-logic.js แล้ว (migration plan v2
 // เฟส 5, import ไว้ด้านบนของไฟล์) — ดูคอมเมนต์ในไฟล์นั้นสำหรับเหตุผล
-
-// สีประจำแต่ละประเภท reminder — ใช้เป็น border-left accent ของการ์ด +
-// พื้นหลัง icon กล่อง (ตาม reminder-dashboard-mockup.jsx, migration plan v2
-// เฟส 1.4) อ้างอิงตัวแปร CSS --g-* ที่มีอยู่แล้วในไฟล์นี้ (ไม่ผูกกับสถานะ
-// enabled/disabled ของ reminder — นั่นยังคงสื่อผ่าน .reminder-card.active
-// เดิมที่คุม background/border ทั้งใบแยกต่างหาก) --g-purple/--g-teal เป็น
-// ตัวแปรใหม่ที่เพิ่มเข้ามาคู่กับ map นี้ (ดู reminder-mode.css) ใช้ hex
-// เดียวกับ "ม่วง"/"ฟ้าอมเขียว" ใน LINE_COLOR_OPTIONS เพื่อไม่เพิ่มโทนสีใหม่
-// เข้ามาในระบบโดยไม่จำเป็น
-const TYPE_ACCENT_COLOR = {
-  [REMINDER_TYPE.INTERVAL]: "var(--g-blue)",
-  [REMINDER_TYPE.WEEKLY]: "var(--g-green)",
-  [REMINDER_TYPE.EVENT_ANCHORED]: "var(--g-purple)",
-  [REMINDER_TYPE.ROUTINE]: "var(--g-teal)",
-  [REMINDER_TYPE.ONCE_AT]: "var(--g-red)",
-  [REMINDER_TYPE.COUNTDOWN]: "var(--g-yellow)",
-  [REMINDER_TYPE.STOPWATCH]: "var(--g-on-surface-variant)"
-};
-
-/** ตัวอักษร/สีตัวอักษรของ icon กล่องต่อประเภท — เหลือง (countdown) ใช้ตัวอักษรเข้มเพื่อ contrast ที่พอเหมาะ ประเภทอื่นใช้ขาว */
-function getTypeIconTextColor(type) {
-  return type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff";
-}
 
 // ตัวเลือก snooze บน due-banner (migration plan v2 เฟส 1.3)
 const SNOOZE_OPTIONS_MINUTES = [5, 10, 15, 30];
@@ -409,75 +376,10 @@ export default function ReminderDashboard({
   });
 
 
-  const composerPreview = useMemo(() => {
-    const title = draft.title.trim() || "Reminder ใหม่";
-    const typeLabel = t(TYPE_FILTER_OPTIONS.find((option) => option.type === draft.type)?.labelKey);
-    const field = (label, value) => ({ label, value });
-    // This is a schedule estimate, not the delivery counter itself.  The
-    // backend remains the final guard because another open device can send a
-    // notification between opening this form and saving it.
-    const quotaDate = new Date();
-    const quotaDateKey = localDateKey(quotaDate);
-    const existingReminderCount = reminders
-      .filter((reminder) => reminder.id !== editingId && reminder.enabled && !reminder.completedAt)
-      .reduce((total, reminder) => total + reminderSlotsOnDate(reminder, quotaDate).length, 0);
-    // Activity notifications are sent only for timed activities, never
-    // all-day items. `activities` has already excluded archived activities
-    // in App, so the same collection drives the estimate and live delivery.
-    const activityNotificationCount = activities.filter((activity) => {
-      if (!activity.start?.dateTime) return false;
-      const start = activityDate(activity.start);
-      return start && localDateKey(start) === quotaDateKey;
-    }).length;
-    const amount = Math.max(1, Number(draft.amount) || 1);
-    const unit = draft.unit === "hours" ? "ชม." : "นาที";
-    const draftForQuota = {
-      type: draft.type,
-      amount,
-      unit: draft.unit,
-      windowStart: draft.runAllDay ? null : draft.windowStart,
-      windowEnd: draft.runAllDay ? null : draft.windowEnd,
-      days: draft.days,
-      time: draft.time,
-      times: draft.times,
-      atMs: draft.atDate && draft.atTime ? new Date(`${draft.atDate}T${draft.atTime}:00`).getTime() : null,
-      startedAt: draft.type === REMINDER_TYPE.COUNTDOWN ? Date.now() : null,
-      durationMs: Math.max(1, Number(draft.countdownMinutes) || 1) * 60 * 1000
-    };
-    const draftNotificationCount = reminderSlotsOnDate(draftForQuota, quotaDate).length;
-    const projectedNotificationCount = existingReminderCount + activityNotificationCount + draftNotificationCount;
-    const notificationQuota = {
-      limit: 720,
-      existingReminderCount,
-      activityNotificationCount,
-      draftNotificationCount,
-      projectedNotificationCount,
-      isAtLimit: projectedNotificationCount >= 720
-    };
-    const withNotificationQuota = (preview) => ({ ...preview, notificationQuota });
-    if (draft.type === REMINDER_TYPE.INTERVAL) {
-      const intervalDraft = { amount, unit: draft.unit, windowStart: draft.runAllDay ? null : draft.windowStart, windowEnd: draft.runAllDay ? null : draft.windowEnd };
-      const schedule = getIntervalWorkSummary(intervalDraft);
-      const slots = intervalScheduleMinutes(intervalDraft);
-      const hours = schedule.workMinutes / 60;
-      const clock = (minute) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-      return withNotificationQuota({ title, typeLabel, fields: [
-        field("ช่วงทำงาน", schedule.range || "ตลอดวัน (24 ชม.)"),
-        field("ความถี่", `ทุก ${amount} ${unit}`),
-        field("แจ้งเตือน", `${schedule.notificationCount} รอบ/การทำงาน`)
-      ], footnote: `เวลา: ${slots.slice(0, 6).map(clock).join(" · ")}${slots.length > 6 ? ` · +${slots.length - 6}` : ""}${schedule.range ? ` (${hours} ชม.)` : ""}` });
-    }
-    if (draft.type === REMINDER_TYPE.WEEKLY) {
-      const days = DAYS_OF_WEEK.filter((day) => draft.days.includes(day.value)).map((day) => t(day.labelKey));
-      const times = (draft.times || []).filter(Boolean);
-      return withNotificationQuota({ title, typeLabel, fields: [field("วัน", days.length ? days.join(" · ") : "ยังไม่ได้เลือก"), field("เวลา", times.length ? times.join(" · ") : "ยังไม่ได้กำหนด"), field("รวม", `${days.length * times.length} รอบ/สัปดาห์`)] });
-    }
-    if (draft.type === REMINDER_TYPE.EVENT_ANCHORED) return withNotificationQuota({ title, typeLabel, fields: [field("เหตุการณ์", draft.eventName.trim() || "ยังไม่ได้ระบุ"), field("แจ้งเตือน", `หลังเหตุการณ์ ${Math.max(1, Number(draft.afterAmount) || 1)} ${draft.afterUnit === "hours" ? "ชม." : "นาที"}`)] });
-    if (draft.type === REMINDER_TYPE.ROUTINE) { const count = draft.routineSteps.split(",").map((item) => item.trim()).filter(Boolean).length; return withNotificationQuota({ title, typeLabel, fields: [field("ขั้นตอน", count ? `${count} ขั้นตอน` : "ยังไม่ได้ระบุ")], footnote: draft.routineSteps || undefined }); }
-    if (draft.type === REMINDER_TYPE.ONCE_AT) return withNotificationQuota({ title, typeLabel, fields: [field("กำหนด", `${draft.atDate || "ยังไม่ได้เลือกวัน"} · ${draft.atTime || "ยังไม่ได้เลือกเวลา"}`)] });
-    if (draft.type === REMINDER_TYPE.COUNTDOWN) return withNotificationQuota({ title, typeLabel, fields: [field("ระยะเวลา", `${Math.max(1, Number(draft.countdownMinutes) || 1)} นาที`), field("เริ่ม", "ทันทีหลังบันทึก")] });
-    return withNotificationQuota({ title, typeLabel, fields: [field("การทำงาน", "เริ่มจับเวลาเมื่อกด Start")], footnote: "หยุดและเริ่มใหม่ได้โดยไม่รีเซ็ตเวลาสะสม" });
-  }, [activities, draft, editingId, reminders, t]);
+  const composerPreview = useReminderComposerPreview({
+    draft, editingId, reminders, activities, t,
+    typeOptions: TYPE_FILTER_OPTIONS, daysOfWeek: DAYS_OF_WEEK
+  });
 
   // Tab ของรายการ reminder (migration plan v2 เฟส 1.2) — เดิมแสดง
   // active/paused พร้อมกันทั้งคู่คั่นด้วย section header, ตอนนี้เลือกดูได้
@@ -527,108 +429,13 @@ export default function ReminderDashboard({
     groups, activeTypeFilter, activeGroupFilter
   });
 
-  const triggerAnchorEvent = (reminderId) => {
-    const now = Date.now();
-    updateReminders((prev) =>
-      prev.map((r) => {
-        if (r.id !== reminderId) return r;
-        const updated = { ...r, lastTriggeredAt: now, enabled: true };
-        return { ...updated, nextDueAt: computeNextDueAt(updated, now) };
-      })
-    );
-  };
-
-  const advanceRoutine = (reminderId) => {
-    updateReminders((prev) =>
-      prev.map((r) => {
-        if (r.id !== reminderId) return r;
-        const nextIdx = (r.currentIndex || 0) + 1;
-        if (nextIdx >= r.steps.length) {
-          // ทำครบทุก step แล้ว — เข้า tab "ทำเสร็จแล้ว" เหมือน one-shot
-          // type (migration plan v2 เฟส 4.3) แทนที่จะแค่ enabled: false
-          // เฉยๆ แบบเดิม — ผู้ใช้ยังเปิดสวิตช์กลับเองได้ตามปกติ (toggle()
-          // จะเคลียร์ completedAt คืนเป็น null ให้ ดูฟังก์ชันนั้นด้านล่าง)
-          logReminderEvent("reminder_completed", { reminder_type: r.type });
-          recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-          return {
-            ...r,
-            currentIndex: 0,
-            enabled: false,
-            completedAt: Date.now(),
-            completionCount: (Number.isInteger(r.completionCount) ? r.completionCount : 0) + 1
-          };
-        }
-        return { ...r, currentIndex: nextIdx };
-      })
-    );
-  };
-
-  // Start/Stop สำหรับ stopwatch โดยเฉพาะ (แยกจาก toggle() ทั่วไปเพราะ semantics ต่างกัน)
-  // - Start: enabled=true, startedAt=ตอนนี้ (นับเวลาต่อจาก accumulatedMs เดิม)
-  // - Stop: บวกเวลาที่ผ่านไปตั้งแต่ startedAt เข้ากับ accumulatedMs แล้วหยุด (enabled=false, startedAt=null)
-  //   ทำให้กด Start ใหม่ได้และเวลานับต่อจากเดิมได้ ไม่รีเซ็ตทุกครั้งที่หยุด
-  const toggleStopwatch = (reminderId) => {
-    updateReminders((prev) =>
-      prev.map((r) => {
-        if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
-
-        if (!r.enabled) {
-          return { ...r, enabled: true, startedAt: Date.now() };
-        }
-
-        const elapsedSinceStart = r.startedAt ? Date.now() - r.startedAt : 0;
-        recordStatsEvent("stopwatch-session", { title: r.title, durationMs: elapsedSinceStart });
-        return {
-          ...r,
-          enabled: false,
-          accumulatedMs: (r.accumulatedMs || 0) + elapsedSinceStart,
-          startedAt: null
-        };
-      })
-    );
-  };
-
-  // รีเซ็ต stopwatch กลับเป็น 0 (หยุดด้วย ถ้ากำลังทำงานอยู่)
-  const resetStopwatch = (reminderId) => {
-    updateReminders((prev) =>
-      prev.map((r) => {
-        if (r.id !== reminderId || r.type !== REMINDER_TYPE.STOPWATCH) return r;
-        return { ...r, enabled: false, accumulatedMs: 0, startedAt: null };
-      })
-    );
-  };
-
-  const toggle = (reminderId) => {
-    updateReminders((prev) =>
-      prev.map((r) => {
-        if (r.id !== reminderId) return r;
-
-        if (!r.enabled) {
-          // เปิดสวิตช์กลับ (ไม่ว่าจะเคย "ทำเสร็จแล้ว" มาก่อนหรือแค่ปิดไว้
-          // เฉยๆ) ต้องเคลียร์ completedAt กลับเป็น null เสมอ — migration
-          // plan v2 เฟส 4: reminder ที่กำลัง enabled ไม่ควรค้างอยู่ tab
-          // "ทำเสร็จแล้ว" พร้อมกัน (ทั้งสองสถานะไม่ควรจริงพร้อมกัน)
-
-          // Countdown ประเภทเดียวที่ "เปิดใหม่" ควรหมายถึงเริ่มนับใหม่ทั้งหมด
-          // (ถ้าใช้ startedAt เดิม endMs จะเป็นอดีตไปแล้ว ทำให้ยิงแจ้งเตือนทันทีที่เปิด)
-          if (r.type === REMINDER_TYPE.COUNTDOWN) {
-            const restarted = { ...r, enabled: true, startedAt: Date.now(), completedAt: null };
-            return { ...restarted, nextDueAt: computeNextDueAt(restarted, Date.now()) };
-          }
-
-          // Once-at ที่เวลาผ่านไปแล้ว เปิดสวิตช์กลับไม่มีประโยชน์ (จะยิงทันที) ต้องให้ผู้ใช้แก้ไขวันที่/เวลาใหม่แทน
-          if (r.type === REMINDER_TYPE.ONCE_AT && r.atMs && r.atMs <= Date.now()) {
-            alert("เวลาที่ตั้งไว้ผ่านไปแล้ว กรุณาแก้ไขวันที่และเวลาใหม่ก่อนเปิดใช้งานอีกครั้ง");
-            return r;
-          }
-
-          const nextDue = r.type === REMINDER_TYPE.INTERVAL ? null : computeNextDueAt(r, Date.now());
-          return { ...r, enabled: true, nextDueAt: nextDue, completedAt: null };
-        }
-        return { ...r, enabled: false };
-      })
-    );
-  };
+  const {
+    triggerAnchorEvent, advanceRoutine, toggleStopwatch, resetStopwatch, toggleReminder
+  } = useReminderActions({
+    updateReminders,
+    recordStatsEvent,
+    onWarning: (message) => window.alert(message)
+  });
 
   const { toggleDayInDraft, submitReminderForm, deleteReminder, deleteEditingReminder, startEdit, cancelEditing, toggleComposer } = useReminderComposerActions({
     draft, setDraft, editingId, setEditingId, isComposerOpen, setIsComposerOpen,
@@ -658,173 +465,29 @@ export default function ReminderDashboard({
 
 
 
-  const getReminderPriority = (reminder) => {
-    if (reminder.completedAt) return { label: t("reminder.completed"), tone: "completed" };
-    if (!reminder.enabled) return { label: t("reminder.status.paused"), tone: "paused" };
-    if (Number.isFinite(reminder.nextDueAt)) {
-      const remainingSeconds = Math.ceil((reminder.nextDueAt - nowTick) / 1000);
-      if (remainingSeconds <= 0) return { label: t("reminder.status.due"), tone: "due" };
-      return { label: t("reminder.status.next", { time: formatDurationClock(remainingSeconds) }), tone: "next" };
-    }
-    if (reminder.type === REMINDER_TYPE.EVENT_ANCHORED) return { label: t("reminder.status.waiting"), tone: "waiting" };
-    return { label: t("reminder.status.active"), tone: "active" };
-  };
-
-  const renderReminder = (reminder) => {
-    const priority = getReminderPriority(reminder);
-    const typeLabel = t(TYPE_FILTER_OPTIONS.find((option) => option.type === reminder.type)?.labelKey);
-    const group = reminder.groupId ? groups.find((item) => item.id === reminder.groupId) : null;
-    const weeklyDaysLabel = reminder.type === REMINDER_TYPE.WEEKLY
-      ? DAYS_OF_WEEK.filter((day) => reminder.days?.includes(day.value)).map((day) => t(day.labelKey)).join(" · ")
-      : null;
-    const intervalWorkSummary = reminder.type === REMINDER_TYPE.INTERVAL
-      ? getIntervalWorkSummary(reminder)
-      : null;
-    const intervalHours = intervalWorkSummary && intervalWorkSummary.workMinutes / 60;
-    const intervalWorkLabel = intervalHours % 1 === 0 ? `${intervalHours} ชม.` : `${intervalWorkSummary.workMinutes} นาที`;
-    return (
-      <div
+  const renderReminder = (reminder) => (
+    <ReminderCard
       key={reminder.id}
-      className={`reminder-card ${reminder.enabled ? "active" : ""}${cardMenu?.id === reminder.id ? " menu-open" : ""}`}
-      style={{ borderLeftColor: TYPE_ACCENT_COLOR[reminder.type] }}
-    >
-      <button
-        type="button"
-        className="reminder-type-icon"
-        style={{ backgroundColor: TYPE_ACCENT_COLOR[reminder.type], color: getTypeIconTextColor(reminder.type) }}
-        onClick={() => focusReminderOnTimeline(reminder)}
-        title="เลื่อน Timeline มาที่เวลาของ Reminder"
-        aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}
-      >
-        {reminder.type === REMINDER_TYPE.WEEKLY ? "📅" :
-         reminder.type === REMINDER_TYPE.EVENT_ANCHORED ? "⚓" :
-         reminder.type === REMINDER_TYPE.ROUTINE ? "📋" :
-         reminder.type === REMINDER_TYPE.ONCE_AT ? "1x" : 
-         reminder.type === REMINDER_TYPE.COUNTDOWN ? "⏱" :
-         reminder.type === REMINDER_TYPE.STOPWATCH ? "⏱️" : "↻"}
-      </button>
-      <div
-        className="reminder-info"
-        role="button"
-        tabIndex={0}
-        onClick={() => startEdit(reminder)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            startEdit(reminder);
-          }
-        }}
-        title="คลิกเพื่อแก้ไข Reminder"
-      >
-        <div className="reminder-card-title-row">
-          <p className="title">{reminder.title}</p>
-          <span className={`reminder-priority reminder-priority--${priority.tone}`}>{priority.label}</span>
-        </div>
-        <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
-        {weeklyDaysLabel && (
-          <p className="reminder-weekly-days-detail">
-            <span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}
-          </p>
-        )}
-        {/* Badge "ทำเสร็จแล้ว" (migration plan v2 เฟส 4) — ทำให้การ์ดใน tab
-            "ทำเสร็จแล้ว" ดูต่างจาก "ปิดใช้งาน" เฉยๆ ชัดเจน (ทั้งคู่มี
-            enabled: false เหมือนกัน แต่ความหมายต่างกันคนละเรื่อง) กด
-            toggle-switch/stopwatch ปกติเพื่อ "เปิดใช้งานใหม่" ได้เหมือนเดิม
-            ซึ่งจะเคลียร์ completedAt ให้อัตโนมัติ (ดู toggle() function) */}
-        {reminder.completedAt && (
-          <span className="reminder-completed-badge">
-            ✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}
-          </span>
-        )}
-        {intervalWorkSummary && (
-          <p
-            className="reminder-interval-summary"
-            title={`ช่วงทำงาน ${intervalWorkSummary.range || "ตลอดวัน"} · แจ้งเตือน ${intervalWorkSummary.notificationCount} ครั้ง`}
-          >
-            <span>{intervalWorkLabel}</span>
-            <span aria-hidden="true">·</span>
-            <strong>{intervalWorkSummary.notificationCount} รอบ</strong>
-          </p>
-        )}
-        <div className="reminder-card-metadata">
-          <span className="reminder-type-chip">{typeLabel}</span>
-          {group && (
-          <span className="reminder-group-chip">
-            <span
-              className="reminder-group-chip-dot"
-              style={{ background: group.color }}
-            />
-            {group.name}
-          </span>
-          )}
-        </div>
-
-        {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && (
-          <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); triggerAnchorEvent(reminder.id); }}>
-            ⚡ เริ่มเหตุการณ์ "{reminder.eventName}"
-          </button>
-        )}
-
-        {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && (
-          <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); advanceRoutine(reminder.id); }}>
-            ✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})
-          </button>
-        )}
-      </div>
-
-      {reminder.type === REMINDER_TYPE.STOPWATCH ? (
-        // Stopwatch ใช้ปุ่ม Start/Stop (+ Reset) แทน toggle switch ทั่วไป เพราะไม่ใช่ enable/disable
-        // แบบ on-off เฉย ๆ แต่มี semantics ของการนับเวลาสะสมที่ต้องจัดการเฉพาะ
-        <div className="stopwatch-controls">
-          <button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => toggleStopwatch(reminder.id)}>
-            {reminder.enabled ? "⏸ Stop" : "▶ Start"}
-          </button>
-          <button type="button" className="icon-btn" onClick={() => resetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">
-            ↺
-          </button>
-        </div>
-      ) : (
-        <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => toggle(reminder.id)} aria-label="สวิตช์เปิดปิด" />
-      )}
-
-      <div className={`reminder-card-actions ${cardMenu?.id === reminder.id ? "menu-open" : ""}`}>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={(event) => toggleCardMenu(event, reminder.id)}
-          title="ตัวเลือกเพิ่มเติม"
-          aria-haspopup="true"
-          aria-expanded={cardMenu?.id === reminder.id}
-        >
-          ⋮
-        </button>
-        {cardMenu?.id === reminder.id && createPortal(
-          <div className="card-dropdown-menu" role="menu" onPointerDown={(event) => event.stopPropagation()} style={{ "--card-menu-x": `${cardMenu.position.x}px`, "--card-menu-y": `${cardMenu.position.y}px` }}>
-            <button type="button" role="menuitem" onClick={() => { closeCardMenu(); startEdit(reminder); }}>
-              ✏️ แก้ไข
-            </button>
-            {/* migration plan v2 เฟส 4 — mark เสร็จเองได้โดยไม่ต้องรอถึงเวลา
-                due-banner จำกัดเฉพาะ one-shot type (once-at/countdown)
-                เท่านั้น เพราะ type วนซ้ำ "ทำเสร็จแล้ว" มีความหมายเท่ากับ
-                "เตือนอีกครั้ง" อยู่แล้ว (ดู markCompleted's comment) กด
-                ก่อนถึงเวลาจริงจากตรงนี้จึงจะดูสมเหตุสมผลเฉพาะ type ที่จบ
-                แบบถาวรได้เท่านั้น ไม่แสดงถ้าทำเสร็จไปแล้ว (ป้องกันกดซ้ำ) */}
-            {isOneShotType(reminder.type) && !reminder.completedAt && (
-              <button type="button" role="menuitem" onClick={() => { closeCardMenu(); markCompleted(reminder.id); }}>
-                ✓ ทำเสร็จแล้ว
-              </button>
-            )}
-            <button type="button" role="menuitem" className="is-danger" onClick={() => { closeCardMenu(); deleteReminder(reminder.id); }}>
-              🗑️ ลบ
-            </button>
-          </div>,
-          document.body
-        )}
-      </div>
-      </div>
-    );
-  };
-
+      reminder={reminder}
+      nowTick={nowTick}
+      t={t}
+      groups={groups}
+      typeOptions={TYPE_FILTER_OPTIONS}
+      daysOfWeek={DAYS_OF_WEEK}
+      cardMenu={cardMenu}
+      onFocusTimeline={focusReminderOnTimeline}
+      onStartEdit={startEdit}
+      onTriggerAnchor={triggerAnchorEvent}
+      onAdvanceRoutine={advanceRoutine}
+      onToggleStopwatch={toggleStopwatch}
+      onResetStopwatch={resetStopwatch}
+      onToggleReminder={toggleReminder}
+      onToggleMenu={toggleCardMenu}
+      onCloseMenu={closeCardMenu}
+      onMarkCompleted={markCompleted}
+      onDelete={deleteReminder}
+    />
+  );
   return (
     <div
       className="reminder-app-container"
@@ -1048,235 +711,22 @@ export default function ReminderDashboard({
           <div className="reminders-scroll-area">
             {/* Composer แบบ inline expand/collapse: พับเก็บเป็นค่าเริ่มต้นเพื่อประหยัดพื้นที่
                 เมื่อกด "เพิ่ม Reminder" หรือกด "แก้ไข" การ์ดใดการ์ดหนึ่ง จะดันลงมาแสดงแทนที่ */}
-            {isComposerOpen && (
-              <div className="composer-backdrop" onMouseDown={cancelEditing}>
-              <form ref={composerCardRef} className="composer-card" onMouseDown={(event) => event.stopPropagation()} onSubmit={submitReminderForm}>
-              <div className="form-field">
-                <label htmlFor="reminder-title">{t("reminder.title")}</label>
-                <input id="reminder-title" className="form-input" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder={t("reminder.titlePlaceholder")} />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="reminder-type">{t("reminder.type")}</label>
-                <select id="reminder-type" className="form-select" value={draft.type} onChange={(e) => setDraft((prev) => ({ ...prev, type: e.target.value }))}>
-                  <option value={REMINDER_TYPE.INTERVAL}>{t("reminder.type.interval")}</option>
-                  <option value={REMINDER_TYPE.WEEKLY}>{t("reminder.type.weekly")}</option>
-                  <option value={REMINDER_TYPE.EVENT_ANCHORED}>{t("reminder.type.event-anchored")}</option>
-                  <option value={REMINDER_TYPE.ROUTINE}>{t("reminder.type.routine")}</option>
-                  <option value={REMINDER_TYPE.ONCE_AT}>{t("reminder.type.once-at")}</option>
-                  <option value={REMINDER_TYPE.COUNTDOWN}>{t("reminder.type.countdown")}</option>
-                  <option value={REMINDER_TYPE.STOPWATCH}>{t("reminder.type.stopwatch")}</option>
-                </select>
-              </div>
-
-              {/* migration plan v2 เฟส 3 — เลือกกลุ่ม/โปรเจกต์ที่ reminder
-                  นี้จะผูกด้วย (optional, one-to-one) ซ่อนตัวเลือกนี้ไปเลย
-                  ถ้ายังไม่มีกลุ่มไหนถูกสร้างไว้เลย แทนที่จะโชว์ dropdown
-                  ว่างๆ ที่มีแค่ตัวเลือกเดียว ("ไม่มีกลุ่ม") ซึ่งไม่มีประโยชน์ */}
-              {groups.length > 0 && (
-                <div className="form-field">
-                  <label htmlFor="reminder-group">{t("reminder.groupOptional")}</label>
-                  <select
-                    id="reminder-group"
-                    className="form-select"
-                    value={draft.groupId ?? ""}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, groupId: e.target.value || null }))}
-                  >
-                    <option value="">{t("reminder.noGroup")}</option>
-                    {groups.map((group) => (
-                      <option key={group.id} value={group.id}>{group.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {draft.type === REMINDER_TYPE.INTERVAL && (
-                <>
-                  <div className="form-field">
-                    <label htmlFor="reminder-amount">{t("reminder.frequency")}</label>
-                    <div className="freq-inline-group">
-                      <input id="reminder-amount" className="form-input" type="number" min="1" value={draft.amount} onChange={(e) => setDraft((prev) => ({ ...prev, amount: e.target.value }))} />
-                      <select className="form-select" value={draft.unit} onChange={(e) => setDraft((prev) => ({ ...prev, unit: e.target.value }))}>
-                        <option value="minutes">{t("reminder.minutes")}</option>
-                        <option value="hours">{t("reminder.hours")}</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="form-field">
-                    <button type="button" role="switch" aria-checked={draft.runAllDay} className={`interval-window-toggle${draft.runAllDay ? " is-active" : ""}`} onClick={() => setDraft((prev) => ({ ...prev, runAllDay: !prev.runAllDay, ...(!prev.runAllDay ? { windowStart: "", windowEnd: "" } : {}) }))}>
-                      <span className="interval-window-toggle-track" aria-hidden="true" />
-                      <span>{t("reminder.runAllDay")}</span>
-                    </button>
-                    {!draft.runAllDay && <>
-                    <label>{t("reminder.activeWindow")}</label>
-                    <div className="composer-row">
-                      <input className="form-input" type="time" value={draft.windowStart} onChange={(e) => setDraft((prev) => ({ ...prev, windowStart: e.target.value }))} />
-                      <input className="form-input" type="time" value={draft.windowEnd} onChange={(e) => setDraft((prev) => ({ ...prev, windowEnd: e.target.value }))} />
-                    </div>
-                    </>}
-                  </div>
-                </>
-              )}
-
-              {draft.type === REMINDER_TYPE.WEEKLY && (
-                <>
-                  <div className="form-field">
-                    <label>{t("reminder.selectWeekdays")}</label>
-                    <div className="day-selector">
-                      {DAYS_OF_WEEK.map((d) => (
-                        <button key={d.value} type="button" className={`day-btn ${draft.days.includes(d.value) ? "selected" : ""}`} onClick={() => toggleDayInDraft(d.value)}>
-                          {t(d.labelKey)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="form-field">
-                    <label>{t("reminder.time")}</label>
-                    {(draft.times || [draft.time]).map((time, index) => (
-                      <div className="weekly-time-row" key={`${time}-${index}`}>
-                        <input className="form-input" type="time" value={time} onChange={(event) => setDraft((prev) => ({ ...prev, times: prev.times.map((value, itemIndex) => itemIndex === index ? event.target.value : value) }))} />
-                        <button type="button" className="icon-btn" disabled={draft.times.length === 1} onClick={() => setDraft((prev) => ({ ...prev, times: prev.times.filter((_, itemIndex) => itemIndex !== index) }))}>✕</button>
-                      </div>
-                    ))}
-                    <button type="button" className="btn-text weekly-add-time" onClick={() => setDraft((prev) => ({ ...prev, times: [...prev.times, "12:00"] }))}>{t("reminder.addTime")}</button>
-                  </div>
-                </>
-              )}
-
-              {draft.type === REMINDER_TYPE.EVENT_ANCHORED && (
-                <>
-                  <div className="form-field">
-                    <label>{t("reminder.eventReference")}</label>
-                    <input className="form-input" value={draft.eventName} onChange={(e) => setDraft((prev) => ({ ...prev, eventName: e.target.value }))} placeholder={t("reminder.eventReferencePlaceholder")} />
-                  </div>
-                  <div className="form-field">
-                    <label>{t("reminder.afterEvent")}</label>
-                    <div className="freq-inline-group">
-                      <input className="form-input" type="number" min="1" value={draft.afterAmount} onChange={(e) => setDraft((prev) => ({ ...prev, afterAmount: e.target.value }))} />
-                      <select className="form-select" value={draft.afterUnit} onChange={(e) => setDraft((prev) => ({ ...prev, afterUnit: e.target.value }))}>
-                        <option value="minutes">{t("reminder.minutes")}</option>
-                        <option value="hours">{t("reminder.hours")}</option>
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {draft.type === REMINDER_TYPE.ROUTINE && (
-                <div className="form-field">
-                  <label>{t("reminder.steps")}</label>
-                  <input className="form-input" value={draft.routineSteps} onChange={(e) => setDraft((prev) => ({ ...prev, routineSteps: e.target.value }))} placeholder={t("reminder.stepsPlaceholder")} />
-                </div>
-              )}
-
-              {draft.type === REMINDER_TYPE.ONCE_AT && (
-                <div className="composer-row form-field">
-                  <div>
-                    <label htmlFor="at-date">{t("reminder.date")}</label>
-                    <input id="at-date" className="form-input" type="date" value={draft.atDate} onChange={(e) => setDraft((prev) => ({ ...prev, atDate: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label htmlFor="at-time">{t("reminder.time")}</label>
-                    <input id="at-time" className="form-input" type="time" value={draft.atTime} onChange={(e) => setDraft((prev) => ({ ...prev, atTime: e.target.value }))} />
-                  </div>
-                </div>
-              )}
-
-              {draft.type === REMINDER_TYPE.COUNTDOWN && (
-                <>
-                  <div className="form-field">
-                    <label htmlFor="countdown-minutes">{t("reminder.durationMinutes")}</label>
-                    <input id="countdown-minutes" className="form-input" type="number" min="1" max="1440" value={draft.countdownMinutes} onChange={(e) => setDraft((prev) => ({ ...prev, countdownMinutes: e.target.value }))} />
-                  </div>
-                  <div className="form-field">
-                    <label>{t("reminder.timelineColor")}</label>
-                    <div className="color-picker-group">
-                      {LINE_COLOR_OPTIONS.map((c) => (
-                        <button
-                          key={c.value}
-                          type="button"
-                          className={`color-swatch-btn ${draft.lineColor === c.value ? "selected" : ""}`}
-                          style={{ backgroundColor: c.value }}
-                          title={c.label}
-                          aria-label={c.label}
-                          onClick={() => setDraft((prev) => ({ ...prev, lineColor: c.value }))}
-                        />
-                      ))}
-                      <label className="color-swatch-btn color-swatch-custom" title="เลือกสีเอง" style={{ backgroundColor: draft.lineColor }}>
-                        <input type="color" value={draft.lineColor} onChange={(e) => setDraft((prev) => ({ ...prev, lineColor: e.target.value }))} />
-                      </label>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {draft.type === REMINDER_TYPE.STOPWATCH && (
-                <>
-                  <p className="form-hint">{t("reminder.stopwatchHint")}</p>
-                  <div className="form-field">
-                    <label>{t("reminder.timelineColor")}</label>
-                    <div className="color-picker-group">
-                      {LINE_COLOR_OPTIONS.map((c) => (
-                        <button
-                          key={c.value}
-                          type="button"
-                          className={`color-swatch-btn ${draft.lineColor === c.value ? "selected" : ""}`}
-                          style={{ backgroundColor: c.value }}
-                          title={c.label}
-                          aria-label={c.label}
-                          onClick={() => setDraft((prev) => ({ ...prev, lineColor: c.value }))}
-                        />
-                      ))}
-                      <label className="color-swatch-btn color-swatch-custom" title="เลือกสีเอง" style={{ backgroundColor: draft.lineColor }}>
-                        <input type="color" value={draft.lineColor} onChange={(e) => setDraft((prev) => ({ ...prev, lineColor: e.target.value }))} />
-                      </label>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <section className="reminder-composer-preview" aria-live="polite">
-                <p className="reminder-composer-preview-label">สรุปก่อนบันทึก</p>
-                <div className="reminder-composer-preview-heading">
-                  <strong>{composerPreview.title}</strong>
-                  <span>{composerPreview.typeLabel}</span>
-                </div>
-                <div className="reminder-composer-preview-fields">
-                  {composerPreview.fields.map(({ label, value }) => (
-                    <div key={label}><span>{label}</span><strong>{value}</strong></div>
-                  ))}
-                </div>
-                {composerPreview.footnote && <p className="reminder-composer-preview-note">{composerPreview.footnote}</p>}
-                <div className={`reminder-composer-quota${composerPreview.notificationQuota.isAtLimit ? " is-at-limit" : ""}`} role={composerPreview.notificationQuota.isAtLimit ? "alert" : undefined}>
-                  <div className="reminder-composer-quota-heading">
-                    <span>โควตาแจ้งเตือนวันนี้</span>
-                    <strong>{composerPreview.notificationQuota.projectedNotificationCount} / {composerPreview.notificationQuota.limit}</strong>
-                  </div>
-                  <p>
-                    Reminder เดิม {composerPreview.notificationQuota.existingReminderCount} · Activity {composerPreview.notificationQuota.activityNotificationCount} · รายการนี้ {composerPreview.notificationQuota.draftNotificationCount}
-                  </p>
-                  {composerPreview.notificationQuota.isAtLimit && (
-                    <p className="reminder-composer-quota-warning">
-                      {composerPreview.notificationQuota.projectedNotificationCount > composerPreview.notificationQuota.limit
-                        ? `เกินขีดจำกัด ${composerPreview.notificationQuota.projectedNotificationCount - composerPreview.notificationQuota.limit} ครั้ง — ระบบจะไม่ส่งรายการที่เกิน 720 ครั้ง/วัน`
-                        : "ถึงขีดจำกัด 720 ครั้ง/วันแล้ว — การแจ้งเตือนรายการถัดไปอาจไม่ถูกส่ง"}
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              <div className="composer-actions">
-                {editingId && (
-                  <button className="btn-text btn-delete-reminder" type="button" onClick={deleteEditingReminder}>{t("reminder.delete")}</button>
-                )}
-                <button className="btn-text" type="button" onClick={cancelEditing}>{t("reminder.cancel")}</button>
-                <button className="btn-contained" type="submit">
-                  {editingId ? t("reminder.save") : t("reminder.addReminder")}
-                </button>
-              </div>
-              </form>
-              </div>
-            )}
+            <ReminderComposer
+              open={isComposerOpen}
+              draft={draft}
+              setDraft={setDraft}
+              editingId={editingId}
+              groups={groups}
+              typeOptions={TYPE_FILTER_OPTIONS}
+              daysOfWeek={DAYS_OF_WEEK}
+              lineColorOptions={LINE_COLOR_OPTIONS}
+              preview={composerPreview}
+              cardRef={composerCardRef}
+              onSubmit={submitReminderForm}
+              onCancel={cancelEditing}
+              onDelete={deleteEditingReminder}
+              onToggleDay={toggleDayInDraft}
+            />
 
             {reminders.length === 0 && !isComposerOpen ? (
               <p className="empty-state">{t("reminder.empty")}</p>
@@ -1326,119 +776,28 @@ export default function ReminderDashboard({
           </div>
         </section>
 
-        {/* Timeline Section — ย้ายมาขวาสุด (เดิมอยู่ซ้ายสุด) เนื้อหา/logic
-            ข้างในไม่เปลี่ยนแปลงเลยจากของเดิม แค่ย้ายตำแหน่งใน DOM order
-            ให้ตรงกับ 3-column grid ใหม่เท่านั้น */}
-        <aside className="timeline-panel">
-          <div className="timeline-header">
-            <p className="timeline-title">{t("reminder.timeline24h")} · {selectedDateKey}</p>
-            <div className="timeline-header-actions">
-              <button
-                type="button"
-                className="timeline-export-btn"
-                title="บันทึกภาพ timeline reminder"
-                disabled={isExporting}
-                onClick={exportTimelineImage}
-              >
-                ⇩ <span>{isExporting ? "…" : "PNG"}</span>
-              </button>
-              <div className="zoom-controls">
-                <button type="button" className="zoom-btn" onClick={zoomOut} disabled={zoomIndex === 0} title={t("reminder.zoomOut")}>−</button>
-                <span className="zoom-display">{t("reminder.minutesPerSlot", { minutes: minutesPerRow })}</span>
-                <button type="button" className="zoom-btn" onClick={zoomIn} disabled={zoomIndex === ZOOM_LEVELS_MINUTES.length - 1} title={t("reminder.zoomIn")}>+</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="timeline-viewport">
-            {selectedDateKey === localDateKey() && activityNowStatus && (
-              <div
-                className="timeline-activity-status"
-                title={activityNowStatus.title}
-                style={{ "--timeline-status-color": activityNowStatus.color.border }}
-              >
-                  <AutoShrinkText
-                    text={activityNowStatus.title}
-                    minScale={0.5}
-                    className="timeline-activity-status-title"
-                  />
-                  <strong>{activityNowStatus.text}</strong>
-              </div>
-            )}
-            <div hidden={selectedDateKey !== localDateKey()} className="now-indicator" aria-label={`เวลาปัจจุบัน ${formatDigitalClock(nowTick)}`}>
-              <span className="now-indicator-clock">{formatDigitalClock(nowTick)}</span>
-            </div>
-
-            <div
-              className="tape-scroll-container"
-              ref={tapeScrollRef}
-              onScroll={handleUserInteraction}
-              onWheel={handleUserInteraction}
-              onTouchMove={handleUserInteraction}
-            >
-              <div
-                className="tape-track-wrapper"
-                style={{ minWidth: `max(100%, ${timelineTrackMinWidth}px)` }}
-              >
-                {/* Spacer บน: ยืดขอบออกจากแถว 00:00 ไม่ให้ now-indicator ชนขอบ container
-                    เป็น slot เปิดไว้ เผื่อใส่ contentอื่นในอนาคต (เช่น แบนเนอร์/โฆษณา) */}
-                <div className="tape-spacer tape-spacer-top" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
-                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-top" /> */}
-                </div>
-
-                <TimelineRows tapeRows={tapeRows} nowTick={nowTick} onEditReminder={startEdit} />
-
-                <div className="running-reminder-layer" aria-label="Timer และ Stopwatch ที่กำลังทำงาน">
-                  {runningReminderSpans.map((span) => (
-                    <div
-                      key={span.id}
-                      className={`running-reminder-span is-${span.type}`}
-                      style={{ top: `${span.top}px`, height: `${span.height}px`, "--running-reminder-color": span.color }}
-                      title={`${span.type === REMINDER_TYPE.COUNTDOWN ? "Timer" : "Stopwatch"}: ${span.title}`}
-                    />
-                  ))}
-                </div>
-
-                <div className="calendar-timeline-layer" aria-label="กิจกรรมในปฏิทินของวันนี้">
-                  {calendarTimelineBlocks.filter((block) => !block.hidden).map((block) => (
-                    <button
-                      key={block.id}
-                      type="button"
-                      className={`calendar-timeline-block${block.isActive ? " is-current" : ""}${block.titleBelow ? " has-stacked-title" : ""}`}
-                      style={{
-                        top: `${block.top}px`,
-                        height: `${block.height}px`,
-                        left: "84px",
-                        width: `calc(100% - ${92 + block.stackIndex * 10}px)`,
-                        right: "auto",
-                        zIndex: block.stackZ,
-                        "--calendar-activity-border": block.color.border,
-                        "--calendar-activity-bg": block.color.bg
-                      }}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEditActivity?.(block.activity);
-                      }}
-                      onContextMenu={(event) => openActivityContextMenu(event, block)}
-                      title={`แก้ไขกิจกรรม: ${block.title}`}
-                      aria-label={`แก้ไขกิจกรรม: ${block.title}`}
-                    >
-                      <span className={`calendar-timeline-block-title${block.titleBelow ? " is-stacked" : ""}${block.titleOffsetMinutes > 0 ? " is-relocated" : ""}`} style={block.titleOffsetMinutes > 0 ? { top: `${(block.titleOffsetMinutes / Math.max(1, block.endMin - block.startMin)) * 100}%` } : undefined}>{block.title}</span>
-                      {block.hiddenCount > 0 && <small className="calendar-timeline-overflow-count">+{block.hiddenCount}</small>}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Spacer ล่าง: ยืดขอบออกจากแถว 24:00 ไม่ให้ now-indicator ชนขอบ container
-                    เป็น slot เปิดไว้ เผื่อใส่ content อื่นในอนาคตเช่นกัน */}
-                <div className="tape-spacer tape-spacer-bottom" style={{ height: `${SPACER_HEIGHT_PX}px` }}>
-                  {/* TODO: ใส่ content เพิ่มเติมได้ที่นี่ในอนาคต เช่น <AdSlot position="timeline-bottom" /> */}
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <ReminderTimelinePanel
+          t={t}
+          selectedDateKey={selectedDateKey}
+          nowTick={nowTick}
+          isExporting={isExporting}
+          onExport={exportTimelineImage}
+          zoomIndex={zoomIndex}
+          zoomIn={zoomIn}
+          zoomOut={zoomOut}
+          minutesPerRow={minutesPerRow}
+          zoomLevelCount={ZOOM_LEVELS_MINUTES.length}
+          activityNowStatus={activityNowStatus}
+          tapeScrollRef={tapeScrollRef}
+          onUserInteraction={handleUserInteraction}
+          timelineTrackMinWidth={timelineTrackMinWidth}
+          spacerHeight={SPACER_HEIGHT_PX}
+          timelineRows={<TimelineRows tapeRows={tapeRows} nowTick={nowTick} onEditReminder={startEdit} />}
+          runningReminderSpans={runningReminderSpans}
+          calendarTimelineBlocks={calendarTimelineBlocks}
+          onEditActivity={onEditActivity}
+          onOpenActivityMenu={openActivityContextMenu}
+        />
         {activityContextMenu && (
           <ActivityPopup
             activity={activityContextMenu.block.activity}
