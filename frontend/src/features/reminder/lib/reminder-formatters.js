@@ -23,6 +23,15 @@ export function formatDigitalClock(timestamp) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
 }
 
+export function describeEventAnchorSession(reminder) {
+  const parts = [];
+  const before = Number(reminder.eventAnchorCountdownMinutes);
+  const after = Number(reminder.eventAnchorStopwatchMinutes);
+  if (Number.isInteger(before) && before > 0) parts.push(`Countdown ก่อน ${before} นาที`);
+  if (Number.isInteger(after) && after > 0) parts.push(`Stopwatch หลัง ${after} นาที`);
+  return parts.join(" · ");
+}
+
 // minuteOfDayAt/minutesFromHHMM/isMinuteWithinWindow/snapToNextWindowStart/
 // computeNextDueAt ทั้งหมดย้ายไป ../reminder-due-logic.js แล้ว (migration
 // plan v2 เฟส 5, import ไว้ด้านบนของไฟล์) — เป็น prerequisite ของ FCM

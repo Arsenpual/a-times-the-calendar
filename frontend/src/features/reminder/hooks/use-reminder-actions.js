@@ -57,11 +57,10 @@ export function useReminderActions({ updateReminders, recordStatsEvent, onWarnin
         const restarted = { ...reminder, enabled: true, startedAt: Date.now(), completedAt: null };
         return { ...restarted, nextDueAt: computeNextDueAt(restarted, Date.now()) };
       }
+      const reenabled = { ...reminder, enabled: true, completedAt: null };
       return {
-        ...reminder,
-        enabled: true,
+        ...reenabled,
         nextDueAt: reminder.type === REMINDER_TYPE.INTERVAL ? null : computeNextDueAt(reminder, Date.now()),
-        completedAt: null
       };
     }));
   }, [onWarning, updateReminders]);

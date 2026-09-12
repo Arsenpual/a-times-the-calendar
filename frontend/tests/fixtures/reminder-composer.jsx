@@ -11,7 +11,7 @@ const types = [
 ].map(([type, labelKey]) => ({ type, labelKey }));
 const days = [["reminder.day.sun", 0], ["reminder.day.mon", 1], ["reminder.day.tue", 2], ["reminder.day.wed", 3], ["reminder.day.thu", 4], ["reminder.day.fri", 5], ["reminder.day.sat", 6]].map(([labelKey, value]) => ({ labelKey, value }));
 const colors = [{ label: "แดง", value: "#ea4335" }, { label: "น้ำเงิน", value: "#4285f4" }];
-const blank = () => ({ title: "", type: REMINDER_TYPE.INTERVAL, amount: "30", unit: "minutes", runAllDay: true, windowStart: "", windowEnd: "", atDate: "2026-09-12", atTime: "10:00", days: [1, 3], time: "08:00", times: ["08:00"], eventName: "", afterAmount: "2", afterUnit: "hours", routineSteps: "one, two", countdownMinutes: "20", lineColor: "#ea4335", groupId: null });
+const blank = () => ({ title: "", type: REMINDER_TYPE.INTERVAL, amount: "30", unit: "minutes", runAllDay: true, windowStart: "", windowEnd: "", atDate: "2026-09-12", atTime: "10:00", days: [1, 3], time: "08:00", times: ["08:00"], eventName: "", afterAmount: "2", afterUnit: "hours", eventAnchorCountdownEnabled: false, eventAnchorCountdownAmount: "10", eventAnchorCountdownUnit: "minutes", eventAnchorCountdownTitle: "", eventAnchorStopwatchEnabled: false, eventAnchorStopwatchAmount: "10", eventAnchorStopwatchUnit: "minutes", eventAnchorStopwatchTitle: "", routineSteps: "one, two", countdownMinutes: "20", lineColor: "#ea4335", groupId: null });
 function Fixture() {
   const [draft, setDraft] = useState(blank);
   const [open, setOpen] = useState(true);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEventAnchorSession } from "../lib/reminder-due-logic.js";
 import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import { localDateKey } from "../lib/reminder-date-view.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
@@ -60,6 +60,18 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
       // เรียกใช้ตรงกันได้เป๊ะๆ ในอนาคต ไม่ต้องคัดลอกเงื่อนไข if ซ้ำอีกที่
       const due = reminders.filter((r) => isReminderDue(r, now));
       setDueReminders(due);
+      // Persist the primary instant once, even if the user leaves the due
+      // banner open. That is the hand-off point from the main reminder to a
+      // derived Stopwatch; it is not an additional due notification.
+      const anchorStarts = due.filter((reminder) => hasEventAnchorSession(reminder) && reminder.eventAnchorStartedAt !== reminder.nextDueAt);
+      if (anchorStarts.length) {
+        const byId = new Map(anchorStarts.map((reminder) => [reminder.id, reminder.nextDueAt]));
+        updateReminders((previous) => previous.map((reminder) => (
+          byId.get(reminder.id) === reminder.nextDueAt
+            ? { ...reminder, eventAnchorStartedAt: reminder.nextDueAt }
+            : reminder
+        )));
+      }
       // ไม่มี scheduler: ส่งได้เฉพาะเมื่อหน้า Reminder Mode เปิดอยู่เท่านั้น.
       // ใช้ due timestamp เป็น key เพื่อกัน tick ทุกวินาทีส่งข้อความซ้ำ.
       due.forEach((reminder) => {
@@ -129,8 +141,9 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
           recordStatsEvent("snoozed", { title: r.title, reminderType: r.type, minutes: snoozeMinutes });
           return { ...r, enabled: true, nextDueAt: snoozedUntil, snoozedUntil };
         }
-        if (isOneShotType(r.type)) return { ...r, enabled: false, nextDueAt: Infinity };
-        return { ...r, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
+        const eventAnchorStartedAt = hasEventAnchorSession(r) ? (r.nextDueAt || Date.now()) : r.eventAnchorStartedAt;
+        if (isOneShotType(r.type)) return { ...r, eventAnchorStartedAt, enabled: false, nextDueAt: Infinity };
+        return { ...r, eventAnchorStartedAt, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
   };
@@ -153,14 +166,15 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
     updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
+        const eventAnchorStartedAt = hasEventAnchorSession(r) ? (r.nextDueAt || Date.now()) : r.eventAnchorStartedAt;
         if (isOneShotType(r.type)) {
           logReminderEvent("reminder_completed", { reminder_type: r.type });
           recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-          return { ...r, completedAt: Date.now(), enabled: false, nextDueAt: Infinity, snoozedUntil: null };
+          return { ...r, eventAnchorStartedAt, completedAt: Date.now(), enabled: false, nextDueAt: Infinity, snoozedUntil: null };
         }
         logReminderEvent("reminder_completed", { reminder_type: r.type });
         recordStatsEvent("completed", { title: r.title, reminderType: r.type });
-        return { ...r, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
+        return { ...r, eventAnchorStartedAt, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
     );
   };

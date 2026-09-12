@@ -18,12 +18,17 @@ export const SNOOZE_OPTIONS_MINUTES = [5, 10, 15, 30];
 export const TYPE_FILTER_OPTIONS = [
   { type: REMINDER_TYPE.INTERVAL, labelKey: "reminder.type.interval" },
   { type: REMINDER_TYPE.WEEKLY, labelKey: "reminder.type.weekly" },
-  { type: REMINDER_TYPE.EVENT_ANCHORED, labelKey: "reminder.type.event-anchored" },
   { type: REMINDER_TYPE.ROUTINE, labelKey: "reminder.type.routine" },
   { type: REMINDER_TYPE.ONCE_AT, labelKey: "reminder.type.once-at" },
   { type: REMINDER_TYPE.COUNTDOWN, labelKey: "reminder.type.countdown" },
   { type: REMINDER_TYPE.STOPWATCH, labelKey: "reminder.type.stopwatch" }
 ];
+
+// Event-anchored remains available only for existing records so old data can
+// still be read and edited. New reminders use notification buffers instead.
+export const LEGACY_EVENT_ANCHORED_OPTION = { type: REMINDER_TYPE.EVENT_ANCHORED, labelKey: "reminder.type.event-anchored" };
+export const REMINDER_DISPLAY_TYPE_OPTIONS = [...TYPE_FILTER_OPTIONS, LEGACY_EVENT_ANCHORED_OPTION];
+export const REMINDER_COMPOSER_TYPE_OPTIONS = TYPE_FILTER_OPTIONS;
 
 export const DAYS_OF_WEEK = [
   { labelKey: "reminder.day.sun", value: 0 },

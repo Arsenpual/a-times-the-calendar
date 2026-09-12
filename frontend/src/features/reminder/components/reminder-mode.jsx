@@ -13,6 +13,7 @@ import { useReminderStats } from "../hooks/use-reminder-stats.js";
 import { useActivityContextMenu } from "../hooks/use-activity-context-menu.js";
 import { useReminderOmnibar } from "../hooks/use-reminder-omnibar.js";
 import { useReminderFilters } from "../hooks/use-reminder-filters.js";
+import { useEventAnchorSessions } from "../hooks/use-event-anchor-sessions.js";
 import ReminderSidebar from "./reminder-sidebar.jsx";
 import ReminderCard from "./reminder-card.jsx";
 import ReminderListPanel from "./reminder-list-panel.jsx";
@@ -25,7 +26,7 @@ import { useReminderExport } from "../hooks/use-reminder-export.js";
 import { useReminderTimeline, ZOOM_LEVELS_MINUTES } from "../hooks/use-reminder-timeline.js";
 import "../styles/reminder-material.css";
 import "../styles/reminder-mode.css";
-import { STORAGE_KEY, REMINDER_STATUS_TAB, TYPE_FILTER_OPTIONS, DAYS_OF_WEEK, LINE_COLOR_OPTIONS, DEFAULT_LINE_COLOR } from "../lib/reminder-config.js";
+import { STORAGE_KEY, REMINDER_STATUS_TAB, TYPE_FILTER_OPTIONS, REMINDER_DISPLAY_TYPE_OPTIONS, REMINDER_COMPOSER_TYPE_OPTIONS, DAYS_OF_WEEK, LINE_COLOR_OPTIONS, DEFAULT_LINE_COLOR } from "../lib/reminder-config.js";
 import { extractScheduleFields } from "../lib/reminder-sync-fields.js";
 import { createBlankDraft, DEFAULT_REMINDERS } from "../lib/reminder-defaults.js";
 import { formatDurationClock } from "../lib/reminder-formatters.js";
@@ -69,6 +70,8 @@ export default function ReminderDashboard({
   const { dueReminders, nowTick, scheduleNext, markCompleted } = useDueReminders({
     reminders, setReminders, updateReminders, firebaseUser, recordStatsEvent
   });
+  const eventAnchorSessions = useEventAnchorSessions(reminders, nowTick);
+  const remindersForDisplay = [...reminders, ...eventAnchorSessions];
 
   const { draft, setDraft, editingId, setEditingId, isComposerOpen, setIsComposerOpen, composerCardRef } = useReminderComposerState(createBlankDraft);
   const { omnibarEnabled, omnibarInput, setOmnibarInput, omnibarPreview, submitOmnibar } = useReminderOmnibar({
@@ -79,7 +82,7 @@ export default function ReminderDashboard({
 
   const composerPreview = useReminderComposerPreview({
     draft, editingId, reminders, activities, t,
-    typeOptions: TYPE_FILTER_OPTIONS, daysOfWeek: DAYS_OF_WEEK
+    typeOptions: REMINDER_DISPLAY_TYPE_OPTIONS, daysOfWeek: DAYS_OF_WEEK
   });
 
   // Tab ของรายการ reminder (migration plan v2 เฟส 1.2) — เดิมแสดง
@@ -87,7 +90,7 @@ export default function ReminderDashboard({
   // ทีละ tab แบบ mockup "completed" ยังเป็น placeholder เฉยๆ (รอ field
   // completedAt จริงจากเฟส 4) กด disabled ไว้ก่อน
   // สถานะของรายการที่กำลังแสดง ไม่ใช่ "active" ของ UI ทั่วไป.
-  const { dateView, setDateView, selectedDateKey, selectedDate, selectDate, reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(reminders);
+  const { reminderDateFilter, setReminderDateFilter, selectedDateKey, selectedDate, selectDate, todayReminderCount, reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(remindersForDisplay);
 
   const reminderCalendar = useReminderCalendar({
     userId: firebaseUser?.uid, calendarAccessToken, selectedDateKey,
@@ -126,7 +129,7 @@ export default function ReminderDashboard({
     timelineTrackMinWidth, calendarTimelineBlocks, runningReminderSpans,
     activityNowStatus, handleUserInteraction, focusReminderOnTimeline, SPACER_HEIGHT_PX
   } = useReminderTimeline({
-    reminders, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
+    reminders: remindersForDisplay, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
     activeTypeFilter, activeGroupFilter, nowTick,
     defaultLineColor: DEFAULT_LINE_COLOR, formatDurationClock
   });
@@ -178,7 +181,7 @@ export default function ReminderDashboard({
       nowTick={nowTick}
       t={t}
       groups={groups}
-      typeOptions={TYPE_FILTER_OPTIONS}
+      typeOptions={REMINDER_DISPLAY_TYPE_OPTIONS}
       daysOfWeek={DAYS_OF_WEEK}
       cardMenu={cardMenu}
       onFocusTimeline={focusReminderOnTimeline}
@@ -231,15 +234,15 @@ export default function ReminderDashboard({
       {reminderCalendar.error && <p className="error-banner" role="alert">{reminderCalendar.error}</p>}
       {reminderCalendar.loading && <p role="status">กำลังโหลดกิจกรรมในปฏิทิน…</p>}
       <div className="dashboard-body">
-        {/* Left Nav — "ตัวกรองประเภท" (เฟส 2) และ "กลุ่ม/โปรเจกต์" (เฟส 3)
-            wired จริงทั้งคู่แล้ว "ของวันนี้" ยังเป็น placeholder รอระบบ
-            มุมมองในอนาคต count ทุกจุดคำนวณจาก reminders/groups จริงเสมอ */}
+        {/* Left Nav — มุมมองทั้งหมด/วันนี้/วันที่เลือก, ตัวกรองประเภท และ
+            กลุ่ม/โปรเจกต์ ใช้ reminderDateFilter ชุดเดียวกับ list/timeline */}
         <ReminderSidebar
-          dateView={dateView}
-          setDateView={setDateView}
+          reminderDateFilter={reminderDateFilter}
+          setReminderDateFilter={setReminderDateFilter}
+          todayReminderCount={todayReminderCount}
           selectedDateKey={selectedDateKey}
           selectDate={selectDate}
-          reminders={reminders}
+          reminders={remindersForDisplay}
           groups={groups}
           groupsError={groupsError}
           addGroup={addGroup}
@@ -255,9 +258,10 @@ export default function ReminderDashboard({
 
         <ReminderListPanel
           t={t}
-          reminders={reminders}
+          reminders={remindersForDisplay}
           groups={groups}
           typeOptions={TYPE_FILTER_OPTIONS}
+          composerTypeOptions={editingId && draft.type === "event-anchored" ? REMINDER_DISPLAY_TYPE_OPTIONS : REMINDER_COMPOSER_TYPE_OPTIONS}
           daysOfWeek={DAYS_OF_WEEK}
           lineColorOptions={LINE_COLOR_OPTIONS}
           activeTypeFilter={activeTypeFilter}

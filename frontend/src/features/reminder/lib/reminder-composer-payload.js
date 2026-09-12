@@ -31,5 +31,22 @@ export function applyReminderTypeFields(reminder, { draft, editingId, existingRe
     reminder.startedAt = editingId ? existingReminder?.startedAt || null : null;
     reminder.enabled = editingId ? existingReminder?.enabled || false : false;
   }
+  // The temporary Countdown/Stopwatch is derived at runtime; only its
+  // durations are stored on the parent reminder.
+  const toSessionMinutes = (enabled, amount, unit) => {
+    if (!enabled) return null;
+    const value = Math.max(1, Math.min(1440, parseInt(amount, 10) || 1));
+    return unit === "hours" ? Math.min(1440, value * 60) : value;
+  };
+  const supportsSession = draft.type === REMINDER_TYPE.WEEKLY ||
+    draft.type === REMINDER_TYPE.ONCE_AT;
+  reminder.eventAnchorCountdownMinutes = supportsSession
+    ? toSessionMinutes(draft.eventAnchorCountdownEnabled, draft.eventAnchorCountdownAmount, draft.eventAnchorCountdownUnit)
+    : null;
+  reminder.eventAnchorStopwatchMinutes = supportsSession
+    ? toSessionMinutes(draft.eventAnchorStopwatchEnabled, draft.eventAnchorStopwatchAmount, draft.eventAnchorStopwatchUnit)
+    : null;
+  reminder.eventAnchorCountdownTitle = reminder.eventAnchorCountdownMinutes ? draft.eventAnchorCountdownTitle.trim() : null;
+  reminder.eventAnchorStopwatchTitle = reminder.eventAnchorStopwatchMinutes ? draft.eventAnchorStopwatchTitle.trim() : null;
   return reminder;
 }

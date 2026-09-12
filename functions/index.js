@@ -83,7 +83,9 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
   }
 });
 
-async function processUserDueReminders(userId, dueReminders, now, { computeNextDueAt, isOneShotType }) {
+async function processUserDueReminders(userId, dueReminders, now, {
+  computeNextDueAt, isOneShotType, hasEventAnchorSession
+}) {
   const tokensSnapshot = await db.collection("users").doc(userId)
     .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
   const tokens = tokensSnapshot.docs.map((d) => d.data().token).filter(Boolean);
@@ -135,6 +137,7 @@ async function processUserDueReminders(userId, dueReminders, now, { computeNextD
     // (เหมือน markCompleted()/scheduleNext() ฝั่ง client ทำตอนผู้ใช้กด
     // "เตือนอีกครั้ง" — ที่นี่ทำอัตโนมัติแทนเพราะไม่มีใครเปิดแอปอยู่ให้กด)
     const updates = { [RENOTIFY_GUARD_FIELD]: now };
+    if (hasEventAnchorSession?.(reminder)) updates.eventAnchorStartedAt = reminder.nextDueAt || now;
     if (isOneShotType(reminder.type) || reminder.type === "activity-notification") {
       // one-shot ที่ยิงแล้วไม่มีใคร acknowledge — ปิด enabled เฉยๆ (ไม่ตั้ง
       // completedAt เพราะนั่นเป็น "ผู้ใช้กดทำเสร็จแล้ว" ไม่ใช่ระบบยิงเอง

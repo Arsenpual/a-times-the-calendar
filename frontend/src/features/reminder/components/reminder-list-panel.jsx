@@ -2,7 +2,7 @@ import ReminderComposer from "./reminder-composer.jsx";
 
 /** Center dashboard presentation: heading, status tabs, composer, and filtered list. */
 export default function ReminderListPanel({
-  t, reminders, groups, typeOptions, daysOfWeek, lineColorOptions,
+  t, reminders, groups, typeOptions, composerTypeOptions = typeOptions, daysOfWeek, lineColorOptions,
   activeTypeFilter, activeGroupFilter, onClearTypeFilter, onClearGroupFilter,
   enabledReminders, pausedReminders, completedReminders,
   visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders,
@@ -39,7 +39,7 @@ export default function ReminderListPanel({
       {tabs.map(([value, className, label, count]) => <button key={value} type="button" role="tab" aria-selected={statusTab === value} className={`reminder-status-tab reminder-status-tab--${className} ${statusTab === value ? "is-active" : ""}`} onClick={() => onStatusTabChange(value)}>{label} <span className="reminder-status-tab-count">{count}</span></button>)}
     </div>
     <div className="reminders-scroll-area">
-      <ReminderComposer {...composerProps} open={isComposerOpen} groups={groups} typeOptions={typeOptions} daysOfWeek={daysOfWeek} lineColorOptions={lineColorOptions} />
+      <ReminderComposer {...composerProps} open={isComposerOpen} groups={groups} typeOptions={composerTypeOptions} daysOfWeek={daysOfWeek} lineColorOptions={lineColorOptions} />
       {reminders.length === 0 && !isComposerOpen ? <p className="empty-state">{t("reminder.empty")}</p> : activeList.length > 0 ? activeList.map(renderReminder) : (!isComposerOpen || statusTab === statusTabs.COMPLETED) && <p className="empty-state">{emptyMessage(statusTab)}</p>}
     </div>
   </section>;

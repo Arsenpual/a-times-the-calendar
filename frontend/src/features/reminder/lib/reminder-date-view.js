@@ -21,6 +21,7 @@ export function reminderSlotsOnDate(reminder, date) {
     case 'interval': return intervalScheduleMinutes(reminder);
     case 'once-at': return at(reminder.atMs);
     case 'countdown': return at(reminder.startedAt ? reminder.startedAt + reminder.durationMs : null);
+    case 'stopwatch': return reminder.isEventAnchorDerived ? at(reminder.startedAt) : [];
     case 'event-anchored': return at(reminder.nextDueAt);
     default: return [];
   }

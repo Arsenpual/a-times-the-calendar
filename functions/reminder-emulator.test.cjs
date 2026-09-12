@@ -99,6 +99,16 @@ test('event-anchored disarms, then sends again only after a new trigger', async 
   await ref.update({ lastTriggeredAt: now - 60000, nextDueAt: now });
   await run(); assert.equal(calls.length, 2);
 });
+test('event anchor stores the primary instant once while regular weekly scheduling continues', async () => {
+  const ref = reminder('anchored-weekly');
+  await ref.set(base({ type: 'weekly', days: [3], times: ['10:00'], nextDueAt: now,
+    eventAnchorCountdownMinutes: 15, eventAnchorStopwatchMinutes: 10 }));
+  await run();
+  const value = await read(ref);
+  assert.equal(calls.length, 1);
+  assert.equal(value.eventAnchorStartedAt, now);
+  assert.equal(value.nextDueAt, at('2026-09-16T10:00:00'));
+});
 test('disabled, completed, future, null, routine, stopwatch and notified records stay unchanged', async () => {
   const cases = [{ enabled: false }, { completedAt: now }, { nextDueAt: now + 1 }, { nextDueAt: null },
     { type: 'routine' }, { type: 'stopwatch' }, { lastNotifiedAt: now }];

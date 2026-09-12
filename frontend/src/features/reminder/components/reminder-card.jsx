@@ -1,4 +1,4 @@
-import { formatDurationClock, describeReminder } from "../lib/reminder-formatters.js";
+import { formatDurationClock, describeReminder, describeEventAnchorSession } from "../lib/reminder-formatters.js";
 import { createPortal } from "react-dom";
 import { REMINDER_TYPE, isOneShotType } from "../lib/reminder-due-logic.js";
 import { getIntervalWorkSummary } from "../lib/interval-schedule.js";
@@ -53,14 +53,20 @@ export default function ReminderCard({
   const intervalWorkLabel = intervalHours % 1 === 0 ? `${intervalHours} ชม.` : `${intervalWorkSummary?.workMinutes} นาที`;
   const isMenuOpen = cardMenu?.id === reminder.id;
   const accentColor = TYPE_ACCENT_COLOR[reminder.type];
+  const eventAnchorSummary = describeEventAnchorSession(reminder);
+  const isDerivedSession = Boolean(reminder.isEventAnchorDerived);
+  const sourceReminder = reminder.sourceReminder || reminder;
 
   return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
     <button type="button" className="reminder-type-icon" style={{ backgroundColor: accentColor, color: reminder.type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff" }} onClick={() => onFocusTimeline(reminder)} title="เลื่อน Timeline มาที่เวลาของ Reminder" aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}>{typeIcon(reminder.type)}</button>
-    <div className="reminder-info" role="button" tabIndex={0} onClick={() => onStartEdit(reminder)} onKeyDown={(event) => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onStartEdit(reminder); }
+    <div className="reminder-info" role="button" tabIndex={0} onClick={() => onStartEdit(sourceReminder)} onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onStartEdit(sourceReminder); }
     }} title="คลิกเพื่อแก้ไข Reminder">
       <div className="reminder-card-title-row"><p className="title">{reminder.title}</p><span className={`reminder-priority reminder-priority--${priority.tone}`}>{priority.label}</span></div>
       <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
+      {eventAnchorSummary && <p className="reminder-buffer-detail">⏳ {eventAnchorSummary}</p>}
+      {eventAnchorSummary && <span className="reminder-type-chip">Event session พร้อมใช้</span>}
+      {isDerivedSession && <p className="reminder-buffer-detail">ชั่วคราว · จาก {sourceReminder.title}</p>}
       {weeklyDaysLabel && <p className="reminder-weekly-days-detail"><span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}</p>}
       {reminder.completedAt && <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}</span>}
       {intervalWorkSummary && <p className="reminder-interval-summary" title={`ช่วงทำงาน ${intervalWorkSummary.range || "ตลอดวัน"} · แจ้งเตือน ${intervalWorkSummary.notificationCount} ครั้ง`}><span>{intervalWorkLabel}</span><span aria-hidden="true">·</span><strong>{intervalWorkSummary.notificationCount} รอบ</strong></p>}
@@ -68,9 +74,9 @@ export default function ReminderCard({
       {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onTriggerAnchor(reminder.id); }}>⚡ เริ่มเหตุการณ์ "{reminder.eventName}"</button>}
       {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onAdvanceRoutine(reminder.id); }}>✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})</button>}
     </div>
-    {reminder.type === REMINDER_TYPE.STOPWATCH ? <div className="stopwatch-controls"><button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => onToggleStopwatch(reminder.id)}>{reminder.enabled ? "⏸ Stop" : "▶ Start"}</button><button type="button" className="icon-btn" onClick={() => onResetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">↺</button></div> : <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => onToggleReminder(reminder.id)} aria-label="สวิตช์เปิดปิด" />}
-    <div className={`reminder-card-actions ${isMenuOpen ? "menu-open" : ""}`}><button type="button" className="icon-btn" onClick={(event) => onToggleMenu(event, reminder.id)} title="ตัวเลือกเพิ่มเติม" aria-haspopup="true" aria-expanded={isMenuOpen}>⋮</button>
+    {!isDerivedSession && (reminder.type === REMINDER_TYPE.STOPWATCH ? <div className="stopwatch-controls"><button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => onToggleStopwatch(reminder.id)}>{reminder.enabled ? "⏸ Stop" : "▶ Start"}</button><button type="button" className="icon-btn" onClick={() => onResetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">↺</button></div> : <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => onToggleReminder(reminder.id)} aria-label="สวิตช์เปิดปิด" />)}
+    {!isDerivedSession && <div className={`reminder-card-actions ${isMenuOpen ? "menu-open" : ""}`}><button type="button" className="icon-btn" onClick={(event) => onToggleMenu(event, reminder.id)} title="ตัวเลือกเพิ่มเติม" aria-haspopup="true" aria-expanded={isMenuOpen}>⋮</button>
       {isMenuOpen && createPortal(<div className="card-dropdown-menu" role="menu" onPointerDown={(event) => event.stopPropagation()} style={{ "--card-menu-x": `${cardMenu.position.x}px`, "--card-menu-y": `${cardMenu.position.y}px` }}><button type="button" role="menuitem" onClick={() => { onCloseMenu(); onStartEdit(reminder); }}>✏️ แก้ไข</button>{isOneShotType(reminder.type) && !reminder.completedAt && <button type="button" role="menuitem" onClick={() => { onCloseMenu(); onMarkCompleted(reminder.id); }}>✓ ทำเสร็จแล้ว</button>}<button type="button" role="menuitem" className="is-danger" onClick={() => { onCloseMenu(); onDelete(reminder.id); }}>🗑️ ลบ</button></div>, document.body)}
-    </div>
+    </div>}
   </div>;
 }

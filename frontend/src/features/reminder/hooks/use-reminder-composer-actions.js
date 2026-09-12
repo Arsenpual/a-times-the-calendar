@@ -52,9 +52,12 @@ export function useReminderComposerActions({
 
     // Interval เวอร์ชันพื้นฐานเก็บเพียงความถี่เพื่อใช้อ้างอิงใน UI ยังไม่
     // เข้าระบบ due/push จึงไม่สร้างงาน Cloud Run หรือ notification.
-    newReminder.nextDueAt = newReminder.type === REMINDER_TYPE.INTERVAL
-      ? null
-      : computeNextDueAt(newReminder, Date.now());
+    const scheduleNow = Date.now();
+    if (newReminder.type === REMINDER_TYPE.INTERVAL) {
+      newReminder.nextDueAt = null;
+    } else {
+      newReminder.nextDueAt = computeNextDueAt(newReminder, scheduleNow);
+    }
 
     // migration plan v2 เฟส 4 — completedAt เป็น runtime field (ไม่ sync
     // backend, ดู SCHEDULE_FIELD_KEYS) ต้องคงค่าเดิมไว้ตอนแก้ไข reminder
@@ -117,6 +120,16 @@ export function useReminderComposerActions({
       eventName: reminder.eventName || "",
       afterAmount: String(reminder.afterAmount || 2),
       afterUnit: reminder.afterUnit || "hours",
+      // Read the short-lived notification-buffer field too, so an unsynced
+      // draft from the prior build can be saved into the Event session shape.
+      eventAnchorCountdownEnabled: Number.isFinite(reminder.eventAnchorCountdownMinutes ?? reminder.notificationBufferBeforeMinutes),
+      eventAnchorCountdownAmount: String(reminder.eventAnchorCountdownMinutes ?? reminder.notificationBufferBeforeMinutes ?? 10),
+      eventAnchorCountdownUnit: "minutes",
+      eventAnchorCountdownTitle: reminder.eventAnchorCountdownTitle || "",
+      eventAnchorStopwatchEnabled: Number.isFinite(reminder.eventAnchorStopwatchMinutes ?? reminder.notificationBufferAfterMinutes),
+      eventAnchorStopwatchAmount: String(reminder.eventAnchorStopwatchMinutes ?? reminder.notificationBufferAfterMinutes ?? 10),
+      eventAnchorStopwatchUnit: "minutes",
+      eventAnchorStopwatchTitle: reminder.eventAnchorStopwatchTitle || "",
       routineSteps: reminder.steps ? reminder.steps.join(", ") : "แปรงฟัน, ยืดตัว, กินวิตามิน",
       lineColor: reminder.lineColor || DEFAULT_LINE_COLOR,
       groupId: reminder.groupId ?? null

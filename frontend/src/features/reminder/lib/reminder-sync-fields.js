@@ -10,7 +10,8 @@ import { REMINDER_TYPE } from "./reminder-due-logic.js";
 const SCHEDULE_FIELD_KEYS = [
   "type", "title", "enabled", "amount", "unit", "windowStart", "windowEnd",
   "days", "time", "times", "atMs", "afterAmount", "afterUnit", "durationMs",
-  "lineColor", "eventName", "steps",
+  "lineColor", "eventName", "steps", "eventAnchorCountdownMinutes",
+  "eventAnchorStopwatchMinutes", "eventAnchorCountdownTitle", "eventAnchorStopwatchTitle", "eventAnchorStartedAt",
   // migration plan v2 เฟส 3 — groupId ผูก reminder เข้ากับกลุ่ม/โปรเจกต์
   // (one-to-one, null = ไม่มีกลุ่ม) ต้องส่งค่า null อย่างชัดเจนเสมอ (ไม่ใช่
   // undefined) เมื่อไม่มีกลุ่ม เพื่อให้ extractScheduleFields ด้านล่างส่ง

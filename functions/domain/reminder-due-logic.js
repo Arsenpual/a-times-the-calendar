@@ -14,6 +14,27 @@ export function isOneShotType(type) {
   return type === REMINDER_TYPE.ONCE_AT || type === REMINDER_TYPE.COUNTDOWN;
 }
 
+// Event anchor is an optional session layer on a scheduled reminder. It does
+// not schedule extra notifications or create child documents: the UI derives
+// a temporary Countdown before the main event and a Stopwatch after it.
+export function supportsEventAnchorSession(type) {
+  return type === REMINDER_TYPE.WEEKLY ||
+    type === REMINDER_TYPE.ONCE_AT;
+}
+
+export function eventAnchorMinutes(reminder, phase) {
+  const key = phase === "countdown" ? "eventAnchorCountdownMinutes" : "eventAnchorStopwatchMinutes";
+  const value = Number(reminder?.[key]);
+  return Number.isInteger(value) && value >= 1 && value <= 1440 ? value : null;
+}
+
+export function hasEventAnchorSession(reminder) {
+  return supportsEventAnchorSession(reminder?.type) && Boolean(
+    eventAnchorMinutes(reminder, "countdown") || eventAnchorMinutes(reminder, "stopwatch")
+  );
+}
+
+
 export function intervalMs(reminder) {
   return reminder.amount * (reminder.unit === "hours" ? 60 * 60 * 1000 : 60 * 1000);
 }

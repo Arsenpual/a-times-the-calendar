@@ -18,7 +18,8 @@ export async function fetchReminders() {
  * @param {string} reminderId
  * @param {object} fields ฟิลด์วัน/เวลาที่จะบันทึก (type, title, enabled,
  *   amount, unit, windowStart, windowEnd, days, time, atMs, afterAmount,
- *   afterUnit, durationMs, lineColor, eventName, steps) — ฟิลด์ runtime
+ *   afterUnit, eventAnchorCountdownMinutes, eventAnchorStopwatchMinutes,
+ *   eventAnchorStartedAt, durationMs, lineColor, eventName, steps) — ฟิลด์ runtime
  *   อื่นที่ไม่อยู่ใน allow-list นี้จะถูกตัดทิ้งฝั่ง backend เงียบๆ ถ้าส่งมา
  */
 export async function saveReminder(reminderId, fields) {

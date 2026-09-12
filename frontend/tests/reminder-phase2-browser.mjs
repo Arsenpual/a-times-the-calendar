@@ -22,6 +22,9 @@ try {
   await page.getByRole("button", { name: "ศ" }).click();
   await page.getByRole("button", { name: "เพิ่มเวลา" }).click();
   assert.equal((await page.locator(".weekly-time-row").count()), 2);
+  await page.getByRole("switch", { name: "เริ่ม Countdown ก่อนเวลาหลัก" }).click();
+  await page.locator(".notification-buffer-inputs input").fill("15");
+  assert.equal(await page.evaluate(() => window.composerFixture.draft.eventAnchorCountdownAmount), "15");
   await page.locator("#reminder-type").selectOption("interval");
   await page.getByRole("switch").click();
   assert.equal(await page.locator('input[type="time"]').count(), 2);

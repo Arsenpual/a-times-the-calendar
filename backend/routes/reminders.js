@@ -34,6 +34,12 @@ const ALLOWED_FIELDS = [
   "atMs",
   "afterAmount",
   "afterUnit",
+  // Config for view-only Countdown/Stopwatch derived from the main event.
+  "eventAnchorCountdownMinutes",
+  "eventAnchorStopwatchMinutes",
+  "eventAnchorCountdownTitle",
+  "eventAnchorStopwatchTitle",
+  "eventAnchorStartedAt",
   "durationMs",
   "lineColor",
   "eventName",
@@ -123,7 +129,7 @@ function sanitizeReminderFields(body) {
   if (!isValidStringField(body.title) || body.title.trim().length === 0) return null;
 
   // ฟิลด์ string ทั่วไปอื่นๆ ที่ frontend อาจส่งมา — เช็คเพดานความยาวก่อนรับ
-  const STRING_FIELDS = ["unit", "afterUnit", "lineColor", "eventName"];
+  const STRING_FIELDS = ["unit", "afterUnit", "lineColor", "eventName", "eventAnchorCountdownTitle", "eventAnchorStopwatchTitle"];
   for (const key of STRING_FIELDS) {
     if (body[key] !== undefined && !isValidStringField(body[key])) return null;
   }
@@ -140,6 +146,18 @@ function sanitizeReminderFields(body) {
 
   if (body.snoozedUntil !== undefined && body.snoozedUntil !== null &&
     (typeof body.snoozedUntil !== "number" || !Number.isFinite(body.snoozedUntil))) return null;
+
+  for (const key of ["eventAnchorCountdownMinutes", "eventAnchorStopwatchMinutes"]) {
+    if (body[key] !== undefined && body[key] !== null &&
+      (!Number.isInteger(body[key]) || body[key] < 1 || body[key] > 1440)) return null;
+  }
+  const hasEventAnchorSession = (
+    (body.eventAnchorCountdownMinutes !== null && body.eventAnchorCountdownMinutes !== undefined) ||
+    (body.eventAnchorStopwatchMinutes !== null && body.eventAnchorStopwatchMinutes !== undefined)
+  );
+  if (hasEventAnchorSession && !["weekly", "once-at"].includes(body.type)) return null;
+  if (body.eventAnchorStartedAt !== undefined && body.eventAnchorStartedAt !== null &&
+    (typeof body.eventAnchorStartedAt !== "number" || !Number.isFinite(body.eventAnchorStartedAt))) return null;
 
   // ไม่ขยาย runtime state ของ reminder ประเภทอื่นขึ้น Firestore ในรอบนี้.
   if (body.completedAt !== undefined && body.type !== "routine") return null;

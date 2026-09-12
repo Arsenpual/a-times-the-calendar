@@ -1270,6 +1270,13 @@
           text-overflow: ellipsis;
         }
 
+        .reminder-buffer-detail {
+          margin: -1px 0 0;
+          color: var(--g-blue-hover);
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
         .reminder-weekly-days-detail {
           display: flex;
           gap: 4px;
@@ -1573,6 +1580,11 @@
         .freq-inline-group input {
           width: 80px;
         }
+
+        .notification-buffer-fields { gap: 8px; }
+        .notification-buffer-fields .form-hint { margin: -2px 0 2px; }
+        .notification-buffer-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .notification-buffer-inputs { align-items: center; }
 
         .reminder-composer-preview {
           display: grid;

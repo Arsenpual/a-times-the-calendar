@@ -1,5 +1,5 @@
 import React from "react";
-import { REMINDER_TYPE } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, supportsEventAnchorSession } from "../lib/reminder-due-logic.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 
 function ColorPicker({ draft, setDraft, options }) {
@@ -29,6 +29,36 @@ function ComposerPreview({ preview }) {
           : "ถึงขีดจำกัด 720 ครั้ง/วันแล้ว — การแจ้งเตือนรายการถัดไปอาจไม่ถูกส่ง"}
       </p>}
     </div>
+  </section>;
+}
+
+function EventAnchorSessionFields({ draft, update, t }) {
+  const renderPhase = (phase) => {
+    const isCountdown = phase === "countdown";
+    const enabledKey = isCountdown ? "eventAnchorCountdownEnabled" : "eventAnchorStopwatchEnabled";
+    const amountKey = isCountdown ? "eventAnchorCountdownAmount" : "eventAnchorStopwatchAmount";
+    const unitKey = isCountdown ? "eventAnchorCountdownUnit" : "eventAnchorStopwatchUnit";
+    const titleKey = isCountdown ? "eventAnchorCountdownTitle" : "eventAnchorStopwatchTitle";
+    const label = t(isCountdown ? "reminder.eventAnchorCountdown" : "reminder.eventAnchorStopwatch");
+    return <div className="notification-buffer-row" key={phase}>
+      <button type="button" role="switch" aria-checked={draft[enabledKey]} className={`interval-window-toggle${draft[enabledKey] ? " is-active" : ""}`} onClick={() => update({ [enabledKey]: !draft[enabledKey] })}>
+        <span className="interval-window-toggle-track" aria-hidden="true" />
+        <span>{label}</span>
+      </button>
+      {draft[enabledKey] && <div className="freq-inline-group notification-buffer-inputs">
+        <input className="form-input" type="number" min="1" max={draft[unitKey] === "hours" ? 24 : 1440} value={draft[amountKey]} onChange={(event) => update({ [amountKey]: event.target.value })} aria-label={label} />
+        <select className="form-select" value={draft[unitKey]} onChange={(event) => update({ [unitKey]: event.target.value })}>
+          <option value="minutes">{t("reminder.minutes")}</option><option value="hours">{t("reminder.hours")}</option>
+        </select>
+      </div>}
+      {draft[enabledKey] && <input className="form-input" value={draft[titleKey]} onChange={(event) => update({ [titleKey]: event.target.value })} placeholder={isCountdown ? "ชื่อ Countdown ชั่วคราว (ไม่บังคับ)" : "ชื่อ Stopwatch ชั่วคราว (ไม่บังคับ)"} aria-label={`ชื่อ ${label}`} />}
+    </div>;
+  };
+  return <section className="form-field notification-buffer-fields">
+    <label>{t("reminder.eventAnchorSession")}</label>
+    <p className="form-hint">{t("reminder.eventAnchorSessionHint")}</p>
+    {renderPhase("countdown")}
+    {renderPhase("stopwatch")}
   </section>;
 }
 
@@ -82,6 +112,7 @@ export default function ReminderComposer({
       {draft.type === REMINDER_TYPE.ONCE_AT && <div className="composer-row form-field"><div><label htmlFor="at-date">{t("reminder.date")}</label><input id="at-date" className="form-input" type="date" value={draft.atDate} onChange={(event) => update({ atDate: event.target.value })} /></div><div><label htmlFor="at-time">{t("reminder.time")}</label><input id="at-time" className="form-input" type="time" value={draft.atTime} onChange={(event) => update({ atTime: event.target.value })} /></div></div>}
       {draft.type === REMINDER_TYPE.COUNTDOWN && <><div className="form-field"><label htmlFor="countdown-minutes">{t("reminder.durationMinutes")}</label><input id="countdown-minutes" className="form-input" type="number" min="1" max="1440" value={draft.countdownMinutes} onChange={(event) => update({ countdownMinutes: event.target.value })} /></div><div className="form-field"><label>{t("reminder.timelineColor")}</label><ColorPicker draft={draft} setDraft={setDraft} options={lineColorOptions} /></div></>}
       {draft.type === REMINDER_TYPE.STOPWATCH && <><p className="form-hint">{t("reminder.stopwatchHint")}</p><div className="form-field"><label>{t("reminder.timelineColor")}</label><ColorPicker draft={draft} setDraft={setDraft} options={lineColorOptions} /></div></>}
+      {supportsEventAnchorSession(draft.type) && <EventAnchorSessionFields draft={draft} update={update} t={t} />}
       <ComposerPreview preview={preview} />
       <div className="composer-actions">
         {editingId && <button className="btn-text btn-delete-reminder" type="button" onClick={onDelete}>{t("reminder.delete")}</button>}
