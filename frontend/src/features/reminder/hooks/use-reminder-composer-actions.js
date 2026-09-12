@@ -1,5 +1,5 @@
 import { applyReminderTypeFields, buildReminderBase } from "../lib/reminder-composer-payload.js";
-import { REMINDER_TYPE, computeNextDueAt, hasWindow } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, computeNextDueAt, hasWindow, initializeEventAnchorSchedule } from "../lib/reminder-due-logic.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
 
 function toLocalDateInputValue(ms) {
@@ -56,7 +56,7 @@ export function useReminderComposerActions({
     if (newReminder.type === REMINDER_TYPE.INTERVAL) {
       newReminder.nextDueAt = null;
     } else {
-      newReminder.nextDueAt = computeNextDueAt(newReminder, scheduleNow);
+      Object.assign(newReminder, initializeEventAnchorSchedule(newReminder, scheduleNow));
     }
 
     // migration plan v2 เฟส 4 — completedAt เป็น runtime field (ไม่ sync

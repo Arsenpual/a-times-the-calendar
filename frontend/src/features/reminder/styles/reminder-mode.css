@@ -1592,6 +1592,16 @@
         .event-anchor-phase-toggle + .notification-buffer-inputs input { width: 48px; min-width: 48px; font-size: 11px; padding-inline: 7px; }
         .event-anchor-phase-toggle + .notification-buffer-inputs .form-select { width: 76px; min-width: 76px; font-size: 11px; padding-inline: 6px; }
         .event-anchor-title-input { flex: 1 1 132px; min-width: 0; font-size: 11px; padding: 7px 8px; }
+        .reminder-active-event-session {
+          margin: 3px 0 0;
+          color: var(--g-blue);
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
 
         .reminder-composer-preview {
           display: grid;

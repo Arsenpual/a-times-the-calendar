@@ -84,7 +84,7 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
 });
 
 async function processUserDueReminders(userId, dueReminders, now, {
-  computeNextDueAt, isOneShotType, hasEventAnchorSession
+  computeNextDueAt, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel
 }) {
   const tokensSnapshot = await db.collection("users").doc(userId)
     .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
@@ -105,7 +105,7 @@ async function processUserDueReminders(userId, dueReminders, now, {
       const message = {
         data: {
           reminderId: ref.id,
-          title: "ถึงเวลาแล้ว",
+          title: eventAnchorNotificationLabel?.(reminder) || "ถึงเวลาแล้ว",
           body: reminder.title || "(ไม่มีชื่อ)"
         },
         tokens
@@ -137,8 +137,9 @@ async function processUserDueReminders(userId, dueReminders, now, {
     // (เหมือน markCompleted()/scheduleNext() ฝั่ง client ทำตอนผู้ใช้กด
     // "เตือนอีกครั้ง" — ที่นี่ทำอัตโนมัติแทนเพราะไม่มีใครเปิดแอปอยู่ให้กด)
     const updates = { [RENOTIFY_GUARD_FIELD]: now };
-    if (hasEventAnchorSession?.(reminder)) updates.eventAnchorStartedAt = reminder.nextDueAt || now;
-    if (isOneShotType(reminder.type) || reminder.type === "activity-notification") {
+    if (hasEventAnchorSession?.(reminder)) {
+      Object.assign(updates, advanceEventAnchorSchedule(reminder, now));
+    } else if (isOneShotType(reminder.type) || reminder.type === "activity-notification") {
       // one-shot ที่ยิงแล้วไม่มีใคร acknowledge — ปิด enabled เฉยๆ (ไม่ตั้ง
       // completedAt เพราะนั่นเป็น "ผู้ใช้กดทำเสร็จแล้ว" ไม่ใช่ระบบยิงเอง
       // ระวัง: completedAt ก็ไม่ sync ขึ้น backend ตาม design เดิมของเฟส 4

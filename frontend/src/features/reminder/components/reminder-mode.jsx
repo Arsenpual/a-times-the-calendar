@@ -71,7 +71,17 @@ export default function ReminderDashboard({
     reminders, setReminders, updateReminders, firebaseUser, recordStatsEvent
   });
   const eventAnchorSessions = useEventAnchorSessions(reminders, nowTick);
-  const remindersForDisplay = [...reminders, ...eventAnchorSessions];
+  // Keep temporary sessions visible on their own, and also attach them to
+  // the parent card so a user can see the currently running buffer without
+  // needing to find it elsewhere in the list.
+  const sessionsBySourceId = new Map();
+  eventAnchorSessions.forEach((session) => {
+    const current = sessionsBySourceId.get(session.sourceReminderId) || [];
+    current.push(session);
+    sessionsBySourceId.set(session.sourceReminderId, current);
+  });
+  const remindersForDisplay = reminders.map((reminder) => ({ ...reminder, activeEventAnchorSessions: sessionsBySourceId.get(reminder.id) || [] }));
+  const remindersForTimeline = [...remindersForDisplay, ...eventAnchorSessions];
 
   const { draft, setDraft, editingId, setEditingId, isComposerOpen, setIsComposerOpen, composerCardRef } = useReminderComposerState(createBlankDraft);
   const { omnibarEnabled, omnibarInput, setOmnibarInput, omnibarPreview, submitOmnibar } = useReminderOmnibar({
@@ -129,7 +139,7 @@ export default function ReminderDashboard({
     timelineTrackMinWidth, calendarTimelineBlocks, runningReminderSpans,
     activityNowStatus, handleUserInteraction, focusReminderOnTimeline, SPACER_HEIGHT_PX
   } = useReminderTimeline({
-    reminders: remindersForDisplay, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
+    reminders: remindersForTimeline, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
     activeTypeFilter, activeGroupFilter, nowTick,
     defaultLineColor: DEFAULT_LINE_COLOR, formatDurationClock
   });

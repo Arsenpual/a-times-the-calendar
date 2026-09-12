@@ -12,7 +12,7 @@ const { act } = Renderer;
 const asDataUrl = (value) => "data:text/javascript;base64," + Buffer.from(value).toString("base64");
 const source = readFileSync(new URL("../src/features/reminder/hooks/use-reminder-actions.js", import.meta.url), "utf8")
   .replace('from "react"', `from "${reactUrl}"`)
-  .replace('import { REMINDER_TYPE, computeNextDueAt } from "../lib/reminder-due-logic.js";', 'const REMINDER_TYPE = { INTERVAL: "interval", COUNTDOWN: "countdown", ONCE_AT: "once-at", ROUTINE: "routine", STOPWATCH: "stopwatch" }; const computeNextDueAt = (_, now) => now + 60000;')
+  .replace('import { REMINDER_TYPE, computeNextDueAt, initializeEventAnchorSchedule } from "../lib/reminder-due-logic.js";', 'const REMINDER_TYPE = { INTERVAL: "interval", COUNTDOWN: "countdown", ONCE_AT: "once-at", ROUTINE: "routine", STOPWATCH: "stopwatch" }; const computeNextDueAt = (_, now) => now + 60000; const initializeEventAnchorSchedule = (_, now) => ({ nextDueAt: now + 60000 });')
   .replace('import { logReminderEvent } from "../lib/reminder-telemetry.js";', 'const logReminderEvent = (...event) => globalThis.events.push(event);');
 const { useReminderActions } = await import(asDataUrl(source));
 globalThis.events = [];

@@ -12,9 +12,14 @@ export function useReminderComposerPreview({ draft, editingId, reminders, activi
     const field = (label, value) => ({ label, value });
     const quotaDate = new Date();
     const quotaDateKey = localDateKey(quotaDate);
+    // Countdown start and Stopwatch completion are notification phases of the
+    // same parent reminder, but each consumes one delivery from the daily cap.
+    const notificationMultiplier = (reminder) => 1 +
+      (Number.isInteger(reminder.eventAnchorCountdownMinutes) && reminder.eventAnchorCountdownMinutes > 0 ? 1 : 0) +
+      (Number.isInteger(reminder.eventAnchorStopwatchMinutes) && reminder.eventAnchorStopwatchMinutes > 0 ? 1 : 0);
     const existingReminderCount = reminders
       .filter((reminder) => reminder.id !== editingId && reminder.enabled && !reminder.completedAt)
-      .reduce((total, reminder) => total + reminderSlotsOnDate(reminder, quotaDate).length, 0);
+      .reduce((total, reminder) => total + reminderSlotsOnDate(reminder, quotaDate).length * notificationMultiplier(reminder), 0);
     const activityNotificationCount = activities.filter((activity) => {
       if (!activity.start?.dateTime) return false;
       const start = activityDate(activity.start);
@@ -37,7 +42,7 @@ export function useReminderComposerPreview({ draft, editingId, reminders, activi
       limit: 720,
       existingReminderCount,
       activityNotificationCount,
-      draftNotificationCount: reminderSlotsOnDate(draftForQuota, quotaDate).length
+      draftNotificationCount: reminderSlotsOnDate(draftForQuota, quotaDate).length * notificationMultiplier(draftForQuota)
     };
     notificationQuota.projectedNotificationCount = notificationQuota.existingReminderCount + notificationQuota.activityNotificationCount + notificationQuota.draftNotificationCount;
     notificationQuota.isAtLimit = notificationQuota.projectedNotificationCount >= notificationQuota.limit;

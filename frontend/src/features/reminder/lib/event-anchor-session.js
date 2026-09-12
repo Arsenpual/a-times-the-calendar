@@ -21,7 +21,9 @@ export function deriveEventAnchorSessions(reminders, now = Date.now()) {
     const derived = [];
     const countdownMinutes = eventAnchorMinutes(source, "countdown");
     const stopwatchMinutes = eventAnchorMinutes(source, "stopwatch");
-    const nextPrimaryAt = source.nextDueAt;
+    const nextPrimaryAt = Number.isFinite(source.eventAnchorPrimaryDueAt)
+      ? source.eventAnchorPrimaryDueAt
+      : source.nextDueAt;
 
     if (source.enabled && !source.completedAt && countdownMinutes && Number.isFinite(nextPrimaryAt)) {
       const startedAt = nextPrimaryAt - countdownMinutes * MINUTE_MS;

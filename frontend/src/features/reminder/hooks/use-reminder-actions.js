@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { REMINDER_TYPE, computeNextDueAt } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, computeNextDueAt, initializeEventAnchorSchedule } from "../lib/reminder-due-logic.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
 
 /** Runtime commands for a reminder card. UI components only invoke these actions. */
@@ -58,10 +58,9 @@ export function useReminderActions({ updateReminders, recordStatsEvent, onWarnin
         return { ...restarted, nextDueAt: computeNextDueAt(restarted, Date.now()) };
       }
       const reenabled = { ...reminder, enabled: true, completedAt: null };
-      return {
-        ...reenabled,
-        nextDueAt: reminder.type === REMINDER_TYPE.INTERVAL ? null : computeNextDueAt(reminder, Date.now()),
-      };
+      return reminder.type === REMINDER_TYPE.INTERVAL
+        ? { ...reenabled, nextDueAt: null }
+        : { ...reenabled, ...initializeEventAnchorSchedule(reenabled, Date.now()) };
     }));
   }, [onWarning, updateReminders]);
 

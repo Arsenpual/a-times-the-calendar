@@ -40,6 +40,8 @@ const ALLOWED_FIELDS = [
   "eventAnchorCountdownTitle",
   "eventAnchorStopwatchTitle",
   "eventAnchorStartedAt",
+  "eventAnchorPrimaryDueAt",
+  "eventAnchorNotificationPhase",
   "durationMs",
   "lineColor",
   "eventName",
@@ -160,6 +162,10 @@ function sanitizeReminderFields(body) {
   if (hasEventAnchorSession && !["weekly", "once-at"].includes(body.type)) return null;
   if (body.eventAnchorStartedAt !== undefined && body.eventAnchorStartedAt !== null &&
     (typeof body.eventAnchorStartedAt !== "number" || !Number.isFinite(body.eventAnchorStartedAt))) return null;
+  if (body.eventAnchorPrimaryDueAt !== undefined && body.eventAnchorPrimaryDueAt !== null &&
+    (typeof body.eventAnchorPrimaryDueAt !== "number" || !Number.isFinite(body.eventAnchorPrimaryDueAt))) return null;
+  if (body.eventAnchorNotificationPhase !== undefined && body.eventAnchorNotificationPhase !== null &&
+    !["countdown", "main", "stopwatch"].includes(body.eventAnchorNotificationPhase)) return null;
 
   // ไม่ขยาย runtime state ของ reminder ประเภทอื่นขึ้น Firestore ในรอบนี้.
   if (body.completedAt !== undefined && body.type !== "routine") return null;

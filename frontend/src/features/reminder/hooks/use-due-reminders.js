@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEventAnchorSession } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel } from "../lib/reminder-due-logic.js";
 import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import { localDateKey } from "../lib/reminder-date-view.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
@@ -63,12 +63,12 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
       // Persist the primary instant once, even if the user leaves the due
       // banner open. That is the hand-off point from the main reminder to a
       // derived Stopwatch; it is not an additional due notification.
-      const anchorStarts = due.filter((reminder) => hasEventAnchorSession(reminder) && reminder.eventAnchorStartedAt !== reminder.nextDueAt);
+      const anchorStarts = due.filter((reminder) => hasEventAnchorSession(reminder) && reminder.eventAnchorNotificationPhase === "main" && reminder.eventAnchorStartedAt !== reminder.eventAnchorPrimaryDueAt);
       if (anchorStarts.length) {
-        const byId = new Map(anchorStarts.map((reminder) => [reminder.id, reminder.nextDueAt]));
+        const byId = new Map(anchorStarts.map((reminder) => [reminder.id, reminder.eventAnchorPrimaryDueAt]));
         updateReminders((previous) => previous.map((reminder) => (
-          byId.get(reminder.id) === reminder.nextDueAt
-            ? { ...reminder, eventAnchorStartedAt: reminder.nextDueAt }
+          byId.get(reminder.id) === reminder.eventAnchorPrimaryDueAt
+            ? { ...reminder, eventAnchorStartedAt: reminder.eventAnchorPrimaryDueAt }
             : reminder
         )));
       }
@@ -78,7 +78,7 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
         if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramReminderKeysRef.current.has(key)) return;
         sentTelegramReminderKeysRef.current.add(key);
-        sendTelegramReminder(reminder.title, "reminder", key).catch(() => {
+        sendTelegramReminder(`${eventAnchorNotificationLabel(reminder)} · ${reminder.title}`, "reminder", key).catch(() => {
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
         });
       });
@@ -141,7 +141,8 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
           recordStatsEvent("snoozed", { title: r.title, reminderType: r.type, minutes: snoozeMinutes });
           return { ...r, enabled: true, nextDueAt: snoozedUntil, snoozedUntil };
         }
-        const eventAnchorStartedAt = hasEventAnchorSession(r) ? (r.nextDueAt || Date.now()) : r.eventAnchorStartedAt;
+        if (hasEventAnchorSession(r)) return { ...r, ...advanceEventAnchorSchedule(r, Date.now()) };
+        const eventAnchorStartedAt = r.eventAnchorStartedAt;
         if (isOneShotType(r.type)) return { ...r, eventAnchorStartedAt, enabled: false, nextDueAt: Infinity };
         return { ...r, eventAnchorStartedAt, snoozedUntil: null, nextDueAt: computeNextDueAt(r, Date.now()) };
       })
@@ -166,7 +167,8 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
     updateReminders((prev) =>
       prev.map((r) => {
         if (r.id !== reminderId) return r;
-        const eventAnchorStartedAt = hasEventAnchorSession(r) ? (r.nextDueAt || Date.now()) : r.eventAnchorStartedAt;
+        if (hasEventAnchorSession(r)) return { ...r, ...advanceEventAnchorSchedule(r, Date.now()), snoozedUntil: null };
+        const eventAnchorStartedAt = r.eventAnchorStartedAt;
         if (isOneShotType(r.type)) {
           logReminderEvent("reminder_completed", { reminder_type: r.type });
           recordStatsEvent("completed", { title: r.title, reminderType: r.type });

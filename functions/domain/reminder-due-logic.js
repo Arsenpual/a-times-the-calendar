@@ -34,6 +34,12 @@ export function hasEventAnchorSession(reminder) {
   );
 }
 
+export function eventAnchorNotificationLabel(reminder) {
+  if (reminder?.eventAnchorNotificationPhase === "countdown") return "Countdown เริ่มต้น";
+  if (reminder?.eventAnchorNotificationPhase === "stopwatch") return "Stopwatch สิ้นสุด";
+  return "ถึงเวลาแล้ว";
+}
+
 
 export function intervalMs(reminder) {
   return reminder.amount * (reminder.unit === "hours" ? 60 * 60 * 1000 : 60 * 1000);
@@ -138,6 +144,35 @@ export function computeNextDueAt(reminder, from) {
       return nextIntervalDue(reminder, from);
     }
   }
+}
+
+function scheduleEventAnchorPrimary(reminder, primaryDueAt, from) {
+  if (!Number.isFinite(primaryDueAt)) return { eventAnchorPrimaryDueAt: null, eventAnchorNotificationPhase: null, nextDueAt: null };
+  const before = eventAnchorMinutes(reminder, "countdown");
+  const countdownAt = before ? primaryDueAt - before * 60000 : null;
+  if (countdownAt && countdownAt > from) {
+    return { eventAnchorPrimaryDueAt: primaryDueAt, eventAnchorNotificationPhase: "countdown", nextDueAt: countdownAt };
+  }
+  return { eventAnchorPrimaryDueAt: primaryDueAt, eventAnchorNotificationPhase: "main", nextDueAt: primaryDueAt };
+}
+
+export function initializeEventAnchorSchedule(reminder, from) {
+  if (!hasEventAnchorSession(reminder)) return { eventAnchorPrimaryDueAt: null, eventAnchorNotificationPhase: null, nextDueAt: computeNextDueAt(reminder, from) };
+  return scheduleEventAnchorPrimary(reminder, computeNextDueAt(reminder, from), from);
+}
+
+export function advanceEventAnchorSchedule(reminder, now) {
+  if (!hasEventAnchorSession(reminder)) return { eventAnchorPrimaryDueAt: null, eventAnchorNotificationPhase: null, nextDueAt: computeNextDueAt(reminder, now), enabled: reminder.enabled };
+  const primary = Number.isFinite(reminder.eventAnchorPrimaryDueAt) ? reminder.eventAnchorPrimaryDueAt : reminder.nextDueAt;
+  if (reminder.eventAnchorNotificationPhase === "countdown") {
+    return { eventAnchorPrimaryDueAt: primary, eventAnchorNotificationPhase: "main", nextDueAt: primary, enabled: reminder.enabled };
+  }
+  if (reminder.eventAnchorNotificationPhase === "main") {
+    const stopwatch = eventAnchorMinutes(reminder, "stopwatch");
+    if (stopwatch) return { eventAnchorPrimaryDueAt: primary, eventAnchorStartedAt: primary, eventAnchorNotificationPhase: "stopwatch", nextDueAt: primary + stopwatch * 60000, enabled: reminder.enabled };
+  }
+  if (isOneShotType(reminder.type)) return { eventAnchorPrimaryDueAt: null, eventAnchorNotificationPhase: null, nextDueAt: null, enabled: false };
+  return { ...scheduleEventAnchorPrimary(reminder, computeNextDueAt(reminder, Math.max(primary || now, now)), now), enabled: reminder.enabled };
 }
 
 /**

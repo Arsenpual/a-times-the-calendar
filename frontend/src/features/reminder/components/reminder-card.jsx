@@ -35,6 +35,15 @@ function typeIcon(type) {
   return "↻";
 }
 
+function activeEventSessionLabel(session, nowTick) {
+  if (session.eventAnchorPhase === "countdown") {
+    const remainingSeconds = Math.max(0, Math.ceil(((session.startedAt + session.durationMs) - nowTick) / 1000));
+    return `⏳ ${session.title} · ${formatDurationClock(remainingSeconds)}`;
+  }
+  const elapsedSeconds = Math.max(0, Math.floor((nowTick - session.startedAt) / 1000));
+  return `⏱ ${session.title} · ${formatDurationClock(elapsedSeconds)}`;
+}
+
 /** Presentational card; all state mutations remain in ReminderDashboard hooks. */
 export default function ReminderCard({
   reminder, nowTick, t, groups, typeOptions, daysOfWeek, cardMenu,
@@ -56,6 +65,7 @@ export default function ReminderCard({
   const eventAnchorSummary = describeEventAnchorSession(reminder);
   const isDerivedSession = Boolean(reminder.isEventAnchorDerived);
   const sourceReminder = reminder.sourceReminder || reminder;
+  const activeEventAnchorSessions = reminder.activeEventAnchorSessions || [];
 
   return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
     <button type="button" className="reminder-type-icon" style={{ backgroundColor: accentColor, color: reminder.type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff" }} onClick={() => onFocusTimeline(reminder)} title="เลื่อน Timeline มาที่เวลาของ Reminder" aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}>{typeIcon(reminder.type)}</button>
@@ -66,6 +76,9 @@ export default function ReminderCard({
       <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
       {eventAnchorSummary && <p className="reminder-buffer-detail">⏳ {eventAnchorSummary}</p>}
       {eventAnchorSummary && <span className="reminder-type-chip">Event session พร้อมใช้</span>}
+      {activeEventAnchorSessions.map((session) => <p key={session.id} className="reminder-active-event-session" title={session.eventAnchorPhase === "countdown" ? "Countdown ชั่วคราวกำลังทำงาน" : "Stopwatch ชั่วคราวกำลังทำงาน"}>
+        {activeEventSessionLabel(session, nowTick)}
+      </p>)}
       {isDerivedSession && <p className="reminder-buffer-detail">ชั่วคราว · จาก {sourceReminder.title}</p>}
       {weeklyDaysLabel && <p className="reminder-weekly-days-detail"><span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}</p>}
       {reminder.completedAt && <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}</span>}
