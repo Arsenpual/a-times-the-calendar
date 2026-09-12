@@ -40,6 +40,16 @@ export function eventAnchorNotificationLabel(reminder) {
   return "ถึงเวลาแล้ว";
 }
 
+export function eventAnchorNotificationTitle(reminder) {
+  if (reminder?.eventAnchorNotificationPhase === "countdown") {
+    return reminder.eventAnchorCountdownTitle || reminder.title;
+  }
+  if (reminder?.eventAnchorNotificationPhase === "stopwatch") {
+    return reminder.eventAnchorStopwatchTitle || reminder.title;
+  }
+  return reminder?.title || "(ไม่มีชื่อ Reminder)";
+}
+
 
 export function intervalMs(reminder) {
   return reminder.amount * (reminder.unit === "hours" ? 60 * 60 * 1000 : 60 * 1000);

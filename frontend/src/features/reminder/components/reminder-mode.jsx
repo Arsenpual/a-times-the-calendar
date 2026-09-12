@@ -233,7 +233,7 @@ export default function ReminderDashboard({
           แยกต่างหาก */}
       <ReminderAlerts
         t={t} cardMenu={cardMenu} snoozeMenuForId={snoozeMenuForId} closeAllMenus={closeAllMenus}
-        dueReminders={dueReminders} toggleSnoozeMenu={toggleSnoozeMenu} scheduleNext={scheduleNext}
+        dueReminders={dueReminders.filter((reminder) => !["countdown", "stopwatch"].includes(reminder.eventAnchorNotificationPhase))} toggleSnoozeMenu={toggleSnoozeMenu} scheduleNext={scheduleNext}
         closeSnoozeMenu={closeSnoozeMenu} markCompleted={markCompleted}
       />
 

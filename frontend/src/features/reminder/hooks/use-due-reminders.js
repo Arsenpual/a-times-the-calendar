@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel, eventAnchorNotificationTitle } from "../lib/reminder-due-logic.js";
 import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import { localDateKey } from "../lib/reminder-date-view.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
@@ -28,6 +28,7 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
   const [nowTick, setNowTick] = useState(() => Date.now());
   const sentTelegramReminderKeysRef = useRef(new Set());
   const intervalTelegramSlotRef = useRef(new Map());
+  const autoAdvancedBufferKeysRef = useRef(new Set());
 
   useEffect(() => {
     // Repair stale weekly nextDueAt values after a schedule was edited or a
@@ -78,10 +79,29 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
         if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramReminderKeysRef.current.has(key)) return;
         sentTelegramReminderKeysRef.current.add(key);
-        sendTelegramReminder(`${eventAnchorNotificationLabel(reminder)} · ${reminder.title}`, "reminder", key).catch(() => {
+        sendTelegramReminder(`${eventAnchorNotificationLabel(reminder)} · ${eventAnchorNotificationTitle(reminder)}`, "reminder", key).catch(() => {
           // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
         });
       });
+      // Buffer phases are automatic: they notify, then immediately move to
+      // the next phase. They never wait in the due banner for completion.
+      const automaticBufferPhases = due.filter((reminder) => (
+        reminder.eventAnchorNotificationPhase === "countdown" ||
+        reminder.eventAnchorNotificationPhase === "stopwatch"
+      ));
+      if (automaticBufferPhases.length) {
+        const keys = automaticBufferPhases.map((reminder) => `${reminder.id}:${reminder.eventAnchorNotificationPhase}:${reminder.nextDueAt}`);
+        const fresh = automaticBufferPhases.filter((_, index) => !autoAdvancedBufferKeysRef.current.has(keys[index]));
+        keys.forEach((key) => autoAdvancedBufferKeysRef.current.add(key));
+        if (fresh.length) {
+          const phasesById = new Map(fresh.map((reminder) => [reminder.id, `${reminder.eventAnchorNotificationPhase}:${reminder.nextDueAt}`]));
+          updateReminders((previous) => previous.map((reminder) => (
+            phasesById.get(reminder.id) === `${reminder.eventAnchorNotificationPhase}:${reminder.nextDueAt}`
+              ? { ...reminder, ...advanceEventAnchorSchedule(reminder, now) }
+              : reminder
+          )));
+        }
+      }
 
       // Interval is deliberately Telegram-only: it does not join `due`, so
       // it never produces a due banner, browser notification, completion

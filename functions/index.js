@@ -84,7 +84,7 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
 });
 
 async function processUserDueReminders(userId, dueReminders, now, {
-  computeNextDueAt, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel
+  computeNextDueAt, isOneShotType, hasEventAnchorSession, advanceEventAnchorSchedule, eventAnchorNotificationLabel, eventAnchorNotificationTitle
 }) {
   const tokensSnapshot = await db.collection("users").doc(userId)
     .collection("modes").doc("reminder-mode").collection("fcmTokens").get();
@@ -106,7 +106,7 @@ async function processUserDueReminders(userId, dueReminders, now, {
         data: {
           reminderId: ref.id,
           title: eventAnchorNotificationLabel?.(reminder) || "ถึงเวลาแล้ว",
-          body: reminder.title || "(ไม่มีชื่อ)"
+          body: eventAnchorNotificationTitle?.(reminder) || reminder.title || "(ไม่มีชื่อ)"
         },
         tokens
       };
