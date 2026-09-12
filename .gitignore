@@ -1,5 +1,45 @@
-package.json
-package-lock.json
-firestore-debug.log
-firebase-debug.log
+# Dependencies (all packages)
 node_modules/
+
+# Local environment and credentials; keep safe configuration templates
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+secrets/
+client_secret_*.json
+application_default_credentials.json
+*.key
+*.p12
+*.pfx
+
+# Build output and caches
+dist/
+build/
+.vite/
+.cache/
+.firebase/
+*.tsbuildinfo
+
+# Logs and test output
+*.log
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Existing backend-only local note
+/backend/REMINDER.md
+
+# Commit package.json, lockfiles, source, tests and Firebase configuration.
+# Ignore rules do not remove files already tracked by Git.
