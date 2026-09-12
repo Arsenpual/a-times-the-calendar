@@ -131,7 +131,9 @@ function sanitizeReminderFields(body) {
   // ฟิลด์ string ทั่วไปอื่นๆ ที่ frontend อาจส่งมา — เช็คเพดานความยาวก่อนรับ
   const STRING_FIELDS = ["unit", "afterUnit", "lineColor", "eventName", "eventAnchorCountdownTitle", "eventAnchorStopwatchTitle"];
   for (const key of STRING_FIELDS) {
-    if (body[key] !== undefined && !isValidStringField(body[key])) return null;
+    // Event-session titles are optional, therefore null means "use the
+    // generated title" rather than a malformed reminder.
+    if (body[key] !== undefined && body[key] !== null && !isValidStringField(body[key])) return null;
   }
 
   if (body.days !== undefined && !isValidDays(body.days)) return null;
