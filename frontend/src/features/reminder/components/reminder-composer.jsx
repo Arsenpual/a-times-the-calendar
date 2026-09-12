@@ -41,7 +41,7 @@ function EventAnchorSessionFields({ draft, update, t }) {
     const titleKey = isCountdown ? "eventAnchorCountdownTitle" : "eventAnchorStopwatchTitle";
     const label = t(isCountdown ? "reminder.eventAnchorCountdown" : "reminder.eventAnchorStopwatch");
     return <div className="notification-buffer-row" key={phase}>
-      <button type="button" role="switch" aria-checked={draft[enabledKey]} className={`interval-window-toggle${draft[enabledKey] ? " is-active" : ""}`} onClick={() => update({ [enabledKey]: !draft[enabledKey] })}>
+      <button type="button" role="switch" aria-checked={draft[enabledKey]} className={`interval-window-toggle event-anchor-phase-toggle${draft[enabledKey] ? " is-active" : ""}`} onClick={() => update({ [enabledKey]: !draft[enabledKey] })}>
         <span className="interval-window-toggle-track" aria-hidden="true" />
         <span>{label}</span>
       </button>
@@ -51,7 +51,7 @@ function EventAnchorSessionFields({ draft, update, t }) {
           <option value="minutes">{t("reminder.minutes")}</option><option value="hours">{t("reminder.hours")}</option>
         </select>
       </div>}
-      {draft[enabledKey] && <input className="form-input" value={draft[titleKey]} onChange={(event) => update({ [titleKey]: event.target.value })} placeholder={isCountdown ? "ชื่อ Countdown ชั่วคราว (ไม่บังคับ)" : "ชื่อ Stopwatch ชั่วคราว (ไม่บังคับ)"} aria-label={`ชื่อ ${label}`} />}
+      {draft[enabledKey] && <input className="form-input event-anchor-title-input" value={draft[titleKey]} onChange={(event) => update({ [titleKey]: event.target.value })} placeholder={isCountdown ? "ชื่อ Countdown (ไม่บังคับ)" : "ชื่อ Stopwatch (ไม่บังคับ)"} aria-label={`ชื่อ ${label}`} />}
     </div>;
   };
   return <section className="form-field notification-buffer-fields">
