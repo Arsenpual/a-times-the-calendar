@@ -35,5 +35,6 @@ export function useActivityContextMenu() {
     });
   };
 
-  return { activityContextMenu, openActivityContextMenu };
+  const closeActivityContextMenu = () => setActivityContextMenu(null);
+  return { activityContextMenu, openActivityContextMenu, closeActivityContextMenu };
 }

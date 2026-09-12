@@ -190,6 +190,11 @@ function MainApp() {
     setWeekSpineViewMode("week");
     setWeekSpineFullscreenRequest((request) => request + 1);
   }, [cycleAnchorDate, selectWeek]);
+  const openCycleWeekView = useCallback((date) => {
+    selectWeek(date);
+    setSummaryPanelMode("week");
+    setWeekSpineViewMode("week");
+  }, [selectWeek]);
   const handleTimelineFullscreenChange = useCallback((isFullscreen) => {
     if (isFullscreen || !cycleViewToRestoreRef.current) return;
     const cycleAnchor = cycleViewToRestoreRef.current;
@@ -887,6 +892,7 @@ function MainApp() {
                     onSelectOverviewDay={focusDate}
                     onNavigateCycle={navigateCycle}
                     onOpenOverviewWeekEditor={openCycleWeekEditor}
+                    onOpenOverviewWeekView={openCycleWeekView}
                     onFocusOverviewSummary={focusCycleSummary}
                     onFocusWeekSummary={focusWeeklySummary}
                     onCycleDataChange={setCycleSummaryData}

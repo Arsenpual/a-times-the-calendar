@@ -135,8 +135,8 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
             <button type="button" className={`mini-braid-detail mini-start-live-detail${isLocked ? " is-locked" : ""}`} onClick={openEditor} disabled={isLocked} aria-label={isLocked ? "กิจกรรมถูกล็อก" : `แก้ไข ${activity.summary || "กิจกรรม"}`}>
               <span className="mini-braid-detail-color" style={{ background: `linear-gradient(to top, ${color.border} 0%, ${color.border} ${energyPercent}%, transparent ${energyPercent}%, transparent 100%)` }} aria-label="พลังงานเวลาที่เหลือ" />
               <span className="mini-start-live-copy">
-                <span className="mini-start-live-heading"><strong>{activity.summary || "(ไม่มีชื่อ)"}</strong><time>{isAllDay ? "ทั้งวัน" : `${time} – ${formatTime(activityDate(activity.end))}`}</time></span>
-                <small>เหลือ {Math.max(0, Math.ceil((endAt - nowTick) / 60000))} นาที</small>
+                <span className="mini-start-live-heading"><strong>{activity.summary || "(ไม่มีชื่อ)"}</strong></span>
+                <span className="mini-start-live-meta"><small>เหลือ {Math.max(0, Math.ceil((endAt - nowTick) / 60000))} นาที</small><time>{isAllDay ? "ทั้งวัน" : `${time} – ${formatTime(activityDate(activity.end))}`}</time></span>
               </span>
               <span aria-hidden>{isLocked ? "🔒" : "›"}</span>
             </button>

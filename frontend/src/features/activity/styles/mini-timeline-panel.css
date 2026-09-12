@@ -12,9 +12,11 @@
 .mini-start-time { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .mini-start-live-detail { min-height: 62px; margin: 3px 0; }
 .mini-start-live-copy { min-width: 0; }
-.mini-start-live-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(8px, .3fr); align-items: baseline; gap: 8px; min-width: 0; }
+.mini-start-live-heading { display: block; min-width: 0; }
 .mini-start-live-heading strong { min-width: 0; }
-.mini-start-live-heading time { grid-column: 2; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mini-start-live-meta { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 3px; }
+.mini-start-live-meta time { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mini-start-live-meta small { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-timeline-category-legend { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 10.5px; }
 .mini-timeline-category-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .mini-timeline-category-legend i { width: 8px; height: 8px; border-radius: 2px; }

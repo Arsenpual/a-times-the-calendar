@@ -253,8 +253,17 @@ export default function ActivityModal({
       const next = !current;
       if (next && date && (!endDate || endDate <= date)) setEndDate(datePlusDays(date, 1));
       if (!next) {
-        if (!startTime) setStartTime("09:00");
-        if (!endTime) setEndTime("10:00");
+        // Converting an all-day event back to a timed event is treated like
+        // a fresh time assignment. All-day events normally carry 00:00 to
+        // 00:00 (exclusive next day), which is not a useful timed default.
+        // Use the real current local time, then make the end exactly +1 hour.
+        const now = new Date();
+        now.setSeconds(0, 0);
+        const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+        setDate(toDateInputValue(now));
+        setStartTime(toTimeInputValue(now));
+        setEndDate(toDateInputValue(oneHourLater));
+        setEndTime(toTimeInputValue(oneHourLater));
       }
       return next;
     });

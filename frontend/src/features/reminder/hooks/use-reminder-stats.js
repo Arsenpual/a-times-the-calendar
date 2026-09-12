@@ -7,6 +7,9 @@ import {
 } from "../lib/reminder-stats.js";
 
 export function useReminderStats({ firebaseUser, reminders }) {
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const openStats = () => setIsStatsOpen(true);
+  const closeStats = () => setIsStatsOpen(false);
   const [statsEvents, setStatsEvents] = useState(() => loadReminderStats(firebaseUser?.uid));
 
   const reminderStats = useMemo(
@@ -22,5 +25,5 @@ export function useReminderStats({ firebaseUser, reminders }) {
     setStatsEvents((previous) => appendReminderStat(previous, type, payload));
   };
 
-  return { reminderStats, recordStatsEvent };
+  return { reminderStats, recordStatsEvent, isStatsOpen, openStats, closeStats };
 }
