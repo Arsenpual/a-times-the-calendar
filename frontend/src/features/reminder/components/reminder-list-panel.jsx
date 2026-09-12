@@ -46,6 +46,7 @@ export default function ReminderListPanel({
           <option value="all">{t("reminder.listFilterAll")}</option>
           <option value="scheduled">{t("reminder.listFilterScheduled")}</option>
           <option value="event-session">{t("reminder.listFilterEventSession")}</option>
+          <option value="active-buffer">{t("reminder.listFilterActiveBuffer")}</option>
           <option value="unscheduled">{t("reminder.listFilterUnscheduled")}</option>
         </select>
       </span>

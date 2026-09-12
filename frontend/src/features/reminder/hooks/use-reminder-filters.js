@@ -39,6 +39,7 @@ export function useReminderFilters(reminders) {
   const filterByListMode = (list) => list.filter((reminder) => {
     if (reminderListFilter === "scheduled") return Number.isFinite(reminder.nextDueAt);
     if (reminderListFilter === "event-session") return Number.isInteger(reminder.eventAnchorCountdownMinutes) || Number.isInteger(reminder.eventAnchorStopwatchMinutes);
+    if (reminderListFilter === "active-buffer") return (reminder.activeEventAnchorSessions?.length || 0) > 0;
     if (reminderListFilter === "unscheduled") return !Number.isFinite(reminder.nextDueAt);
     return true;
   });
