@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useActivityView } from "../features/activity/hooks/use-activity-view.js";
+import { useActivityError } from "../features/activity/hooks/use-activity-error.js";
+import { useCycleActivities } from "../features/activity/hooks/use-cycle-activities.js";
+import { useActivityCollections } from "../features/activity/hooks/use-activity-collections.js";
+import { useAppNavigation } from "./hooks/use-app-navigation.js";
+import { useDisplayPreferences } from "../features/settings/hooks/use-display-preferences.js";
+import React, { useCallback, useEffect, useMemo } from "react";
 import loginGuideStep1 from "../../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../../public/login-guide-step3.jpg";
@@ -12,8 +18,7 @@ import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { formatWeekLabel, getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
-import { normalizeActivityId } from "../shared/lib/id-utils.js";
+import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
 import { createAiActivityDraft } from "../features/activity/api/activity-draft.js";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
 import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
@@ -41,12 +46,6 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/ac
 const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
 
-function formatCycleLabel(date) {
-  const cycle = getYearCycle(date);
-  const dateLabel = cycle.start.toLocaleDateString("th-TH", { day: "numeric", month: "long" });
-  return `${dateLabel} cycle ที่ ${cycle.cycleNumber}/${cycle.totalCycles} ของปี`;
-}
-
 // 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
 // OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
 // แทน string path ตรงๆ ("/login-guide-step1.jpg") เพราะ GitHub Pages เสิร์ฟ
@@ -67,9 +66,11 @@ export default function App() {
 
 /**
  * State/effects previously all lived directly in this component (~1650
- * lines). Now composed from 6 hooks under ./hooks/, split by concern:
+ * lines). Now composed from app and feature hooks, split by concern:
  *   - useAuth: Firebase session + Google Calendar OAuth token
- *   - useWeekNavigation: cursorDate/expandedDate, mode, theme, small UI toggles
+ *   - useWeekNavigation: cursorDate/expandedDate and Activity keyboard navigation
+ *   - useAppNavigation: mode, settings drawer and login guide
+ *   - useDisplayPreferences: theme and reminder timeline colors
  *   - useCalendarData: activities/categories/tags/locks/summary (reads)
  *   - useTagSearch: tag search terms + wide-range fetch
  *   - useActivityModal: ActivityModal open/close state
@@ -87,14 +88,13 @@ export default function App() {
  * and render.
  */
 function MainApp() {
-  const [weekSpineViewMode, setWeekSpineViewMode] = useState("week");
-  // This deliberately stays separate from cursorDate. In Cycle view, users
-  // may inspect any of its four weeks without moving the visible Cycle.
-  const [cycleAnchorDate, setCycleAnchorDate] = useState(() => new Date());
-  const [weekSpineFullscreenRequest, setWeekSpineFullscreenRequest] = useState(0);
-  const [cycleSummaryData, setCycleSummaryData] = useState({ activities: [], loading: false, error: "" });
-  const [summaryPanelMode, setSummaryPanelMode] = useState("week");
-  const cycleViewToRestoreRef = useRef(null);
+  const auth = useAuth();
+  return <AccountApp key={auth.firebaseUser?.uid || "guest"} auth={auth} />;
+}
+
+// Reset all feature state and effect subscriptions when the Firebase identity
+// changes. Mode switches keep this boundary mounted so reminder timers continue.
+function AccountApp({ auth }) {
   useEffect(() => {
     const openMockupMode = (event) => {
       const target = event.target;
@@ -107,12 +107,11 @@ function MainApp() {
     window.addEventListener("keydown", openMockupMode);
     return () => window.removeEventListener("keydown", openMockupMode);
   }, []);
-  const auth = useAuth();
   const {
     firebaseUser,
     authReady,
-    error,
-    setError,
+    error: authError,
+    setError: setAuthError,
     calendarAccessToken,
     calendarConnectionState,
     setCalendarAccessToken,
@@ -125,6 +124,8 @@ function MainApp() {
     handleReauthCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
+  const { error: activityError, setError } = useActivityError(firebaseUser?.uid);
+  const error = authError || activityError;
 
   const archivedActivityIds = useArchivedActivityIds(firebaseUser);
   const announcementMessage = useAnnouncementMessage(firebaseUser);
@@ -134,6 +135,7 @@ function MainApp() {
     const dismissIfOutsideToast = (event) => {
       if (event.target instanceof Element && event.target.closest(".error-banner")) return;
       setError(null);
+      setAuthError(null);
     };
     document.addEventListener("pointerdown", dismissIfOutsideToast, true);
     document.addEventListener("focusin", dismissIfOutsideToast, true);
@@ -141,20 +143,16 @@ function MainApp() {
       document.removeEventListener("pointerdown", dismissIfOutsideToast, true);
       document.removeEventListener("focusin", dismissIfOutsideToast, true);
     };
-  }, [error, setError]);
+  }, [error, setError, setAuthError]);
 
-  const nav = useWeekNavigation();
+  const { mode, setMode, settingsOpen, setSettingsOpen, showLoginGuide, setShowLoginGuide } = useAppNavigation();
   const {
-    mode,
-    setMode,
-    settingsOpen,
-    setSettingsOpen,
-    showLoginGuide,
-    setShowLoginGuide,
-    theme,
-    setTheme,
-    reminderTimelineColors,
-    setReminderTimelineColors,
+    theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
+    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled,
+    weekSpineHoursPerCell, setWeekSpineHoursPerCell
+  } = useDisplayPreferences();
+  const nav = useWeekNavigation({ mode, userId: firebaseUser?.uid ?? null });
+  const {
     cursorDate,
     expandedDate,
     navigateWeek,
@@ -165,83 +163,40 @@ function MainApp() {
     openDay,
     closeDay
   } = nav;
-  const setWeekSpineView = useCallback((nextView) => {
-    if (nextView === "four-weeks") {
-      setCycleAnchorDate(getYearCycle(cursorDate).start);
-      setCycleSummaryData({ activities: [], loading: true, error: "" });
-      setSummaryPanelMode("cycle");
-    }
-    if (nextView === "week") setSummaryPanelMode("week");
-    setWeekSpineViewMode(nextView);
-  }, [cursorDate]);
-  const navigateCycle = useCallback((direction) => {
-    const currentCycle = getYearCycle(cycleAnchorDate);
-    const pivot = new Date(direction > 0 ? currentCycle.end : currentCycle.start);
-    pivot.setDate(pivot.getDate() + (direction > 0 ? 1 : -1));
-    const nextCycle = getYearCycle(pivot);
-    // Browsing another Cycle must not silently change the user's focused
-    // week. The focus only changes after they deliberately click a week
-    // inside the Cycle; returning to 7-day view then restores that focus.
-    setCycleAnchorDate(nextCycle.start);
-  }, [cycleAnchorDate]);
-  const openCycleWeekEditor = useCallback((date) => {
-    cycleViewToRestoreRef.current = new Date(cycleAnchorDate);
-    selectWeek(date);
-    setWeekSpineViewMode("week");
-    setWeekSpineFullscreenRequest((request) => request + 1);
-  }, [cycleAnchorDate, selectWeek]);
-  const openCycleWeekView = useCallback((date) => {
-    selectWeek(date);
-    setSummaryPanelMode("week");
-    setWeekSpineViewMode("week");
-  }, [selectWeek]);
-  const handleTimelineFullscreenChange = useCallback((isFullscreen) => {
-    if (isFullscreen || !cycleViewToRestoreRef.current) return;
-    const cycleAnchor = cycleViewToRestoreRef.current;
-    cycleViewToRestoreRef.current = null;
-    setCycleAnchorDate(cycleAnchor);
-    setSummaryPanelMode("cycle");
-    setWeekSpineViewMode("four-weeks");
-  }, []);
-  const selectCycleWeek = useCallback((date) => {
-    selectWeek(date);
-    setSummaryPanelMode("week");
-  }, [selectWeek]);
-  const focusCycleSummary = useCallback(() => {
-    closeDay();
-    setSummaryPanelMode("cycle");
-  }, [closeDay]);
-  const focusWeeklySummary = useCallback(() => {
-    closeDay();
-    setSummaryPanelMode("week");
-  }, [closeDay]);
-  const activityHeaderTitle = weekSpineViewMode === "four-weeks"
-    ? formatCycleLabel(cycleAnchorDate)
-    : formatWeekLabel(cursorDate);
+  const {
+    weekSpineViewMode,
+    cycleAnchorDate,
+    weekSpineFullscreenRequest,
+    summaryPanelMode,
+    setWeekSpineView,
+    navigateCycle,
+    openCycleWeekEditor,
+    openCycleWeekView,
+    handleTimelineFullscreenChange,
+    selectCycleWeek,
+    focusCycleSummary,
+    focusWeeklySummary,
+    activityHeaderTitle
+  } = useActivityView({ cursorDate, selectWeek, closeDay, userId: firebaseUser?.uid ?? null });
+  const cycleRange = getYearCycle(cycleAnchorDate);
+  const cycleData = useCycleActivities({
+    viewMode: mode === "activity" && firebaseUser ? weekSpineViewMode : "week",
+    calendarAccessToken,
+    cycleStart: cycleRange.start,
+    cycleEnd: cycleRange.end,
+    userId: firebaseUser?.uid,
+    archivedActivityIds
+  });
   const {
     isActivityReading,
     setIsActivityReading,
     accountMenuOpen,
     setAccountMenuOpen,
-    summaryPanelGlassEnabled,
-    setSummaryPanelGlassEnabled,
     accountMenuRef,
     activityDashboardRef,
-    weekSpineHoursPerCell,
-    setWeekSpineHoursPerCell,
     handleActivityDashboardScroll
   } = useAppShellUi({ mode, userId: firebaseUser?.uid });
   const brandWordmarkSrc = theme === "dark" ? BRAND_WORDMARK_DARK_SRC : BRAND_WORDMARK_LIGHT_SRC;
-
-  // Reminder timeline has one unambiguous reference day: "today" (its now
-  // indicator and all reminder slots are real-time).  Calendar data on the
-  // other hand is fetched for Activity Mode's cursor week.  Returning to
-  // today here keeps both sources in the same week, so activities scheduled
-  // for today cannot disappear merely because Activity Mode was last viewed
-  // on another week.
-  useEffect(() => {
-    if (mode === "reminder") goToday();
-  }, [mode, goToday]);
 
   const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
   const {
@@ -351,9 +306,8 @@ function MainApp() {
   // the data it owns; neither hook has a reference to the other, so this
   // composition has to happen here.
   const handleLogout = async () => {
-    // Reset the shell first so Reminder Mode unmounts immediately (stopping
-    // its due-checking/timer effects) rather than leaving its local UI on
-    // screen while Firebase finishes the asynchronous sign-out.
+    // Close transient UI immediately. Firebase identity change then unmounts
+    // the account tree, including both modes' timers and subscriptions.
     setAccountMenuOpen(false);
     setSettingsOpen(false);
     setIsActivityReading(false);
@@ -372,17 +326,10 @@ function MainApp() {
    * tagSearchResults (ดึงมาแบบกว้าง ±3 เดือน จาก useTagSearch) แทน
    * activities ของสัปดาห์ปัจจุบัน เพื่อให้เห็นผลลัพธ์ข้ามสัปดาห์ได้
    */
-  const visibleActivities = useMemo(() => {
-    const isArchived = (activity) => archivedActivityIds.has(activity.id) || archivedActivityIds.has(normalizeActivityId(activity.id));
-    if (tagSearchTerms.length === 0) return [...activities, ...onboardingActivities].filter((activity) => !isArchived(activity));
-    const queries = tagSearchTerms.map((t) => t.toLowerCase());
-    return tagSearchResults.filter((activity) => {
-      if (isArchived(activity)) return false;
-      const tags = activityTagMap[normalizeActivityId(activity.id)] || [];
-      const lowerTags = tags.map((t) => t.toLowerCase());
-      return queries.some((q) => lowerTags.some((tag) => tag.includes(q)));
-    });
-  }, [activities, activityTagMap, tagSearchTerms, tagSearchResults, onboardingActivities, archivedActivityIds]);
+  const { calendarActivities, visibleActivities } = useActivityCollections({
+    activities, onboardingActivities, archivedActivityIds,
+    tagSearchTerms, tagSearchResults, activityTagMap
+  });
   const displayedActivityCategoryMap = useMemo(
     () => ({ ...activityCategoryMap, ...onboardingCategoryMap }),
     [activityCategoryMap, onboardingCategoryMap]
@@ -646,6 +593,7 @@ function MainApp() {
         </div>
       )}
 
+      {error && <div className="error-banner" role="alert">{error}</div>}
       <main className="app-main">
         {firebaseUser && (
           // Keep the reminder runtime mounted while Activity Mode is open.
@@ -656,8 +604,12 @@ function MainApp() {
           // continue while this browser tab remains open.
           <div className="reminder-mode-runtime" hidden={mode !== "reminder"} aria-hidden={mode !== "reminder"}>
             <ReminderMode
+              calendarAccessToken={calendarAccessToken}
+              onReauthRequired={setCalendarAccessToken}
+              archivedActivityIds={archivedActivityIds}
+              isVisible={mode === "reminder"}
               firebaseUser={firebaseUser}
-              activities={visibleActivities}
+              activities={calendarActivities}
               categories={categories}
               activityCategoryMap={activityCategoryMap}
               lockedActivities={lockedActivities}
@@ -775,11 +727,6 @@ function MainApp() {
               </div>
             )}
 
-            {firebaseUser && error && (
-              <div className="error-banner" role="alert">
-                {error}
-              </div>
-            )}
             {firebaseUser && loading && (
               <div className="loading-banner" role="status" aria-live="polite">
                 กำลังโหลด...
@@ -799,9 +746,9 @@ function MainApp() {
                     <div className="flip-face flip-face-summary">
                       {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
                             anchorDate={cycleAnchorDate}
-                            activities={cycleSummaryData.activities}
-                            loading={cycleSummaryData.loading}
-                            error={cycleSummaryData.error}
+                            activities={cycleData.activities}
+                            loading={cycleData.loading}
+                            error={cycleData.error}
                             categories={categories}
                             activityCategoryMap={activityCategoryMap}
                             onSelectWeek={selectCycleWeek}
@@ -883,7 +830,6 @@ function MainApp() {
                     onReauthCalendar={handleReauthCalendar}
                     hoursPerCell={weekSpineHoursPerCell}
                     onHoursPerCellChange={setWeekSpineHoursPerCell}
-                    calendarAccessToken={calendarAccessToken}
                     viewMode={weekSpineViewMode}
                     cycleStartDate={cycleAnchorDate}
                     fullscreenRequestId={weekSpineFullscreenRequest}
@@ -895,7 +841,7 @@ function MainApp() {
                     onOpenOverviewWeekView={openCycleWeekView}
                     onFocusOverviewSummary={focusCycleSummary}
                     onFocusWeekSummary={focusWeeklySummary}
-                    onCycleDataChange={setCycleSummaryData}
+                    cycleData={cycleData}
                     dayGantt={weekSpineViewMode === "week" ? <ActivityDayGantt
                       day={expandedDate || cursorDate}
                       activities={visibleActivities}

@@ -4,6 +4,34 @@
 
 ## ขอบเขต
 
+Navigation lifecycle: `useActivityView` และ `useWeekNavigation` รับ userId
+เมื่อ userId เปลี่ยน (รวม logout เป็น null) จะ reset ก่อน render ลูก:
+week view, weekly summary, Cycle anchor ใหม่, fullscreen request เป็น 0,
+ล้าง Cycle restore ref, cursor เป็นวันนี้ และ expandedDate เป็น null
+การ render ปกติหรือสลับโหมดด้วย userId เดิมไม่ใช้ reset นี้
+ทดสอบบัญชี A → B และ logout ใน `activity-view-browser.mjs`
+
+`use-activity-collections.js` แยก derived data สองชุดจากข้อมูลเดิม:
+- `calendarActivities`: กิจกรรม Calendar ที่โหลดแล้วและไม่ได้เก็บเข้าคลัง ส่งให้ Reminder โดยไม่ผ่าน tag search หรือกิจกรรมตัวอย่าง
+- `visibleActivities`: มุมมอง Activity รวม onboarding เมื่อไม่ได้ค้นหา หรือใช้ผลค้นหา tag แบบ OR เมื่อค้นหา
+
+ไม่มีการ fetch เพิ่มหรือสร้าง state สำเนา การเลือกช่วงวันที่เพื่อโหลด Calendar และระบบแจ้งเตือนคงเดิม
+ทดสอบ: `node frontend/tests/activity-collections.test.mjs`
+
+Phase 3: `use-activity-view.js` เป็นเจ้าของมุมมอง Week/Cycle,
+Cycle anchor, summary panel mode และ fullscreen request/return
+ส่วน cursorDate/expandedDate ยังอยู่ใน useWeekNavigation
+
+`use-cycle-activities.js` ถูกเรียกที่ App เพียงจุดเดียว แล้วส่ง `cycleData`
+ให้ Week Spine และ Cycle Summary โดยตรง ไม่มี state สำเนาหรือ onCycleDataChange
+กรองคลังด้วย archivedActivityIds ชุดเดียว และแยกผลโหลดตามบัญชี/token/ช่วงเวลา
+ผลจาก request เก่าถูกละทิ้งเมื่อเลื่อน Cycle, เปลี่ยนบัญชี หรือออกจากมุมมอง
+ทดสอบ: `node frontend/tests/cycle-data.test.mjs`
+
+ทดสอบขั้นนี้: `node frontend/tests/activity-view-browser.mjs`
+ครอบคลุมเลือกสัปดาห์โดยไม่เลื่อน Cycle, เลื่อน Cycle โดยไม่เปลี่ยน focus,
+สลับ summary, เปิด editor ซ้ำ และคืนมุมมองหลังปิด fullscreen
+
 `ActivityModeWeekSpine` ประกอบ UI และส่งคำสั่งให้ hooks ตามหน้าที่ โดยมี `WeekSpineContent` ที่ผูก `key` กับ userId เพื่อเริ่ม state ใหม่เมื่อเปลี่ยนบัญชี รวมถึงยกเลิก effect ของบัญชีเก่า
 
 | ส่วน | เจ้าของ |

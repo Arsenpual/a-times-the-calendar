@@ -42,7 +42,12 @@ export function useTagSearch({ calendarAccessToken, setCalendarAccessToken }) {
   // เดือนจากวันนี้แยกต่างหากจาก `activities` ปกติ เกิดขึ้นแค่ตอนมี
   // tagSearchTerms อย่างน้อย 1 คำ
   useEffect(() => {
-    if (tagSearchTerms.length === 0 || !calendarAccessToken) return;
+    if (tagSearchTerms.length === 0 || !calendarAccessToken) {
+      setTagSearchLoading(false);
+      setTagSearchResults([]);
+      setTagSearchError(null);
+      return;
+    }
 
     let cancelled = false;
     setTagSearchLoading(true);
@@ -75,14 +80,6 @@ export function useTagSearch({ calendarAccessToken, setCalendarAccessToken }) {
     // tagSearchRefreshKey deliberately triggers a refetch on every bump
     // even though it carries no data of its own.
   }, [tagSearchTerms, calendarAccessToken, tagSearchRefreshKey, setCalendarAccessToken]);
-
-  // เคลียร์ผลค้นหาทิ้งเมื่อไม่มีคำค้นหาเหลืออยู่แล้ว
-  useEffect(() => {
-    if (tagSearchTerms.length === 0) {
-      setTagSearchResults([]);
-      setTagSearchError(null);
-    }
-  }, [tagSearchTerms]);
 
   const isSearchingTags = tagSearchTerms.length > 0;
 

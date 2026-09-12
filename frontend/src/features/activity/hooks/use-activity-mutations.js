@@ -1,15 +1,16 @@
+import { useSessionTaskGuard } from "../../../shared/hooks/use-session-task-guard.js";
 import {
-  getActivity,
-  createActivity,
-  updateActivity,
-  deleteActivity,
-  fetchRecurringInstances,
+  getActivity as rawGetActivity,
+  createActivity as rawCreateActivity,
+  updateActivity as rawUpdateActivity,
+  deleteActivity as rawDeleteActivity,
+  fetchRecurringInstances as rawFetchRecurringInstances,
   isCalendarAuthExpiredError
 } from "../../calendar-connection/api/google-calendar.js";
-import { createCategory, deleteCategory, assignActivityCategory, fetchActivityCategoryMap } from "../api/categories.js";
-import { setActivityTags } from "../api/tags.js";
-import { fetchLockedActivities, setActivityLocked } from "../api/locks.js";
-import { saveActivityNotification, deleteActivityNotification } from "../api/notifications.js";
+import { createCategory as rawCreateCategory, deleteCategory as rawDeleteCategory, assignActivityCategory as rawAssignActivityCategory, fetchActivityCategoryMap as rawFetchActivityCategoryMap } from "../api/categories.js";
+import { setActivityTags as rawSetActivityTags } from "../api/tags.js";
+import { fetchLockedActivities as rawFetchLockedActivities, setActivityLocked as rawSetActivityLocked } from "../api/locks.js";
+import { saveActivityNotification as rawSaveActivityNotification, deleteActivityNotification as rawDeleteActivityNotification } from "../api/notifications.js";
 import { activityDate } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { exceedsOverlapLimit } from "../lib/timeline-layout.js";
@@ -49,20 +50,45 @@ const overlapEntriesFromActivities = (items) => items.map((activity) => ({
  */
 export function useActivityMutations({
   calendarAccessToken,
-  setCalendarAccessToken,
+  setCalendarAccessToken: rawSetCalendarAccessToken,
   activities,
-  setActivities,
+  setActivities: rawSetActivities,
   activityCategoryMap,
-  setActivityCategoryMap,
+  setActivityCategoryMap: rawSetActivityCategoryMap,
   activityTagMap,
-  setActivityTagMap,
+  setActivityTagMap: rawSetActivityTagMap,
   lockedActivities,
-  setLockedActivities,
-  setCategories,
-  loadActivities,
-  refreshTagSearchIfActive,
-  setError
+  setLockedActivities: rawSetLockedActivities,
+  setCategories: rawSetCategories,
+  loadActivities: rawLoadActivities,
+  refreshTagSearchIfActive: rawRefreshTagSearchIfActive,
+  setError: rawSetError
 }) {
+  const { guardTask, guardCallback } = useSessionTaskGuard();
+  const getActivity = guardTask(rawGetActivity);
+  const createActivity = guardTask(rawCreateActivity);
+  const updateActivity = guardTask(rawUpdateActivity);
+  const deleteActivity = guardTask(rawDeleteActivity);
+  const fetchRecurringInstances = guardTask(rawFetchRecurringInstances);
+  const createCategory = guardTask(rawCreateCategory);
+  const deleteCategory = guardTask(rawDeleteCategory);
+  const assignActivityCategory = guardTask(rawAssignActivityCategory);
+  const fetchActivityCategoryMap = guardTask(rawFetchActivityCategoryMap);
+  const setActivityTags = guardTask(rawSetActivityTags);
+  const fetchLockedActivities = guardTask(rawFetchLockedActivities);
+  const setActivityLocked = guardTask(rawSetActivityLocked);
+  const saveActivityNotification = guardTask(rawSaveActivityNotification);
+  const deleteActivityNotification = guardTask(rawDeleteActivityNotification);
+  const setCalendarAccessToken = guardCallback(rawSetCalendarAccessToken);
+  const setActivities = guardCallback(rawSetActivities);
+  const setActivityCategoryMap = guardCallback(rawSetActivityCategoryMap);
+  const setActivityTagMap = guardCallback(rawSetActivityTagMap);
+  const setLockedActivities = guardCallback(rawSetLockedActivities);
+  const setCategories = guardCallback(rawSetCategories);
+  const loadActivities = guardTask(rawLoadActivities);
+  const refreshTagSearchIfActive = guardCallback(rawRefreshTagSearchIfActive);
+  const setError = guardCallback(rawSetError);
+
   /**
    * Clears calendarAccessToken when `e` indicates the Google Calendar
    * token itself is dead (401) — called from every write handler below

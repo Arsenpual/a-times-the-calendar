@@ -1,4 +1,5 @@
 import { useReminderMenus } from "../hooks/use-reminder-menus.js";
+import { useReminderCalendar } from "../hooks/use-reminder-calendar.js";
 import { useDueReminders } from "../hooks/use-due-reminders.js";
 import { useReminderComposerState } from "../hooks/use-reminder-composer-state.js";
 import { useReminderComposerActions } from "../hooks/use-reminder-composer-actions.js";
@@ -35,6 +36,10 @@ import ReminderAlerts from "./reminder-alerts.jsx";
 
 export default function ReminderDashboard({
   firebaseUser,
+  calendarAccessToken,
+  onReauthRequired,
+  archivedActivityIds,
+  isVisible = true,
   activities = [],
   categories = [],
   activityCategoryMap = {},
@@ -84,6 +89,11 @@ export default function ReminderDashboard({
   // สถานะของรายการที่กำลังแสดง ไม่ใช่ "active" ของ UI ทั่วไป.
   const { dateView, setDateView, selectedDateKey, selectedDate, selectDate, reminderStatusTab, setReminderStatusTab, activeTypeFilter, setActiveTypeFilter, activeGroupFilter, setActiveGroupFilter, toggleTypeFilter, toggleGroupFilter, enabledReminders, pausedReminders, completedReminders, visibleEnabledReminders, visiblePausedReminders, visibleCompletedReminders } = useReminderFilters(reminders);
 
+  const reminderCalendar = useReminderCalendar({
+    userId: firebaseUser?.uid, calendarAccessToken, selectedDateKey,
+    enabled: isVisible, activityRevision: activities, archivedActivityIds, onReauthRequired
+  });
+
   // ฟอร์มสร้างกลุ่มใหม่แบบ inline ใน nav sidebar — เปิด/ปิดด้วยปุ่ม "+
   // เพิ่มกลุ่มใหม่" เก็บแค่ชื่อ (สีสุ่ม/วนจาก GROUP_COLOR_PALETTE อัตโนมัติ
   // ไม่ให้ผู้ใช้เลือกเอง เพื่อลดขั้นตอนเหลือแค่พิมพ์ชื่อ + Enter)
@@ -116,12 +126,12 @@ export default function ReminderDashboard({
     timelineTrackMinWidth, calendarTimelineBlocks, runningReminderSpans,
     activityNowStatus, handleUserInteraction, focusReminderOnTimeline, SPACER_HEIGHT_PX
   } = useReminderTimeline({
-    reminders, activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
+    reminders, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
     activeTypeFilter, activeGroupFilter, nowTick,
     defaultLineColor: DEFAULT_LINE_COLOR, formatDurationClock
   });
   const { isExporting, exportTimelineImage } = useReminderExport({
-    getExportReminders, selectedDate, activities, categories, activityCategoryMap,
+    getExportReminders, selectedDate, activities: reminderCalendar.activities, categories, activityCategoryMap,
     groups, activeTypeFilter, activeGroupFilter
   });
 
@@ -218,6 +228,8 @@ export default function ReminderDashboard({
           (เดิม 2 คอลัมน์: timeline ซ้าย / list ขวา — ย้าย timeline ไปขวาสุด
           ตาม reminder-dashboard-mockup.jsx, migration plan v2 เฟส 1.1) */}
       {syncError && <p className="error-banner" role="alert">{syncError}</p>}
+      {reminderCalendar.error && <p className="error-banner" role="alert">{reminderCalendar.error}</p>}
+      {reminderCalendar.loading && <p role="status">กำลังโหลดกิจกรรมในปฏิทิน…</p>}
       <div className="dashboard-body">
         {/* Left Nav — "ตัวกรองประเภท" (เฟส 2) และ "กลุ่ม/โปรเจกต์" (เฟส 3)
             wired จริงทั้งคู่แล้ว "ของวันนี้" ยังเป็น placeholder รอระบบ

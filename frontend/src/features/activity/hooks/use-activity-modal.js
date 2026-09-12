@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getActivity } from "../../calendar-connection/api/google-calendar.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
@@ -15,6 +15,12 @@ import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
  * banner, same as every other hook here.
  */
 export function useActivityModal({ calendarAccessToken, lockedActivities, setError }) {
+  const pendingRequest = useRef(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; pendingRequest.current++; };
+  }, []);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDefaultDate, setModalDefaultDate] = useState(null);
   const [modalDefaultEnd, setModalDefaultEnd] = useState(null);
@@ -31,6 +37,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
    * pressed, so a new activity defaults to "now" instead of midnight.
    */
   const openAddActivity = useCallback((day, { preserveTime = false, end = null, title = "", warning = "", missingFields = [] } = {}) => {
+    pendingRequest.current++;
     const now = new Date();
     const base = day || now;
     const combined = preserveTime
@@ -48,6 +55,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
 
   const openEditActivity = useCallback(
     (activity) => {
+      pendingRequest.current++;
       if (lockedActivities[normalizeActivityId(activity.id)]) {
         setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
         return;
@@ -66,8 +74,10 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
 
   const openEditActivityById = useCallback(async (activityId) => {
     if (!calendarAccessToken || !activityId) return;
+    const request = ++pendingRequest.current;
     try {
       const activity = await getActivity(calendarAccessToken, activityId);
+      if (!alive.current || request !== pendingRequest.current) return;
       if (lockedActivities[normalizeActivityId(activity.id)]) {
         setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
         return;
@@ -81,11 +91,13 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       setModalEditingAsSeries(false);
       setModalOpen(true);
     } catch (error) {
+      if (!alive.current || request !== pendingRequest.current) return;
       setError("ไม่สามารถโหลดกิจกรรมสำหรับแก้ไขได้: " + error.message);
     }
   }, [calendarAccessToken, lockedActivities, setError]);
 
   const closeModal = useCallback(() => {
+    pendingRequest.current++;
     setModalOpen(false);
     setModalEditingActivity(null);
     setModalDefaultDate(null);
@@ -104,12 +116,14 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
   const handleEditSeries = useCallback(
     async (activity) => {
       if (!calendarAccessToken) return;
+      const request = ++pendingRequest.current;
       if (lockedActivities[normalizeActivityId(activity.id)]) {
         setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไข");
         return;
       }
       try {
         const masterEvent = await getActivity(calendarAccessToken, activity.recurringEventId);
+        if (!alive.current || request !== pendingRequest.current) return;
         setModalDefaultDate(null);
         setModalDefaultEnd(null);
         setModalDefaultTitle("");
@@ -119,6 +133,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         setModalEditingAsSeries(true);
         setModalOpen(true);
       } catch (e) {
+        if (!alive.current || request !== pendingRequest.current) return;
         setError("โหลดข้อมูลชุดกิจกรรมไม่สำเร็จ: " + e.message);
       }
     },

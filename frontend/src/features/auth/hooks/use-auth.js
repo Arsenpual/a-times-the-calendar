@@ -46,6 +46,7 @@ export function useAuth() {
   // fixable on Firebase's side from app code other than preventing the
   // overlap ourselves.
   const authPopupInFlight = useRef(false);
+  const calendarStatusRequest = useRef(0);
 
   const [error, setError] = useState(null);
 
@@ -115,6 +116,9 @@ export function useAuth() {
   }, []);
 
   const refreshCalendarConnection = useCallback(async () => {
+    const request = ++calendarStatusRequest.current;
+    const userId = auth.currentUser?.uid;
+    const isCurrent = () => request === calendarStatusRequest.current && auth.currentUser?.uid === userId;
     if (!auth.currentUser) {
       setCalendarConnectionState("idle");
       return false;
@@ -124,8 +128,10 @@ export function useAuth() {
     // ให้เวลา Render ตื่นจาก cold start สองรอบก่อนตัดสินว่า backend
     // เข้าไม่ถึงจริง ๆ; สำคัญคือไม่ล้าง Calendar state ระหว่างนี้.
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!isCurrent()) return false;
       try {
         const status = await getCalendarConnectionStatus();
+        if (!isCurrent()) return false;
         if (status.connected) {
           setCalendarAccessToken("server-managed");
           return true;
@@ -135,13 +141,14 @@ export function useAuth() {
         setCalendarAccessToken(null);
         return false;
       } catch {
+        if (!isCurrent()) return false;
         if (attempt < 2) {
           await new Promise((resolve) => window.setTimeout(resolve, (attempt + 1) * 1500));
         }
       }
     }
 
-    setCalendarConnectionState("unavailable");
+    if (isCurrent()) setCalendarConnectionState("unavailable");
     return false;
   }, [setCalendarAccessToken]);
 
@@ -171,6 +178,7 @@ export function useAuth() {
   // on every sign-in/sign-out.
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((user) => {
+      calendarStatusRequest.current++;
       setFirebaseUser(user);
       setAuthReady(true);
       if (!user) {
@@ -186,7 +194,7 @@ export function useAuth() {
         refreshCalendarConnection();
       }
     });
-    return unsubscribe;
+    return () => { calendarStatusRequest.current++; unsubscribe(); };
   }, [refreshCalendarConnection, setCalendarAccessToken]);
 
   const handleLogin = useCallback(async () => {

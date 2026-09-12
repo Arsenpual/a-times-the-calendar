@@ -23,6 +23,7 @@ function Fixture() {
   return <LanguageProvider><main style={{ padding: 20 }}>
     <ActivityModeWeekSpine {...options} activities={activities} categories={[]} activityCategoryMap={{}} activityTagMap={{}} lockedActivities={{ Locked: true }} calendarAccessToken="test-token" hoursPerCell={2}
       onTimelineFullscreenChange={fullscreenChanged}
+      cycleData={{ activities, loading: false, error: "" }}
       onSelectOverviewWeek={date => setOptions(current => ({ ...current, anchorDate: date }))}
       onOpenOverviewWeekView={date => setOptions(current => ({ ...current, anchorDate: date, viewMode: 'week' }))}
       onOpenOverviewWeekEditor={date => { returnToCycle.current = true; setOptions(current => ({ ...current, anchorDate: date, viewMode: 'week', fullscreenRequestId: current.fullscreenRequestId + 1 })); }}

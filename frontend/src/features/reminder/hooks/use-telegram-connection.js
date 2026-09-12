@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSessionTaskGuard } from "../../../shared/hooks/use-session-task-guard.js";
 import { beginTelegramConnection, getTelegramStatus } from "../../notifications/telegram/api.js";
 import {
   areTelegramNotificationsEnabled,
@@ -13,19 +14,22 @@ const EMPTY_CONNECTION = {
 };
 
 export function useTelegramConnection(firebaseUser) {
+  const { guardTask } = useSessionTaskGuard();
   const [telegramConnection, setTelegramConnection] = useState(EMPTY_CONNECTION);
   const [areTelegramAlertsEnabled, setAreTelegramAlertsEnabled] = useState(() => (
     areTelegramNotificationsEnabled(firebaseUser?.uid)
   ));
 
   useEffect(() => {
+    let cancelled = false;
     if (!firebaseUser) {
       setTelegramConnection(EMPTY_CONNECTION);
       return;
     }
     getTelegramStatus()
-      .then(({ connected }) => setTelegramConnection((previous) => ({ ...previous, isConnected: connected })))
+      .then(({ connected }) => { if (!cancelled) setTelegramConnection((previous) => ({ ...previous, isConnected: connected })); })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -34,8 +38,11 @@ export function useTelegramConnection(firebaseUser) {
 
   useEffect(() => {
     if (!firebaseUser || telegramConnection.isConnected || !telegramConnection.linkExpiresAt) return undefined;
+    let cancelled = false;
+    let inFlight = false;
 
     const checkConnection = async () => {
+      if (cancelled || inFlight) return;
       if (Date.now() >= telegramConnection.linkExpiresAt) {
         setTelegramConnection((previous) => ({
           ...previous,
@@ -45,8 +52,9 @@ export function useTelegramConnection(firebaseUser) {
         return;
       }
       try {
+        inFlight = true;
         const { connected } = await getTelegramStatus();
-        if (connected) {
+        if (connected && !cancelled) {
           setTelegramConnection({
             isConnected: true,
             isLoading: false,
@@ -56,19 +64,21 @@ export function useTelegramConnection(firebaseUser) {
         }
       } catch {
         // Render may be waking up; retain the active connection link.
+      } finally {
+        inFlight = false;
       }
     };
 
     checkConnection();
     const intervalId = window.setInterval(checkConnection, 3_000);
-    return () => window.clearInterval(intervalId);
+    return () => { cancelled = true; window.clearInterval(intervalId); };
   }, [firebaseUser, telegramConnection.isConnected, telegramConnection.linkExpiresAt]);
 
   const handleTelegramConnection = async () => {
     const telegramDesktopWindow = window.open("about:blank", "_blank");
     try {
       setTelegramConnection((previous) => ({ ...previous, isLoading: true, statusMessage: "" }));
-      const { connectUrl, appConnectUrl, expiresAt } = await beginTelegramConnection();
+      const { connectUrl, appConnectUrl, expiresAt } = await guardTask(beginTelegramConnection)();
       const telegramDestination = appConnectUrl || connectUrl;
       if (telegramDesktopWindow) telegramDesktopWindow.location.replace(telegramDestination);
       else window.location.assign(telegramDestination);
@@ -80,6 +90,7 @@ export function useTelegramConnection(firebaseUser) {
       }));
     } catch (error) {
       telegramDesktopWindow?.close();
+      if (error.name === "AbortError") return;
       setTelegramConnection((previous) => ({ ...previous, isLoading: false, statusMessage: error.message }));
     }
   };

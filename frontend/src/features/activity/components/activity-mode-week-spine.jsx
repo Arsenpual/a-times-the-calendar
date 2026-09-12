@@ -10,7 +10,6 @@ import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
 import { useWeekNames } from "../hooks/use-week-names.js";
 import WeekNameField from "./week-name-field.jsx";
 import FourWeekOverview from "./four-week-overview.jsx";
-import { useCycleActivities } from "../hooks/use-cycle-activities.js";
 import { useWeekSpineFullscreen } from "../hooks/use-week-spine-fullscreen.js";
 import { useWeekSpineSelection } from "../hooks/use-week-spine-selection.js";
 import { useWeekSpineTimeChanges } from "../hooks/use-week-spine-time-changes.js";
@@ -72,7 +71,6 @@ function WeekSpineContent({
   onReauthCalendar,
   hoursPerCell = 1,
   onHoursPerCellChange,
-  calendarAccessToken,
   viewMode = "week",
   cycleStartDate,
   fullscreenRequestId = 0,
@@ -84,7 +82,7 @@ function WeekSpineContent({
   onOpenOverviewWeekView,
   onFocusOverviewSummary,
   onFocusWeekSummary,
-  onCycleDataChange,
+  cycleData = { activities: [], loading: false, error: "" },
   dayGantt,
 }) {
   const { language } = useLanguage();
@@ -173,12 +171,7 @@ function WeekSpineContent({
     day.setDate(day.getDate() + offset);
     return day;
   }), [weekStart.getTime()]);
-  const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = useCycleActivities({
-    viewMode,
-    calendarAccessToken,
-    cycleStart,
-    cycleEnd: cycle.end
-  });
+  const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = cycleData;
   const timelineActivities = useMemo(() => activities.map((activity) => {
     const pending = pendingTimeChanges.get(activity.id);
     if (!pending) return activity;
@@ -196,14 +189,6 @@ function WeekSpineContent({
     () => new Set(activityArchive.map((item) => item.calendarId).filter(Boolean)),
     [activityArchive]
   );
-  useEffect(() => {
-    if (viewMode !== "four-weeks") return;
-    onCycleDataChange?.({
-      activities: fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id)),
-      loading: fourWeekLoading,
-      error: fourWeekError
-    });
-  }, [viewMode, fourWeekActivities, fourWeekLoading, fourWeekError, archivedCalendarIds, onCycleDataChange]);
   const timelineSegments = timedSegments.filter((segment) => !archivedCalendarIds.has(segment.calendarId) || restoringCalendarIds.has(segment.calendarId));
   const visibleAllDayActivities = allDayActivities.filter((activity) => !archivedCalendarIds.has(activity.calendarId) || restoringCalendarIds.has(activity.calendarId));
   const {
@@ -285,7 +270,7 @@ function WeekSpineContent({
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
-              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities.filter((activity) => !archivedCalendarIds.has(activity.id))} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
+              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
         ) : <>
         <section ref={timelineFullscreenSurfaceRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>
