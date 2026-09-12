@@ -1,5 +1,6 @@
+import { formatDurationClock, describeReminder } from "../lib/reminder-formatters.js";
 import { createPortal } from "react-dom";
-import { REMINDER_TYPE, isOneShotType, hasWindow } from "../lib/reminder-due-logic.js";
+import { REMINDER_TYPE, isOneShotType } from "../lib/reminder-due-logic.js";
 import { getIntervalWorkSummary } from "../lib/interval-schedule.js";
 
 const TYPE_ACCENT_COLOR = {
@@ -11,56 +12,6 @@ const TYPE_ACCENT_COLOR = {
   [REMINDER_TYPE.COUNTDOWN]: "var(--g-yellow)",
   [REMINDER_TYPE.STOPWATCH]: "var(--g-on-surface-variant)"
 };
-
-function formatDurationClock(totalSeconds) {
-  const hh = Math.floor(totalSeconds / 3600);
-  const mm = Math.floor((totalSeconds % 3600) / 60);
-  const ss = totalSeconds % 60;
-  return hh > 0
-    ? `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
-    : `${mm}:${String(ss).padStart(2, "0")}`;
-}
-
-function describeReminder(reminder, nowMs) {
-  if (reminder.snoozedUntil === reminder.nextDueAt && Number.isFinite(reminder.snoozedUntil)) {
-    const remainingMs = reminder.snoozedUntil - nowMs;
-    if (remainingMs > 0) return `เลื่อนเตือน · เหลือ ${formatDurationClock(Math.ceil(remainingMs / 1000))}`;
-  }
-  switch (reminder.type) {
-    case REMINDER_TYPE.WEEKLY:
-      return `วนสัปดาห์ · เวลา ${reminder.time}`;
-    case REMINDER_TYPE.EVENT_ANCHORED: {
-      const unit = reminder.afterUnit === "hours" ? "ชม." : "นาที";
-      return `เหตุการณ์ · +${reminder.afterAmount} ${unit} หลัง "${reminder.eventName}"`;
-    }
-    case REMINDER_TYPE.ROUTINE: {
-      const total = reminder.steps?.length || 0;
-      const current = (reminder.currentIndex || 0) + 1;
-      return `Routine (${current}/${total}) · ถัดไป: ${reminder.steps?.[reminder.currentIndex] || "เสร็จสิ้นแล้ว"}`;
-    }
-    case REMINDER_TYPE.ONCE_AT: {
-      const date = new Date(reminder.atMs);
-      return `ครั้งเดียว · ${date.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-    }
-    case REMINDER_TYPE.COUNTDOWN: {
-      if (!reminder.enabled || reminder.completedAt || !reminder.startedAt) return `นับถอยหลัง · ตั้งไว้ ${Math.round(reminder.durationMs / 60000)} นาที`;
-      const remainingMs = reminder.startedAt + reminder.durationMs - nowMs;
-      return remainingMs <= 0 ? "นับถอยหลัง · ถึงเวลาแล้ว" : `นับถอยหลัง · เหลือ ${formatDurationClock(Math.ceil(remainingMs / 1000))}`;
-    }
-    case REMINDER_TYPE.STOPWATCH: {
-      const elapsedMs = (reminder.accumulatedMs || 0) + (reminder.enabled && reminder.startedAt ? nowMs - reminder.startedAt : 0);
-      return reminder.enabled && reminder.startedAt
-        ? `จับเวลา · ${formatDurationClock(Math.floor(elapsedMs / 1000))}`
-        : `จับเวลา · หยุดที่ ${formatDurationClock(Math.floor(elapsedMs / 1000))}`;
-    }
-    case REMINDER_TYPE.INTERVAL:
-    default: {
-      const unit = reminder.unit === "hours" ? "ชั่วโมง" : "นาที";
-      const base = `ทุก ${reminder.amount} ${unit}`;
-      return hasWindow(reminder) ? `${base} (${reminder.windowStart}-${reminder.windowEnd})` : base;
-    }
-  }
-}
 
 function priorityFor(reminder, nowTick, t) {
   if (reminder.completedAt) return { label: t("reminder.completed"), tone: "completed" };

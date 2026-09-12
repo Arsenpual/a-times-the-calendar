@@ -1,20 +1,32 @@
-# Reminder feature
+# Reminder Mode — Phase 2
 
-รอบย้ายไฟล์ตามฟีเจอร์: ย้ายไฟล์เดิม 10 ไฟล์และปรับ relative import โดยคง logic, export, CSS, storage key และรูปแบบข้อมูลเดิม
+Phase 2 แยก state, actions และ JSX จาก reminder-mode.jsx ครบตามขอบเขตที่ตกลงไว้แล้ว
 
-- `components/`: reminder-mode.jsx และ reminder-stats-panel.jsx
-- `hooks/`: use-reminder-store.js, use-reminders-sync.js และ use-reminder-groups.js
-- `lib/`: reminder-due-logic.js, reminder-quick-parse.js, reminder-stats.js และ reminder-telemetry.js
-- `styles/`: reminder-material.css
+## โครงสร้าง
+- components/reminder-mode.jsx: ประกอบ hooks และเชื่อม callbacks ระหว่าง panels
+- components/reminder-topbar.jsx: Omnibar, Telegram toggle และปุ่มสถิติ
+- components/telegram-connection-toast.jsx: สถานะการเชื่อมต่อและปิดข้อความ
+- components/reminder-alerts.jsx: due banner, snooze และ backdrop ของเมนู
+- components/reminder-list-panel.jsx / reminder-card.jsx: ตัวกรองสถานะและรายการ
+- components/reminder-composer.jsx: ฟอร์มสร้าง/แก้ไข
+- components/reminder-timeline-panel.jsx / reminder-timeline-rows.jsx: Timeline และแถวที่ memoize
+- hooks/: เป็นเจ้าของข้อมูล, runtime actions, composer, filters, timeline, export, menus, Telegram และ stats
+- lib/reminder-config.js: ตัวเลือก UI และค่าคงที่
+- lib/reminder-defaults.js: draft ใหม่คำนวณวันเวลาเมื่อเรียกใช้
+- lib/reminder-formatters.js: ข้อความและเวลาร่วมกันระหว่าง card และ timeline
+- lib/reminder-sync-fields.js: เลือกฟิลด์สำหรับ sync และแปลง nextDueAt ที่ไม่ finite เป็น null
 
-## จุดเชื่อม
+## ขอบเขตความรับผิดชอบ
+Components ส่ง action กลับไปยัง hooks โดยไม่เขียนฐานข้อมูลเอง การคำนวณ due หลักยังอยู่ใน reminder-due-logic.js และระบบเดิม ส่วน formatter ใช้แสดงผลเท่านั้น
+ปุ่มปิด Telegram เรียก dismissTelegramStatus จาก hook เพื่อปิดข้อความและหยุดตรวจลิงก์ตามพฤติกรรมเดิม
+Timeline rows ตรวจทั้งข้อมูลแถวและ callback เพื่อไม่เรียก handler เก่าหลัง render ใหม่
 
-`src/app.jsx` ยังคง mount Reminder Mode ไว้เพื่อให้การแจ้งเตือนทำงานเมื่อเปิด Activity Mode ส่วน ActivityPopup และฟังก์ชันสี/จัด layout กิจกรรมอ้างถึง `features/activity/` ตามเดิมผ่านตำแหน่ง import ใหม่
+## ตรวจสอบจากรากโปรเจกต์
+- npm run build --prefix frontend
+- node frontend/tests/reminder-sync.test.mjs
+- node frontend/tests/reminder-phase2.test.mjs
+- node frontend/tests/reminder-phase2-browser.mjs
+- node frontend/tests/reminder-shell-browser.mjs
+- node frontend/src/features/reminder/hooks/reminder-timeline-export.test.mjs
 
-API ของ Reminder, Firebase config, ภาษา, date/id helpers และ AutoShrinkText ยังอยู่ตำแหน่งเดิม ส่วน Telegram API/preference และ Push hook ย้ายไป `features/notifications/` แล้ว ระบบ mockup ยังอยู่ใน `src/components/`
-
-ยังไม่ได้แยกไฟล์ reminder-mode.jsx หรือ runtime แจ้งเตือนในรอบนี้ สำเนา reminder-due-logic.js ใน functions/ และ cloud-run-reminder-worker/ ยังคงอยู่; ต้นฉบับ frontend อยู่ที่ `src/features/reminder/lib/reminder-due-logic.js` แล้ว
-
-## การตรวจสอบ
-
-ตรวจ relative imports และ build ผ่าน หลังย้ายควรทดสอบเพิ่ม/แก้ไข/ลบ reminder, snooze, ทำสำเร็จและ reuse, ตัวกรองกลุ่ม/ประเภท, timeline, เปิด/ปิด Telegram และแจ้งเตือนระหว่างอยู่ Activity Mode ด้วยบัญชีจริง
+Browser tests ใช้ Chrome และ Playwright ที่ติดตั้งใน temporary test runtime: times-reminder-sync-tests/node_modules (เช่นเดียวกับชุดทดสอบเดิม)

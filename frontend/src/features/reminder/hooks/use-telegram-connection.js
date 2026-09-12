@@ -108,6 +108,9 @@ export function useTelegramConnection(firebaseUser) {
   return {
     telegramConnection,
     areTelegramAlertsEnabled,
-    handleTelegramAlertToggle
+    handleTelegramAlertToggle,
+    dismissTelegramStatus: () => setTelegramConnection((previous) => ({
+      ...previous, statusMessage: "", linkExpiresAt: null
+    }))
   };
 }

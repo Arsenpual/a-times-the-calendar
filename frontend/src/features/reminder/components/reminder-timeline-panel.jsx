@@ -1,11 +1,7 @@
+import { formatDigitalClock } from "../lib/reminder-formatters.js";
 import AutoShrinkText from "../../../shared/ui/auto-shrink-text.jsx";
 import { localDateKey } from "../lib/reminder-date-view.js";
 import { REMINDER_TYPE } from "../lib/reminder-due-logic.js";
-
-function formatDigitalClock(timestamp) {
-  const date = new Date(timestamp);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
-}
 
 /** Timeline presentation only. Positions and event layouts stay in useReminderTimeline. */
 export default function ReminderTimelinePanel({
