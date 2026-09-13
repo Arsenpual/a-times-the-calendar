@@ -209,7 +209,16 @@ router.post("/notify", async (req, res, next) => {
     if (deliveryClaim.status === "limited") {
       return res.json({ sent: false, rateLimited: true, limit: DAILY_NOTIFICATION_LIMIT, remaining: 0, dayKey: deliveryClaim.dayKey });
     }
-    await sendTelegram(data.chatId, `🔔 ถึงเวลาของ${notificationLabel}: ${title}`);
+    const notificationText = `🔔 ถึงเวลาของ${notificationLabel}: ${title}`;
+    const sentMessage = await sendTelegram(data.chatId, notificationText);
+    // Mirror successful deliveries into the web chat. This makes
+    // MR.Zettascale the single readable notification history instead of
+    // showing only commands that originated from Telegram itself.
+    await saveChatMessage(req.userId, {
+      direction: "outgoing",
+      text: notificationText,
+      telegramMessageId: sentMessage?.message_id
+    });
     res.json({ sent: true, limit: DAILY_NOTIFICATION_LIMIT, remaining: deliveryClaim.remaining, dayKey: deliveryClaim.dayKey });
   } catch (error) {
     // Allow a later retry if Telegram itself failed after this process won
