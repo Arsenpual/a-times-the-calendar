@@ -1,7 +1,20 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export default function TelegramWebChat({ isOpen, messages, error, onClose, onSend }) {
+export default function TelegramWebChat({ isOpen, messages, error, onClose, onSend, onRead }) {
   const [draft, setDraft] = useState("");
+  const messageNodes = useRef({});
+  const unreadMessages = messages.filter((message) => message.direction === "outgoing" && !message.readAt);
+  const unreadKey = unreadMessages.map((message) => message.id).join(":");
+  useEffect(() => {
+    if (!isOpen) return;
+    const firstUnread = unreadMessages[0];
+    const target = firstUnread ? messageNodes.current[firstUnread.id] : messageNodes.current[messages.at(-1)?.id];
+    target?.scrollIntoView({ block: firstUnread ? "center" : "end", behavior: "smooth" });
+    if (firstUnread) {
+      const timer = window.setTimeout(() => onRead?.(), 220);
+      return () => window.clearTimeout(timer);
+    }
+  }, [isOpen, unreadKey, messages, onRead]);
   if (!isOpen) return null;
   const submit = async (event) => {
     event.preventDefault();
@@ -15,7 +28,7 @@ export default function TelegramWebChat({ isOpen, messages, error, onClose, onSe
       <header><strong>✈ MR.Zettascale</strong><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></header>
       <div className="telegram-web-chat__messages">
         {messages.length === 0 && <p>ยังไม่มีข้อความในแชตนี้</p>}
-        {messages.map((message) => <p key={message.id} className={`telegram-web-chat__message is-${message.direction}`}>{message.text}</p>)}
+        {messages.map((message) => <p key={message.id} ref={(node) => { if (node) messageNodes.current[message.id] = node; }} className={`telegram-web-chat__message is-${message.direction}`}>{message.text}</p>)}
       </div>
       {error && <p className="telegram-web-chat__error">{error}</p>}
       <form onSubmit={submit}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="พิมพ์ข้อความถึงบอต" maxLength="4000" autoFocus /><button type="submit">ส่ง</button></form>

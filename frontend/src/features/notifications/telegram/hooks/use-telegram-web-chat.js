@@ -17,10 +17,23 @@ export function useTelegramWebChat(firebaseUser, connected) {
   }, [refresh]);
   const openChat = useCallback(async () => {
     setChat((previous) => ({ ...previous, isOpen: true }));
-    await markTelegramChatRead().catch(() => {});
     await refresh();
   }, [refresh]);
   const closeChat = useCallback(() => setChat((previous) => ({ ...previous, isOpen: false })), []);
-  const send = useCallback(async (text) => { await sendTelegramChatMessage(text); await refresh(); }, [refresh]);
-  return { ...chat, openChat, closeChat, sendChatMessage: send };
+  const markRead = useCallback(async () => {
+    await markTelegramChatRead().catch(() => {});
+    setChat((previous) => ({
+      ...previous,
+      unreadCount: 0,
+      messages: previous.messages.map((message) => (
+        message.direction === "outgoing" && !message.readAt ? { ...message, readAt: Date.now() } : message
+      ))
+    }));
+  }, []);
+  const send = useCallback(async (text) => {
+    await sendTelegramChatMessage(text);
+    await refresh();
+    await markRead();
+  }, [markRead, refresh]);
+  return { ...chat, openChat, closeChat, markTelegramChatRead: markRead, sendChatMessage: send };
 }

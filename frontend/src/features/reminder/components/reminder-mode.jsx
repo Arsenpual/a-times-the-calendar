@@ -228,7 +228,7 @@ export default function ReminderDashboard({
       />
 
       <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
-      <TelegramWebChat isOpen={telegramChat.isOpen} messages={telegramChat.messages} error={telegramChat.error} onClose={telegramChat.closeChat} onSend={telegramChat.sendChatMessage} />
+      <TelegramWebChat isOpen={telegramChat.isOpen} messages={telegramChat.messages} error={telegramChat.error} onClose={telegramChat.closeChat} onSend={telegramChat.sendChatMessage} onRead={telegramChat.markTelegramChatRead} />
 
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />
 

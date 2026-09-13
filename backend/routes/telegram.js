@@ -56,11 +56,11 @@ async function sendTelegram(chatId, text, options = {}) {
   return data.result;
 }
 
-async function saveChatMessage(userId, { direction, text, telegramMessageId = null }) {
+async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
   const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
   await telegramMessagesCol(userId).doc(messageId).set({
     direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
-    createdAt: Date.now(), readAt: direction === "outgoing" ? Date.now() : null
+    createdAt: Date.now(), readAt
   }, { merge: true });
 }
 
@@ -147,13 +147,15 @@ router.get("/messages", async (req, res, next) => {
   try {
     const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(100).get();
     const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
-    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "incoming" && !message.readAt).length });
+    // A person's own messages are never unread. Only bot replies and sent
+    // notifications wait for acknowledgement in the web chat.
+    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
   } catch (error) { next(error); }
 });
 
 router.post("/messages/read", async (req, res, next) => {
   try {
-    const snapshot = await telegramMessagesCol(req.userId).where("direction", "==", "incoming").where("readAt", "==", null).limit(100).get();
+    const snapshot = await telegramMessagesCol(req.userId).where("direction", "==", "outgoing").where("readAt", "==", null).limit(100).get();
     const batch = db.batch();
     snapshot.docs.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
     if (!snapshot.empty) await batch.commit();
@@ -170,7 +172,7 @@ router.post("/messages", async (req, res, next) => {
     const sent = await sendTelegram(auth.chatId, text);
     // The text was composed by the person in the web chat, even though this
     // endpoint relays it through the bot API. Render it on the user's side.
-    await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id });
+    await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id, readAt: Date.now() });
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
       await sendChatReply(req.userId, auth.chatId, COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
     }
@@ -272,7 +274,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     const text = String(message?.text || "").trim();
     if (!chatId) return res.sendStatus(200);
     const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId || null;
-    if (chatOwner && text) await saveChatMessage(chatOwner, { direction: "incoming", text, telegramMessageId: message.message_id });
+    if (chatOwner && text) await saveChatMessage(chatOwner, { direction: "incoming", text, telegramMessageId: message.message_id, readAt: Date.now() });
     const reply = (replyText, options) => chatOwner
       ? sendChatReply(chatOwner, chatId, replyText, options)
       : sendTelegram(chatId, replyText, options);
@@ -327,7 +329,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     await telegramAuthDoc(link.userId).set({ chatId: String(chatId), connectedAt: new Date().toISOString() }, { merge: true });
     await telegramChatOwnerDoc(chatId).set({ userId: link.userId, updatedAt: Date.now() }, { merge: true });
     await ref.delete();
-    if (text) await saveChatMessage(link.userId, { direction: "incoming", text, telegramMessageId: message.message_id });
+    if (text) await saveChatMessage(link.userId, { direction: "incoming", text, telegramMessageId: message.message_id, readAt: Date.now() });
     await sendChatReply(link.userId, chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
     res.sendStatus(200);
   } catch (error) {
