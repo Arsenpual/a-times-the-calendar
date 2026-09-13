@@ -1,12 +1,16 @@
 const crypto = require("crypto");
 const express = require("express");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
+const { askMrZettascale } = require("../gemini-chat.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
+const AI_WINDOW_MS = 15 * 60 * 1000;
+const AI_WINDOW_LIMIT = 20;
+const aiRequestsByUser = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
@@ -68,6 +72,26 @@ async function sendChatReply(userId, chatId, text, options = {}) {
   const sent = await sendTelegram(chatId, text, options);
   await saveChatMessage(userId, { direction: "outgoing", text, telegramMessageId: sent?.message_id });
   return sent;
+}
+
+async function replyWithGemini(userId, chatId, text) {
+  const now = Date.now();
+  const recent = (aiRequestsByUser.get(userId) || []).filter((at) => at > now - AI_WINDOW_MS);
+  if (recent.length >= AI_WINDOW_LIMIT) {
+    await sendChatReply(userId, chatId, "ขอพักการตอบสักครู่นะครับ — ลองใหม่อีกครั้งในไม่กี่นาที");
+    return;
+  }
+  recent.push(now);
+  aiRequestsByUser.set(userId, recent);
+  const history = (await telegramMessagesCol(userId).orderBy("createdAt", "desc").limit(9).get()).docs
+    .map((doc) => doc.data()).reverse();
+  try {
+    const answer = await askMrZettascale(text, history);
+    await sendChatReply(userId, chatId, answer);
+  } catch (error) {
+    console.error("[telegram] Gemini ตอบแชตไม่สำเร็จ:", error.message);
+    await sendChatReply(userId, chatId, "ตอนนี้ผมยังตอบผ่าน Gemini ไม่ได้ ลองใหม่อีกครั้งในสักครู่นะครับ");
+  }
 }
 
 function bangkokDayKey(now = new Date()) {
@@ -175,6 +199,8 @@ router.post("/messages", async (req, res, next) => {
     await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id, readAt: Date.now() });
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
       await sendChatReply(req.userId, auth.chatId, COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+    } else if (!text.startsWith("/")) {
+      await replyWithGemini(req.userId, auth.chatId, text);
     }
     res.json({ ok: true });
   } catch (error) { next(error); }
