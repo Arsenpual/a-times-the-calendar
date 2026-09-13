@@ -159,7 +159,10 @@ router.post("/messages", async (req, res, next) => {
     if (!text || text.length > 4_000) return res.status(400).json({ error: "ข้อความต้องมีความยาว 1–4,000 ตัวอักษร" });
     const auth = (await telegramAuthDoc(req.userId).get()).data();
     if (!auth?.chatId) return res.status(409).json({ error: "ยังไม่ได้เชื่อม Telegram" });
-    await sendChatReply(req.userId, auth.chatId, text);
+    const sent = await sendTelegram(auth.chatId, text);
+    // The text was composed by the person in the web chat, even though this
+    // endpoint relays it through the bot API. Render it on the user's side.
+    await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id });
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
@@ -181,7 +184,7 @@ router.post("/test", async (req, res, next) => {
   try {
     const data = (await telegramAuthDoc(req.userId).get()).data();
     if (!data?.chatId) return res.status(409).json({ error: "ยังไม่ได้เชื่อม Telegram" });
-    await sendTelegram(data.chatId, "✅ MR.Zettascale เชื่อมต่อกับ T.i.M.E.S. สำเร็จแล้ว");
+    await sendChatReply(req.userId, data.chatId, "✅ MR.Zettascale เชื่อมต่อกับ T.i.M.E.S. สำเร็จแล้ว");
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
