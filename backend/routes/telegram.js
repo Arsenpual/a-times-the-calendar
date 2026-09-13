@@ -7,6 +7,14 @@ const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
+const COMMAND_HELP_TEXT =
+  "📚 คำสั่งของ MR.Zettascale\n\n" +
+  "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
+  "/cmd — ดูรายการคำสั่งนี้\n" +
+  "/myid — ดู Telegram chat ID ของคุณ\n" +
+  "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
+  "/announce off — ซ่อน announcement-ticker\n\n" +
+  "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
 const CUSTOM_COMMAND_KEYBOARD = {
@@ -163,6 +171,9 @@ router.post("/messages", async (req, res, next) => {
     // The text was composed by the person in the web chat, even though this
     // endpoint relays it through the bot API. Render it on the user's side.
     await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id });
+    if (/^\/cmd(?:@\w+)?$/i.test(text)) {
+      await sendChatReply(req.userId, auth.chatId, COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+    }
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
@@ -267,16 +278,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
       : sendTelegram(chatId, replyText, options);
 
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
-      await reply(
-        "📚 คำสั่งของ MR.Zettascale\n\n" +
-        "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
-        "/cmd — ดูรายการคำสั่งนี้\n" +
-        "/myid — ดู Telegram chat ID ของคุณ\n" +
-        "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
-        "/announce off — ซ่อน announcement-ticker\n\n" +
-        "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้",
-        { reply_markup: CUSTOM_COMMAND_KEYBOARD }
-      );
+      await reply(COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       return res.sendStatus(200);
     }
 
