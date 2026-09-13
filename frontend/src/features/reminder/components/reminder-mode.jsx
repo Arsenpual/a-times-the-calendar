@@ -33,6 +33,8 @@ import { formatDurationClock } from "../lib/reminder-formatters.js";
 import ReminderTimelineRows from "./reminder-timeline-rows.jsx";
 import ReminderTopbar from "./reminder-topbar.jsx";
 import TelegramConnectionToast from "./telegram-connection-toast.jsx";
+import TelegramWebChat from "../../notifications/telegram/components/telegram-web-chat.jsx";
+import { useTelegramWebChat } from "../../notifications/telegram/hooks/use-telegram-web-chat.js";
 import ReminderAlerts from "./reminder-alerts.jsx";
 
 export default function ReminderDashboard({
@@ -65,6 +67,7 @@ export default function ReminderDashboard({
   } = usePushNotifications({ firebaseUser });
 
   const { telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, dismissTelegramStatus } = useTelegramConnection(firebaseUser);
+  const telegramChat = useTelegramWebChat(firebaseUser, telegramConnection.isConnected);
   const { activityContextMenu, openActivityContextMenu, closeActivityContextMenu } = useActivityContextMenu();
   const { reminderStats, recordStatsEvent, isStatsOpen, openStats, closeStats } = useReminderStats({ firebaseUser, reminders });
   const { dueReminders, nowTick, scheduleNext, markCompleted } = useDueReminders({
@@ -220,10 +223,12 @@ export default function ReminderDashboard({
         t={t} omnibarInput={omnibarInput} setOmnibarInput={setOmnibarInput}
         submitOmnibar={submitOmnibar} omnibarEnabled={omnibarEnabled} omnibarPreview={omnibarPreview}
         telegramConnection={telegramConnection} areTelegramAlertsEnabled={areTelegramAlertsEnabled}
-        handleTelegramAlertToggle={handleTelegramAlertToggle} isPushEnabled={isPushEnabled} openStats={openStats}
+        handleTelegramAlertToggle={handleTelegramAlertToggle} unreadTelegramMessages={telegramChat.unreadCount}
+        openTelegramChat={telegramChat.openChat} isPushEnabled={isPushEnabled} openStats={openStats}
       />
 
       <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
+      <TelegramWebChat isOpen={telegramChat.isOpen} messages={telegramChat.messages} error={telegramChat.error} onClose={telegramChat.closeChat} onSend={telegramChat.sendChatMessage} />
 
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />
 

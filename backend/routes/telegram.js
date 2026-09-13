@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
-const { db, telegramAuthDoc, telegramLinkDoc, announcementDoc } = require("../firestore-db.js");
+const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -45,6 +45,21 @@ async function sendTelegram(chatId, text, options = {}) {
   });
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(`Telegram ส่งข้อความไม่สำเร็จ: ${data.description || response.status}`);
+  return data.result;
+}
+
+async function saveChatMessage(userId, { direction, text, telegramMessageId = null }) {
+  const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
+  await telegramMessagesCol(userId).doc(messageId).set({
+    direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
+    createdAt: Date.now(), readAt: direction === "outgoing" ? Date.now() : null
+  }, { merge: true });
+}
+
+async function sendChatReply(userId, chatId, text, options = {}) {
+  const sent = await sendTelegram(chatId, text, options);
+  await saveChatMessage(userId, { direction: "outgoing", text, telegramMessageId: sent?.message_id });
+  return sent;
 }
 
 function bangkokDayKey(now = new Date()) {
@@ -115,7 +130,37 @@ async function registerBotCommands() {
 router.get("/status", async (req, res, next) => {
   try {
     const data = (await telegramAuthDoc(req.userId).get()).data();
+    if (data?.chatId) await telegramChatOwnerDoc(data.chatId).set({ userId: req.userId, updatedAt: Date.now() }, { merge: true });
     res.json({ connected: Boolean(data?.chatId), username: process.env.TELEGRAM_BOT_USERNAME || null });
+  } catch (error) { next(error); }
+});
+
+router.get("/messages", async (req, res, next) => {
+  try {
+    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(100).get();
+    const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
+    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "incoming" && !message.readAt).length });
+  } catch (error) { next(error); }
+});
+
+router.post("/messages/read", async (req, res, next) => {
+  try {
+    const snapshot = await telegramMessagesCol(req.userId).where("direction", "==", "incoming").where("readAt", "==", null).limit(100).get();
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
+    if (!snapshot.empty) await batch.commit();
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
+router.post("/messages", async (req, res, next) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text || text.length > 4_000) return res.status(400).json({ error: "ข้อความต้องมีความยาว 1–4,000 ตัวอักษร" });
+    const auth = (await telegramAuthDoc(req.userId).get()).data();
+    if (!auth?.chatId) return res.status(409).json({ error: "ยังไม่ได้เชื่อม Telegram" });
+    await sendChatReply(req.userId, auth.chatId, text);
+    res.json({ ok: true });
   } catch (error) { next(error); }
 });
 
@@ -203,9 +248,14 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
     if (!chatId) return res.sendStatus(200);
+    const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId || null;
+    if (chatOwner && text) await saveChatMessage(chatOwner, { direction: "incoming", text, telegramMessageId: message.message_id });
+    const reply = (replyText, options) => chatOwner
+      ? sendChatReply(chatOwner, chatId, replyText, options)
+      : sendTelegram(chatId, replyText, options);
 
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
-      await sendTelegram(chatId,
+      await reply(
         "📚 คำสั่งของ MR.Zettascale\n\n" +
         "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
         "/cmd — ดูรายการคำสั่งนี้\n" +
@@ -219,41 +269,41 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     }
 
     if (/^\/(?:myid|chatid)(?:@\w+)?$/i.test(text)) {
-      await sendTelegram(chatId, `รหัส Telegram chat ของคุณ: ${chatId}\nตั้งค่า TELEGRAM_ANNOUNCEMENT_ADMIN_CHAT_IDS=${chatId} ใน Render เพื่อใช้คำสั่งประกาศ`);
+      await reply(`รหัส Telegram chat ของคุณ: ${chatId}\nตั้งค่า TELEGRAM_ANNOUNCEMENT_ADMIN_CHAT_IDS=${chatId} ใน Render เพื่อใช้คำสั่งประกาศ`);
       return res.sendStatus(200);
     }
 
     const announcementMatch = text.match(/^\/announce(?:@\w+)?(?:\s+([\s\S]*))?$/i);
     if (announcementMatch) {
       if (!isAnnouncementAdmin(chatId)) {
-        await sendTelegram(chatId, "⛔ คุณไม่มีสิทธิ์เปลี่ยนประกาศ");
+        await reply("⛔ คุณไม่มีสิทธิ์เปลี่ยนประกาศ");
         return res.sendStatus(200);
       }
 
       const nextMessage = (announcementMatch[1] || "").trim();
       if (!nextMessage) {
-        await sendTelegram(chatId, "ใช้ /announce ข้อความประกาศ\nหรือ /announce off เพื่อซ่อนประกาศ");
+        await reply("ใช้ /announce ข้อความประกาศ\nหรือ /announce off เพื่อซ่อนประกาศ");
         return res.sendStatus(200);
       }
       if (/^(off|clear)$/i.test(nextMessage)) {
         await announcementDoc().set({ message: null, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
-        await sendTelegram(chatId, "✅ ซ่อน announcement-ticker แล้ว");
+        await reply("✅ ซ่อน announcement-ticker แล้ว");
         return res.sendStatus(200);
       }
       if (nextMessage.length > MAX_ANNOUNCEMENT_LENGTH) {
-        await sendTelegram(chatId, `ข้อความยาวเกินไป — จำกัด ${MAX_ANNOUNCEMENT_LENGTH} ตัวอักษร`);
+        await reply(`ข้อความยาวเกินไป — จำกัด ${MAX_ANNOUNCEMENT_LENGTH} ตัวอักษร`);
         return res.sendStatus(200);
       }
 
       await announcementDoc().set({ message: nextMessage, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
-      await sendTelegram(chatId, `✅ อัปเดต announcement-ticker แล้ว\n\n${nextMessage}`);
+      await reply(`✅ อัปเดต announcement-ticker แล้ว\n\n${nextMessage}`);
       return res.sendStatus(200);
     }
 
     const match = text.match(/^\/start\s+([A-Za-z0-9_-]{1,64})$/);
     if (!match) {
       if (/^\/start(?:@\w+)?$/i.test(text)) {
-        await sendTelegram(chatId, "ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+        await reply("ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       }
       return res.sendStatus(200);
     }
@@ -261,8 +311,10 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     const link = (await ref.get()).data();
     if (!link || link.expiresAt < Date.now()) return res.sendStatus(200);
     await telegramAuthDoc(link.userId).set({ chatId: String(chatId), connectedAt: new Date().toISOString() }, { merge: true });
+    await telegramChatOwnerDoc(chatId).set({ userId: link.userId, updatedAt: Date.now() }, { merge: true });
     await ref.delete();
-    await sendTelegram(chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+    if (text) await saveChatMessage(link.userId, { direction: "incoming", text, telegramMessageId: message.message_id });
+    await sendChatReply(link.userId, chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
     res.sendStatus(200);
   } catch (error) {
     console.error("[telegram] webhook ล้มเหลว:", error.message);

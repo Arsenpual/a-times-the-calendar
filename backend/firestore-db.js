@@ -120,6 +120,16 @@ function telegramAuthDoc(userId) {
   return userDoc(userId).collection("private").doc("telegramAuth");
 }
 
+// Chat history is server-owned: the browser accesses it only through the
+// authenticated Telegram routes, never directly through Firestore rules.
+function telegramMessagesCol(userId) {
+  return telegramAuthDoc(userId).collection("messages");
+}
+
+function telegramChatOwnerDoc(chatId) {
+  return db.collection("telegram-chat-owners").doc(String(chatId));
+}
+
 function telegramLinkDoc(token) {
   return db.collection("telegram-link-tokens").doc(token);
 }
@@ -425,6 +435,8 @@ module.exports = {
   activityModeDoc,
   calendarAuthDoc,
   telegramAuthDoc,
+  telegramMessagesCol,
+  telegramChatOwnerDoc,
   telegramLinkDoc,
   announcementDoc,
   categoriesCol,
