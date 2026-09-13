@@ -15,6 +15,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
   const stateRef = useRef(reminders);
   const owner = useRef(storageKey);
   const ready = useRef(false);
+  const pendingCloudWrites = useRef(0);
   const [syncError, setSyncError] = useState(null);
   const { remoteReminders, loadError, syncScheduleFields, deleteRemoteReminder, fetchLatestReminders } = useRemindersSync({ firebaseUser });
   const setReminders = useCallback(update => {
@@ -30,18 +31,23 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
   }, [storageKey, setReminders]);
 
   useEffect(() => {
-    if (remoteReminders === null || ready.current) return;
-    // Keep a recoverable snapshot of legacy local-only records; never upload
-    // them automatically, as they may be records deleted by another device.
-    try {
-      const backupKey = storageKey + ":before-cloud-first";
-      if (!localStorage.getItem(backupKey)) localStorage.setItem(backupKey, JSON.stringify(stateRef.current));
-    } catch { /* Storage quota must not block loading cloud data. */ }
+    if (remoteReminders === null) return;
+    if (!ready.current) {
+      // Keep a recoverable snapshot of legacy local-only records; never upload
+      // them automatically, as they may be records deleted by another device.
+      try {
+        const backupKey = storageKey + ":before-cloud-first";
+        if (!localStorage.getItem(backupKey)) localStorage.setItem(backupKey, JSON.stringify(stateRef.current));
+      } catch { /* Storage quota must not block loading cloud data. */ }
+      ready.current = true;
+    }
+    // Do not let a poll overwrite an edit this browser is still submitting.
+    // The next 15-second poll applies the confirmed cloud result instead.
+    if (pendingCloudWrites.current > 0) return;
     const cached = new Map(stateRef.current.map(item => [item.id, item]));
     setReminders(Object.entries(remoteReminders).map(([id, fields]) => ({
       ...cached.get(id), ...fields, id
     })));
-    ready.current = true;
   }, [remoteReminders, storageKey, setReminders]);
 
   useEffect(() => {
@@ -70,11 +76,16 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
       }
     }
     for (const item of before) if (!nextIds.has(item.id)) requests.push(deleteRemoteReminder(item.id));
-    if (requests.length) Promise.allSettled(requests).then(results => {
-      if (owner.current !== ownerKey) return;
-      const failure = results.find(result => result.status === "rejected");
-      if (failure) setSyncError("บันทึก Reminder บน cloud ไม่สำเร็จ: " + failure.reason.message);
-    });
+    if (requests.length) {
+      pendingCloudWrites.current += requests.length;
+      Promise.allSettled(requests).then(results => {
+        if (owner.current !== ownerKey) return;
+        const failure = results.find(result => result.status === "rejected");
+        if (failure) setSyncError("บันทึก Reminder บน cloud ไม่สำเร็จ: " + failure.reason.message);
+      }).finally(() => {
+        pendingCloudWrites.current = Math.max(0, pendingCloudWrites.current - requests.length);
+      });
+    }
   }, [firebaseUser, storageKey, setReminders, extractScheduleFields, syncScheduleFields, deleteRemoteReminder]);
   const getExportReminders = useCallback(async () => {
     if (!firebaseUser) return stateRef.current;

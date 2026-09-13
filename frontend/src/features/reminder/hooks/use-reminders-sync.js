@@ -12,12 +12,30 @@ export function useRemindersSync({ firebaseUser }) {
   const queues = useRef(new Map());
   useEffect(() => {
     let cancelled = false;
+    let lastPayload = null;
     setLoaded({ uid, data: null });
     setLoadError(null);
-    if (uid) fetchReminders().then(data => {
-      if (!cancelled) setLoaded({ uid, data });
-    }).catch(error => { if (!cancelled) setLoadError(error.message); });
-    return () => { cancelled = true; };
+    if (!uid) return () => { cancelled = true; };
+
+    // The API remains the only data boundary. Polling lets a dedicated
+    // notification screen (for example the Raspberry Pi) see mutations made
+    // from another browser without giving every browser a Firestore client.
+    const refresh = async () => {
+      try {
+        const data = await fetchReminders();
+        const payload = JSON.stringify(data);
+        if (!cancelled && payload !== lastPayload) {
+          lastPayload = payload;
+          setLoaded({ uid, data });
+        }
+        if (!cancelled) setLoadError(null);
+      } catch (error) {
+        if (!cancelled) setLoadError(error.message);
+      }
+    };
+    refresh();
+    const pollId = window.setInterval(refresh, 15_000);
+    return () => { cancelled = true; window.clearInterval(pollId); };
   }, [uid]);
 
   const enqueue = useCallback((id, action) => {
