@@ -1,5 +1,5 @@
 ```mermaid
-[flowchart TD
+flowchart TD
 
 subgraph group_frontend["React frontend"]
   node_web_entry["Vite entry<br/>React bootstrap<br/>[main.jsx]"]
@@ -87,4 +87,4 @@ classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
 class node_web_entry,node_app_shell,node_api_client,node_firebase_browser,node_activity_workspace,node_timeline_views,node_reminder_workspace,node_reminder_sync,node_client_due_logic,node_fcm_service_worker toneBlue
 class node_api_entry,node_auth_middleware,node_firestore_access,node_calendar_oauth,node_api_routes toneAmber
 class node_functions,node_worker toneMint
-class node_firebase_auth,node_firestore,node_google_calendar,node_notification_channels,node_gemini toneNeutral]
+class node_firebase_auth,node_firestore,node_google_calendar,node_notification_channels,node_gemini toneNeutral
