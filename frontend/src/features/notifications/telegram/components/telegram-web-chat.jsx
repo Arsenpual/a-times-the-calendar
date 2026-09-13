@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function TelegramWebChat({ isOpen, messages, error, aiChat, onClose, onSend, onRead, onAiChatEnabledChange }) {
+export default function TelegramWebChat({ isOpen, messages, error, onClose, onSend, onRead }) {
   const [draft, setDraft] = useState("");
   const messageNodes = useRef({});
   const unreadMessages = messages.filter((message) => message.direction === "outgoing" && !message.readAt);
@@ -24,9 +24,8 @@ export default function TelegramWebChat({ isOpen, messages, error, aiChat, onClo
     await onSend(text);
   };
   return <div className="telegram-web-chat-backdrop" role="presentation" onMouseDown={onClose}>
-    <section className="telegram-web-chat" role="dialog" aria-modal="true" aria-label="แชตกับ MR.Zettascale" onMouseDown={(event) => event.stopPropagation()}>
-      <header><strong>✈ MR.Zettascale</strong><span className="telegram-web-chat__header-actions"><label className="telegram-ai-switch" title="เปิด/ปิด Gemini เพื่อรักษาโควต้าของคุณ"><input type="checkbox" checked={Boolean(aiChat?.enabled)} disabled={!aiChat?.allowed || !aiChat?.globallyEnabled} onChange={(event) => onAiChatEnabledChange?.(event.target.checked)} /><span aria-hidden="true" /></label><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></span></header>
-      {aiChat && <p className="telegram-ai-quota">AI {aiChat.enabled ? "กำลังเปิด" : "ปิดอยู่"} · เหลือ {Math.max(0, aiChat.userDay.limit - aiChat.userDay.used)}/{aiChat.userDay.limit} วันนี้ · {Math.max(0, aiChat.userWindow.limit - aiChat.userWindow.used)}/{aiChat.userWindow.limit} ใน 15 นาที</p>}
+    <section className="telegram-web-chat" role="dialog" aria-modal="true" aria-label="ข้อความจาก Telegram" onMouseDown={(event) => event.stopPropagation()}>
+      <header><strong>✈ Telegram</strong><span className="telegram-web-chat__header-actions"><button type="button" onClick={onClose} aria-label="ปิดข้อความ">×</button></span></header>
       <div className="telegram-web-chat__messages">
         {messages.length === 0 && <p>ยังไม่มีข้อความในแชตนี้</p>}
         {messages.map((message) => <p key={message.id} ref={(node) => { if (node) messageNodes.current[message.id] = node; }} className={`telegram-web-chat__message is-${message.direction}`}>{message.text}</p>)}

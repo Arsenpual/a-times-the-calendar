@@ -97,7 +97,7 @@ export default function ActivityModal({
   onDelete,
   onSyncGoogleCalendar,
   googleCalendarSyncing = false,
-  onGenerateAiDraft,
+  initialAiDraft = null,
   onClose
 }) {
   const isEditing = !!initialActivity;
@@ -131,10 +131,10 @@ export default function ActivityModal({
   const [endDate, setEndDate] = useState(missingFields.includes("end") ? "" : toDateInputValue(initialEnd));
   const [startTime, setStartTime] = useState(missingFields.includes("start") ? "" : toTimeInputValue(initialStart));
   const [endTime, setEndTime] = useState(missingFields.includes("end") ? "" : toTimeInputValue(initialEnd));
-  const [isAllDay, setIsAllDay] = useState(() => Boolean(initialActivity?.start?.date && !initialActivity?.start?.dateTime));
+  const [isAllDay, setIsAllDay] = useState(() => Boolean(initialActivity?.start?.date && !initialActivity?.start?.dateTime) || Boolean(initialAiDraft?.allDay));
 
   const [categoryId, setCategoryId] = useState(
-    (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || ""
+    (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || categories.find((category) => category.name === initialAiDraft?.categoryName)?.id || ""
   );
 
   // Tag แบบพิมพ์เอง (free text) — เก็บเป็น array ของ string, พิมพ์แล้วกด
@@ -222,8 +222,8 @@ export default function ActivityModal({
     [repeat, date, startTime]
   );
 
-  const [notesOpen, setNotesOpen] = useState(!!initialActivity?.description);
-  const [notes, setNotes] = useState(initialActivity?.description || "");
+  const [notesOpen, setNotesOpen] = useState(!!initialActivity?.description || Boolean(initialAiDraft?.notes));
+  const [notes, setNotes] = useState(initialActivity?.description || initialAiDraft?.notes || "");
 
   const [saving, setSaving] = useState(false);
   const [aiDrafting, setAiDrafting] = useState(false);
@@ -612,11 +612,6 @@ export default function ActivityModal({
               <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
                 <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
                 <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
-              </button>
-            )}
-            {!isEditing && onGenerateAiDraft && (
-              <button type="button" className="ai-activity-draft-btn" onClick={handleAiDraft} disabled={aiDrafting} title="ให้ Gemini ช่วยร่างกิจกรรม">
-                <span aria-hidden="true">✨</span><span>{aiDrafting ? "กำลังร่าง..." : "ร่างด้วย AI"}</span>
               </button>
             )}
             <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">

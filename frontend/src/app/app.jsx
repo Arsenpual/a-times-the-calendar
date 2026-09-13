@@ -4,7 +4,7 @@ import { useCycleActivities } from "../features/activity/hooks/use-cycle-activit
 import { useActivityCollections } from "../features/activity/hooks/use-activity-collections.js";
 import { useAppNavigation } from "./hooks/use-app-navigation.js";
 import { useDisplayPreferences } from "../features/settings/hooks/use-display-preferences.js";
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import loginGuideStep1 from "../../public/login-guide-step1.jpg";
 import loginGuideStep2 from "../../public/login-guide-step2.jpg";
 import loginGuideStep3 from "../../public/login-guide-step3.jpg";
@@ -19,7 +19,7 @@ import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
-import { createAiActivityDraft } from "../features/activity/api/activity-draft.js";
+import ActivityAiAssistant from "../features/activity/components/activity-ai-assistant.jsx";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
 import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
 import { useCalendarData } from "../features/activity/hooks/use-calendar-data.js";
@@ -231,8 +231,6 @@ function AccountApp({ auth }) {
     }
   }, [calendarAccessToken, loadActivities, setError]);
 
-  const handleGenerateAiActivityDraft = useCallback((input) => createAiActivityDraft(input), []);
-
   const tagSearch = useTagSearch({ calendarAccessToken, setCalendarAccessToken });
   const {
     tagSearchTerms,
@@ -256,12 +254,15 @@ function AccountApp({ auth }) {
     modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
+    modalAiDraft,
     openAddActivity,
+    openAiDraftActivity,
     openEditActivity,
     openEditActivityById,
     closeModal,
     handleEditSeries
   } = activityModal;
+  const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -451,6 +452,9 @@ function AccountApp({ auth }) {
                   disabled={!calendarAccessToken}
                 >
                   + เพิ่มกิจกรรม
+                </button>
+                <button type="button" className="activity-ai-launch" onClick={() => setActivityAssistantOpen(true)}>
+                  ✦ MR.Zettascale
                 </button>
                 {/* 🧪 DEV TEST BUTTON — เดิมไม่มี guard ใดๆ ทำให้ปุ่มนี้ขึ้น
                     ในโปรดักชันจริงด้วย ตอนนี้ห่อด้วย import.meta.env.DEV
@@ -888,9 +892,16 @@ function AccountApp({ auth }) {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
-        onGenerateAiDraft={handleGenerateAiActivityDraft}
+        initialAiDraft={modalAiDraft}
         googleCalendarSyncing={loading}
         onClose={closeModal}
+      />
+
+      <ActivityAiAssistant
+        open={activityAssistantOpen}
+        onClose={() => setActivityAssistantOpen(false)}
+        categories={categories}
+        onConfirmDraft={openAiDraftActivity}
       />
 
       <SettingsDrawer

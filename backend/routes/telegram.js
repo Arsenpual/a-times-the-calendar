@@ -214,9 +214,10 @@ router.post("/messages", async (req, res, next) => {
     await saveChatMessage(req.userId, { direction: "incoming", text, telegramMessageId: sent?.message_id, readAt: Date.now() });
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
       await sendChatReply(req.userId, auth.chatId, COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
-    } else if (!text.startsWith("/")) {
-      await replyWithGemini(req.userId, auth.chatId, text);
     }
+    // Telegram is deliberately delivery-only. MR.Zettascale's planning AI
+    // lives in Activity Mode on the web, where a draft can be reviewed
+    // before it is allowed anywhere near Calendar data.
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
