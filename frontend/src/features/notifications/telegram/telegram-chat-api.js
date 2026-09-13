@@ -11,3 +11,7 @@ export async function markTelegramChatRead() {
 export async function sendTelegramChatMessage(text) {
   return handleResponse(await apiRequest("/api/telegram/messages", { method: "POST", body: JSON.stringify({ text }) }), "POST /api/telegram/messages");
 }
+
+export async function setTelegramAiChatEnabled(enabled) {
+  return handleResponse(await apiRequest("/api/telegram/ai-chat", { method: "POST", body: JSON.stringify({ enabled }) }), "POST /api/telegram/ai-chat");
+}

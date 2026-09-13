@@ -1,16 +1,13 @@
 const crypto = require("crypto");
 const express = require("express");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
-const { askMrZettascale } = require("../gemini-chat.js");
+const { askMrZettascale, getGeminiChatStatus, setGeminiChatEnabled, claimGeminiChatUsage, releaseGeminiChatUsage } = require("../gemini-chat.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
-const AI_WINDOW_MS = 15 * 60 * 1000;
-const AI_WINDOW_LIMIT = 20;
-const aiRequestsByUser = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
@@ -75,20 +72,26 @@ async function sendChatReply(userId, chatId, text, options = {}) {
 }
 
 async function replyWithGemini(userId, chatId, text) {
-  const now = Date.now();
-  const recent = (aiRequestsByUser.get(userId) || []).filter((at) => at > now - AI_WINDOW_MS);
-  if (recent.length >= AI_WINDOW_LIMIT) {
-    await sendChatReply(userId, chatId, "ขอพักการตอบสักครู่นะครับ — ลองใหม่อีกครั้งในไม่กี่นาที");
+  const claim = await claimGeminiChatUsage(userId);
+  if (claim.status !== "claimed") {
+    const messages = {
+      "user-disabled": "AI chat ถูกปิดไว้ เพื่อรักษาโควต้าของคุณ",
+      "globally-disabled": "AI chat ถูกปิดชั่วคราวโดยระบบ",
+      "not-allowed": "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ AI chat",
+      "window-limited": "ใช้ AI ครบโควต้าช่วง 15 นาทีแล้ว ลองใหม่อีกครั้งในไม่กี่นาที",
+      "day-limited": "ใช้ AI ครบโควต้าประจำวันแล้ว พรุ่งนี้ลองใหม่ได้อีกครั้ง",
+      "global-limited": "โควต้า AI ของระบบวันนี้เต็มแล้ว ลองใหม่พรุ่งนี้นะครับ"
+    };
+    await sendChatReply(userId, chatId, messages[claim.status] || "AI chat ใช้งานไม่ได้ในขณะนี้");
     return;
   }
-  recent.push(now);
-  aiRequestsByUser.set(userId, recent);
   const history = (await telegramMessagesCol(userId).orderBy("createdAt", "desc").limit(9).get()).docs
     .map((doc) => doc.data()).reverse();
   try {
     const answer = await askMrZettascale(text, history);
     await sendChatReply(userId, chatId, answer);
   } catch (error) {
+    await releaseGeminiChatUsage(claim).catch(() => {});
     console.error("[telegram] Gemini ตอบแชตไม่สำเร็จ:", error.message);
     await sendChatReply(userId, chatId, "ตอนนี้ผมยังตอบผ่าน Gemini ไม่ได้ ลองใหม่อีกครั้งในสักครู่นะครับ");
   }
@@ -173,16 +176,28 @@ router.get("/messages", async (req, res, next) => {
     const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
     // A person's own messages are never unread. Only bot replies and sent
     // notifications wait for acknowledgement in the web chat.
-    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
+    const aiChat = await getGeminiChatStatus(req.userId);
+    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length, aiChat });
+  } catch (error) { next(error); }
+});
+
+router.post("/ai-chat", async (req, res, next) => {
+  try {
+    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "ต้องระบุสถานะ enabled ของ AI chat" });
+    res.json({ aiChat: await setGeminiChatEnabled(req.userId, req.body.enabled) });
   } catch (error) { next(error); }
 });
 
 router.post("/messages/read", async (req, res, next) => {
   try {
-    const snapshot = await telegramMessagesCol(req.userId).where("direction", "==", "outgoing").where("readAt", "==", null).limit(100).get();
+    // Use the same newest-message window as GET /messages instead of a
+    // compound Firestore query, so opening the chat never depends on a new
+    // composite index being deployed.
+    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(100).get();
     const batch = db.batch();
-    snapshot.docs.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
-    if (!snapshot.empty) await batch.commit();
+    const unread = snapshot.docs.filter((doc) => doc.data().direction === "outgoing" && !doc.data().readAt);
+    unread.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
+    if (unread.length) await batch.commit();
     res.json({ ok: true });
   } catch (error) { next(error); }
 });

@@ -350,7 +350,16 @@
         .telegram-web-chat-backdrop { position:fixed; inset:0; z-index:1002; display:flex; justify-content:flex-end; align-items:flex-end; padding:18px; background:color-mix(in srgb, var(--g-on-surface) 16%, transparent); }
         .telegram-web-chat { width:min(380px,100%); height:min(570px,calc(100vh - 36px)); display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--g-outline); border-radius:16px; background:var(--g-surface); box-shadow:0 18px 52px color-mix(in srgb, var(--g-on-surface) 28%, transparent); }
         .telegram-web-chat header { display:flex; align-items:center; justify-content:space-between; padding:13px 15px; color:var(--g-blue); background:color-mix(in srgb, var(--g-blue) 9%, var(--g-surface)); border-bottom:1px solid var(--g-outline); }
+        .telegram-web-chat__header-actions { display:flex; align-items:center; gap:10px; }
         .telegram-web-chat header button { border:0; background:transparent; color:inherit; cursor:pointer; font-size:24px; line-height:1; }
+        .telegram-ai-switch { display:inline-flex; cursor:pointer; }
+        .telegram-ai-switch input { position:absolute; opacity:0; pointer-events:none; }
+        .telegram-ai-switch span { width:31px; height:18px; border-radius:999px; background:var(--g-toggle-off); transition:background 150ms ease; }
+        .telegram-ai-switch span::after { content:""; display:block; width:12px; height:12px; margin:3px; border-radius:50%; background:#fff; transition:transform 150ms ease; }
+        .telegram-ai-switch input:checked + span { background:var(--g-blue); }
+        .telegram-ai-switch input:checked + span::after { transform:translateX(13px); }
+        .telegram-ai-switch input:disabled + span { opacity:.4; cursor:not-allowed; }
+        .telegram-ai-quota { margin:0; padding:6px 12px; border-bottom:1px solid var(--g-outline-variant); background:var(--g-surface); color:var(--g-on-surface-variant); font-size:11px; line-height:1.35; }
         .telegram-web-chat__messages { flex:1; overflow:auto; padding:12px; background:var(--g-background); }
         .telegram-web-chat__messages > p:first-child:last-child { color:var(--g-on-surface-variant); text-align:center; }
         /* Backend direction is relative to the bot: outgoing = MR.Zettascale
