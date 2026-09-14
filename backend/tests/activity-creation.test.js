@@ -169,3 +169,12 @@ test('third unclear turn requests manual title without inventing one', () => {
   const result = finishResult({ ready: false, reply: 'ถามต่อ', draft: {} }, ctx);
   assert.equal(result.ready, false); assert.match(result.reply, /ชื่อกิจกรรม/);
 });
+test('guided flow keeps Gemini next-field question after earlier answers', () => {
+  const ctx = context('08.00');
+  ctx.guidedStep = 'activity.time';
+  ctx.guidedActivity = { title: 'ประชุมทีม', date: '2026-09-14', time: '', durationMinutes: 0 };
+  ctx.history = [{ role: 'user', text: 'ประชุมทีม' }, { role: 'user', text: 'วันนี้' }];
+  const result = finishResult({ ready: false, reply: 'กิจกรรมนี้ใช้เวลานานเท่าไรครับ?', draft: { startTime: '08:00' } }, ctx);
+  assert.equal(result.reply, 'กิจกรรมนี้ใช้เวลานานเท่าไรครับ?');
+  assert.equal(result.collected.time, '08:00');
+});

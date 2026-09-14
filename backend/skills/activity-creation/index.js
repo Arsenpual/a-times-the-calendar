@@ -42,7 +42,15 @@ function finishResult(raw, context) {
       time: typeof partial.startTime === 'string' && /^\d{2}:\d{2}$/.test(partial.startTime) ? partial.startTime : '',
       durationMinutes: Number.isInteger(partial.durationMinutes) && partial.durationMinutes >= 30 && partial.durationMinutes <= 720 ? partial.durationMinutes : 0
     };
-    return { reply: context.history.filter(item => item.role === 'user').length >= 2 ? 'กรุณาระบุชื่อกิจกรรมที่ต้องการสร้างให้ชัดเจนครับ' : reply, ready: false, draft: null, collected };
+    // In the guided flow, a previous field (such as title) may already be in
+    // guidedActivity. Never replace Gemini's next-field question with the old
+    // generic “please provide a title” fallback.
+    const safeReply = context.guidedStep
+      ? reply
+      : context.history.filter(item => item.role === 'user').length >= 2
+        ? 'กรุณาระบุชื่อกิจกรรมที่ต้องการสร้างให้ชัดเจนครับ'
+        : reply;
+    return { reply: safeReply, ready: false, draft: null, collected };
   }
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
