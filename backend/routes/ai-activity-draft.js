@@ -5,6 +5,7 @@ const { claimGeminiChatUsage, releaseGeminiChatUsage, getGeminiChatStatus } = re
 const router = express.Router();
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft } = require("../skills/activity-creation");
+const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
 router.post("/activity-validate", (req, res) => {
   try { res.json({ draft: validateDraft(req.body.draft, req.body.categories || []) }); }
@@ -66,6 +67,10 @@ router.post("/activity-conversation", async (req, res, next) => {
   let claim = null;
   try {
     const context = prepareContext(req.body);
+    // Product FAQ answers are deterministic local lookups. They do not call
+    // Gemini, so they never consume the person's AI quota.
+    const knowledgeReply = answerTimesQuestion(context.text);
+    if (knowledgeReply) return res.json({ reply: knowledgeReply, ready: false, draft: null, source: "knowledge" });
     claim = await claimGeminiChatUsage(req.userId);
     if (claim.status !== "claimed") {
       const errors = {

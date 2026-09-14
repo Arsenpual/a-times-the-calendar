@@ -1,6 +1,6 @@
 // The only product knowledge MR.Zettascale may use in a free-text answer.
 // Keep this aligned with the template-chat branch “T.i.M.E.S. คืออะไร”.
-module.exports = `
+const TEXT = `
 PRODUCT IDENTITY
 T.i.M.E.S. is a personal time-planning app. It separates scheduled activities from reminders while showing both in connected time views. Its purpose is to help a person see what is planned, what needs attention, and what is due next without treating every scheduled block as a reminder.
 
@@ -48,3 +48,22 @@ MR.Zettascale template-chat history, the currently selected chat branch, and an 
 ANSWERING RULES
 Use only the facts above for product questions. Do not invent pricing, guarantees, integrations, background services, notification schedules, or features not explicitly described here. If information is absent, say: "ผมยังไม่มีข้อมูลยืนยันเกี่ยวกับส่วนนั้นใน T.i.M.E.S. ครับ".
 `;
+
+const TOPICS = [
+  { keywords: ["google calendar", "ปฏิทิน google", "oauth", "refresh token", "access token", "เชื่อม google"], answer: "T.i.M.E.S. เชื่อม Google Calendar ผ่านสิทธิ์ Google OAuth ของผู้ใช้ครับ backend เก็บ Refresh Token แบบเข้ารหัสเพื่อขอ Access Token ใหม่อัตโนมัติ จึงไม่ควรต้องเชื่อมใหม่ทุกชั่วโมง แต่ถ้าถอนสิทธิ์หรือ token ใช้ไม่ได้ ต้องเชื่อมต่อใหม่ การเชื่อมต่อนี้เป็นทางเลือก แอปยังใช้งานได้โดยไม่เชื่อมครับ" },
+  { keywords: ["telegram", "การแจ้งเตือน", "แจ้งเตือน", "notification", "noti", "mr.zettascale bot"], answer: "T.i.M.E.S. ส่งการแจ้งเตือนผ่านบอท MR.Zettascale ใน Telegram ได้หลังเชื่อมต่อแล้ว และเปิด/ปิดการแจ้งเตือนแยกตามอุปกรณ์ได้ครับ ระบบนับจำนวนแจ้งเตือนรวมเพื่อควบคุมโควต้ารายวัน อุปกรณ์ที่เฝ้าการแจ้งเตือนต้องออนไลน์ ไม่หลับ และได้รับข้อมูลล่าสุดจึงจะทำงานได้ตามเวลา" },
+  { keywords: ["reminder", "buffer", "countdown", "stopwatch", "routine", "interval", "weekly", "one-time", "ครั้งเดียว"], answer: "Reminder Mode แยก Reminder ออกจากกิจกรรมในตาราง รองรับแบบครั้งเดียว รายสัปดาห์ Routine, Interval, Countdown และ Stopwatch ครับ Reminder ที่ active จะแสดงบน Timeline ส่วนที่พักหรือทำเสร็จแล้วจะไม่แสดง Buffer ของ Reminder แบบรายสัปดาห์หรือครั้งเดียวสามารถสร้าง Countdown ชั่วคราวก่อน และ Stopwatch ชั่วคราวหลัง Reminder หลักได้" },
+  { keywords: ["sync", "ซิงก์", "firestore", "firebase", "ข้อมูล", "local storage", "privacy", "ส่วนตัว", "เก็บข้อมูล"], answer: "ข้อมูลหลักของผู้ใช้ถูกแยกตาม Firebase UID และเก็บใน Firestore จึงซิงก์การเพิ่ม แก้ไข และลบระหว่างอุปกรณ์ที่ลงชื่อเข้าใช้บัญชีเดียวกันเมื่อออนไลน์ได้ครับ แต่ประวัติแชต MR.Zettascale, สาขาที่เลือก และร่างที่ค้างอยู่ เก็บเฉพาะ Local Storage ของเบราว์เซอร์เครื่องนั้น ไม่ใช้ cloud และไม่ไปโผล่อีกอุปกรณ์" },
+  { keywords: ["activity mode", "week spine", "cycle", "กิจกรรม", "กิจกรรมทั้งวัน", "all-day", "ตาราง"], answer: "Activity Mode ใช้วางกิจกรรมตามวันและเวลาบน Week Spine ครับ เพิ่ม แก้ไข ลากย้าย ปรับเวลา ทำสำเนา ล็อก และจัดหมวดหมู่หรือ Tag ได้ มีทั้งมุมมองรายสัปดาห์และ Cycle 4 สัปดาห์ กิจกรรมทั้งวันยังเป็นกิจกรรมปกติที่ยาว 00:00 ถึง 00:00 วันถัดไป แต่จะไม่แสดงบน Reminder Timeline และไม่แจ้ง Telegram" },
+  { keywords: ["mr.zettascale", "ผู้ช่วย", "ai ทำอะไร", "ai ช่วยอะไร"], answer: "MR.Zettascale เป็นผู้ช่วยใน Activity Mode ที่ช่วยแปลงข้อความหรือการเลือกข้อความสำเร็จรูปเป็นร่างกิจกรรมครับ สามารถช่วยเติมวัน เวลา ระยะเวลา Tag และหมวดหมู่ให้ตรวจสอบก่อนยืนยันได้ แต่จะไม่บันทึกกิจกรรมให้เองโดยไม่ผ่านการ Confirm ของผู้ใช้" },
+  { keywords: ["times คืออะไร", "t.i.m.e.s คืออะไร", "แอปนี้", "โปรแกรมนี้"], answer: "T.i.M.E.S. เป็นแอปวางแผนเวลาส่วนตัวที่แยกกิจกรรมตามตารางออกจาก Reminder แล้วเชื่อมทั้งสองส่วนเข้ากับมุมมองเวลาเดียวกันครับ ใช้วางกิจกรรม ติดตามสิ่งที่ต้องทำ และเลือกเชื่อม Google Calendar หรือ Telegram ได้" }
+];
+
+function answerTimesQuestion(input) {
+  const text = String(input || "").toLowerCase().trim();
+  if (!text || /สร้าง|เพิ่ม|นัดหมาย|วางกิจกรรม|กำหนดเวลา/.test(text)) return null;
+  const topic = TOPICS.find(({ keywords }) => keywords.some((keyword) => text.includes(keyword)));
+  return topic?.answer || null;
+}
+
+module.exports = { TEXT, answerTimesQuestion };

@@ -12,7 +12,7 @@ function loadSavedChat() {
   try {
     const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
     const messages = Array.isArray(saved?.messages)
-      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: message.source === "ai" ? "ai" : "template" }))
+      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "knowledge"].includes(message.source) ? message.source : "template" }))
       : [];
     return {
       messages: messages.length ? messages : [INITIAL_MESSAGE],
@@ -123,7 +123,13 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name)
       });
-      setMessages((current) => [...current, { role: "assistant", text: result.reply, source: "ai" }]);
+      const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
+      setMessages((current) => {
+        const withCorrectedUserSource = responseSource === "knowledge"
+          ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
+          : current;
+        return [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
+      });
       if (result.ready) setDraft(result.draft);
     } catch (requestError) {
       setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
@@ -156,7 +162,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}`}>{message.source === "ai" && <small className="activity-ai-source">{message.role === "user" ? "✦ AI · ใช้ quota 1 ครั้ง" : "✦ คำตอบจาก AI · ไม่ใช้ quota เพิ่ม"}</small>}<span>{message.text}</span></div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}`}>{message.source === "ai" && <small className="activity-ai-source">{message.role === "user" ? "✦ AI · ใช้ quota 1 ครั้ง" : "✦ คำตอบจาก AI · ไม่ใช้ quota เพิ่ม"}</small>}{message.source === "knowledge" && <small className="activity-ai-source">⌕ T.i.M.E.S. knowledge · ไม่ใช้ AI quota</small>}<span>{message.text}</span></div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>

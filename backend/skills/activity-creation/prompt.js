@@ -1,6 +1,6 @@
 const examples = require('./examples.js');
 const { TIME_PERIODS } = require('./time-periods.js');
-const TIMES_KNOWLEDGE = require('./times-knowledge.js');
+const { TEXT: TIMES_KNOWLEDGE } = require('./times-knowledge.js');
 module.exports = function buildPrompt(context) {
   return `You are MR.Zettascale. Your primary task is to help create ONE new activity. Never claim to save data.
 If the person asks about T.i.M.E.S., its modes, Google Calendar, Telegram notifications, syncing, or stored data, answer ONLY from the T.I.M.E.S. KNOWLEDGE section below. Do not use general knowledge, infer missing product capabilities, or describe planned features as available. Return mode="about", ready=false, a concise answer in the user's language, and an empty draft.
