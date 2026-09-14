@@ -43,8 +43,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     const nextMessages = [...messages, { role: "user", text }];
     setMessages(nextMessages); setInput(""); setPending(true); setError(""); setDraft(null); setEditingDraft(false);
     try {
+      const history = messages.slice(1);
+      // `text` is the current turn. Keep an accidentally duplicated current
+      // message out of history so it cannot be interpreted as stale intent.
+      if (history.at(-1)?.role === "user" && history.at(-1).text.trim() === text) history.pop();
       const result = await continueActivityAssistant({
-        text, history: messages.slice(1), referenceDate: toDateInputValue(new Date()),
+        text, history, referenceDate: toDateInputValue(new Date()),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name)
       });

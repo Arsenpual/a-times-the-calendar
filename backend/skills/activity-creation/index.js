@@ -12,6 +12,9 @@ function prepareContext(body) {
   const history = (Array.isArray(body.history) ? body.history : []).slice(-10).map(item => ({
     role: item.role === 'assistant' ? 'assistant' : 'user', text: bounded(item.text, 4000, 'ประวัติแชต')
   }));
+  // Defend the API too: callers must not send the current text twice, once as
+  // `text` and once as the newest history entry.
+  if (history.at(-1)?.role === 'user' && history.at(-1).text === text) history.pop();
   const categories = (Array.isArray(body.categories) ? body.categories : []).slice(0, 50).map(name => bounded(name, 200, 'หมวดหมู่'));
   return { text, referenceDate, timeZone, history, categories };
 }

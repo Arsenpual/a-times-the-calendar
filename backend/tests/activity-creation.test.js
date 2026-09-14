@@ -135,6 +135,10 @@ test('oversized notes rejected', () => assert.throws(() => finish({ notes: 'a'.r
 test('recurrence rejected in single activity phase', () => assert.throws(() => finish({ recurrence: ['RRULE:FREQ=DAILY'] })));
 test('manual invalid all day rejected', () => assert.throws(() => validateDraft({ ...valid(), allDay: true })));
 test('bad timezone rejected before AI call', () => assert.throws(() => prepareContext({ text: 'test', referenceDate: '2026-09-14', timeZone: 'bad' })));
+test('current text is removed when it is duplicated as newest history', () => {
+  const ctx = prepareContext({ text: 'เข้านอน 23.00', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', history: [{ role: 'user', text: 'เข้านอน 23.00' }] });
+  assert.deepEqual(ctx.history, []);
+});
 test('incomplete AI result rejected', () => assert.throws(() => finishResult({}, context())));
 test('unclear title can request clarification', () => assert.equal(finishResult({ ready: false, reply: 'ทำอะไรครับ?', draft: {} }, context()).draft, null));
 test('third unclear turn requests manual title without inventing one', () => {
