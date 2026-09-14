@@ -19,13 +19,13 @@ test('unknown tag falls back', () => assert.equal(finish({ tags: ['unrecognized'
 test('homework evening retains two-hour duration', () => assert.equal(finish({ title: 'ทำการบ้าน', tags: ['evening'] }).endLocal, '2026-09-14T21:00'));
 test('Thai breakfast gets morning tag and 06:00–08:00 immediately', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', tags: [] }, 'ทานข้าวตอนเช้า');
-  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'hour-08']);
+  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-120m']);
   assert.equal(draft.startLocal, '2026-09-14T06:00');
   assert.equal(draft.endLocal, '2026-09-14T08:00');
 });
 test('Thai breakfast corrects an incorrect model period tag', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', tags: ['night'] }, 'ทานข้าวตอนเช้า');
-  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'hour-08']);
+  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-120m']);
 });
 test('Thai breakfast replaces an arbitrary model time when user gave no clock time', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', startLocal: '2026-09-14T19:00', endLocal: '2026-09-14T20:00' }, 'ทานข้าวตอนเช้า');
@@ -42,11 +42,12 @@ test('explicit clock time wins over an inferred situation tag', () => {
   assert.equal(draft.startLocal, '2026-09-14T07:30');
   assert.equal(draft.endLocal, '2026-09-14T08:00');
 });
-test('every timed activity gets precise start and end hour tags', () => {
+test('every timed activity gets an hour, 30-minute start, and duration tag', () => {
   const draft = finish({ startTime: '07:30', durationMinutes: 30 });
   assert.ok(draft.tags.includes('hour-07'));
-  assert.ok(draft.tags.includes('hour-08'));
-  assert.equal(draft.tags.filter(tag => tag.startsWith('hour-')).length, 2);
+  assert.ok(draft.tags.includes('start-07-30'));
+  assert.ok(draft.tags.includes('duration-30m'));
+  assert.equal(draft.tags.filter(tag => tag.startsWith('hour-')).length, 1);
 });
 test('a supplied hour tag supplies an empty start time', () => {
   const draft = finish({ tags: ['morning', 'hour-10'] }, 'ประชุมตอนเช้า');
@@ -73,9 +74,17 @@ test('an overnight activity receives a multi-day tag', () => {
 });
 test('a long activity receives each crossed time-period tag', () => {
   const draft = finish({ startTime: '05:00', durationMinutes: 480 });
-  assert.deepEqual(draft.tags.filter(tag => !tag.startsWith('hour-')), ['single-day', 'dawn', 'morning', 'noon', 'afternoon']);
+  assert.deepEqual(draft.tags.filter(tag => !tag.startsWith('hour-') && !tag.startsWith('start-') && !tag.startsWith('duration-')), ['single-day', 'dawn', 'morning', 'noon', 'afternoon']);
   assert.ok(draft.tags.includes('hour-05'));
-  assert.ok(draft.tags.includes('hour-13'));
+  assert.ok(draft.tags.includes('start-05-00'));
+  assert.ok(draft.tags.includes('duration-480m'));
+});
+test('start and duration tags use 30-minute frames without changing exact times', () => {
+  const draft = finish({ startLocal: '2026-09-14T05:10', endLocal: '2026-09-14T12:50' });
+  assert.equal(draft.startLocal, '2026-09-14T05:10');
+  assert.equal(draft.endLocal, '2026-09-14T12:50');
+  assert.ok(draft.tags.includes('start-05-00'));
+  assert.ok(draft.tags.includes('duration-480m'));
 });
 test('generic defaults today evening', () => assert.equal(valid().startLocal, '2026-09-14T19:00'));
 test('generic lasts one hour', () => assert.equal(valid().endLocal, '2026-09-14T20:00'));
@@ -88,7 +97,7 @@ test('overnight duration', () => assert.equal(finish({ startTime: '23:30', durat
 test('all day exclusive end', () => assert.equal(finish({ allDay: true }).endLocal, '2026-09-15T00:00'));
 test('unknown category cleared', () => assert.equal(finish({ categoryName: 'ไม่มี' }).categoryName, ''));
 test('known category preserved', () => assert.equal(finish({ categoryName: 'งาน' }).categoryName, 'งาน'));
-test('tags deduplicated while retaining system time tags', () => assert.deepEqual(finish({ tags: ['a', 'a'] }).tags, ['a', 'single-day', 'evening', 'hour-19', 'hour-20']));
+test('tags deduplicated while retaining system time tags', () => assert.deepEqual(finish({ tags: ['a', 'a'] }).tags, ['a', 'single-day', 'evening', 'hour-19', 'start-19-00', 'duration-60m']));
 test('assumptions are visible data', () => assert.ok(valid().assumptions.length >= 3));
 test('missing title rejected', () => assert.throws(() => finish({ title: '' })));
 test('invalid date rejected', () => assert.throws(() => finish({ startLocal: '2026-02-30T10:00' })));

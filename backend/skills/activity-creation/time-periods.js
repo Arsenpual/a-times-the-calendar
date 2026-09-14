@@ -32,6 +32,19 @@ function hourTagForLocal(local) {
   const match = /^\d{4}-\d{2}-\d{2}T(\d{2}):\d{2}$/.exec(local || '');
   return match ? `${HOUR_TAG_PREFIX}${match[1]}` : undefined;
 }
+function startTagForLocal(local) {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(local || '');
+  if (!match) return undefined;
+  const minute = Number(match[3]) < 30 ? '00' : '30';
+  return `start-${match[2]}-${minute}`;
+}
+function durationTagForRange(startLocal, endLocal) {
+  const start = new Date(`${startLocal}:00Z`).getTime();
+  const end = new Date(`${endLocal}:00Z`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return undefined;
+  const roundedMinutes = Math.max(30, Math.ceil((end - start) / 60000 / 30) * 30);
+  return `duration-${roundedMinutes}m`;
+}
 function describeHourTag(tag) {
   const time = timeForHourTag(tag);
   if (!time) return '';
@@ -59,4 +72,4 @@ function periodTagsForRange(startLocal, endLocal) {
   }
   return [...tags];
 }
-module.exports = { TIME_PERIODS, HOUR_TAG_PREFIX, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, describeHourTag, periodTagsForRange };
+module.exports = { TIME_PERIODS, HOUR_TAG_PREFIX, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, startTagForLocal, durationTagForRange, describeHourTag, periodTagsForRange };

@@ -1,5 +1,5 @@
 const { localDateTime } = require('./validator.js');
-const { TIME_PERIODS, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, describeHourTag, periodTagsForRange } = require('./time-periods.js');
+const { TIME_PERIODS, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, startTagForLocal, durationTagForRange, describeHourTag, periodTagsForRange } = require('./time-periods.js');
 
 const SITUATION_RULES = [
   { match: /ทานข้าวตอนเช้า|กินข้าวเช้า|อาหารเช้า|มื้อเช้า|\bbreakfast\b/i, tag: 'morning', preferredStart: '06:00', durationMinutes: 120 },
@@ -18,15 +18,17 @@ function replacePeriodTag(tags, period) {
   return period ? [...new Set([...remaining, period])] : remaining;
 }
 function replaceTimeTags(tags, startLocal, endLocal) {
-  const hourTags = [hourTagForLocal(startLocal), hourTagForLocal(endLocal)].filter(Boolean);
+  const hourTags = [hourTagForLocal(startLocal)].filter(Boolean);
+  const startTag = startTagForLocal(startLocal);
+  const durationTag = durationTagForRange(startLocal, endLocal);
   const periodTags = periodTagsForRange(startLocal, endLocal);
-  if (!hourTags.length) return Array.isArray(tags) ? tags : [];
-  const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => !/^hour-(?:[01]\d|2[0-3])$/.test(tag));
+  if (!hourTags.length || !startTag || !durationTag) return Array.isArray(tags) ? tags : [];
+  const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => !/^hour-(?:[01]\d|2[0-3])$/.test(tag) && !/^start-(?:[01]\d|2[0-3])-(?:00|30)$/.test(tag) && !/^duration-\d+m$/.test(tag));
   const scopeTag = remaining.find((tag) => tag === 'single-day' || tag === 'multi-day');
   const withoutPeriods = remaining.filter((tag) => !Object.hasOwn(TIME_PERIODS, tag) && tag !== 'single-day' && tag !== 'multi-day');
   // System time metadata takes priority over excess optional tags, while
   // retaining the existing twenty-tag safety limit.
-  const systemTags = [...(scopeTag ? [scopeTag] : []), ...periodTags, ...new Set(hourTags)];
+  const systemTags = [...(scopeTag ? [scopeTag] : []), ...periodTags, ...new Set(hourTags), startTag, durationTag];
   return [...withoutPeriods.slice(0, Math.max(0, 20 - systemTags.length)), ...systemTags];
 }
 function replaceDayScopeTag(tags, startLocal, endLocal, allDay) {
@@ -83,8 +85,10 @@ function applyAssumptions(raw, context) {
   draft.tags = replaceDayScopeTag(draft.tags, draft.startLocal, draft.endLocal, draft.allDay);
   if (!draft.allDay) {
     draft.tags = replaceTimeTags(draft.tags, draft.startLocal, draft.endLocal);
-    const hourTags = draft.tags.filter((tag) => /^hour-(?:[01]\d|2[0-3])$/.test(tag));
-    if (hourTags.length) draft.assumptions.push(`กรอบเวลา ${hourTags.map(describeHourTag).join(' และ ')} จาก tag ${hourTags.join(', ')}`);
+    const hourTag = draft.tags.find((tag) => /^hour-(?:[01]\d|2[0-3])$/.test(tag));
+    const startTag = draft.tags.find((tag) => /^start-(?:[01]\d|2[0-3])-(?:00|30)$/.test(tag));
+    const durationTag = draft.tags.find((tag) => /^duration-\d+m$/.test(tag));
+    if (hourTag && startTag && durationTag) draft.assumptions.push(`กรอบเริ่ม ${describeHourTag(hourTag)} · ${startTag} · ${durationTag}`);
   }
   return draft;
 }
