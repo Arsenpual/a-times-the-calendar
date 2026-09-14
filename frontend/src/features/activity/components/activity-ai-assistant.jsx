@@ -144,6 +144,9 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       if (canAdvanceGuidedFlow) {
         setGuidedActivity(completedGuidedActivity);
         if (nextNodeId) setConversationNodeId(nextNodeId);
+        // Gemini has finished this turn. The next answer is the person's
+        // choice again: tap a template option or type to ask Gemini directly.
+        setGuidedConversationMode("template");
       } else if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); }
       setMessages((current) => {
         const withCorrectedUserSource = responseSource === "knowledge"
