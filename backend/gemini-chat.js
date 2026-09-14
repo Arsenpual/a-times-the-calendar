@@ -6,6 +6,9 @@ const USER_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_DAILY_LIMIT || 100);
 const GLOBAL_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_GLOBAL_DAILY_LIMIT || 1000);
 const DEVELOPER_WINDOW_LIMIT = Number(process.env.GEMINI_CHAT_DEVELOPER_WINDOW_LIMIT || 120);
 const DEVELOPER_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_DEVELOPER_DAILY_LIMIT || 1000);
+// AI-assisted final drafts are paid by the application, never by a person's
+// daily chat allowance. Keep a separate hard cap to protect the owner.
+const DRAFT_GLOBAL_DAILY_LIMIT = Number(process.env.GEMINI_DRAFT_GLOBAL_DAILY_LIMIT || 300);
 
 function bangkokDayKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -98,4 +101,27 @@ async function releaseGeminiChatUsage(claim) {
   });
 }
 
-module.exports = { getGeminiChatStatus, claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser, userLimits };
+async function claimGeminiDraftUsage(userId) {
+  const now = Date.now();
+  const dayKey = bangkokDayKey();
+  const globalRef = db.collection("app-usage").doc(`gemini-draft-${dayKey}`);
+  return db.runTransaction(async (transaction) => {
+    const global = await transaction.get(globalRef);
+    if (!enabledGlobally()) return { status: "globally-disabled" };
+    if (!isAllowedUser(userId)) return { status: "not-allowed" };
+    const count = Number(global.data()?.count || 0);
+    if (count >= DRAFT_GLOBAL_DAILY_LIMIT) return { status: "global-limited" };
+    transaction.set(globalRef, { count: count + 1, dayKey, updatedAt: now }, { merge: true });
+    return { status: "claimed", refs: { globalRef } };
+  });
+}
+
+async function releaseGeminiDraftUsage(claim) {
+  if (claim?.status !== "claimed") return;
+  await db.runTransaction(async (transaction) => {
+    const global = await transaction.get(claim.refs.globalRef);
+    transaction.set(claim.refs.globalRef, { count: Math.max(0, Number(global.data()?.count || 0) - 1), updatedAt: Date.now() }, { merge: true });
+  });
+}
+
+module.exports = { getGeminiChatStatus, claimGeminiChatUsage, releaseGeminiChatUsage, claimGeminiDraftUsage, releaseGeminiDraftUsage, isDeveloperUser, userLimits };

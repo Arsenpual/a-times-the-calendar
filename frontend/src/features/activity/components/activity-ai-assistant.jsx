@@ -12,7 +12,7 @@ function loadSavedChat() {
   try {
     const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
     const messages = Array.isArray(saved?.messages)
-      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "knowledge"].includes(message.source) ? message.source : "template" }))
+      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
       : [];
     return {
       messages: messages.length ? messages : [INITIAL_MESSAGE],
@@ -73,7 +73,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     setGuidedActivity(null); setConversationNodeId("home"); setPending(true); setPendingSource("template"); setError("");
     try {
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
-      addMessages({ role: "assistant", text: result.reply, source: "template" }); setDraft(result.draft);
+      addMessages({ role: "assistant", text: result.reply, source: result.summarySource === "system-ai" ? "system" : "template" }); setDraft(result.draft);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
@@ -164,7 +164,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
