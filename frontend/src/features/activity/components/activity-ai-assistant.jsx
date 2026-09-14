@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { continueActivityAssistant } from "../api/activity-assistant.js";
+import { continueActivityAssistant, getActivityAssistantStatus, setActivityAssistantEnabled } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
@@ -10,6 +10,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [aiStatus, setAiStatus] = useState(null);
   const bottomRef = useRef(null);
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ block: "end" }); }, [open, messages, pending]);
   useEffect(() => {
@@ -18,6 +19,10 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+  useEffect(() => {
+    if (!open) return;
+    getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch((requestError) => setError(requestError.message));
+  }, [open]);
   if (!open) return null;
   const reset = () => { setMessages([{ role: "assistant", text: WELCOME }]); setDraft(null); setError(""); setInput(""); };
   const send = async (event) => {
@@ -38,9 +43,17 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     finally { setPending(false); }
   };
   const confirm = () => { if (!draft) return; onConfirmDraft(draft); onClose(); };
+  const toggleAi = async (enabled) => {
+    try {
+      setError("");
+      const result = await setActivityAssistantEnabled(enabled);
+      setAiStatus(result.aiChat);
+    } catch (requestError) { setError(requestError.message || "เปลี่ยนสถานะ AI ไม่สำเร็จ"); }
+  };
   return <div className="activity-ai-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
-      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
+      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div>{aiStatus && <label className="activity-ai-switch" title="เปิดหรือพัก AI เพื่อควบคุมโควต้าของคุณ"><input type="checkbox" checked={Boolean(aiStatus.enabled)} disabled={!aiStatus.allowed || !aiStatus.globallyEnabled} onChange={(event) => toggleAi(event.target.checked)} /><span>{aiStatus.enabled ? "AI เปิด" : "AI ปิด"}</span></label>}<button type="button" onClick={reset}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
+      {aiStatus && <p className="activity-ai-quota">เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที</p>}
       <main className="activity-ai-messages">
         {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}`}>{message.text}</p>)}
         {pending && <p className="activity-ai-message is-assistant is-thinking">กำลังช่วยคิดรายละเอียด…</p>}
@@ -48,7 +61,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="เล่ากิจกรรมที่ต้องการสร้าง…" maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim()}>ส่ง</button></form>
+      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="เล่ากิจกรรมที่ต้องการสร้าง…" maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false}>ส่ง</button></form>
     </section>
   </div>;
 }
