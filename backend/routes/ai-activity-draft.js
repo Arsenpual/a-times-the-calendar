@@ -18,6 +18,25 @@ router.get("/activity-assistant-status", async (req, res, next) => {
   catch (error) { next(error); }
 });
 
+// Deterministic path for the guided quick-reply flow. It deliberately skips
+// Gemini and its quota: every required value was chosen by the person.
+router.post("/activity-template-draft", (req, res) => {
+  try {
+    const { title, date, time, durationMinutes, categoryName = "", categories = [] } = req.body || {};
+    if (typeof title !== "string" || !title.trim()) throw new Error("ต้องระบุชื่อกิจกรรม");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) throw new Error("วันที่ไม่ถูกต้อง");
+    if (!/^\d{2}:\d{2}$/.test(time || "")) throw new Error("เวลาไม่ถูกต้อง");
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 720) throw new Error("ระยะเวลาต้องอยู่ระหว่าง 30 ถึง 720 นาที");
+    const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories });
+    const result = finishResult({
+      ready: true,
+      reply: "ร่างกิจกรรมจากตัวเลือกพร้อมตรวจสอบแล้วครับ",
+      draft: { title, date, startTime: time, startLocal: "", endLocal: "", durationMinutes, allDay: false, categoryName, tags: [], notes: "", assumptions: ["สร้างจากข้อความสำเร็จรูป"] }
+    }, context);
+    res.json(result);
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
 function jsonFromGemini(payload) {
   const text = payload?.candidates?.[0]?.content?.parts
     ?.map((part) => part.text || "")

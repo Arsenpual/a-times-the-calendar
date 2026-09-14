@@ -12,6 +12,13 @@ export async function getActivityAssistantStatus() {
   return handleResponse(await apiRequest("/api/ai/activity-assistant-status", { cache: "no-store" }), "GET /api/ai/activity-assistant-status");
 }
 
+export async function createActivityTemplateDraft(input) {
+  return handleResponse(
+    await apiRequest("/api/ai/activity-template-draft", { method: "POST", body: JSON.stringify(input) }),
+    "POST /api/ai/activity-template-draft"
+  );
+}
+
 export async function validateActivityAssistantDraft(draft, categories) {
   return handleResponse(await apiRequest("/api/ai/activity-validate", { method: "POST", body: JSON.stringify({ draft, categories }) }), "POST /api/ai/activity-validate");
 }
