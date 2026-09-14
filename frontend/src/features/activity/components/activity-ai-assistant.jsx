@@ -215,8 +215,10 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
       <div className="activity-ai-manual-launch"><button type="button" onClick={openManualEditor} disabled={pending}>กรอกเองในแบบฟอร์มกิจกรรมเต็มรูปแบบ</button><small>ไม่ใช้ AI quota · ตั้งค่าได้ครบเหมือนปุ่มเพิ่มกิจกรรม</small></div>
-      {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไปสำหรับขั้นตอนนี้ · ไม่ใช้ AI quota</small>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
-      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}
+      <div className="activity-ai-choice-strip" aria-label="ตัวเลือกตอบกลับ">
+        {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป">{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
+        {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}
+      </div>
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
