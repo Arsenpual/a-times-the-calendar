@@ -61,9 +61,16 @@ function addMinutes(local, minutes) {
 // Only fill missing values. Explicit dates/times from extraction win.
 function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
-  const text = context.history.filter(item => item.role === 'user').map(item => item.text).concat(context.text).join(' ');
-  const situation = inferSituation(`${draft.title || ''} ${text}`);
-  const statedPeriod = inferPeriodFromText(text);
+  const historyText = context.history.filter(item => item.role === 'user').map(item => item.text).join(' ');
+  const latestText = context.text;
+  // A new activity intent replaces an unsaved proposal. Do not let “เข้านอน”
+  // from an earlier turn bleed into a new “ทานข้าวเช้า” request.
+  const latestSituation = inferSituation(latestText);
+  const latestPeriod = inferPeriodFromText(latestText);
+  const text = latestSituation || latestPeriod ? latestText : `${historyText} ${latestText}`.trim();
+  const situation = latestSituation || inferSituation(`${draft.title || ''} ${text}`);
+  const statedPeriod = latestPeriod || inferPeriodFromText(text);
+  if (latestSituation || latestPeriod) draft.assumptions = [];
   const hasExplicitClockTime = /\b\d{1,2}(?::|\.)\d{2}\b|\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
   // A recognisable phrase from the person wins over any incorrect period tag
   // proposed by the model.

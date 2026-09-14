@@ -49,6 +49,16 @@ test('a stated Thai period overrides an incorrect AI time and period tag', () =>
   assert.ok(draft.tags.includes('morning'));
   assert.ok(!draft.tags.includes('night'));
 });
+test('a latest activity intent replaces stale assumptions from an earlier unsaved proposal', () => {
+  const ctx = context('ทานข้าวตอนเช้า');
+  ctx.history = [{ role: 'user', text: 'เข้านอนคืนนี้' }];
+  const result = finishResult({ ready: true, reply: 'ร่างใหม่', draft: extraction({ title: 'ทานข้าวตอนเช้า', tags: ['night'], startLocal: '2026-09-14T21:00', endLocal: '2026-09-14T22:00', assumptions: ['เวลาเริ่ม 21:00 ภายใน tag night'] }) }, ctx);
+  assert.equal(result.draft.startLocal, '2026-09-14T06:00');
+  assert.equal(result.draft.endLocal, '2026-09-14T08:00');
+  assert.ok(result.draft.tags.includes('morning'));
+  assert.ok(!result.draft.tags.includes('night'));
+  assert.ok(!result.draft.assumptions.some((item) => item.includes('21:00')));
+});
 test('every timed activity gets an hour, 30-minute start, and duration tag', () => {
   const draft = finish({ startTime: '07:30', durationMinutes: 30 });
   assert.ok(draft.tags.includes('hour-07'));
