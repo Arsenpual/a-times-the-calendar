@@ -2757,3 +2757,7 @@ html[data-theme="dark"] .new-category-name-input {
   .week-spine-four-week-grid { grid-template-columns: 1fr; }
   .week-spine-overview-day { min-height: 100px; }
 }
+.activity-ai-assistant { display: flex; flex-direction: column; width: 100%; height: 100dvh; border-radius: 0; }
+.activity-ai-backdrop { padding: 0; }
+.activity-ai-messages { flex: 1; }
+.activity-ai-review > .activity-ai-manual-editor { display: grid; justify-content: stretch; }

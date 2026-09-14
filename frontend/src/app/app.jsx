@@ -19,6 +19,7 @@ import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
+import { validateActivityAssistantDraft } from "../features/activity/api/activity-assistant.js";
 import ActivityAiAssistant from "../features/activity/components/activity-ai-assistant.jsx";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
 import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
@@ -291,7 +292,8 @@ function AccountApp({ auth }) {
     handleDuplicateActivity,
     handleMoveActivityToDay
   } = mutations;
-  const handleConfirmAiActivityDraft = useCallback(async (draft) => {
+  const handleConfirmAiActivityDraft = useCallback(async (inputDraft) => {
+    const { draft } = await validateActivityAssistantDraft(inputDraft, categories.map(item => item.name));
     const categoryId = categories.find((category) => category.name === draft.categoryName)?.id || null;
     const title = String(draft.title || "").trim();
     if (!title || !draft.startLocal || !draft.endLocal) throw new Error("กรอกชื่อ วัน และเวลาเริ่ม–สิ้นสุดให้ครบก่อนยืนยัน");
@@ -299,13 +301,13 @@ function AccountApp({ auth }) {
       const startDate = draft.startLocal.slice(0, 10);
       const endDate = draft.endLocal.slice(0, 10);
       if (!startDate || !endDate || endDate <= startDate) throw new Error("กิจกรรมทั้งวันต้องมีวันสิ้นสุดหลังวันเริ่ม");
-      await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { date: startDate }, end: { date: endDate } }, categoryId, tags: [] });
+      await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { date: startDate }, end: { date: endDate } }, categoryId, tags: draft.tags });
       return;
     }
     const start = new Date(draft.startLocal);
     const end = new Date(draft.endLocal);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error("เวลาเริ่มและสิ้นสุดของกิจกรรมไม่ถูกต้อง");
-    await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } }, categoryId, tags: [] });
+    await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } }, categoryId, tags: draft.tags });
   }, [categories, handleSaveActivity]);
 
   const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({

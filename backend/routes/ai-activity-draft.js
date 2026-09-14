@@ -4,7 +4,12 @@ const { claimGeminiChatUsage, releaseGeminiChatUsage, getGeminiChatStatus, setGe
 
 const router = express.Router();
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const MAX_PROMPT_LENGTH = 1200;
+const { schema, buildPrompt, prepareContext, finishResult, validateDraft } = require("../skills/activity-creation");
+
+router.post("/activity-validate", (req, res) => {
+  try { res.json({ draft: validateDraft(req.body.draft, req.body.categories || []) }); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
 
 // Activity Mode owns the visible control now.  Keep this under /api/ai so
 // it does not depend on Telegram being connected just to plan an activity.
@@ -48,16 +53,7 @@ function createVertexAuth() {
 router.post("/activity-conversation", async (req, res, next) => {
   let claim = null;
   try {
-    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    const referenceDate = typeof req.body?.referenceDate === "string" ? req.body.referenceDate : "";
-    const timeZone = typeof req.body?.timeZone === "string" ? req.body.timeZone : "Asia/Bangkok";
-    const categories = Array.isArray(req.body?.categories) ? req.body.categories.filter((name) => typeof name === "string").slice(0, 50) : [];
-    const history = Array.isArray(req.body?.history) ? req.body.history.slice(-10).map((item) => ({
-      role: item?.role === "assistant" ? "MR.Zettascale" : "ผู้ใช้",
-      text: String(item?.text || "").slice(0, 1_000)
-    })).filter((item) => item.text) : [];
-    if (!text || text.length > MAX_PROMPT_LENGTH) return res.status(400).json({ error: "ข้อความต้องมีความยาว 1–1200 ตัวอักษร" });
-
+    const context = prepareContext(req.body);
     claim = await claimGeminiChatUsage(req.userId);
     if (claim.status !== "claimed") {
       const errors = {
@@ -71,60 +67,26 @@ router.post("/activity-conversation", async (req, res, next) => {
       return res.status(429).json({ error: errors[claim.status] || "AI ใช้งานไม่ได้ในขณะนี้" });
     }
 
-    const schema = {
-      type: "OBJECT",
-      properties: {
-        reply: { type: "STRING", description: "A concise Thai reply or one focused follow-up question" },
-        ready: { type: "BOOLEAN", description: "true only once title, date, start time, and end time/duration are known" },
-        draft: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING" }, startLocal: { type: "STRING" }, endLocal: { type: "STRING" },
-            allDay: { type: "BOOLEAN" }, categoryName: { type: "STRING" }, notes: { type: "STRING" }
-          },
-          required: ["title", "startLocal", "endLocal", "allDay", "categoryName", "notes"]
-        }
-      },
-      required: ["reply", "ready", "draft"]
-    };
-    const context = history.map((item) => `${item.role}: ${item.text}`).join("\n");
-    const instruction = [
-      "You are MR.Zettascale, the Activity Mode planning assistant in T.i.M.E.S. Reply in Thai unless the user writes another language.",
-      "Your only task is to help the person prepare exactly one calendar activity. You never create it yourself.",
-      "Finish a usable draft within 1–3 user messages. Ask a follow-up only if the activity title/intent is genuinely unclear; title is the only essential detail that you must not guess. Never ask follow-ups about category, tags, repetition, all-day status, date, time, or duration unless the person explicitly wants to decide them.",
-      "Make necessary assumptions: missing date means the reference date (today), except an explicit tomorrow/next-day phrase means tomorrow. Missing time means an appropriate time inferred from the title. For homework/studying after school, use 19:00 and a maximum two-hour duration (end 21:00). For a generic activity with no time clue, use 19:00–20:00. Missing duration/end time uses the inferred default or one hour.",
-      "Category, tags, repetition, and all-day status are optional. Leave categoryName and notes empty, allDay=false, and do not invent a recurrence. The person can edit every optional field manually after the draft appears.",
-      "When a title is known, set ready=true immediately using those assumptions and reply with a short review that explicitly lists assumptions. Set ready=false only for an unclear title/intent, ask one concise question, and after no more than two follow-up questions choose the safest reasonable title and finish the draft.",
-      "When not ready, put empty strings for unknown draft fields; allDay must be false unless explicitly requested.",
-      `Reference local date: ${referenceDate || "today"}. Timezone: ${timeZone}.`,
-      "Datetime values must be YYYY-MM-DDTHH:mm in the supplied timezone, never UTC/Z.",
-      `Available category names: ${categories.join(", ") || "none"}. Choose one exact supplied name only when confident; otherwise use an empty string.`,
-      context ? `Conversation so far:\n${context}` : "",
-      `Latest user message: ${text}`
-    ].filter(Boolean).join("\n\n");
+    const instruction = buildPrompt(context);
     const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
     const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
     const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-    if (!project) return res.status(503).json({ error: "ยังไม่ได้ตั้งค่า GOOGLE_CLOUD_PROJECT หรือ FIREBASE_PROJECT_ID บน backend" });
+    if (!project) throw new Error("ยังไม่ได้ตั้งค่า GOOGLE_CLOUD_PROJECT หรือ FIREBASE_PROJECT_ID บน backend");
     const authClient = await createVertexAuth().getClient();
     const token = await authClient.getAccessToken();
     if (!token?.token) throw new Error("ขอ access token สำหรับ Vertex AI ไม่สำเร็จ");
     const response = await fetch(`https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.token}` },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: instruction }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.25 } })
+      signal: AbortSignal.timeout(45000),
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: instruction }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(context) }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.25 } })
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(payload?.error?.message || `Vertex AI ตอบ ${response.status}`);
-    const result = jsonFromGemini(payload);
-    if (!result?.reply || typeof result.ready !== "boolean" || !result.draft) throw new Error("Gemini ส่งผลการวางแผนไม่ครบ");
-    if (result.ready && (!result.draft.title || !result.draft.startLocal || !result.draft.endLocal)) {
-      result.ready = false;
-      result.reply = "ผมยังต้องทราบวันและเวลาให้ครบก่อนครับ ต้องการเริ่มและจบเมื่อไร?";
-    }
+    const result = finishResult(jsonFromGemini(payload), context);
     res.json(result);
   } catch (error) {
     if (claim?.status === "claimed") await releaseGeminiChatUsage(claim).catch(() => {});
-    next(error);
+    res.status(error.status || 502).json({ error: error.message });
   }
 });
 
