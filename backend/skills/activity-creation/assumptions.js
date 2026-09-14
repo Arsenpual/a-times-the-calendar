@@ -58,9 +58,26 @@ function addMinutes(local, minutes) {
   localDateTime(local);
   return new Date(new Date(`${local}:00Z`).getTime() + minutes * 60000).toISOString().slice(0, 16);
 }
+function normalizeClock(value) {
+  if (typeof value !== 'string') return value;
+  const match = /^(\d{1,2})[.:]([0-5]\d)$/.exec(value.trim());
+  if (!match || Number(match[1]) > 23) return value;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+function normalizeLocalDateTime(value) {
+  if (typeof value !== 'string') return value;
+  return value.trim().replace(/T(\d{1,2})\.([0-5]\d)$/, (_, hour, minute) => `T${hour.padStart(2, '0')}:${minute}`);
+}
+function explicitClockFromText(text) {
+  const match = /\b([01]?\d|2[0-3])[.:]([0-5]\d)\b/i.exec(text);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : undefined;
+}
 // Only fill missing values. Explicit dates/times from extraction win.
 function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
+  draft.startTime = normalizeClock(draft.startTime);
+  draft.startLocal = normalizeLocalDateTime(draft.startLocal);
+  draft.endLocal = normalizeLocalDateTime(draft.endLocal);
   const historyText = context.history.filter(item => item.role === 'user').map(item => item.text).join(' ');
   const latestText = context.text;
   // A new activity intent replaces an unsaved proposal. Do not let “เข้านอน”
@@ -71,7 +88,9 @@ function applyAssumptions(raw, context) {
   const situation = latestSituation || inferSituation(`${draft.title || ''} ${text}`);
   const statedPeriod = latestPeriod || inferPeriodFromText(text);
   if (latestSituation || latestPeriod) draft.assumptions = [];
-  const hasExplicitClockTime = /\b\d{1,2}(?::|\.)\d{2}\b|\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
+  const explicitClock = explicitClockFromText(text);
+  const hasExplicitClockTime = Boolean(explicitClock) || /\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
+  if (!draft.startLocal && !draft.startTime && explicitClock) draft.startTime = explicitClock;
   // A recognisable phrase from the person wins over any incorrect period tag
   // proposed by the model.
   if (!draft.allDay && (situation || statedPeriod)) {
@@ -121,4 +140,4 @@ function applyAssumptions(raw, context) {
   }
   return draft;
 }
-module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText };
+module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText, normalizeClock, normalizeLocalDateTime, explicitClockFromText };

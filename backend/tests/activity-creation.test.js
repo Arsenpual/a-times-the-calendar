@@ -42,6 +42,16 @@ test('explicit clock time wins over an inferred situation tag', () => {
   assert.equal(draft.startLocal, '2026-09-14T07:30');
   assert.equal(draft.endLocal, '2026-09-14T08:00');
 });
+test('Thai 16.00 is normalized as 16:00, not 04:00', () => {
+  const draft = finish({ title: 'ออกกำลังกาย', startLocal: '2026-09-14T16.00', endLocal: '2026-09-14T17.00' }, 'ออกกำลังกาย 16.00');
+  assert.equal(draft.startLocal, '2026-09-14T16:00');
+  assert.equal(draft.endLocal, '2026-09-14T17:00');
+});
+test('Thai 16.00 supplies a missing start time', () => {
+  const draft = finish({ title: 'ออกกำลังกาย' }, 'ออกกำลังกาย 16.00');
+  assert.equal(draft.startLocal, '2026-09-14T16:00');
+  assert.equal(draft.endLocal, '2026-09-14T17:00');
+});
 test('a stated Thai period overrides an incorrect AI time and period tag', () => {
   const draft = finish({ title: 'ประชุมทีม', tags: ['night'], startLocal: '2026-09-15T21:00', endLocal: '2026-09-15T22:00' }, 'พรุ่งนี้ ช่วงเช้า ประชุมทีม');
   assert.equal(draft.startLocal, '2026-09-15T09:00');
