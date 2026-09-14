@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
+import { getActivityAssistantConversationNode } from "../config/activity-assistant-conversation-tree.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
 
@@ -15,6 +16,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [aiStatus, setAiStatus] = useState(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [guidedActivity, setGuidedActivity] = useState(null);
+  const [conversationNodeId, setConversationNodeId] = useState("home");
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
@@ -38,57 +40,41 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([{ role: "assistant", text: WELCOME, source: "template" }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); };
+  const reset = () => { setMessages([{ role: "assistant", text: WELCOME, source: "template" }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
-  const startGuidedActivity = () => {
-    setDraft(null); setEditingDraft(false); setError("");
-    setGuidedActivity({ step: "title" });
-    addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" }, { role: "assistant", text: "กิจกรรมนี้ชื่ออะไรครับ? เลือกจากตัวอย่าง หรือพิมพ์รายละเอียดเองได้เลย", source: "template" });
-  };
-  const selectGuidedTitle = (title) => {
-    setGuidedActivity({ step: "date", title });
-    addMessages({ role: "user", text: title, source: "template" }, { role: "assistant", text: "ต้องการทำกิจกรรมวันไหนครับ?", source: "template" });
-  };
-  const selectGuidedDate = (label, date) => {
-    setGuidedActivity((current) => ({ ...current, step: "time", date }));
-    addMessages({ role: "user", text: label, source: "template" }, { role: "assistant", text: "ต้องการเริ่มช่วงไหนครับ?", source: "template" });
-  };
-  const selectGuidedTime = (label, time) => {
-    setGuidedActivity((current) => ({ ...current, step: "duration", time }));
-    addMessages({ role: "user", text: label, source: "template" }, { role: "assistant", text: "ต้องการใช้เวลานานเท่าไรครับ?", source: "template" });
-  };
-  const selectGuidedDuration = async (label, durationMinutes) => {
-    if (!guidedActivity?.title || !guidedActivity.date || !guidedActivity.time) return;
-    const selected = { ...guidedActivity, durationMinutes };
-    setGuidedActivity(null); addMessages({ role: "user", text: label, source: "template" }); setPending(true); setPendingSource("template"); setError("");
+  const finishGuidedActivity = async (selected) => {
+    if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
+    setGuidedActivity(null); setConversationNodeId("home"); setPending(true); setPendingSource("template"); setError("");
     try {
-      const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
+      const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
       addMessages({ role: "assistant", text: result.reply, source: "template" }); setDraft(result.draft);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  const quickReplies = !guidedActivity ? [{ label: "สร้างกิจกรรม", onClick: startGuidedActivity }] : guidedActivity.step === "title" ? [
-    { label: "ออกกำลังกาย", onClick: () => selectGuidedTitle("ออกกำลังกาย") },
-    { label: "นัดทานมื้อเย็นวันนี้", onClick: () => selectGuidedTitle("นัดทานมื้อเย็น") }
-  ] : guidedActivity.step === "date" ? [
-    { label: "วันนี้", onClick: () => selectGuidedDate("วันนี้", toDateInputValue(new Date())) },
-    { label: "พรุ่งนี้", onClick: () => selectGuidedDate("พรุ่งนี้", toDateInputValue(tomorrow)) }
-  ] : guidedActivity.step === "time" ? [
-    { label: "ช่วงเช้า · 09:00", onClick: () => selectGuidedTime("ช่วงเช้า · 09:00", "09:00") },
-    { label: "ช่วงเย็น · 18:00", onClick: () => selectGuidedTime("ช่วงเย็น · 18:00", "18:00") },
-    { label: "คืนนี้ · 20:00", onClick: () => selectGuidedTime("คืนนี้ · 20:00", "20:00") }
-  ] : [
-    { label: "30 นาที", onClick: () => selectGuidedDuration("30 นาที", 30) },
-    { label: "1 ชั่วโมง", onClick: () => selectGuidedDuration("1 ชั่วโมง", 60) },
-    { label: "2 ชั่วโมง", onClick: () => selectGuidedDuration("2 ชั่วโมง", 120) }
-  ];
+  const selectQuickReply = async (option) => {
+    if (option.kind === "start") {
+      const nextNode = getActivityAssistantConversationNode(option.next);
+      setDraft(null); setEditingDraft(false); setError(""); setGuidedActivity({}); setConversationNodeId(option.next);
+      addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" }, { role: "assistant", text: nextNode.prompt, source: "template" });
+      return;
+    }
+    const node = getActivityAssistantConversationNode(conversationNodeId);
+    const value = option.dateOffset === undefined ? option.value : (() => { const date = new Date(); date.setDate(date.getDate() + option.dateOffset); return toDateInputValue(date); })();
+    const selected = { ...guidedActivity, [node.field]: value };
+    addMessages({ role: "user", text: option.label, source: "template" });
+    if (option.complete) { await finishGuidedActivity(selected); return; }
+    const nextNode = getActivityAssistantConversationNode(option.next);
+    setGuidedActivity(selected); setConversationNodeId(option.next);
+    addMessages({ role: "assistant", text: nextNode.prompt, source: "template" });
+  };
+  const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
+  const quickReplies = conversationNode.options.filter((option) => option.available !== false);
   const send = async (event) => {
     event.preventDefault();
     const text = input.trim();
     if (!text || pending || cooldownSeconds > 0) return;
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
-    setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null);
+    setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null); setConversationNodeId("home");
     try {
       const history = messages.slice(1);
       // `text` is the current turn. Keep an accidentally duplicated current
@@ -145,7 +131,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.label} type="button" onClick={reply.onClick} disabled={pending}>{reply.label}</button>)}</div>
+      <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
