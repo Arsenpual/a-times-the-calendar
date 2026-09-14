@@ -12,10 +12,26 @@ const SITUATION_RULES = [
 function inferSituation(text) {
   return SITUATION_RULES.find((rule) => rule.match.test(text)) || null;
 }
+function inferPeriodFromText(text) {
+  const rules = [
+    ['late-night', /หลังเที่ยงคืน|ดึกมาก|\blate night\b/i],
+    ['dawn', /เช้ามืด|รุ่งเช้า|\bdawn\b/i],
+    ['morning', /ช่วงเช้า|ตอนเช้า|\bmorning\b/i],
+    ['noon', /ตอนเที่ยง|ช่วงเที่ยง|\bnoon\b/i],
+    ['afternoon', /ช่วงบ่าย|ตอนบ่าย|\bafternoon\b/i],
+    ['dusk', /ช่วงเย็น|ตอนเย็น|หัวค่ำ|\bdusk\b/i],
+    ['evening', /ช่วงค่ำ|ตอนค่ำ|\bevening\b/i],
+    ['night', /กลางคืน|ตอนกลางคืน|\bnight\b/i]
+  ];
+  return rules.find(([, pattern]) => pattern.test(text))?.[0];
+}
 
 function replacePeriodTag(tags, period) {
   const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => !Object.hasOwn(TIME_PERIODS, tag));
   return period ? [...new Set([...remaining, period])] : remaining;
+}
+function removeSystemTimeTags(tags) {
+  return (Array.isArray(tags) ? tags : []).filter((tag) => !/^hour-(?:[01]\d|2[0-3])$/.test(tag) && !/^start-(?:[01]\d|2[0-3])-(?:00|30)$/.test(tag) && !/^duration-\d+m$/.test(tag));
 }
 function replaceTimeTags(tags, startLocal, endLocal) {
   const hourTags = [hourTagForLocal(startLocal)].filter(Boolean);
@@ -47,10 +63,16 @@ function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
   const text = context.history.filter(item => item.role === 'user').map(item => item.text).concat(context.text).join(' ');
   const situation = inferSituation(`${draft.title || ''} ${text}`);
+  const statedPeriod = inferPeriodFromText(text);
   const hasExplicitClockTime = /\b\d{1,2}(?::|\.)\d{2}\b|\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
   // A recognisable phrase from the person wins over any incorrect period tag
   // proposed by the model.
-  if (!draft.allDay && situation) draft.tags = replacePeriodTag(draft.tags, situation.tag);
+  if (!draft.allDay && (situation || statedPeriod)) {
+    draft.tags = replacePeriodTag(draft.tags, statedPeriod || situation.tag);
+    // These are generated tags, so a named period from the person must be
+    // able to replace a stale AI-generated time frame.
+    if (!hasExplicitClockTime) draft.tags = removeSystemTimeTags(draft.tags);
+  }
   let date = draft.startLocal?.slice(0, 10) || draft.date || context.referenceDate;
   if (!draft.date && !draft.startLocal) {
     if (/พรุ่งนี้|\btomorrow\b/i.test(text)) date = addMinutes(`${date}T00:00`, 1440).slice(0, 10);
@@ -67,7 +89,7 @@ function applyAssumptions(raw, context) {
   // Limit this correction to recognised situations. A raw clock value can also
   // come from the manual editor, and must remain editable even when its tag is
   // broad (for example, a 16:30 task deliberately tagged #morning).
-  if (!draft.allDay && situation && !hasExplicitClockTime) {
+  if (!draft.allDay && (situation || statedPeriod) && !hasExplicitClockTime) {
     draft.startLocal = '';
     draft.endLocal = '';
     draft.startTime = situation?.preferredStart || timeForHourTag(taggedHour) || defaultTimeForPeriod(period);
@@ -92,4 +114,4 @@ function applyAssumptions(raw, context) {
   }
   return draft;
 }
-module.exports = { applyAssumptions, addMinutes, inferSituation };
+module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText };

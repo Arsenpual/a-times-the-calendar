@@ -42,6 +42,13 @@ test('explicit clock time wins over an inferred situation tag', () => {
   assert.equal(draft.startLocal, '2026-09-14T07:30');
   assert.equal(draft.endLocal, '2026-09-14T08:00');
 });
+test('a stated Thai period overrides an incorrect AI time and period tag', () => {
+  const draft = finish({ title: 'ประชุมทีม', tags: ['night'], startLocal: '2026-09-15T21:00', endLocal: '2026-09-15T22:00' }, 'พรุ่งนี้ ช่วงเช้า ประชุมทีม');
+  assert.equal(draft.startLocal, '2026-09-15T09:00');
+  assert.equal(draft.endLocal, '2026-09-15T10:00');
+  assert.ok(draft.tags.includes('morning'));
+  assert.ok(!draft.tags.includes('night'));
+});
 test('every timed activity gets an hour, 30-minute start, and duration tag', () => {
   const draft = finish({ startTime: '07:30', durationMinutes: 30 });
   assert.ok(draft.tags.includes('hour-07'));
@@ -49,8 +56,8 @@ test('every timed activity gets an hour, 30-minute start, and duration tag', () 
   assert.ok(draft.tags.includes('duration-30m'));
   assert.equal(draft.tags.filter(tag => tag.startsWith('hour-')).length, 1);
 });
-test('a supplied hour tag supplies an empty start time', () => {
-  const draft = finish({ tags: ['morning', 'hour-10'] }, 'ประชุมตอนเช้า');
+test('a supplied hour tag supplies an empty start time when no period is stated', () => {
+  const draft = finish({ tags: ['morning', 'hour-10'] }, 'ประชุมทีม');
   assert.equal(draft.startLocal, '2026-09-14T10:00');
   assert.ok(draft.tags.includes('hour-10'));
 });
