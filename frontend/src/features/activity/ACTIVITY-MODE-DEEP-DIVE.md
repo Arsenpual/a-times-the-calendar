@@ -290,11 +290,11 @@ Fullscreen เป็น overlay ของแอป (`timelineFullscreen`) ไม
 
 `ActivityDayGantt` อยู่ใต้ Week Spine เฉพาะคอลัมน์ timeline ส่วน `activity-archive` อยู่ล่างสุดเต็มความกว้างสำหรับอ่าน/scroll
 
-### Onboarding และ AI draft
+### Onboarding และ MR.Zettascale
 
 `use-activity-onboarding.js` สร้างกิจกรรมตัวอย่างสำหรับผู้ใช้ใหม่ในสัปดาห์ปัจจุบัน โดยเก็บสถานะต่อผู้ใช้ใน localStorage และไม่ควรกลายเป็น Calendar event โดยไม่ตั้งใจ
 
-`api/activity-draft.js` ส่งข้อความธรรมชาติไป backend เพื่อสร้าง draft ให้ผู้ใช้ตรวจใน ActivityModal ก่อนบันทึกจริง AI ต้องไม่เขียน Calendar โดยตรง
+MR.Zettascale เป็นผู้ช่วยเฉพาะการสร้าง Activity ผ่านแชตเต็มจอ ผู้ใช้แก้รายละเอียดด้วยตนเองในแชตและกด Confirm ก่อนบันทึกจริง AI ต้องไม่เขียน Calendar โดยตรง
 
 ### Mockup preview สำหรับพัฒนา
 

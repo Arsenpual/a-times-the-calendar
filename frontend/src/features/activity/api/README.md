@@ -8,6 +8,6 @@
 - summary.js: สรุปสัปดาห์
 - archive.js: คลังใน Firestore
 - notifications.js: บันทึก/ลบข้อมูลเวลาเริ่มกิจกรรมสำหรับระบบแจ้งเตือนฝั่ง server
-- activity-draft.js: ขอร่างกิจกรรมด้วย AI
+- activity-assistant.js: คุยกับ MR.Zettascale เพื่อสร้างร่าง Activity เท่านั้น
 
 ทุกไฟล์ใช้ shared/api/client.js การอ่าน/เขียน Google Calendar ยังคงอยู่ใน features/calendar-connection/api/google-calendar.js ส่วนการส่ง Telegram อยู่ใน features/notifications/telegram/api.js

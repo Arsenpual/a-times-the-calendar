@@ -29,7 +29,6 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
   const [modalMissingFields, setModalMissingFields] = useState([]);
   const [modalEditingActivity, setModalEditingActivity] = useState(null);
   const [modalEditingAsSeries, setModalEditingAsSeries] = useState(false);
-  const [modalAiDraft, setModalAiDraft] = useState(null);
 
   /**
    * Opens the "add activity" modal prefilled with the actual current
@@ -51,30 +50,8 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     setModalMissingFields(missingFields);
     setModalEditingActivity(null);
     setModalEditingAsSeries(false);
-    setModalAiDraft(null);
     setModalOpen(true);
   }, []);
-
-  // The assistant has only prepared this object.  Passing it through the
-  // same ActivityModal keeps the final human review and normal save path.
-  const openAiDraftActivity = useCallback((draft) => {
-    const start = new Date(`${draft?.startLocal || ""}:00`);
-    const end = new Date(`${draft?.endLocal || ""}:00`);
-    if (!draft?.title || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      setError("ร่างจาก MR.Zettascale มีวันหรือเวลายังไม่ครบ");
-      return;
-    }
-    pendingRequest.current++;
-    setModalDefaultDate(start);
-    setModalDefaultEnd(end);
-    setModalDefaultTitle(draft.title);
-    setModalInitialWarning("ตรวจสอบรายละเอียดก่อนบันทึก กิจกรรมจะยังไม่ถูกสร้างจนกดบันทึก");
-    setModalMissingFields([]);
-    setModalEditingActivity(null);
-    setModalEditingAsSeries(false);
-    setModalAiDraft(draft);
-    setModalOpen(true);
-  }, [setError]);
 
   const openEditActivity = useCallback(
     (activity) => {
@@ -90,7 +67,6 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       setModalMissingFields([]);
       setModalEditingActivity(activity);
       setModalEditingAsSeries(false);
-      setModalAiDraft(null);
       setModalOpen(true);
     },
     [lockedActivities, setError]
@@ -113,7 +89,6 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       setModalMissingFields([]);
       setModalEditingActivity(activity);
       setModalEditingAsSeries(false);
-      setModalAiDraft(null);
       setModalOpen(true);
     } catch (error) {
       if (!alive.current || request !== pendingRequest.current) return;
@@ -131,7 +106,6 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     setModalInitialWarning("");
     setModalMissingFields([]);
     setModalEditingAsSeries(false);
-    setModalAiDraft(null);
   }, []);
 
   /**
@@ -157,7 +131,6 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         setModalMissingFields([]);
         setModalEditingActivity(masterEvent);
         setModalEditingAsSeries(true);
-        setModalAiDraft(null);
         setModalOpen(true);
       } catch (e) {
         if (!alive.current || request !== pendingRequest.current) return;
@@ -176,9 +149,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
-    modalAiDraft,
     openAddActivity,
-    openAiDraftActivity,
     openEditActivity,
     openEditActivityById,
     closeModal,

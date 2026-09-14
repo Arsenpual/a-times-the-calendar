@@ -1,7 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
-const { askMrZettascale, getGeminiChatStatus, setGeminiChatEnabled, claimGeminiChatUsage, releaseGeminiChatUsage } = require("../gemini-chat.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -69,32 +68,6 @@ async function sendChatReply(userId, chatId, text, options = {}) {
   const sent = await sendTelegram(chatId, text, options);
   await saveChatMessage(userId, { direction: "outgoing", text, telegramMessageId: sent?.message_id });
   return sent;
-}
-
-async function replyWithGemini(userId, chatId, text) {
-  const claim = await claimGeminiChatUsage(userId);
-  if (claim.status !== "claimed") {
-    const messages = {
-      "user-disabled": "AI chat ถูกปิดไว้ เพื่อรักษาโควต้าของคุณ",
-      "globally-disabled": "AI chat ถูกปิดชั่วคราวโดยระบบ",
-      "not-allowed": "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ AI chat",
-      "window-limited": "ใช้ AI ครบโควต้าช่วง 15 นาทีแล้ว ลองใหม่อีกครั้งในไม่กี่นาที",
-      "day-limited": "ใช้ AI ครบโควต้าประจำวันแล้ว พรุ่งนี้ลองใหม่ได้อีกครั้ง",
-      "global-limited": "โควต้า AI ของระบบวันนี้เต็มแล้ว ลองใหม่พรุ่งนี้นะครับ"
-    };
-    await sendChatReply(userId, chatId, messages[claim.status] || "AI chat ใช้งานไม่ได้ในขณะนี้");
-    return;
-  }
-  const history = (await telegramMessagesCol(userId).orderBy("createdAt", "desc").limit(9).get()).docs
-    .map((doc) => doc.data()).reverse();
-  try {
-    const answer = await askMrZettascale(text, history);
-    await sendChatReply(userId, chatId, answer);
-  } catch (error) {
-    await releaseGeminiChatUsage(claim).catch(() => {});
-    console.error("[telegram] Gemini ตอบแชตไม่สำเร็จ:", error.message);
-    await sendChatReply(userId, chatId, "ตอนนี้ผมยังตอบผ่าน Gemini ไม่ได้ ลองใหม่อีกครั้งในสักครู่นะครับ");
-  }
 }
 
 function bangkokDayKey(now = new Date()) {
@@ -176,15 +149,7 @@ router.get("/messages", async (req, res, next) => {
     const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
     // A person's own messages are never unread. Only bot replies and sent
     // notifications wait for acknowledgement in the web chat.
-    const aiChat = await getGeminiChatStatus(req.userId);
-    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length, aiChat });
-  } catch (error) { next(error); }
-});
-
-router.post("/ai-chat", async (req, res, next) => {
-  try {
-    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "ต้องระบุสถานะ enabled ของ AI chat" });
-    res.json({ aiChat: await setGeminiChatEnabled(req.userId, req.body.enabled) });
+    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
   } catch (error) { next(error); }
 });
 

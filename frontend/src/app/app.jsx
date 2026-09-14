@@ -254,7 +254,6 @@ function AccountApp({ auth }) {
     modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
-    modalAiDraft,
     openAddActivity,
     openEditActivity,
     openEditActivityById,
