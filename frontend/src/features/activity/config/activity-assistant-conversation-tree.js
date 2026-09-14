@@ -52,7 +52,8 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
       { id: "60m", label: "1 ชั่วโมง", value: 60, complete: true },
       { id: "90m", label: "1 ชั่วโมง 30 นาที", value: 90, complete: true },
       { id: "120m", label: "2 ชั่วโมง", value: 120, complete: true },
-      { id: "180m", label: "3 ชั่วโมง", value: 180, complete: true }
+      { id: "180m", label: "3 ชั่วโมง", value: 180, complete: true },
+      { id: "480m", label: "8 ชั่วโมง", value: 480, complete: true }
     ]
   }
 };
