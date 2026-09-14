@@ -4,6 +4,8 @@ const WINDOW_MS = 15 * 60 * 1000;
 const USER_WINDOW_LIMIT = Number(process.env.GEMINI_CHAT_WINDOW_LIMIT || 20);
 const USER_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_DAILY_LIMIT || 100);
 const GLOBAL_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_GLOBAL_DAILY_LIMIT || 1000);
+const DEVELOPER_WINDOW_LIMIT = Number(process.env.GEMINI_CHAT_DEVELOPER_WINDOW_LIMIT || 120);
+const DEVELOPER_DAILY_LIMIT = Number(process.env.GEMINI_CHAT_DEVELOPER_DAILY_LIMIT || 1000);
 
 function bangkokDayKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -26,6 +28,15 @@ function isAllowedUser(userId) {
   // public chat widget into unrestricted paid Gemini access.
   return allowed.includes(userId);
 }
+function isDeveloperUser(userId) {
+  const developers = String(process.env.GEMINI_CHAT_DEVELOPER_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
+  return developers.includes(userId);
+}
+function userLimits(userId) {
+  return isDeveloperUser(userId)
+    ? { window: DEVELOPER_WINDOW_LIMIT, day: DEVELOPER_DAILY_LIMIT }
+    : { window: USER_WINDOW_LIMIT, day: USER_DAILY_LIMIT };
+}
 
 function enabledGlobally() {
   return String(process.env.GEMINI_CHAT_ENABLED || "true").toLowerCase() !== "false";
@@ -36,6 +47,7 @@ async function getGeminiChatStatus(userId) {
   const now = Date.now();
   const dayKey = bangkokDayKey();
   const windowKey = String(Math.floor(now / WINDOW_MS));
+  const limits = userLimits(userId);
   const [auth, day, window, global] = await Promise.all([
     authRef.get(), authRef.collection("gemini-usage-days").doc(dayKey).get(),
     authRef.collection("gemini-usage-windows").doc(windowKey).get(),
@@ -43,9 +55,9 @@ async function getGeminiChatStatus(userId) {
   ]);
   const enabled = enabledGlobally() && isAllowedUser(userId) && auth.data()?.aiChatEnabled !== false;
   return {
-    enabled, allowed: isAllowedUser(userId), globallyEnabled: enabledGlobally(),
-    userWindow: { used: Number(window.data()?.count || 0), limit: USER_WINDOW_LIMIT, resetAt: (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS },
-    userDay: { used: Number(day.data()?.count || 0), limit: USER_DAILY_LIMIT, resetAt: nextBangkokMidnight(new Date(now)) },
+    enabled, allowed: isAllowedUser(userId), isDeveloper: isDeveloperUser(userId), globallyEnabled: enabledGlobally(),
+    userWindow: { used: Number(window.data()?.count || 0), limit: limits.window, resetAt: (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS },
+    userDay: { used: Number(day.data()?.count || 0), limit: limits.day, resetAt: nextBangkokMidnight(new Date(now)) },
     globalDay: { used: Number(global.data()?.count || 0), limit: GLOBAL_DAILY_LIMIT }
   };
 }
@@ -59,6 +71,7 @@ async function claimGeminiChatUsage(userId) {
   const now = Date.now();
   const dayKey = bangkokDayKey();
   const windowKey = String(Math.floor(now / WINDOW_MS));
+  const limits = userLimits(userId);
   const authRef = telegramAuthDoc(userId);
   const dayRef = authRef.collection("gemini-usage-days").doc(dayKey);
   const windowRef = authRef.collection("gemini-usage-windows").doc(windowKey);
@@ -71,8 +84,8 @@ async function claimGeminiChatUsage(userId) {
     const dayCount = Number(day.data()?.count || 0);
     const windowCount = Number(window.data()?.count || 0);
     const globalCount = Number(global.data()?.count || 0);
-    if (windowCount >= USER_WINDOW_LIMIT) return waitDetails("window-limited", now);
-    if (dayCount >= USER_DAILY_LIMIT) return waitDetails("day-limited", now);
+    if (windowCount >= limits.window) return waitDetails("window-limited", now);
+    if (dayCount >= limits.day) return waitDetails("day-limited", now);
     if (globalCount >= GLOBAL_DAILY_LIMIT) return waitDetails("global-limited", now);
     transaction.set(windowRef, { count: windowCount + 1, windowKey, updatedAt: now, expiresAt: now + WINDOW_MS * 2 }, { merge: true });
     transaction.set(dayRef, { count: dayCount + 1, dayKey, updatedAt: now }, { merge: true });
@@ -91,4 +104,4 @@ async function releaseGeminiChatUsage(claim) {
   });
 }
 
-module.exports = { getGeminiChatStatus, setGeminiChatEnabled, claimGeminiChatUsage, releaseGeminiChatUsage };
+module.exports = { getGeminiChatStatus, setGeminiChatEnabled, claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser, userLimits };

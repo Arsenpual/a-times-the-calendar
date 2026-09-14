@@ -2,11 +2,11 @@ const { localDateTime } = require('./validator.js');
 const { TIME_PERIODS, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, startTagForLocal, durationTagForRange, describeHourTag, periodTagsForRange } = require('./time-periods.js');
 
 const SITUATION_RULES = [
-  { match: /ทานข้าวตอนเช้า|กินข้าวเช้า|อาหารเช้า|มื้อเช้า|\bbreakfast\b/i, tag: 'morning', preferredStart: '06:00', durationMinutes: 120 },
+  { match: /ทานข้าวตอนเช้า|กินข้าวเช้า|อาหารเช้า|มื้อเช้า|\bbreakfast\b/i, tag: 'morning', preferredStart: '06:00' },
   { match: /ทานข้าวกลางวัน|กินข้าวกลางวัน|อาหารกลางวัน|มื้อกลางวัน|\blunch\b/i, tag: 'noon', preferredStart: '12:00', durationMinutes: 60 },
-  { match: /ทานข้าวเย็น|กินข้าวเย็น|อาหารเย็น|มื้อเย็น|\bdinner\b/i, tag: 'dusk', preferredStart: '18:00', durationMinutes: 120 },
-  { match: /ทำการบ้าน|\bhomework\b/i, tag: 'evening', preferredStart: '19:00', durationMinutes: 120 },
-  { match: /ก่อนนอน|เข้านอน|\bbefore bed\b|\bsleep\b/i, tag: 'night', preferredStart: '21:00', durationMinutes: 60 }
+  { match: /ทานข้าวเย็น|กินข้าวเย็น|อาหารเย็น|มื้อเย็น|\bdinner\b/i, tag: 'dusk', preferredStart: '18:00' },
+  { match: /ทำการบ้าน|\bhomework\b/i, tag: 'evening', preferredStart: '19:00' },
+  { match: /ก่อนนอน|เข้านอน|\bbefore bed\b|\bsleep\b/i, tag: 'night', preferredStart: '22:00', durationMinutes: 420 }
 ];
 
 function inferSituation(text) {
@@ -82,6 +82,9 @@ function explicitClockFromText(text) {
   const match = /\b([01]?\d|2[0-3])[.:]([0-5]\d)\b/i.exec(text);
   return match ? `${match[1].padStart(2, '0')}:${match[2]}` : undefined;
 }
+function hasExplicitDuration(text) {
+  return /\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?|นาที|mins?|minutes?)/i.test(text);
+}
 // Only fill missing values. Explicit dates/times from extraction win.
 function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
@@ -100,6 +103,7 @@ function applyAssumptions(raw, context) {
   if (latestSituation || latestPeriod) draft.assumptions = [];
   const explicitClock = explicitClockFromText(text);
   const hasExplicitClockTime = Boolean(explicitClock) || /\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
+  const explicitDuration = hasExplicitDuration(text);
   if (!draft.startLocal && !draft.startTime && explicitClock) draft.startTime = explicitClock;
   // A recognisable phrase from the person wins over any incorrect period tag
   // proposed by the model.
@@ -114,10 +118,9 @@ function applyAssumptions(raw, context) {
     if (/พรุ่งนี้|\btomorrow\b/i.test(text)) date = addMinutes(`${date}T00:00`, 1440).slice(0, 10);
     draft.assumptions.push(`ใช้วันที่ ${date}`);
   }
-  const homework = /การบ้าน|homework/i.test(draft.title || '');
   const period = selectedPeriod(draft.tags);
   const taggedHour = selectedHourTag(draft.tags);
-  const duration = draft.allDay ? 1440 : draft.durationMinutes || situation?.durationMinutes || (homework ? 120 : 60);
+  const duration = draft.allDay ? 1440 : (!explicitDuration && situation?.durationMinutes) || draft.durationMinutes || 60;
   if (!Number.isInteger(duration) || duration < 1 || duration > 10080) throw new Error('ระยะเวลากิจกรรมไม่ถูกต้อง');
   // Gemini may return an arbitrary exact time for a broad phrase. When the
   // person gave no clock time, choose a suitable slot inside the tag's window;
@@ -129,6 +132,14 @@ function applyAssumptions(raw, context) {
     draft.startLocal = '';
     draft.endLocal = '';
     draft.startTime = situation?.preferredStart || timeForHourTag(taggedHour) || defaultTimeForPeriod(period);
+    draft.durationMinutes = duration;
+  }
+  // An actual clock from the person (including a previous turn followed by
+  // “ใช่”) takes priority over an arbitrary clock Gemini may have returned.
+  if (!draft.allDay && explicitClock) {
+    draft.startLocal = '';
+    draft.endLocal = '';
+    draft.startTime = explicitClock;
     draft.durationMinutes = duration;
   }
   if (!draft.startLocal) {
@@ -150,4 +161,4 @@ function applyAssumptions(raw, context) {
   }
   return draft;
 }
-module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText, normalizeClock, normalizeLocalDateTime, explicitClockFromText };
+module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText, normalizeClock, normalizeLocalDateTime, explicitClockFromText, hasExplicitDuration };

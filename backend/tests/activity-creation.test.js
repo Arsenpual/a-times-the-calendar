@@ -16,21 +16,21 @@ test('explicit start time wins over period', () => assert.equal(finish({ startTi
 test('explicit datetime wins over period', () => assert.equal(finish({ startLocal: '2026-09-15T16:30', tags: ['morning'] }).startLocal, '2026-09-15T16:30'));
 test('period does not change all-day midnight', () => assert.equal(finish({ allDay: true, tags: ['night'] }).startLocal, '2026-09-14T00:00'));
 test('unknown tag falls back', () => assert.equal(finish({ tags: ['unrecognized'] }).startLocal, '2026-09-14T19:00'));
-test('homework evening retains two-hour duration', () => assert.equal(finish({ title: 'ทำการบ้าน', tags: ['evening'] }).endLocal, '2026-09-14T21:00'));
-test('Thai breakfast gets morning tag and 06:00–08:00 immediately', () => {
+test('homework uses the one-hour default until a duration is supplied', () => assert.equal(finish({ title: 'ทำการบ้าน', tags: ['evening'] }).endLocal, '2026-09-14T20:00'));
+test('Thai breakfast gets morning tag and the one-hour default immediately', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', tags: [] }, 'ทานข้าวตอนเช้า');
-  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-120m']);
+  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-60m']);
   assert.equal(draft.startLocal, '2026-09-14T06:00');
-  assert.equal(draft.endLocal, '2026-09-14T08:00');
+  assert.equal(draft.endLocal, '2026-09-14T07:00');
 });
 test('Thai breakfast corrects an incorrect model period tag', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', tags: ['night'] }, 'ทานข้าวตอนเช้า');
-  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-120m']);
+  assert.deepEqual(draft.tags, ['single-day', 'dawn', 'morning', 'hour-06', 'start-06-00', 'duration-60m']);
 });
 test('Thai breakfast replaces an arbitrary model time when user gave no clock time', () => {
   const draft = finish({ title: 'ทานข้าวตอนเช้า', startLocal: '2026-09-14T19:00', endLocal: '2026-09-14T20:00' }, 'ทานข้าวตอนเช้า');
   assert.equal(draft.startLocal, '2026-09-14T06:00');
-  assert.equal(draft.endLocal, '2026-09-14T08:00');
+  assert.equal(draft.endLocal, '2026-09-14T07:00');
 });
 test('a generic morning activity uses the morning default, not breakfast time', () => {
   const draft = finish({ title: 'ประชุมทีม', tags: ['morning'] }, 'ประชุมทีมตอนเช้า');
@@ -38,7 +38,7 @@ test('a generic morning activity uses the morning default, not breakfast time', 
   assert.equal(draft.endLocal, '2026-09-14T10:00');
 });
 test('explicit clock time wins over an inferred situation tag', () => {
-  const draft = finish({ title: 'ทานข้าวตอนเช้า', startTime: '07:30', durationMinutes: 30 }, 'ทานข้าวตอนเช้า 7:30');
+  const draft = finish({ title: 'ทานข้าวตอนเช้า', startTime: '07:30', durationMinutes: 30 }, 'ทานข้าวตอนเช้า 7:30 30 นาที');
   assert.equal(draft.startLocal, '2026-09-14T07:30');
   assert.equal(draft.endLocal, '2026-09-14T08:00');
 });
@@ -53,9 +53,20 @@ test('Thai 16.00 supplies a missing start time', () => {
   assert.equal(draft.endLocal, '2026-09-14T17:00');
 });
 test('24:00 from an AI response becomes next-day midnight', () => {
-  const draft = finish({ title: 'เข้านอน', startLocal: '2026-09-14T23:00', endLocal: '2026-09-14T24:00' }, 'เข้านอน 23.00');
+  const draft = finish({ title: 'กิจกรรม', startLocal: '2026-09-14T23:00', endLocal: '2026-09-14T24:00' }, 'กิจกรรม 23.00');
   assert.equal(draft.startLocal, '2026-09-14T23:00');
   assert.equal(draft.endLocal, '2026-09-15T00:00');
+});
+test('sleep defaults to seven hours when the person did not state a duration', () => {
+  const draft = finish({ title: 'เข้านอน', startTime: '23:00', durationMinutes: 60 }, 'เข้านอน 23.00');
+  assert.equal(draft.startLocal, '2026-09-14T23:00');
+  assert.equal(draft.endLocal, '2026-09-15T06:00');
+  assert.ok(draft.tags.includes('duration-420m'));
+});
+test('an explicit sleep duration overrides the seven-hour default', () => {
+  const draft = finish({ title: 'เข้านอน', startTime: '23:00', durationMinutes: 360 }, 'เข้านอน 23.00 6 ชั่วโมง');
+  assert.equal(draft.endLocal, '2026-09-15T05:00');
+  assert.ok(draft.tags.includes('duration-360m'));
 });
 test('a stated Thai period overrides an incorrect AI time and period tag', () => {
   const draft = finish({ title: 'ประชุมทีม', tags: ['night'], startLocal: '2026-09-15T21:00', endLocal: '2026-09-15T22:00' }, 'พรุ่งนี้ ช่วงเช้า ประชุมทีม');
@@ -69,7 +80,7 @@ test('a latest activity intent replaces stale assumptions from an earlier unsave
   ctx.history = [{ role: 'user', text: 'เข้านอนคืนนี้' }];
   const result = finishResult({ ready: true, reply: 'ร่างใหม่', draft: extraction({ title: 'ทานข้าวตอนเช้า', tags: ['night'], startLocal: '2026-09-14T21:00', endLocal: '2026-09-14T22:00', assumptions: ['เวลาเริ่ม 21:00 ภายใน tag night'] }) }, ctx);
   assert.equal(result.draft.startLocal, '2026-09-14T06:00');
-  assert.equal(result.draft.endLocal, '2026-09-14T08:00');
+  assert.equal(result.draft.endLocal, '2026-09-14T07:00');
   assert.ok(result.draft.tags.includes('morning'));
   assert.ok(!result.draft.tags.includes('night'));
   assert.ok(!result.draft.assumptions.some((item) => item.includes('21:00')));
@@ -120,7 +131,7 @@ test('start and duration tags use 30-minute frames without changing exact times'
 });
 test('generic defaults today evening', () => assert.equal(valid().startLocal, '2026-09-14T19:00'));
 test('generic lasts one hour', () => assert.equal(valid().endLocal, '2026-09-14T20:00'));
-test('homework lasts two hours', () => assert.equal(finish({ title: 'ทำการบ้าน' }).endLocal, '2026-09-14T21:00'));
+test('homework without a duration lasts one hour', () => assert.equal(finish({ title: 'ทำการบ้าน' }).endLocal, '2026-09-14T20:00'));
 test('tomorrow Thai', () => assert.equal(finish({}, 'พรุ่งนี้อ่านหนังสือ').startLocal, '2026-09-15T19:00'));
 test('tomorrow English', () => assert.equal(finish({}, 'read tomorrow').startLocal, '2026-09-15T19:00'));
 test('explicit date wins', () => assert.equal(finish({ date: '2026-10-01' }).startLocal, '2026-10-01T19:00'));
@@ -130,6 +141,13 @@ test('all day exclusive end', () => assert.equal(finish({ allDay: true }).endLoc
 test('unknown category cleared', () => assert.equal(finish({ categoryName: 'ไม่มี' }).categoryName, ''));
 test('known category preserved', () => assert.equal(finish({ categoryName: 'งาน' }).categoryName, 'งาน'));
 test('tags deduplicated while retaining system time tags', () => assert.deepEqual(finish({ tags: ['a', 'a'] }).tags, ['a', 'single-day', 'evening', 'hour-19', 'start-19-00', 'duration-60m']));
+test('Gemini semantic analysis tags are retained alongside system tags', () => {
+  const draft = finish({ title: 'ออกกำลังกาย', startTime: '16:00', durationMinutes: 60, tags: ['exercise', 'health'] }, 'ออกกำลังกาย 16.00');
+  assert.ok(draft.tags.includes('exercise'));
+  assert.ok(draft.tags.includes('health'));
+  assert.ok(draft.tags.includes('afternoon'));
+  assert.ok(draft.tags.includes('duration-60m'));
+});
 test('assumptions are visible data', () => assert.ok(valid().assumptions.length >= 3));
 test('missing title rejected', () => assert.throws(() => finish({ title: '' })));
 test('invalid date rejected', () => assert.throws(() => finish({ startLocal: '2026-02-30T10:00' })));
