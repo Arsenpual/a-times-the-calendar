@@ -22,6 +22,9 @@ function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');
   const reply = bounded(raw.reply, 4000, 'คำตอบ');
   if (!reply) fail('AI ไม่ได้ส่งคำตอบ');
+  // Product answers and out-of-scope replies must not be mistaken for a
+  // stalled activity draft after the second user turn.
+  if (raw.mode === 'about' || raw.mode === 'unsupported') return { reply, ready: false, draft: null };
   if (!raw.ready) return { reply: context.history.filter(item => item.role === 'user').length >= 2 ? 'กรุณาระบุชื่อกิจกรรมที่ต้องการสร้างให้ชัดเจนครับ' : reply, ready: false, draft: null };
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
