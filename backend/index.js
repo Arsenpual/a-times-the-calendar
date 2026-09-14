@@ -105,7 +105,15 @@ const aiLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "เรียกผู้ช่วย AI ถี่เกินไป กรุณาลองใหม่ภายหลัง" }
+  handler: (req, res, next, options) => {
+    const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    res.status(options.statusCode).json({
+      error: "เรียกผู้ช่วย AI ถี่เกินไป",
+      retryAfterSeconds,
+      retryAfterAt: new Date(resetAt).toISOString()
+    });
+  }
 });
 app.use("/api/ai", requireAuth, aiLimiter, aiActivityDraftRouter);
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook

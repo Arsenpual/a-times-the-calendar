@@ -71,7 +71,20 @@ export async function handleResponse(res, label) {
       // Firebase session was revoked/signed out in another tab.
       throw new Error(`[${label}] เซสชันไม่ถูกต้องหรือหมดอายุ — กรุณาเข้าสู่ระบบใหม่`);
     }
-    throw new Error(`[${label}] backend ตอบ error (${res.status}): ${text || "(ไม่มีเนื้อหา)"}`);
+    let body;
+    try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+    if (res.status === 429) {
+      const seconds = Number(body?.retryAfterSeconds || res.headers.get("retry-after"));
+      if (Number.isFinite(seconds) && seconds > 0) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        const wait = minutes > 0 ? `${minutes} นาที${remainingSeconds ? ` ${remainingSeconds} วินาที` : ""}` : `${remainingSeconds} วินาที`;
+        const error = new Error(`${body?.error || "เรียก AI ถี่เกินไป"} — ลองใหม่ได้ใน ${wait}`);
+        error.retryAfterSeconds = seconds;
+        throw error;
+      }
+    }
+    throw new Error(`[${label}] backend ตอบ error (${res.status}): ${body?.error || text || "(ไม่มีเนื้อหา)"}`);
   }
   if (!text) {
     throw new Error(

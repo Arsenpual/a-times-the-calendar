@@ -12,6 +12,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [aiStatus, setAiStatus] = useState(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ block: "end" }); }, [open, messages, pending]);
@@ -25,12 +27,19 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     if (!open) return;
     getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch((requestError) => setError(requestError.message));
   }, [open]);
+  useEffect(() => {
+    if (!cooldownUntil || cooldownUntil <= Date.now()) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
   if (!open) return null;
+  const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
+  const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const reset = () => { setMessages([{ role: "assistant", text: WELCOME }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); };
   const send = async (event) => {
     event.preventDefault();
     const text = input.trim();
-    if (!text || pending) return;
+    if (!text || pending || cooldownSeconds > 0) return;
     const nextMessages = [...messages, { role: "user", text }];
     setMessages(nextMessages); setInput(""); setPending(true); setError(""); setDraft(null); setEditingDraft(false);
     try {
@@ -41,7 +50,10 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       });
       setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
       if (result.ready) setDraft(result.draft);
-    } catch (requestError) { setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้"); }
+    } catch (requestError) {
+      setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
+      if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
+    }
     finally {
       setPending(false);
       getActivityAssistantStatus().then(result => setAiStatus(result.aiChat)).catch(() => {});
@@ -89,7 +101,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="เล่ากิจกรรมที่ต้องการสร้าง…" maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false}>ส่ง</button></form>
+      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="เล่ากิจกรรมที่ต้องการสร้าง…" maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่ง"}</button></form>
     </section>
   </div>;
 }

@@ -9,6 +9,17 @@ function bangkokDayKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
+function nextBangkokMidnight(now = new Date()) {
+  const day = bangkokDayKey(now);
+  return new Date(`${day}T00:00:00+07:00`).getTime() + 24 * 60 * 60 * 1000;
+}
+
+function waitDetails(status, now = Date.now()) {
+  const windowResetAt = (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS;
+  const resetAt = status === "window-limited" ? windowResetAt : nextBangkokMidnight(new Date(now));
+  return { status, resetAt, retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)) };
+}
+
 function isAllowedUser(userId) {
   const allowed = String(process.env.GEMINI_CHAT_ALLOWED_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
   // Fail closed during the pilot. An omitted allowlist must never turn a
@@ -33,8 +44,8 @@ async function getGeminiChatStatus(userId) {
   const enabled = enabledGlobally() && isAllowedUser(userId) && auth.data()?.aiChatEnabled !== false;
   return {
     enabled, allowed: isAllowedUser(userId), globallyEnabled: enabledGlobally(),
-    userWindow: { used: Number(window.data()?.count || 0), limit: USER_WINDOW_LIMIT },
-    userDay: { used: Number(day.data()?.count || 0), limit: USER_DAILY_LIMIT },
+    userWindow: { used: Number(window.data()?.count || 0), limit: USER_WINDOW_LIMIT, resetAt: (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS },
+    userDay: { used: Number(day.data()?.count || 0), limit: USER_DAILY_LIMIT, resetAt: nextBangkokMidnight(new Date(now)) },
     globalDay: { used: Number(global.data()?.count || 0), limit: GLOBAL_DAILY_LIMIT }
   };
 }
@@ -60,9 +71,9 @@ async function claimGeminiChatUsage(userId) {
     const dayCount = Number(day.data()?.count || 0);
     const windowCount = Number(window.data()?.count || 0);
     const globalCount = Number(global.data()?.count || 0);
-    if (windowCount >= USER_WINDOW_LIMIT) return { status: "window-limited" };
-    if (dayCount >= USER_DAILY_LIMIT) return { status: "day-limited" };
-    if (globalCount >= GLOBAL_DAILY_LIMIT) return { status: "global-limited" };
+    if (windowCount >= USER_WINDOW_LIMIT) return waitDetails("window-limited", now);
+    if (dayCount >= USER_DAILY_LIMIT) return waitDetails("day-limited", now);
+    if (globalCount >= GLOBAL_DAILY_LIMIT) return waitDetails("global-limited", now);
     transaction.set(windowRef, { count: windowCount + 1, windowKey, updatedAt: now, expiresAt: now + WINDOW_MS * 2 }, { merge: true });
     transaction.set(dayRef, { count: dayCount + 1, dayKey, updatedAt: now }, { merge: true });
     transaction.set(globalRef, { count: globalCount + 1, dayKey, updatedAt: now }, { merge: true });

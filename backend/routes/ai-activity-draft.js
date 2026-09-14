@@ -64,7 +64,10 @@ router.post("/activity-conversation", async (req, res, next) => {
         "day-limited": "ใช้ AI ครบโควต้าประจำวันแล้ว",
         "global-limited": "โควต้า AI ของระบบวันนี้เต็มแล้ว"
       };
-      return res.status(429).json({ error: errors[claim.status] || "AI ใช้งานไม่ได้ในขณะนี้" });
+      return res.status(429).json({
+        error: errors[claim.status] || "AI ใช้งานไม่ได้ในขณะนี้",
+        ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds, retryAfterAt: new Date(claim.resetAt).toISOString() } : {})
+      });
     }
 
     const instruction = buildPrompt(context);
