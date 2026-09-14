@@ -251,6 +251,7 @@ function AccountApp({ auth }) {
     modalDefaultDate,
     modalDefaultEnd,
     modalDefaultTitle,
+    modalInitialDraft,
     modalInitialWarning,
     modalMissingFields,
     modalEditingActivity,
@@ -889,11 +890,12 @@ function AccountApp({ auth }) {
         // ของครั้งแรกสุดที่เปิดฟอร์มค้างอยู่เสมอ (เดิม key ตอนสร้างใหม่เป็น
         // ค่าคงที่ "new" เฉยๆ ไม่ผูกกับ modalDefaultDate เลย จึงไม่ remount
         // เมื่อกดปุ่มเพิ่มกิจกรรมของวันอื่น)
-        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}-${modalDefaultTitle}-${modalInitialWarning}`}
+        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}-${modalDefaultTitle}-${modalInitialDraft?.startLocal || ""}-${modalInitialDraft?.endLocal || ""}-${modalInitialWarning}`}
         open={modalOpen}
         defaultDate={modalDefaultDate}
         defaultEnd={modalDefaultEnd}
         defaultTitle={modalDefaultTitle}
+        initialDraft={modalInitialDraft}
         initialWarning={modalInitialWarning}
         missingFields={modalMissingFields}
         initialActivity={modalEditingActivity}
@@ -917,6 +919,12 @@ function AccountApp({ auth }) {
         onClose={() => setActivityAssistantOpen(false)}
         categories={categories}
         onConfirmDraft={handleConfirmAiActivityDraft}
+        onOpenManualEditor={(draft) => {
+          const start = new Date(draft.startLocal || new Date());
+          const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
+          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: draft });
+          setActivityAssistantOpen(false);
+        }}
       />
 
       <SettingsDrawer

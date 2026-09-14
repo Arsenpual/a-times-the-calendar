@@ -24,7 +24,7 @@ function loadSavedChat() {
   } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft }) {
+export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenManualEditor }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
   const [draft, setDraft] = useState(initialChat.draft);
@@ -185,6 +185,17 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     }
     return { ...current, [field]: value };
   });
+  const openManualEditor = () => {
+    const seed = draft || (() => {
+      const date = guidedActivity?.date || toDateInputValue(new Date());
+      const time = guidedActivity?.time || "09:00";
+      const start = `${date}T${time}`;
+      const end = new Date(start);
+      end.setMinutes(end.getMinutes() + (guidedActivity?.durationMinutes || 60));
+      return { title: guidedActivity?.title || "", startLocal: start, endLocal: `${toDateInputValue(end)}T${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`, allDay: false, categoryName: "", tags: [], notes: "" };
+    })();
+    onOpenManualEditor?.(seed);
+  };
   return <div className="activity-ai-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
@@ -203,6 +214,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
+      <div className="activity-ai-manual-launch"><button type="button" onClick={openManualEditor} disabled={pending}>กรอกเองในแบบฟอร์มกิจกรรมเต็มรูปแบบ</button><small>ไม่ใช้ AI quota · ตั้งค่าได้ครบเหมือนปุ่มเพิ่มกิจกรรม</small></div>
       {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไปสำหรับขั้นตอนนี้ · ไม่ใช้ AI quota</small>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
       {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>

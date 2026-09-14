@@ -83,6 +83,7 @@ export default function ActivityModal({
   defaultDate,
   defaultEnd,
   defaultTitle = "",
+  initialDraft = null,
   initialWarning = "",
   missingFields = [],
   initialActivity,
@@ -117,12 +118,12 @@ export default function ActivityModal({
     return () => animation?.pause?.();
   }, [open]);
 
-  const initialStart = initialActivity ? activityDate(initialActivity.start) : defaultDate || new Date();
+  const initialStart = initialActivity ? activityDate(initialActivity.start) : initialDraft?.startLocal ? new Date(initialDraft.startLocal) : defaultDate || new Date();
   const initialEnd = initialActivity
     ? activityDate(initialActivity.end)
-    : defaultEnd || new Date((defaultDate || new Date()).getTime() + 60 * 60000);
+    : initialDraft?.endLocal ? new Date(initialDraft.endLocal) : defaultEnd || new Date((defaultDate || new Date()).getTime() + 60 * 60000);
 
-  const [title, setTitle] = useState(initialActivity?.summary || defaultTitle);
+  const [title, setTitle] = useState(initialActivity?.summary || initialDraft?.title || defaultTitle);
   // When the modal was opened from an incomplete archive entry, leave the
   // missing value genuinely blank (rather than silently filling "now") so
   // the red required-field treatment points at the real missing data.
@@ -130,17 +131,17 @@ export default function ActivityModal({
   const [endDate, setEndDate] = useState(missingFields.includes("end") ? "" : toDateInputValue(initialEnd));
   const [startTime, setStartTime] = useState(missingFields.includes("start") ? "" : toTimeInputValue(initialStart));
   const [endTime, setEndTime] = useState(missingFields.includes("end") ? "" : toTimeInputValue(initialEnd));
-  const [isAllDay, setIsAllDay] = useState(() => Boolean(initialActivity?.start?.date && !initialActivity?.start?.dateTime));
+  const [isAllDay, setIsAllDay] = useState(() => Boolean(initialDraft?.allDay || (initialActivity?.start?.date && !initialActivity?.start?.dateTime)));
 
   const [categoryId, setCategoryId] = useState(
-    (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || ""
+    (initialActivity && activityCategoryMap[normalizeActivityId(initialActivity.id)]) || categories.find((category) => category.name === initialDraft?.categoryName)?.id || ""
   );
 
   // Tag แบบพิมพ์เอง (free text) — เก็บเป็น array ของ string, พิมพ์แล้วกด
   // Enter/comma เพื่อเพิ่มเป็น chip ลบออกได้ทีละอัน ต่างจาก category ตรงที่
   // ผูกได้หลายอันพร้อมกัน (many-to-many) และไม่ต้องสร้างไว้ก่อนใน list ใดๆ
   const [tags, setTags] = useState(
-    (initialActivity && activityTagMap?.[normalizeActivityId(initialActivity.id)]) || []
+    (initialActivity && activityTagMap?.[normalizeActivityId(initialActivity.id)]) || initialDraft?.tags || []
   );
   const [tagDraft, setTagDraft] = useState("");
   const TAG_MAX_LENGTH = 40;
@@ -221,8 +222,8 @@ export default function ActivityModal({
     [repeat, date, startTime]
   );
 
-  const [notesOpen, setNotesOpen] = useState(!!initialActivity?.description);
-  const [notes, setNotes] = useState(initialActivity?.description || "");
+  const [notesOpen, setNotesOpen] = useState(Boolean(initialActivity?.description || initialDraft?.notes));
+  const [notes, setNotes] = useState(initialActivity?.description || initialDraft?.notes || "");
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(initialWarning || null);

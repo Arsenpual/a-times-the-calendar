@@ -25,6 +25,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
   const [modalDefaultDate, setModalDefaultDate] = useState(null);
   const [modalDefaultEnd, setModalDefaultEnd] = useState(null);
   const [modalDefaultTitle, setModalDefaultTitle] = useState("");
+  const [modalInitialDraft, setModalInitialDraft] = useState(null);
   const [modalInitialWarning, setModalInitialWarning] = useState("");
   const [modalMissingFields, setModalMissingFields] = useState([]);
   const [modalEditingActivity, setModalEditingActivity] = useState(null);
@@ -36,7 +37,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
    * time always comes from `new Date()` at the moment the button is
    * pressed, so a new activity defaults to "now" instead of midnight.
    */
-  const openAddActivity = useCallback((day, { preserveTime = false, end = null, title = "", warning = "", missingFields = [] } = {}) => {
+  const openAddActivity = useCallback((day, { preserveTime = false, end = null, title = "", warning = "", missingFields = [], initialDraft = null } = {}) => {
     pendingRequest.current++;
     const now = new Date();
     const base = day || now;
@@ -46,6 +47,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     setModalDefaultDate(combined);
     setModalDefaultEnd(end ? new Date(end) : null);
     setModalDefaultTitle(title);
+    setModalInitialDraft(initialDraft);
     setModalInitialWarning(warning);
     setModalMissingFields(missingFields);
     setModalEditingActivity(null);
@@ -63,6 +65,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       setModalDefaultDate(null);
       setModalDefaultEnd(null);
       setModalDefaultTitle("");
+      setModalInitialDraft(null);
       setModalInitialWarning("");
       setModalMissingFields([]);
       setModalEditingActivity(activity);
@@ -85,6 +88,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       setModalDefaultDate(null);
       setModalDefaultEnd(null);
       setModalDefaultTitle("");
+      setModalInitialDraft(null);
       setModalInitialWarning("");
       setModalMissingFields([]);
       setModalEditingActivity(activity);
@@ -103,6 +107,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     setModalDefaultDate(null);
     setModalDefaultEnd(null);
     setModalDefaultTitle("");
+    setModalInitialDraft(null);
     setModalInitialWarning("");
     setModalMissingFields([]);
     setModalEditingAsSeries(false);
@@ -127,6 +132,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         setModalDefaultDate(null);
         setModalDefaultEnd(null);
         setModalDefaultTitle("");
+        setModalInitialDraft(null);
         setModalInitialWarning("");
         setModalMissingFields([]);
         setModalEditingActivity(masterEvent);
@@ -145,6 +151,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     modalDefaultDate,
     modalDefaultEnd,
     modalDefaultTitle,
+    modalInitialDraft,
     modalInitialWarning,
     modalMissingFields,
     modalEditingActivity,
