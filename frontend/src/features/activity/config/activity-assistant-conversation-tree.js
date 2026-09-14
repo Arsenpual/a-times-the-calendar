@@ -6,8 +6,8 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
     prompt: "อยากให้ผมช่วยเรื่องไหนครับ?",
     options: [
       { id: "create-activity", label: "สร้างกิจกรรม", kind: "start", next: "activity.title" },
-      { id: "about-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times" },
-      { id: "about-assistant", label: "MR.Zettascale ทำอะไรได้บ้าง", kind: "branch", next: "about-assistant" }
+      { id: "about-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times", available: false },
+      { id: "about-assistant", label: "MR.Zettascale ทำอะไรได้บ้าง", kind: "branch", next: "about-assistant", available: false }
     ]
   },
   "about-times": {
@@ -123,13 +123,39 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
 
 // These are safe, no-quota prompts. The backend answers them from its
 // deterministic T.i.M.E.S. knowledge lookup before it considers Gemini.
-export const ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS = [
-  "T.i.M.E.S. คืออะไร?",
-  "Activity Mode กับ Reminder Mode ต่างกันอย่างไร?",
-  "เชื่อม Google Calendar ทำงานอย่างไร?",
-  "การแจ้งเตือน Telegram ทำงานอย่างไร?",
-  "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?"
-];
+export const ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS = {
+  home: [
+    "T.i.M.E.S. คืออะไร?",
+    "Activity Mode กับ Reminder Mode ต่างกันอย่างไร?",
+    "เชื่อม Google Calendar ทำงานอย่างไร?",
+    "การแจ้งเตือน Telegram ทำงานอย่างไร?",
+    "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?"
+  ],
+  "activity.title": [
+    "ทำไมชื่อกิจกรรมจึงสำคัญ?",
+    "ตั้งชื่อกิจกรรมอย่างไรให้ดี?",
+    "ยังไม่แน่ใจชื่อกิจกรรมทำอย่างไร?"
+  ],
+  "activity.date": [
+    "ทำไมต้องระบุวันของกิจกรรม?",
+    "ถ้ายังไม่แน่ใจวันทำกิจกรรมได้ไหม?",
+    "แก้วันของกิจกรรมภายหลังได้ไหม?"
+  ],
+  "activity.time": [
+    "ทำไมต้องระบุเวลาเริ่มกิจกรรม?",
+    "ยังไม่แน่ใจเวลาเริ่มทำอย่างไร?",
+    "แก้เวลาเริ่มภายหลังได้ไหม?"
+  ],
+  "activity.duration": [
+    "ทำไมต้องระบุระยะเวลากิจกรรม?",
+    "ยังไม่แน่ใจว่าจะใช้เวลานานเท่าไร?",
+    "ปรับระยะเวลาภายหลังได้ไหม?"
+  ]
+};
+
+export function getActivityAssistantSuggestedQuestions(nodeId) {
+  return ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS[nodeId] || [];
+}
 
 export function getActivityAssistantConversationNode(nodeId) {
   return ACTIVITY_ASSISTANT_CONVERSATION_TREE[nodeId] || ACTIVITY_ASSISTANT_CONVERSATION_TREE.home;

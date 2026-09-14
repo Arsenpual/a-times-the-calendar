@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
-import { ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS, getActivityAssistantConversationNode } from "../config/activity-assistant-conversation-tree.js";
+import { getActivityAssistantConversationNode, getActivityAssistantSuggestedQuestions } from "../config/activity-assistant-conversation-tree.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
 const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
@@ -107,12 +107,13 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
   const quickReplies = conversationNode.options.filter((option) => option.available !== false);
+  const suggestedQuestions = getActivityAssistantSuggestedQuestions(conversationNodeId);
   const send = async (event, suggestedText = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
     if (!text || pending || cooldownSeconds > 0) return;
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
-    setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null); setConversationNodeId("home");
+    setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false);
     try {
       const history = messages.slice(1);
       // `text` is the current turn. Keep an accidentally duplicated current
@@ -124,6 +125,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         categories: categories.map((category) => category.name)
       });
       const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
+      if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); }
       setMessages((current) => {
         const withCorrectedUserSource = responseSource === "knowledge"
           ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
@@ -175,7 +177,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      {conversationNodeId === "home" && !guidedActivity && <div className="activity-ai-suggested-questions" aria-label="คำถามแนะนำ"><small>คำถามแนะนำ · ตอบจากข้อมูล T.i.M.E.S. โดยไม่ใช้ AI quota</small>{ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
+      {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไปสำหรับขั้นตอนนี้ · ไม่ใช้ AI quota</small>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
       <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
