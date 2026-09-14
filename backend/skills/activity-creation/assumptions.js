@@ -1,5 +1,5 @@
 const { localDateTime } = require('./validator.js');
-const { TIME_PERIODS, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, describeHourTag } = require('./time-periods.js');
+const { TIME_PERIODS, selectedPeriod, defaultTimeForPeriod, describePeriod, selectedHourTag, timeForHourTag, hourTagForLocal, describeHourTag, periodTagsForRange } = require('./time-periods.js');
 
 const SITUATION_RULES = [
   { match: /ทานข้าวตอนเช้า|กินข้าวเช้า|อาหารเช้า|มื้อเช้า|\bbreakfast\b/i, tag: 'morning', preferredStart: '06:00', durationMinutes: 120 },
@@ -17,13 +17,24 @@ function replacePeriodTag(tags, period) {
   const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => !Object.hasOwn(TIME_PERIODS, tag));
   return period ? [...new Set([...remaining, period])] : remaining;
 }
-function replaceHourTag(tags, local) {
-  const hourTag = hourTagForLocal(local);
-  if (!hourTag) return Array.isArray(tags) ? tags : [];
+function replaceTimeTags(tags, startLocal, endLocal) {
+  const hourTags = [hourTagForLocal(startLocal), hourTagForLocal(endLocal)].filter(Boolean);
+  const periodTags = periodTagsForRange(startLocal, endLocal);
+  if (!hourTags.length) return Array.isArray(tags) ? tags : [];
   const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => !/^hour-(?:[01]\d|2[0-3])$/.test(tag));
-  // The hour tag is system metadata and takes priority over an excess optional
-  // tag, while retaining the existing twenty-tag safety limit.
-  return [...remaining.slice(0, 19), hourTag];
+  const scopeTag = remaining.find((tag) => tag === 'single-day' || tag === 'multi-day');
+  const withoutPeriods = remaining.filter((tag) => !Object.hasOwn(TIME_PERIODS, tag) && tag !== 'single-day' && tag !== 'multi-day');
+  // System time metadata takes priority over excess optional tags, while
+  // retaining the existing twenty-tag safety limit.
+  const systemTags = [...(scopeTag ? [scopeTag] : []), ...periodTags, ...new Set(hourTags)];
+  return [...withoutPeriods.slice(0, Math.max(0, 20 - systemTags.length)), ...systemTags];
+}
+function replaceDayScopeTag(tags, startLocal, endLocal, allDay) {
+  const remaining = (Array.isArray(tags) ? tags : []).filter((tag) => tag !== 'single-day' && tag !== 'multi-day');
+  // Google Calendar all-day events use an exclusive end at the next midnight,
+  // but one all-day event still represents one calendar day for this feature.
+  const isSingleDay = allDay || startLocal?.slice(0, 10) === endLocal?.slice(0, 10);
+  return [...remaining, isSingleDay ? 'single-day' : 'multi-day'];
 }
 function addMinutes(local, minutes) {
   localDateTime(local);
@@ -69,10 +80,11 @@ function applyAssumptions(raw, context) {
     draft.endLocal = addMinutes(draft.startLocal, duration);
     if (!raw.durationMinutes) draft.assumptions.push(`ระยะเวลา ${duration} นาที`);
   }
+  draft.tags = replaceDayScopeTag(draft.tags, draft.startLocal, draft.endLocal, draft.allDay);
   if (!draft.allDay) {
-    draft.tags = replaceHourTag(draft.tags, draft.startLocal);
-    const hourTag = selectedHourTag(draft.tags);
-    if (hourTag) draft.assumptions.push(`กรอบเวลา ${describeHourTag(hourTag)} จาก tag ${hourTag}`);
+    draft.tags = replaceTimeTags(draft.tags, draft.startLocal, draft.endLocal);
+    const hourTags = draft.tags.filter((tag) => /^hour-(?:[01]\d|2[0-3])$/.test(tag));
+    if (hourTags.length) draft.assumptions.push(`กรอบเวลา ${hourTags.map(describeHourTag).join(' และ ')} จาก tag ${hourTags.join(', ')}`);
   }
   return draft;
 }
