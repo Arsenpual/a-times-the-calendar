@@ -256,7 +256,6 @@ function AccountApp({ auth }) {
     modalEditingAsSeries,
     modalAiDraft,
     openAddActivity,
-    openAiDraftActivity,
     openEditActivity,
     openEditActivityById,
     closeModal,
@@ -293,6 +292,22 @@ function AccountApp({ auth }) {
     handleDuplicateActivity,
     handleMoveActivityToDay
   } = mutations;
+  const handleConfirmAiActivityDraft = useCallback(async (draft) => {
+    const categoryId = categories.find((category) => category.name === draft.categoryName)?.id || null;
+    const title = String(draft.title || "").trim();
+    if (!title || !draft.startLocal || !draft.endLocal) throw new Error("กรอกชื่อ วัน และเวลาเริ่ม–สิ้นสุดให้ครบก่อนยืนยัน");
+    if (draft.allDay) {
+      const startDate = draft.startLocal.slice(0, 10);
+      const endDate = draft.endLocal.slice(0, 10);
+      if (!startDate || !endDate || endDate <= startDate) throw new Error("กิจกรรมทั้งวันต้องมีวันสิ้นสุดหลังวันเริ่ม");
+      await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { date: startDate }, end: { date: endDate } }, categoryId, tags: [] });
+      return;
+    }
+    const start = new Date(draft.startLocal);
+    const end = new Date(draft.endLocal);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error("เวลาเริ่มและสิ้นสุดของกิจกรรมไม่ถูกต้อง");
+    await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } }, categoryId, tags: [] });
+  }, [categories, handleSaveActivity]);
 
   const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
     mode,
@@ -892,7 +907,6 @@ function AccountApp({ auth }) {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
-        initialAiDraft={modalAiDraft}
         googleCalendarSyncing={loading}
         onClose={closeModal}
       />
@@ -901,7 +915,7 @@ function AccountApp({ auth }) {
         open={activityAssistantOpen}
         onClose={() => setActivityAssistantOpen(false)}
         categories={categories}
-        onConfirmDraft={openAiDraftActivity}
+        onConfirmDraft={handleConfirmAiActivityDraft}
       />
 
       <SettingsDrawer

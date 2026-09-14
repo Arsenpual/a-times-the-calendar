@@ -7,6 +7,7 @@ const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอ�
 export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft }) {
   const [messages, setMessages] = useState([{ role: "assistant", text: WELCOME }]);
   const [draft, setDraft] = useState(null);
+  const [editingDraft, setEditingDraft] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -24,13 +25,13 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch((requestError) => setError(requestError.message));
   }, [open]);
   if (!open) return null;
-  const reset = () => { setMessages([{ role: "assistant", text: WELCOME }]); setDraft(null); setError(""); setInput(""); };
+  const reset = () => { setMessages([{ role: "assistant", text: WELCOME }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); };
   const send = async (event) => {
     event.preventDefault();
     const text = input.trim();
     if (!text || pending) return;
     const nextMessages = [...messages, { role: "user", text }];
-    setMessages(nextMessages); setInput(""); setPending(true); setError(""); setDraft(null);
+    setMessages(nextMessages); setInput(""); setPending(true); setError(""); setDraft(null); setEditingDraft(false);
     try {
       const result = await continueActivityAssistant({
         text, history: nextMessages.slice(1), referenceDate: toDateInputValue(new Date()),
@@ -42,7 +43,14 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     } catch (requestError) { setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้"); }
     finally { setPending(false); }
   };
-  const confirm = () => { if (!draft) return; onConfirmDraft(draft); onClose(); };
+  const confirm = async () => {
+    if (!draft) return;
+    setPending(true); setError("");
+    try { await onConfirmDraft(draft); onClose(); }
+    catch (requestError) { setError(requestError.message || "สร้างกิจกรรมไม่สำเร็จ"); }
+    finally { setPending(false); }
+  };
+  const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const toggleAi = async (enabled) => {
     try {
       setError("");
@@ -57,7 +65,13 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       <main className="activity-ai-messages">
         {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}`}>{message.text}</p>)}
         {pending && <p className="activity-ai-message is-assistant is-thinking">กำลังช่วยคิดรายละเอียด…</p>}
-        {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong><span>{draft.title}</span><small>{draft.allDay ? "กิจกรรมทั้งวัน" : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}<div><button type="button" onClick={() => setDraft(null)}>แก้รายละเอียดต่อ</button><button type="button" className="btn btn-primary" onClick={confirm}>Confirm และตรวจรายละเอียด</button></div></section>}
+        {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{editingDraft ? <div className="activity-ai-manual-editor">
+          <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
+          <label><input type="checkbox" checked={Boolean(draft.allDay)} onChange={(event) => updateDraft("allDay", event.target.checked)} /> กิจกรรมทั้งวัน</label>
+          <div className="activity-ai-time-fields"><label>เริ่ม<input type={draft.allDay ? "date" : "datetime-local"} value={draft.allDay ? draft.startLocal.slice(0, 10) : draft.startLocal} onChange={(event) => updateDraft("startLocal", draft.allDay ? `${event.target.value}T00:00` : event.target.value)} /></label><label>สิ้นสุด<input type={draft.allDay ? "date" : "datetime-local"} value={draft.allDay ? draft.endLocal.slice(0, 10) : draft.endLocal} onChange={(event) => updateDraft("endLocal", draft.allDay ? `${event.target.value}T00:00` : event.target.value)} /></label></div>
+          <label>หมวดหมู่<select value={draft.categoryName || ""} onChange={(event) => updateDraft("categoryName", event.target.value)}><option value="">ไม่ระบุ</option>{categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select></label>
+          <label>โน้ต<textarea value={draft.notes || ""} onChange={(event) => updateDraft("notes", event.target.value)} /></label>
+        </div> : <><span>{draft.title}</span><small>{draft.allDay ? "กิจกรรมทั้งวัน" : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}{draft.notes && <small>{draft.notes}</small>}</>}<div><button type="button" onClick={() => setEditingDraft((current) => !current)}>{editingDraft ? "เสร็จสิ้นการแก้ไข" : "Edit detail"}</button><button type="button" className="btn btn-primary" onClick={confirm} disabled={pending || !draft.title || !draft.startLocal || !draft.endLocal}>Confirm สร้างกิจกรรม</button></div></section>}
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
