@@ -178,3 +178,12 @@ test('guided flow keeps Gemini next-field question after earlier answers', () =>
   assert.equal(result.reply, 'กิจกรรมนี้ใช้เวลานานเท่าไรครับ?');
   assert.equal(result.collected.time, '08:00');
 });
+test('guided flow never returns a final draft before the guided summary step', () => {
+  const ctx = context('ประชุมทีม');
+  ctx.guidedStep = 'activity.title';
+  ctx.guidedActivity = { title: '', date: '', time: '', durationMinutes: 0 };
+  const result = finishResult({ ready: true, reply: 'วันไหนครับ?', draft: extraction({ title: 'ประชุมทีม' }) }, ctx);
+  assert.equal(result.ready, false);
+  assert.equal(result.draft, null);
+  assert.equal(result.collected.title, 'ประชุมทีม');
+});

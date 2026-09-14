@@ -32,7 +32,10 @@ function finishResult(raw, context) {
   // Product answers and out-of-scope replies must not be mistaken for a
   // stalled activity draft after the second user turn.
   if (raw.mode === 'about' || raw.mode === 'unsupported') return { reply, ready: false, draft: null };
-  if (!raw.ready) {
+  // Gemini may decide a short input is enough for a draft. During the guided
+  // flow it is only a field collector: final drafting is allowed exclusively
+  // after title, date, start time, and duration have all been collected.
+  if (!raw.ready || context.guidedStep) {
     // Keep safe, partial facts from Gemini so a typed reply to a guided
     // question (for example the activity title) survives into the next step.
     const partial = raw.draft || {};
