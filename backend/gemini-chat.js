@@ -48,23 +48,18 @@ async function getGeminiChatStatus(userId) {
   const dayKey = bangkokDayKey();
   const windowKey = String(Math.floor(now / WINDOW_MS));
   const limits = userLimits(userId);
-  const [auth, day, window, global] = await Promise.all([
-    authRef.get(), authRef.collection("gemini-usage-days").doc(dayKey).get(),
+  const [day, window, global] = await Promise.all([
+    authRef.collection("gemini-usage-days").doc(dayKey).get(),
     authRef.collection("gemini-usage-windows").doc(windowKey).get(),
     db.collection("app-usage").doc(`gemini-chat-${dayKey}`).get()
   ]);
-  const enabled = enabledGlobally() && isAllowedUser(userId) && auth.data()?.aiChatEnabled !== false;
+  const enabled = enabledGlobally() && isAllowedUser(userId);
   return {
     enabled, allowed: isAllowedUser(userId), isDeveloper: isDeveloperUser(userId), globallyEnabled: enabledGlobally(),
     userWindow: { used: Number(window.data()?.count || 0), limit: limits.window, resetAt: (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS },
     userDay: { used: Number(day.data()?.count || 0), limit: limits.day, resetAt: nextBangkokMidnight(new Date(now)) },
     globalDay: { used: Number(global.data()?.count || 0), limit: GLOBAL_DAILY_LIMIT }
   };
-}
-
-async function setGeminiChatEnabled(userId, enabled) {
-  await telegramAuthDoc(userId).set({ aiChatEnabled: Boolean(enabled), aiChatUpdatedAt: Date.now() }, { merge: true });
-  return getGeminiChatStatus(userId);
 }
 
 async function claimGeminiChatUsage(userId) {
@@ -77,10 +72,9 @@ async function claimGeminiChatUsage(userId) {
   const windowRef = authRef.collection("gemini-usage-windows").doc(windowKey);
   const globalRef = db.collection("app-usage").doc(`gemini-chat-${dayKey}`);
   return db.runTransaction(async (transaction) => {
-    const [auth, day, window, global] = await Promise.all([transaction.get(authRef), transaction.get(dayRef), transaction.get(windowRef), transaction.get(globalRef)]);
+    const [day, window, global] = await Promise.all([transaction.get(dayRef), transaction.get(windowRef), transaction.get(globalRef)]);
     if (!enabledGlobally()) return { status: "globally-disabled" };
     if (!isAllowedUser(userId)) return { status: "not-allowed" };
-    if (auth.data()?.aiChatEnabled === false) return { status: "user-disabled" };
     const dayCount = Number(day.data()?.count || 0);
     const windowCount = Number(window.data()?.count || 0);
     const globalCount = Number(global.data()?.count || 0);
@@ -104,4 +98,4 @@ async function releaseGeminiChatUsage(claim) {
   });
 }
 
-module.exports = { getGeminiChatStatus, setGeminiChatEnabled, claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser, userLimits };
+module.exports = { getGeminiChatStatus, claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser, userLimits };

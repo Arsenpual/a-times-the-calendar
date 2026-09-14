@@ -1,6 +1,6 @@
 const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
-const { claimGeminiChatUsage, releaseGeminiChatUsage, getGeminiChatStatus, setGeminiChatEnabled } = require("../gemini-chat.js");
+const { claimGeminiChatUsage, releaseGeminiChatUsage, getGeminiChatStatus } = require("../gemini-chat.js");
 
 const router = express.Router();
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
@@ -16,13 +16,6 @@ router.post("/activity-validate", (req, res) => {
 router.get("/activity-assistant-status", async (req, res, next) => {
   try { res.json({ aiChat: await getGeminiChatStatus(req.userId) }); }
   catch (error) { next(error); }
-});
-
-router.post("/activity-assistant-status", async (req, res, next) => {
-  try {
-    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "ต้องระบุสถานะ enabled ของ AI" });
-    res.json({ aiChat: await setGeminiChatEnabled(req.userId, req.body.enabled) });
-  } catch (error) { next(error); }
 });
 
 function jsonFromGemini(payload) {
@@ -57,7 +50,6 @@ router.post("/activity-conversation", async (req, res, next) => {
     claim = await claimGeminiChatUsage(req.userId);
     if (claim.status !== "claimed") {
       const errors = {
-        "user-disabled": "AI ถูกปิดไว้เพื่อรักษาโควต้าของคุณ",
         "globally-disabled": "AI ถูกปิดชั่วคราวโดยระบบ",
         "not-allowed": "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ AI",
         "window-limited": "ใช้ AI ครบโควต้าช่วง 15 นาทีแล้ว",

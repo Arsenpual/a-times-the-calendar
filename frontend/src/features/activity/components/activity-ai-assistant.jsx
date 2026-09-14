@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { continueActivityAssistant, getActivityAssistantStatus, setActivityAssistantEnabled } from "../api/activity-assistant.js";
+import { continueActivityAssistant, getActivityAssistantStatus } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
@@ -67,7 +67,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     if (!draft || pending || savingRef.current) return;
     savingRef.current = true;
     setPending(true); setError("");
-    try { await onConfirmDraft(draft); setDraft(null); setMessages([{ role: "assistant", text: "สร้างกิจกรรมสำเร็จแล้วครับ ต้องการสร้างกิจกรรมใหม่บอกได้เลย" }]); onClose(); }
+    try { await onConfirmDraft(draft); setDraft(null); setMessages((current) => [...current, { role: "assistant", text: "สร้างกิจกรรมสำเร็จแล้วครับ ต้องการสร้างกิจกรรมใหม่บอกได้เลย" }]); onClose(); }
     catch (requestError) { setError(requestError.message || "สร้างกิจกรรมไม่สำเร็จ"); }
     finally { savingRef.current = false; setPending(false); }
   };
@@ -80,16 +80,9 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     }
     return { ...current, [field]: value };
   });
-  const toggleAi = async (enabled) => {
-    try {
-      setError("");
-      const result = await setActivityAssistantEnabled(enabled);
-      setAiStatus(result.aiChat);
-    } catch (requestError) { setError(requestError.message || "เปลี่ยนสถานะ AI ไม่สำเร็จ"); }
-  };
   return <div className="activity-ai-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
-      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div>{aiStatus && <label className="activity-ai-switch" title="เปิดหรือพัก AI เพื่อควบคุมโควต้าของคุณ"><input type="checkbox" checked={Boolean(aiStatus.enabled)} disabled={!aiStatus.allowed || !aiStatus.globallyEnabled} onChange={(event) => toggleAi(event.target.checked)} /><span>{aiStatus.enabled ? "AI เปิด" : "AI ปิด"}</span></label>}<button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
+      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที</p>}
       <main className="activity-ai-messages">
         {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}`}>{message.text}</p>)}

@@ -12,13 +12,6 @@ export async function getActivityAssistantStatus() {
   return handleResponse(await apiRequest("/api/ai/activity-assistant-status", { cache: "no-store" }), "GET /api/ai/activity-assistant-status");
 }
 
-export async function setActivityAssistantEnabled(enabled) {
-  return handleResponse(
-    await apiRequest("/api/ai/activity-assistant-status", { method: "POST", body: JSON.stringify({ enabled }) }),
-    "POST /api/ai/activity-assistant-status"
-  );
-}
-
 export async function validateActivityAssistantDraft(draft, categories) {
   return handleResponse(await apiRequest("/api/ai/activity-validate", { method: "POST", body: JSON.stringify({ draft, categories }) }), "POST /api/ai/activity-validate");
 }
