@@ -52,6 +52,11 @@ test('Thai 16.00 supplies a missing start time', () => {
   assert.equal(draft.startLocal, '2026-09-14T16:00');
   assert.equal(draft.endLocal, '2026-09-14T17:00');
 });
+test('24:00 from an AI response becomes next-day midnight', () => {
+  const draft = finish({ title: 'เข้านอน', startLocal: '2026-09-14T23:00', endLocal: '2026-09-14T24:00' }, 'เข้านอน 23.00');
+  assert.equal(draft.startLocal, '2026-09-14T23:00');
+  assert.equal(draft.endLocal, '2026-09-15T00:00');
+});
 test('a stated Thai period overrides an incorrect AI time and period tag', () => {
   const draft = finish({ title: 'ประชุมทีม', tags: ['night'], startLocal: '2026-09-15T21:00', endLocal: '2026-09-15T22:00' }, 'พรุ่งนี้ ช่วงเช้า ประชุมทีม');
   assert.equal(draft.startLocal, '2026-09-15T09:00');

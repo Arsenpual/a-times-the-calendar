@@ -64,9 +64,19 @@ function normalizeClock(value) {
   if (!match || Number(match[1]) > 23) return value;
   return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
-function normalizeLocalDateTime(value) {
+function normalizeLocalDateTime(value, allowEndOfDay = false) {
   if (typeof value !== 'string') return value;
-  return value.trim().replace(/T(\d{1,2})\.([0-5]\d)$/, (_, hour, minute) => `T${hour.padStart(2, '0')}:${minute}`);
+  const normalized = value.trim()
+    .replace(' ', 'T')
+    .replace(/T(\d{1,2})\.([0-5]\d)(?::\d{2})?$/, (_, hour, minute) => `T${hour.padStart(2, '0')}:${minute}`)
+    .replace(/T(\d{1,2}):([0-5]\d):\d{2}$/, (_, hour, minute) => `T${hour.padStart(2, '0')}:${minute}`);
+  // Models sometimes express midnight after 23:00 as 24:00 on the same date.
+  // Calendar local datetimes use the unambiguous next-day 00:00 instead.
+  const midnight = /^(\d{4}-\d{2}-\d{2})T24:00$/.exec(normalized);
+  if (!midnight || !allowEndOfDay) return normalized;
+  const nextDay = new Date(`${midnight[1]}T00:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  return `${nextDay.toISOString().slice(0, 10)}T00:00`;
 }
 function explicitClockFromText(text) {
   const match = /\b([01]?\d|2[0-3])[.:]([0-5]\d)\b/i.exec(text);
@@ -77,7 +87,7 @@ function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
   draft.startTime = normalizeClock(draft.startTime);
   draft.startLocal = normalizeLocalDateTime(draft.startLocal);
-  draft.endLocal = normalizeLocalDateTime(draft.endLocal);
+  draft.endLocal = normalizeLocalDateTime(draft.endLocal, true);
   const historyText = context.history.filter(item => item.role === 'user').map(item => item.text).join(' ');
   const latestText = context.text;
   // A new activity intent replaces an unsaved proposal. Do not let “เข้านอน”
