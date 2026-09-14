@@ -121,6 +121,16 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   }
 };
 
+// These are safe, no-quota prompts. The backend answers them from its
+// deterministic T.i.M.E.S. knowledge lookup before it considers Gemini.
+export const ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS = [
+  "T.i.M.E.S. คืออะไร?",
+  "Activity Mode กับ Reminder Mode ต่างกันอย่างไร?",
+  "เชื่อม Google Calendar ทำงานอย่างไร?",
+  "การแจ้งเตือน Telegram ทำงานอย่างไร?",
+  "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?"
+];
+
 export function getActivityAssistantConversationNode(nodeId) {
   return ACTIVITY_ASSISTANT_CONVERSATION_TREE[nodeId] || ACTIVITY_ASSISTANT_CONVERSATION_TREE.home;
 }

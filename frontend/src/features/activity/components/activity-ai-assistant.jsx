@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
-import { getActivityAssistantConversationNode } from "../config/activity-assistant-conversation-tree.js";
+import { ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS, getActivityAssistantConversationNode } from "../config/activity-assistant-conversation-tree.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
 const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
@@ -107,9 +107,9 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
   const quickReplies = conversationNode.options.filter((option) => option.available !== false);
-  const send = async (event) => {
-    event.preventDefault();
-    const text = input.trim();
+  const send = async (event, suggestedText = "") => {
+    event?.preventDefault();
+    const text = (suggestedText || input).trim();
     if (!text || pending || cooldownSeconds > 0) return;
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
     setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null); setConversationNodeId("home");
@@ -175,6 +175,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
+      {conversationNodeId === "home" && !guidedActivity && <div className="activity-ai-suggested-questions" aria-label="คำถามแนะนำ"><small>คำถามแนะนำ · ตอบจากข้อมูล T.i.M.E.S. โดยไม่ใช้ AI quota</small>{ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
       <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
