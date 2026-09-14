@@ -122,16 +122,30 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       const result = await continueActivityAssistant({
         text, history, referenceDate: toDateInputValue(new Date()),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        categories: categories.map((category) => category.name)
+        categories: categories.map((category) => category.name),
+        guidedStep: guidedActivity ? conversationNodeId : "",
+        guidedActivity
       });
       const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
-      if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); }
+      const currentNode = getActivityAssistantConversationNode(conversationNodeId);
+      const canAdvanceGuidedFlow = responseSource === "ai" && guidedActivity && currentNode.field && result.collected?.[currentNode.field];
+      const nextNodeId = canAdvanceGuidedFlow ? currentNode.options.find((option) => option.next)?.next : "";
+      const completedGuidedActivity = canAdvanceGuidedFlow ? { ...guidedActivity, ...result.collected } : null;
+      if (canAdvanceGuidedFlow) {
+        setGuidedActivity(completedGuidedActivity);
+        if (nextNodeId) setConversationNodeId(nextNodeId);
+      } else if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); }
       setMessages((current) => {
         const withCorrectedUserSource = responseSource === "knowledge"
           ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
           : current;
-        return [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
+        const nextMessages = [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
+        if (nextNodeId) nextMessages.push({ role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" });
+        return nextMessages;
       });
+      if (canAdvanceGuidedFlow && !nextNodeId && completedGuidedActivity?.title && completedGuidedActivity.date && completedGuidedActivity.time && completedGuidedActivity.durationMinutes) {
+        await finishGuidedActivity(completedGuidedActivity);
+      }
       if (result.ready) setDraft(result.draft);
     } catch (requestError) {
       setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
