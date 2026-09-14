@@ -5,11 +5,12 @@ import { toDateInputValue } from "../../../shared/lib/date-utils.js";
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
 
 export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft }) {
-  const [messages, setMessages] = useState([{ role: "assistant", text: WELCOME }]);
+  const [messages, setMessages] = useState([{ role: "assistant", text: WELCOME, source: "template" }]);
   const [draft, setDraft] = useState(null);
   const [editingDraft, setEditingDraft] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
+  const [pendingSource, setPendingSource] = useState("");
   const [error, setError] = useState("");
   const [aiStatus, setAiStatus] = useState(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -36,34 +37,34 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
-  const reset = () => { setMessages([{ role: "assistant", text: WELCOME }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); };
+  const reset = () => { setMessages([{ role: "assistant", text: WELCOME, source: "template" }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const startGuidedActivity = () => {
     setDraft(null); setEditingDraft(false); setError("");
     setGuidedActivity({ step: "title" });
-    addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม" }, { role: "assistant", text: "กิจกรรมนี้ชื่ออะไรครับ? เลือกจากตัวอย่าง หรือพิมพ์รายละเอียดเองได้เลย" });
+    addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" }, { role: "assistant", text: "กิจกรรมนี้ชื่ออะไรครับ? เลือกจากตัวอย่าง หรือพิมพ์รายละเอียดเองได้เลย", source: "template" });
   };
   const selectGuidedTitle = (title) => {
     setGuidedActivity({ step: "date", title });
-    addMessages({ role: "user", text: title }, { role: "assistant", text: "ต้องการทำกิจกรรมวันไหนครับ?" });
+    addMessages({ role: "user", text: title, source: "template" }, { role: "assistant", text: "ต้องการทำกิจกรรมวันไหนครับ?", source: "template" });
   };
   const selectGuidedDate = (label, date) => {
     setGuidedActivity((current) => ({ ...current, step: "time", date }));
-    addMessages({ role: "user", text: label }, { role: "assistant", text: "ต้องการเริ่มช่วงไหนครับ?" });
+    addMessages({ role: "user", text: label, source: "template" }, { role: "assistant", text: "ต้องการเริ่มช่วงไหนครับ?", source: "template" });
   };
   const selectGuidedTime = (label, time) => {
     setGuidedActivity((current) => ({ ...current, step: "duration", time }));
-    addMessages({ role: "user", text: label }, { role: "assistant", text: "ต้องการใช้เวลานานเท่าไรครับ?" });
+    addMessages({ role: "user", text: label, source: "template" }, { role: "assistant", text: "ต้องการใช้เวลานานเท่าไรครับ?", source: "template" });
   };
   const selectGuidedDuration = async (label, durationMinutes) => {
     if (!guidedActivity?.title || !guidedActivity.date || !guidedActivity.time) return;
     const selected = { ...guidedActivity, durationMinutes };
-    setGuidedActivity(null); addMessages({ role: "user", text: label }); setPending(true); setError("");
+    setGuidedActivity(null); addMessages({ role: "user", text: label, source: "template" }); setPending(true); setPendingSource("template"); setError("");
     try {
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
-      addMessages({ role: "assistant", text: result.reply }); setDraft(result.draft);
+      addMessages({ role: "assistant", text: result.reply, source: "template" }); setDraft(result.draft);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
-    finally { setPending(false); }
+    finally { setPending(false); setPendingSource(""); }
   };
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   const quickReplies = !guidedActivity ? [{ label: "สร้างกิจกรรม", onClick: startGuidedActivity }] : guidedActivity.step === "title" ? [
@@ -85,8 +86,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     event.preventDefault();
     const text = input.trim();
     if (!text || pending || cooldownSeconds > 0) return;
-    const nextMessages = [...messages, { role: "user", text }];
-    setMessages(nextMessages); setInput(""); setPending(true); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null);
+    const nextMessages = [...messages, { role: "user", text, source: "ai" }];
+    setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false); setGuidedActivity(null);
     try {
       const history = messages.slice(1);
       // `text` is the current turn. Keep an accidentally duplicated current
@@ -97,24 +98,24 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name)
       });
-      setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
+      setMessages((current) => [...current, { role: "assistant", text: result.reply, source: "ai" }]);
       if (result.ready) setDraft(result.draft);
     } catch (requestError) {
       setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
       if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
     }
     finally {
-      setPending(false);
+      setPending(false); setPendingSource("");
       getActivityAssistantStatus().then(result => setAiStatus(result.aiChat)).catch(() => {});
     }
   };
   const confirm = async () => {
     if (!draft || pending || savingRef.current) return;
     savingRef.current = true;
-    setPending(true); setError("");
-    try { await onConfirmDraft(draft); setDraft(null); setMessages((current) => [...current, { role: "assistant", text: "สร้างกิจกรรมสำเร็จแล้วครับ ต้องการสร้างกิจกรรมใหม่บอกได้เลย" }]); onClose(); }
+    setPending(true); setPendingSource("template"); setError("");
+    try { await onConfirmDraft(draft); setDraft(null); setMessages((current) => [...current, { role: "assistant", text: "สร้างกิจกรรมสำเร็จแล้วครับ ต้องการสร้างกิจกรรมใหม่บอกได้เลย", source: "template" }]); onClose(); }
     catch (requestError) { setError(requestError.message || "สร้างกิจกรรมไม่สำเร็จ"); }
-    finally { savingRef.current = false; setPending(false); }
+    finally { savingRef.current = false; setPending(false); setPendingSource(""); }
   };
   const updateDraft = (field, value) => setDraft((current) => {
     if (field === 'allDay' && value) {
@@ -130,8 +131,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}`}>{message.text}</p>)}
-        {pending && <p className="activity-ai-message is-assistant is-thinking">กำลังช่วยคิดรายละเอียด…</p>}
+        {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}`}>{message.text}</p>)}
+        {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
           <label><input type="checkbox" checked={Boolean(draft.allDay)} onChange={(event) => updateDraft("allDay", event.target.checked)} /> กิจกรรมทั้งวัน</label>
