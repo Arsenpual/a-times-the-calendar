@@ -8,7 +8,7 @@ const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
 const INITIAL_MESSAGE = { role: "assistant", text: WELCOME, source: "template" };
 
 function loadSavedChat() {
-  if (typeof window === "undefined") return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, draft: null };
+  if (typeof window === "undefined") return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null };
   try {
     const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
     const messages = Array.isArray(saved?.messages)
@@ -18,9 +18,10 @@ function loadSavedChat() {
       messages: messages.length ? messages : [INITIAL_MESSAGE],
       conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
       guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
+      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template",
       draft: saved?.draft && typeof saved.draft === "object" ? saved.draft : null
     };
-  } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, draft: null }; }
+  } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
 export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft }) {
@@ -36,6 +37,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [guidedActivity, setGuidedActivity] = useState(initialChat.guidedActivity);
   const [conversationNodeId, setConversationNodeId] = useState(initialChat.conversationNodeId);
+  const [guidedConversationMode, setGuidedConversationMode] = useState(initialChat.guidedConversationMode);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
@@ -58,19 +60,19 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   useEffect(() => {
     try {
       window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
-        messages: messages.slice(-120), conversationNodeId, guidedActivity, draft
+        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode, draft
       }));
     } catch { /* Storage may be disabled or full; chat still works in memory. */ }
-  }, [messages, conversationNodeId, guidedActivity, draft]);
+  }, [messages, conversationNodeId, guidedActivity, guidedConversationMode, draft]);
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); };
+  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
-    setGuidedActivity(null); setConversationNodeId("home"); setPending(true); setPendingSource("template"); setError("");
+    setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setPending(true); setPendingSource("template"); setError("");
     try {
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
       addMessages({ role: "assistant", text: result.reply, source: result.summarySource === "system-ai" ? "system" : "template" }); setDraft(result.draft);
@@ -92,7 +94,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     }
     if (option.kind === "start") {
       const nextNode = getActivityAssistantConversationNode(option.next);
-      setDraft(null); setEditingDraft(false); setError(""); setGuidedActivity({}); setConversationNodeId(option.next);
+      setDraft(null); setEditingDraft(false); setError(""); setGuidedActivity({}); setConversationNodeId(option.next); setGuidedConversationMode("template");
       addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" }, { role: "assistant", text: nextNode.prompt, source: "template" });
       return;
     }
@@ -102,7 +104,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     addMessages({ role: "user", text: option.label, source: "template" });
     if (option.complete) { await finishGuidedActivity(selected); return; }
     const nextNode = getActivityAssistantConversationNode(option.next);
-    setGuidedActivity(selected); setConversationNodeId(option.next);
+    setGuidedActivity(selected); setConversationNodeId(option.next); setGuidedConversationMode("template");
     addMessages({ role: "assistant", text: nextNode.prompt, source: "template" });
   };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
@@ -114,6 +116,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     if (!text || pending || cooldownSeconds > 0) return;
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
     setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false);
+    if (guidedActivity) setGuidedConversationMode("ai");
     try {
       const history = messages.slice(1);
       // `text` is the current turn. Keep an accidentally duplicated current
@@ -134,13 +137,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       if (canAdvanceGuidedFlow) {
         setGuidedActivity(completedGuidedActivity);
         if (nextNodeId) setConversationNodeId(nextNodeId);
-      } else if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); }
+      } else if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); }
       setMessages((current) => {
         const withCorrectedUserSource = responseSource === "knowledge"
           ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
           : current;
         const nextMessages = [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
-        if (nextNodeId) nextMessages.push({ role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" });
         return nextMessages;
       });
       if (canAdvanceGuidedFlow && !nextNodeId && completedGuidedActivity?.title && completedGuidedActivity.date && completedGuidedActivity.time && completedGuidedActivity.durationMinutes) {
@@ -192,7 +194,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
       {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไปสำหรับขั้นตอนนี้ · ไม่ใช้ AI quota</small>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
-      <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>
+      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
