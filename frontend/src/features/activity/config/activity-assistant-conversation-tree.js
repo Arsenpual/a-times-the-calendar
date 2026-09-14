@@ -3,10 +3,52 @@
 // `available: false` keeps a planned branch out of the UI until it is built.
 export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   home: {
+    prompt: "อยากให้ผมช่วยเรื่องไหนครับ?",
     options: [
       { id: "create-activity", label: "สร้างกิจกรรม", kind: "start", next: "activity.title" },
-      { id: "about-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times", available: false },
-      { id: "about-assistant", label: "MR.Zettascale ทำอะไรได้บ้าง", kind: "branch", next: "about-assistant", available: false }
+      { id: "about-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times" },
+      { id: "about-assistant", label: "MR.Zettascale ทำอะไรได้บ้าง", kind: "branch", next: "about-assistant" }
+    ]
+  },
+  "about-times": {
+    prompt: "T.i.M.E.S. เป็นแอปวางแผนเวลา ที่รวมกิจกรรม ตารางรายสัปดาห์ Reminder และการแจ้งเตือนไว้ในที่เดียว อยากดูส่วนไหนต่อครับ?",
+    options: [
+      { id: "about-activity", label: "Activity Mode", kind: "branch", next: "about-times.activity" },
+      { id: "about-reminder", label: "Reminder Mode", kind: "branch", next: "about-times.reminder" },
+      { id: "about-notifications", label: "การแจ้งเตือน", kind: "branch", next: "about-times.notifications" },
+      { id: "about-home", label: "กลับหน้าหลัก", kind: "home" }
+    ]
+  },
+  "about-times.activity": {
+    prompt: "Activity Mode ใช้วางกิจกรรมบน Week Spine เพื่อเห็นภาพวัน สัปดาห์ และ Cycle ได้ชัดเจน คุณเพิ่ม แก้ไข ลากย้าย ปรับเวลา จัดหมวดหมู่ และเชื่อม Google Calendar ได้ครับ",
+    options: [
+      { id: "activity-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.title" },
+      { id: "activity-about", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times" },
+      { id: "activity-home", label: "กลับหน้าหลัก", kind: "home" }
+    ]
+  },
+  "about-times.reminder": {
+    prompt: "Reminder Mode ใช้ติดตาม Reminder ที่กำลังทำงาน แยกตามสถานะ และแสดงบน Timeline เพื่อดูสิ่งที่กำลังจะถึงเวลาได้รวดเร็วครับ",
+    options: [
+      { id: "reminder-activity", label: "ดู Activity Mode", kind: "branch", next: "about-times.activity" },
+      { id: "reminder-notifications", label: "ดูการแจ้งเตือน", kind: "branch", next: "about-times.notifications" },
+      { id: "reminder-home", label: "กลับหน้าหลัก", kind: "home" }
+    ]
+  },
+  "about-times.notifications": {
+    prompt: "การแจ้งเตือนสามารถส่งผ่าน Telegram ได้ เมื่อเปิดระบบแจ้งเตือนของอุปกรณ์นั้นไว้ เพื่อให้แยกอุปกรณ์ที่ใช้จัดการข้อมูลออกจากอุปกรณ์ที่ใช้เฝ้าการแจ้งเตือนได้ครับ",
+    options: [
+      { id: "notifications-reminder", label: "ดู Reminder Mode", kind: "branch", next: "about-times.reminder" },
+      { id: "notifications-activity", label: "ดู Activity Mode", kind: "branch", next: "about-times.activity" },
+      { id: "notifications-home", label: "กลับหน้าหลัก", kind: "home" }
+    ]
+  },
+  "about-assistant": {
+    prompt: "MR.Zettascale ช่วยสร้างกิจกรรมจากข้อความหรือข้อความสำเร็จรูป จัดร่างชื่อ วัน เวลา ระยะเวลา Tag และหมวดหมู่ให้ตรวจสอบก่อนบันทึกครับ",
+    options: [
+      { id: "assistant-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.title" },
+      { id: "assistant-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times" },
+      { id: "assistant-home", label: "กลับหน้าหลัก", kind: "home" }
     ]
   },
   "activity.title": {

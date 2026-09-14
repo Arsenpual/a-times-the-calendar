@@ -4,10 +4,29 @@ import { toDateInputValue } from "../../../shared/lib/date-utils.js";
 import { getActivityAssistantConversationNode } from "../config/activity-assistant-conversation-tree.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
+const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
+const INITIAL_MESSAGE = { role: "assistant", text: WELCOME, source: "template" };
+
+function loadSavedChat() {
+  if (typeof window === "undefined") return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, draft: null };
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
+    const messages = Array.isArray(saved?.messages)
+      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: message.source === "ai" ? "ai" : "template" }))
+      : [];
+    return {
+      messages: messages.length ? messages : [INITIAL_MESSAGE],
+      conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
+      guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
+      draft: saved?.draft && typeof saved.draft === "object" ? saved.draft : null
+    };
+  } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, draft: null }; }
+}
 
 export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft }) {
-  const [messages, setMessages] = useState([{ role: "assistant", text: WELCOME, source: "template" }]);
-  const [draft, setDraft] = useState(null);
+  const [initialChat] = useState(loadSavedChat);
+  const [messages, setMessages] = useState(initialChat.messages);
+  const [draft, setDraft] = useState(initialChat.draft);
   const [editingDraft, setEditingDraft] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -15,8 +34,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [error, setError] = useState("");
   const [aiStatus, setAiStatus] = useState(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
-  const [guidedActivity, setGuidedActivity] = useState(null);
-  const [conversationNodeId, setConversationNodeId] = useState("home");
+  const [guidedActivity, setGuidedActivity] = useState(initialChat.guidedActivity);
+  const [conversationNodeId, setConversationNodeId] = useState(initialChat.conversationNodeId);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
@@ -36,11 +55,18 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [cooldownUntil]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+        messages: messages.slice(-120), conversationNodeId, guidedActivity, draft
+      }));
+    } catch { /* Storage may be disabled or full; chat still works in memory. */ }
+  }, [messages, conversationNodeId, guidedActivity, draft]);
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([{ role: "assistant", text: WELCOME, source: "template" }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); };
+  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -52,6 +78,18 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     finally { setPending(false); setPendingSource(""); }
   };
   const selectQuickReply = async (option) => {
+    if (option.kind === "home") {
+      const homeNode = getActivityAssistantConversationNode("home");
+      setGuidedActivity(null); setConversationNodeId("home");
+      addMessages({ role: "user", text: option.label, source: "template" }, { role: "assistant", text: homeNode.prompt, source: "template" });
+      return;
+    }
+    if (option.kind === "branch") {
+      const nextNode = getActivityAssistantConversationNode(option.next);
+      setGuidedActivity(null); setConversationNodeId(option.next);
+      addMessages({ role: "user", text: option.label, source: "template" }, { role: "assistant", text: nextNode.prompt, source: "template" });
+      return;
+    }
     if (option.kind === "start") {
       const nextNode = getActivityAssistantConversationNode(option.next);
       setDraft(null); setEditingDraft(false); setError(""); setGuidedActivity({}); setConversationNodeId(option.next);
