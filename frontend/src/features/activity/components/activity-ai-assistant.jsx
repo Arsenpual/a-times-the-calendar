@@ -37,6 +37,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
+  const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
   const reset = () => { setMessages([{ role: "assistant", text: WELCOME, source: "template" }]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const startGuidedActivity = () => {
@@ -129,9 +130,9 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   return <div className="activity-ai-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
-      {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที</p>}
+      {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}`}>{message.text}</p>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}`}>{message.source === "ai" && <small className="activity-ai-source">{message.role === "user" ? "✦ AI · ใช้ quota 1 ครั้ง" : "✦ คำตอบจาก AI · ไม่ใช้ quota เพิ่ม"}</small>}<span>{message.text}</span></div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
@@ -144,8 +145,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป">{quickReplies.map((reply) => <button key={reply.label} type="button" onClick={reply.onClick} disabled={pending}>{reply.label}</button>)}</div>
-      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="เล่ากิจกรรมที่ต้องการสร้าง…" maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่ง"}</button></form>
+      <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป"><small>ข้อความสำเร็จรูป · ไม่ใช้ AI quota</small>{quickReplies.map((reply) => <button key={reply.label} type="button" onClick={reply.onClick} disabled={pending}>{reply.label}</button>)}</div>
+      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
 }
