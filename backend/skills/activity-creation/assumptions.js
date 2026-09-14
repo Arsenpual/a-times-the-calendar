@@ -1,4 +1,5 @@
 const { localDateTime } = require('./validator.js');
+const { TIME_PERIODS, selectedPeriod } = require('./time-periods.js');
 function addMinutes(local, minutes) {
   localDateTime(local);
   return new Date(new Date(`${local}:00Z`).getTime() + minutes * 60000).toISOString().slice(0, 16);
@@ -13,10 +14,11 @@ function applyAssumptions(raw, context) {
     draft.assumptions.push(`ใช้วันที่ ${date}`);
   }
   const homework = /การบ้าน|homework/i.test(draft.title || '');
+  const period = selectedPeriod(draft.tags);
   if (!draft.startLocal) {
-    const time = draft.allDay ? '00:00' : draft.startTime || (/ช่วงเช้า|\bmorning\b/i.test(text) ? '09:00' : /ช่วงบ่าย|\bafternoon\b/i.test(text) ? '13:00' : '19:00');
+    const time = draft.allDay ? '00:00' : draft.startTime || TIME_PERIODS[period] || (/ช่วงเช้า|\bmorning\b/i.test(text) ? '09:00' : /ช่วงบ่าย|\bafternoon\b/i.test(text) ? '13:00' : '19:00');
     draft.startLocal = `${date}T${time}`;
-    if (!draft.startTime) draft.assumptions.push(`เวลาเริ่ม ${time}`);
+    if (!draft.startTime) draft.assumptions.push(`เวลาเริ่ม ${time}${period && !draft.allDay ? ` จาก tag ${period}` : ''}`);
   }
   if (!draft.endLocal) {
     const duration = draft.allDay ? 1440 : draft.durationMinutes || (homework ? 120 : 60);

@@ -5,6 +5,18 @@ const context = (text = 'อ่านหนังสือ') => prepareContext({
 const extraction = (patch = {}) => ({ title: 'อ่านหนังสือ', startLocal: '', endLocal: '', allDay: false, categoryName: '', notes: '', ...patch });
 const finish = (patch, text) => finishResult({ ready: true, reply: 'ร่างพร้อมแล้ว', draft: extraction(patch) }, context(text)).draft;
 const valid = () => finish({});
+for (const [tag, time] of Object.entries(require('../skills/activity-creation/time-periods').TIME_PERIODS)) {
+  test(`period ${tag} sets missing time`, () => {
+    const draft = finish({ tags: [tag] });
+    assert.equal(draft.startLocal, `2026-09-14T${time}`);
+    assert.ok(draft.assumptions.some(item => item.includes(`tag ${tag}`)));
+  });
+}
+test('explicit start time wins over period', () => assert.equal(finish({ startTime: '16:30', tags: ['morning'] }).startLocal, '2026-09-14T16:30'));
+test('explicit datetime wins over period', () => assert.equal(finish({ startLocal: '2026-09-15T16:30', tags: ['morning'] }).startLocal, '2026-09-15T16:30'));
+test('period does not change all-day midnight', () => assert.equal(finish({ allDay: true, tags: ['night'] }).startLocal, '2026-09-14T00:00'));
+test('unknown tag falls back', () => assert.equal(finish({ tags: ['unrecognized'] }).startLocal, '2026-09-14T19:00'));
+test('homework evening retains two-hour duration', () => assert.equal(finish({ title: 'ทำการบ้าน', tags: ['evening'] }).endLocal, '2026-09-14T21:00'));
 test('generic defaults today evening', () => assert.equal(valid().startLocal, '2026-09-14T19:00'));
 test('generic lasts one hour', () => assert.equal(valid().endLocal, '2026-09-14T20:00'));
 test('homework lasts two hours', () => assert.equal(finish({ title: 'ทำการบ้าน' }).endLocal, '2026-09-14T21:00'));
