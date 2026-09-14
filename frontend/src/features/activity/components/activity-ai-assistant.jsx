@@ -114,6 +114,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     event?.preventDefault();
     const text = (suggestedText || input).trim();
     if (!text || pending || cooldownSeconds > 0) return;
+    const directTitleReply = guidedActivity && conversationNodeId === "activity.title" && !suggestedText;
+    // A typed reply to the black title question is already authoritative user
+    // data. Save it before the network round trip so it cannot be lost.
+    const immediateGuidedActivity = directTitleReply ? { ...guidedActivity, title: text } : guidedActivity;
+    const immediateGuidedStep = directTitleReply ? "activity.date" : conversationNodeId;
+    if (directTitleReply) { setGuidedActivity(immediateGuidedActivity); setConversationNodeId("activity.date"); }
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
     setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false);
     if (guidedActivity) setGuidedConversationMode("ai");
@@ -126,14 +132,15 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         text, history, referenceDate: toDateInputValue(new Date()),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name),
-        guidedStep: guidedActivity ? conversationNodeId : "",
-        guidedActivity
+        guidedStep: immediateGuidedActivity ? immediateGuidedStep : "",
+        guidedActivity: immediateGuidedActivity
       });
       const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
       const currentNode = getActivityAssistantConversationNode(conversationNodeId);
-      const canAdvanceGuidedFlow = responseSource === "ai" && guidedActivity && currentNode.field && result.collected?.[currentNode.field];
+      const collectedFieldValue = result.collected?.[currentNode.field] || immediateGuidedActivity?.[currentNode.field];
+      const canAdvanceGuidedFlow = responseSource === "ai" && immediateGuidedActivity && currentNode.field && collectedFieldValue;
       const nextNodeId = canAdvanceGuidedFlow ? currentNode.options.find((option) => option.next)?.next : "";
-      const completedGuidedActivity = canAdvanceGuidedFlow ? { ...guidedActivity, ...result.collected } : null;
+      const completedGuidedActivity = canAdvanceGuidedFlow ? { ...immediateGuidedActivity, ...result.collected } : null;
       if (canAdvanceGuidedFlow) {
         setGuidedActivity(completedGuidedActivity);
         if (nextNodeId) setConversationNodeId(nextNodeId);
