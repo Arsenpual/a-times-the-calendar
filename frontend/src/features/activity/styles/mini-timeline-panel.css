@@ -1,4 +1,8 @@
 .mini-timeline-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 28px; min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); }
+.mini-timeline-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mini-timeline-heading .day-timeline-title { min-width: 0; }
+.mini-timeline-summary-btn { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--today) 60%, var(--border)); border-radius: 999px; padding: 4px 8px; background: color-mix(in srgb, var(--today) 12%, var(--bg)); color: var(--text-primary); font: 600 11px/1.2 inherit; cursor: pointer; white-space: nowrap; }
+.mini-timeline-summary-btn:hover { background: color-mix(in srgb, var(--today) 22%, var(--bg)); }
 .mini-start-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px; }
 .mini-start-row { display: grid; grid-template-columns: 25px minmax(0, 1fr); align-items: center; gap: 2px; }
 .mini-start-visibility { width: 25px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font: 14px/1 inherit; cursor: pointer; }

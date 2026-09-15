@@ -820,7 +820,6 @@ function AccountApp({ auth }) {
                             activityCategoryMap={activityCategoryMap}
                             onSelectWeek={selectCycleWeek}
                             onSelectDay={focusDate}
-                            onOpenDailySummary={requestAssistantDailySummary}
                             glass={summaryPanelGlassEnabled}
                             theme={theme}
                           /> : <WeeklySummaryPanel
@@ -829,7 +828,6 @@ function AccountApp({ auth }) {
                             loading={summaryLoading}
                             error={summaryError}
                             onSelectDay={openDay}
-                            onOpenDailySummary={requestAssistantDailySummary}
                             categories={categories}
                             glass={summaryPanelGlassEnabled}
                             theme={theme}
@@ -845,6 +843,7 @@ function AccountApp({ auth }) {
                         expandedDate={expandedDate}
                         onClose={closeDay}
                         onEditActivity={openEditActivity}
+                        onOpenDailySummary={requestAssistantDailySummary}
                       />
                     </div>
                   </div>

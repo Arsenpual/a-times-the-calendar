@@ -34,7 +34,7 @@ const PREVIEW_ACTIVITIES = [
  * start-time list, live-activity card, archive exclusion, blur controls and
  * direct editing. Reminder Mode keeps its own timeline.
  */
-export default function MiniTimelinePanel({ activities = [], categories = [], activityCategoryMap = {}, lockedActivities = {}, expandedDate, onClose, onEditActivity, userId, previewOnly = false }) {
+export default function MiniTimelinePanel({ activities = [], categories = [], activityCategoryMap = {}, lockedActivities = {}, expandedDate, onClose, onEditActivity, onOpenDailySummary, userId, previewOnly = false }) {
   const previewDate = previewOnly ? PREVIEW_DATE : expandedDate;
   const previewActivities = previewOnly ? PREVIEW_ACTIVITIES : activities;
   const previewCategories = previewOnly ? PREVIEW_CATEGORIES : categories;
@@ -99,7 +99,10 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
 
   return <aside className="timeline-card mini-timeline-panel">
     <div className="day-timeline-header">
-      <p className="day-timeline-title">{WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]]} ที่ {displayedDate}</p>
+      <div className="mini-timeline-heading">
+        {!previewOnly && onOpenDailySummary && <button type="button" className="mini-timeline-summary-btn" onClick={onOpenDailySummary}>สรุปวันนี้</button>}
+        <p className="day-timeline-title">{WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]]} ที่ {displayedDate}</p>
+      </div>
       {previewOnly ? <span className="mini-timeline-preview-label">ตัวอย่าง</span> : <div className="day-timeline-header-actions">
         <button type="button" className="day-timeline-nav" onClick={() => downloadDayTimelineImage({ day: previewDate, activities: dayView.scheduledActivities, allActivities: dayView.visibleActivities, categories: previewCategories, activityCategoryMap: previewCategoryMap })} aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ" title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)">📷</button>
         <button type="button" className="day-timeline-nav day-timeline-close" onClick={() => onClose?.()} aria-label="กลับไปหน้าสรุปสัปดาห์">✕</button>
