@@ -430,9 +430,18 @@
   gap: 16px;
 }
 
-/* During a deterministic daily summary the normal weekly/cycle panel stays
-   exactly where it belongs, but is raised beside MR.Zettascale rather than
-   being visually dimmed behind the assistant backdrop. */
+/* Daily summary uses the same layered presentation as ActivityPopup +
+   MR.Zettascale.  The dashboard is visually pushed back, while the existing
+   Summary card and the assistant share the foremost layer. */
+.activity-dashboard.is-assistant-daily-summary::before {
+  content: "";
+  position: fixed;
+  z-index: 8999;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--text-primary) 16%, transparent);
+}
+
 .summary-column.is-assistant-daily-summary { position: relative; z-index: 9000; }
 
 .summary-panel--glass {

@@ -802,7 +802,7 @@ function AccountApp({ auth }) {
             )}
 
             {firebaseUser && (
-              <div ref={activityDashboardRef} className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
+              <div ref={activityDashboardRef} className={`dashboard activity-dashboard${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
                 <div className={`summary-column${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`}>
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
