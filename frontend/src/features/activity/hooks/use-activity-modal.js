@@ -30,6 +30,10 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
   const [modalMissingFields, setModalMissingFields] = useState([]);
   const [modalEditingActivity, setModalEditingActivity] = useState(null);
   const [modalEditingAsSeries, setModalEditingAsSeries] = useState(false);
+  // `ActivityModal` keeps its own form state while it is mounted.  Give every
+  // open action a fresh session so a successfully saved "new activity" form
+  // can never show the values from the activity created just before it.
+  const [modalSessionId, setModalSessionId] = useState(0);
 
   /**
    * Opens the "add activity" modal prefilled with the actual current
@@ -39,6 +43,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
    */
   const openAddActivity = useCallback((day, { preserveTime = false, end = null, title = "", warning = "", missingFields = [], initialDraft = null } = {}) => {
     pendingRequest.current++;
+    setModalSessionId((current) => current + 1);
     const now = new Date();
     const base = day || now;
     const combined = preserveTime
@@ -62,6 +67,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
         return;
       }
+      setModalSessionId((current) => current + 1);
       setModalDefaultDate(null);
       setModalDefaultEnd(null);
       setModalDefaultTitle("");
@@ -85,6 +91,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
         setError("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไขหรือลบ");
         return;
       }
+      setModalSessionId((current) => current + 1);
       setModalDefaultDate(null);
       setModalDefaultEnd(null);
       setModalDefaultTitle("");
@@ -129,6 +136,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
       try {
         const masterEvent = await getActivity(calendarAccessToken, activity.recurringEventId);
         if (!alive.current || request !== pendingRequest.current) return;
+        setModalSessionId((current) => current + 1);
         setModalDefaultDate(null);
         setModalDefaultEnd(null);
         setModalDefaultTitle("");
@@ -156,6 +164,7 @@ export function useActivityModal({ calendarAccessToken, lockedActivities, setErr
     modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
+    modalSessionId,
     openAddActivity,
     openEditActivity,
     openEditActivityById,

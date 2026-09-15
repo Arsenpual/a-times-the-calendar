@@ -99,6 +99,7 @@ export default function ActivityModal({
   onDelete,
   onSyncGoogleCalendar,
   googleCalendarSyncing = false,
+  onOpenAssistant,
   onClose
 }) {
   const isEditing = !!initialActivity;
@@ -588,6 +589,16 @@ export default function ActivityModal({
               <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
                 <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
                 <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
+              </button>
+            )}
+            {!isEditing && onOpenAssistant && (
+              <button
+                type="button"
+                className="activity-modal-assistant-launch"
+                onClick={onOpenAssistant}
+                title="ให้ MR.Zettascale ช่วยเสนอรายละเอียดกิจกรรม"
+              >
+                <span aria-hidden="true">✦</span> ให้ MR.Zettascale ช่วย
               </button>
             )}
             <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">

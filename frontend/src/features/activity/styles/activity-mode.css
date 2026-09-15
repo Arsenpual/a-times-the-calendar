@@ -1857,6 +1857,24 @@ html[data-theme="dark"] .new-category-name-input {
   gap: 12px;
 }
 
+.activity-modal-assistant-launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--today) 55%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--today) 10%, var(--bg-muted));
+  color: var(--today);
+  font: 700 12px/1 inherit;
+  cursor: pointer;
+}
+
+.activity-modal-assistant-launch:hover {
+  background: color-mix(in srgb, var(--today) 18%, var(--bg-muted));
+}
+
 .all-day-activity-toggle {
   display: inline-flex;
   align-items: center;

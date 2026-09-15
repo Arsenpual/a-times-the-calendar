@@ -256,6 +256,7 @@ function AccountApp({ auth }) {
     modalMissingFields,
     modalEditingActivity,
     modalEditingAsSeries,
+    modalSessionId,
     openAddActivity,
     openEditActivity,
     openEditActivityById,
@@ -264,6 +265,12 @@ function AccountApp({ auth }) {
   } = activityModal;
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
+  const handleCloseActivityModal = () => {
+    // An assistant hand-off belongs only to the current form.  Clearing it on
+    // close prevents an old chat reply from refilling the next blank form.
+    setActivityAssistantFormUpdate(null);
+    closeModal();
+  };
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -891,7 +898,7 @@ function AccountApp({ auth }) {
         // ของครั้งแรกสุดที่เปิดฟอร์มค้างอยู่เสมอ (เดิม key ตอนสร้างใหม่เป็น
         // ค่าคงที่ "new" เฉยๆ ไม่ผูกกับ modalDefaultDate เลย จึงไม่ remount
         // เมื่อกดปุ่มเพิ่มกิจกรรมของวันอื่น)
-        key={modalEditingActivity?.id || `new-${toDateInputValue(modalDefaultDate || new Date())}-${modalDefaultTitle}-${modalInitialDraft?.startLocal || ""}-${modalInitialDraft?.endLocal || ""}-${modalInitialWarning}`}
+        key={`activity-modal-${modalSessionId}`}
         open={modalOpen}
         defaultDate={modalDefaultDate}
         defaultEnd={modalDefaultEnd}
@@ -913,7 +920,8 @@ function AccountApp({ auth }) {
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
         googleCalendarSyncing={loading}
-        onClose={closeModal}
+        onOpenAssistant={() => setActivityAssistantOpen(true)}
+        onClose={handleCloseActivityModal}
       />
 
       <ActivityAiAssistant
