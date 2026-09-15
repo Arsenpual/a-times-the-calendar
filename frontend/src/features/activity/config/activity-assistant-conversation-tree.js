@@ -121,53 +121,21 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   }
 };
 
-// These are safe, no-quota prompts. The backend answers them from its
-// deterministic T.i.M.E.S. knowledge lookup before it considers Gemini.
-export const ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS = {
-  home: [
-    "T.i.M.E.S. คืออะไร?",
-    "Activity Mode กับ Reminder Mode ต่างกันอย่างไร?",
-    "เชื่อม Google Calendar ทำงานอย่างไร?",
-    "การแจ้งเตือน Telegram ทำงานอย่างไร?",
-    "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?",
-    "Week Spine และ Cycle คืออะไร?",
-    "กิจกรรมทั้งวันทำงานอย่างไร?",
-    "Category กับ Tag ต่างกันอย่างไร?",
-    "AI quota ใช้เมื่อไร?",
-    "ข้อความสำเร็จรูปต่างจากคุย AI อย่างไร?"
-  ],
-  "activity.title": [
-    "ทำไมชื่อกิจกรรมจึงสำคัญ?",
-    "ตั้งชื่อกิจกรรมอย่างไรให้ดี?",
-    "ยังไม่แน่ใจชื่อกิจกรรมทำอย่างไร?",
-    "Activity Popup แก้ไขอะไรได้บ้าง?",
-    "Category กับ Tag ช่วยอะไร?"
-  ],
-  "activity.date": [
-    "ทำไมต้องระบุวันของกิจกรรม?",
-    "ถ้ายังไม่แน่ใจวันทำกิจกรรมได้ไหม?",
-    "แก้วันของกิจกรรมภายหลังได้ไหม?",
-    "กิจกรรมข้ามวันได้ไหม?",
-    "กิจกรรมทั้งวันต่างจากกิจกรรมปกติอย่างไร?"
-  ],
-  "activity.time": [
-    "ทำไมต้องระบุเวลาเริ่มกิจกรรม?",
-    "ยังไม่แน่ใจเวลาเริ่มทำอย่างไร?",
-    "แก้เวลาเริ่มภายหลังได้ไหม?",
-    "กิจกรรมเวลาเดียวกันได้ไหม?",
-    "ย้ายเวลาบน Week Spine อย่างไร?"
-  ],
-  "activity.duration": [
-    "ทำไมต้องระบุระยะเวลากิจกรรม?",
-    "ยังไม่แน่ใจว่าจะใช้เวลานานเท่าไร?",
-    "ปรับระยะเวลาภายหลังได้ไหม?",
-    "กิจกรรมข้ามเที่ยงคืนได้ไหม?",
-    "ปรับเวลาสิ้นสุดด้วยการลากได้ไหม?"
-  ]
+// Deterministic product questions form a compact exploration tree. Only the
+// first root is placed in the middle of the chat; later roots attach below
+// the answer that introduced them.
+export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?"];
+
+const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
+  "t.i.m.e.s. คืออะไร?": ["Activity Mode คืออะไร?", "Reminder Mode คืออะไร?"]
 };
 
-export function getActivityAssistantSuggestedQuestions(nodeId) {
-  return ACTIVITY_ASSISTANT_SUGGESTED_QUESTIONS[nodeId] || [];
+export function getActivityAssistantRootQuestions() {
+  return ACTIVITY_ASSISTANT_ROOT_QUESTIONS;
+}
+
+export function getActivityAssistantKnowledgeFollowUps(question) {
+  return ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS[String(question || "").trim().toLowerCase()] || [];
 }
 
 export function getActivityAssistantConversationNode(nodeId) {

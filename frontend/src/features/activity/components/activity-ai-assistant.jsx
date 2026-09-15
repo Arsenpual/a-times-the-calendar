@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant.js";
 import { toDateInputValue } from "../../../shared/lib/date-utils.js";
-import { getActivityAssistantConversationNode, getActivityAssistantSuggestedQuestions } from "../config/activity-assistant-conversation-tree.js";
+import { getActivityAssistantConversationNode, getActivityAssistantKnowledgeFollowUps, getActivityAssistantRootQuestions } from "../config/activity-assistant-conversation-tree.js";
 
 const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
 const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
@@ -118,7 +118,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
   const quickReplies = conversationNode.options.filter((option) => option.available !== false);
-  const suggestedQuestions = getActivityAssistantSuggestedQuestions(conversationNodeId);
+  const rootQuestions = getActivityAssistantRootQuestions();
   const send = async (event, suggestedText = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
@@ -165,7 +165,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
           : current;
         const nextMessages = result.ready
           ? withCorrectedUserSource
-          : [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
+          : [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource, followUpQuestions: responseSource === "knowledge" ? getActivityAssistantKnowledgeFollowUps(text) : [] }];
         return nextMessages;
       });
       if (canAdvanceGuidedFlow && !nextNodeId && completedGuidedActivity?.title && completedGuidedActivity.date && completedGuidedActivity.time && completedGuidedActivity.durationMinutes) {
@@ -220,7 +220,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}</div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
@@ -230,7 +230,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
           <label>Tags (คั่นด้วย comma)<input value={(draft.tags || []).join(", ")} onChange={(event) => updateDraft("tags", event.target.value.split(",").map(tag => tag.trim()).filter(Boolean))} /></label>
           <label>โน้ต<textarea value={draft.notes || ""} onChange={(event) => updateDraft("notes", event.target.value)} /></label>
         </div> : <><span>{draft.title}</span><small>{draft.allDay ? `ทั้งวัน ${draft.startLocal.slice(0, 10)} ถึง ${draft.endLocal.slice(0, 10)} (ไม่รวมวันสิ้นสุด)` : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.tags?.length > 0 && <small>Tags: {draft.tags.map((tag) => `#${tag}`).join(" ")}</small>}{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}{draft.notes && <small>{draft.notes}</small>}</>}<div><button type="button" onClick={() => setEditingDraft((current) => !current)}>{editingDraft ? "เสร็จสิ้นการแก้ไข" : "Edit detail"}</button><button type="button" className="btn btn-primary" onClick={confirm} disabled={pending || !draft.title || !draft.startLocal || !draft.endLocal}>Confirm สร้างกิจกรรม</button></div></section>}
-        {showCenteredGeneralQuestions && suggestedQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไป · ไม่ใช้ AI quota</small><div>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
+        {showCenteredGeneralQuestions && rootQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>เริ่มสำรวจ T.i.M.E.S. · ไม่ใช้ AI quota</small><div>{rootQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
