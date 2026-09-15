@@ -47,8 +47,10 @@ responsibilities.
 - Keep a strict structured draft: title, start/end local datetime, all-day,
   category, tags, recurrence, notes, and assumptions.
 - Validate date/time and duration server-side before returning a draft.
-- Provide a full-screen web chat, manual **Edit detail**, and a single
-  confirmation action that creates the Activity.
+- Provide a compact web chat that stays beside the seven-day Activity plan,
+  manual **Edit detail**, and a single confirmation action that creates the
+  Activity. The chat must not hide the Week Spine; when an Activity Popup is
+  open, both surfaces remain visible together.
 - Add automated cases for Thai and English requests, vague requests, date
   words, all-day activities, and malformed AI output.
 
@@ -152,16 +154,16 @@ frontend/src/features/activity/assistant/
 ├── api/
 │   └── activity-assistant-api.js
 ├── components/
-│   ├── activity-assistant-dialog.jsx
-│   ├── activity-draft-review.jsx
-│   └── activity-draft-editor.jsx
+│   └── activity-assistant-dialog.jsx
 ├── hooks/
-│   └── use-activity-assistant.js
+│   └── use-assistant-chat-storage.js
+├── config/
+│   └── activity-assistant-conversation-tree.js
 ├── lib/
-│   ├── activity-draft-validator.js
-│   └── activity-context-builder.js
-└── styles/
-    └── activity-assistant.css
+│   ├── activity-popup-handoff.js
+│   └── daily-summary-chat.js
+└── tests/
+    └── activity-popup-handoff.test.js
 
 backend/
 ├── skills/
@@ -175,9 +177,21 @@ backend/
     └── activity-assistant.js
 ```
 
-## Next implementation step
+## Phase 1 completion — 16 September 2026
 
-Complete Phase 1 by extracting the current inline Activity assistant prompt,
-schema, and validation from the API route into the dedicated backend skill.
-Then add at least 15–20 automated cases before passing schedule context to the
-model in Phase 2.
+Phase 1 is complete.
+
+- The backend Activity Creation skill is separated into prompt, schema,
+  assumptions, validator, examples, time-period logic, and product knowledge.
+- The compact assistant deliberately stays beside the seven-day plan rather
+  than taking over the whole screen. ActivityPopup and the assistant can be
+  visible together for review.
+- A valid assistant response is handed to ActivityPopup only as a draft;
+  Calendar writes remain behind the person's explicit Save confirmation.
+- Unit coverage validates time/tag assumptions and malformed outputs. Route
+  integration coverage uses a mocked Gemini/usage service to verify the
+  endpoint's knowledge, valid-draft, malformed-output, and quota-release
+  paths without calling Vertex AI or Firestore.
+
+The next implementation work is Phase 2: supply narrow schedule context and
+apply overlap/conflict rules before making a time suggestion.

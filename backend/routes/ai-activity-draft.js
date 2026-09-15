@@ -1,11 +1,23 @@
 const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
-const { claimGeminiChatUsage, releaseGeminiChatUsage, claimGeminiDraftUsage, releaseGeminiDraftUsage, getGeminiChatStatus } = require("../gemini-chat.js");
 
-const router = express.Router();
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft } = require("../skills/activity-creation");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
+
+function createActivityAssistantRouter({
+  claimChatUsage = (...args) => require("../gemini-chat.js").claimGeminiChatUsage(...args),
+  releaseChatUsage = (...args) => require("../gemini-chat.js").releaseGeminiChatUsage(...args),
+  claimDraftUsage = (...args) => require("../gemini-chat.js").claimGeminiDraftUsage(...args),
+  releaseDraftUsage = (...args) => require("../gemini-chat.js").releaseGeminiDraftUsage(...args),
+  getChatStatus = (...args) => require("../gemini-chat.js").getGeminiChatStatus(...args),
+  generateActivity,
+  answerKnowledge = answerTimesQuestion
+} = {}) {
+const router = express.Router();
+// Default assignment happens inside the factory body because default parameter
+// expressions cannot reference a function declared later in that same body.
+generateActivity ||= generateActivityWithGemini;
 
 router.post("/activity-validate", (req, res) => {
   try { res.json({ draft: validateDraft(req.body.draft, req.body.categories || []) }); }
@@ -15,7 +27,7 @@ router.post("/activity-validate", (req, res) => {
 // Activity Mode owns the visible control now.  Keep this under /api/ai so
 // it does not depend on Telegram being connected just to plan an activity.
 router.get("/activity-assistant-status", async (req, res, next) => {
-  try { res.json({ aiChat: await getGeminiChatStatus(req.userId) }); }
+  try { res.json({ aiChat: await getChatStatus(req.userId) }); }
   catch (error) { next(error); }
 });
 
@@ -38,19 +50,19 @@ router.post("/activity-template-draft", async (req, res) => {
     if (!/^\d{2}:\d{2}$/.test(time || "")) throw new Error("เวลาไม่ถูกต้อง");
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 720) throw new Error("ระยะเวลาต้องอยู่ระหว่าง 30 ถึง 720 นาที");
     const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories });
-    claim = await claimGeminiDraftUsage(req.userId);
+    claim = await claimDraftUsage(req.userId);
     if (claim.status === "claimed") {
       try {
-        const result = finishResult(await generateActivityWithGemini(context), context);
+        const result = finishResult(await generateActivity(context), context);
         if (result.ready) return res.json({ ...result, summarySource: "system-ai" });
       } catch (error) {
-        await releaseGeminiDraftUsage(claim).catch(() => {});
+        await releaseDraftUsage(claim).catch(() => {});
         claim = null;
       }
     }
     return res.json({ ...templateFallback(context, { title, date, time, durationMinutes, categoryName }), summarySource: "deterministic" });
   } catch (error) {
-    if (claim?.status === "claimed") await releaseGeminiDraftUsage(claim).catch(() => {});
+    if (claim?.status === "claimed") await releaseDraftUsage(claim).catch(() => {});
     res.status(400).json({ error: error.message });
   }
 });
@@ -105,9 +117,9 @@ router.post("/activity-conversation", async (req, res, next) => {
     const context = prepareContext(req.body);
     // Product FAQ answers are deterministic local lookups. They do not call
     // Gemini, so they never consume the person's AI quota.
-    const knowledgeReply = answerTimesQuestion(context.text);
+    const knowledgeReply = answerKnowledge(context.text);
     if (knowledgeReply) return res.json({ reply: knowledgeReply, ready: false, draft: null, source: "knowledge" });
-    claim = await claimGeminiChatUsage(req.userId);
+    claim = await claimChatUsage(req.userId);
     if (claim.status !== "claimed") {
       const errors = {
         "globally-disabled": "AI ถูกปิดชั่วคราวโดยระบบ",
@@ -122,12 +134,17 @@ router.post("/activity-conversation", async (req, res, next) => {
       });
     }
 
-    const result = finishResult(await generateActivityWithGemini(context), context);
+    const result = finishResult(await generateActivity(context), context);
     res.json(result);
   } catch (error) {
-    if (claim?.status === "claimed") await releaseGeminiChatUsage(claim).catch(() => {});
+    if (claim?.status === "claimed") await releaseChatUsage(claim).catch(() => {});
     res.status(error.status || 502).json({ error: error.message });
   }
 });
 
+return router;
+}
+
+const router = createActivityAssistantRouter();
 module.exports = router;
+module.exports.createActivityAssistantRouter = createActivityAssistantRouter;

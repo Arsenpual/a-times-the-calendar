@@ -8,6 +8,6 @@
 - summary.js: สรุปสัปดาห์
 - archive.js: คลังใน Firestore
 - notifications.js: บันทึก/ลบข้อมูลเวลาเริ่มกิจกรรมสำหรับระบบแจ้งเตือนฝั่ง server
-- activity-assistant.js: คุยกับ MR.Zettascale เพื่อสร้างร่าง Activity เท่านั้น
+- API ของ MR.Zettascale ย้ายไป `../assistant/api/activity-assistant-api.js` เพื่อเก็บทุกส่วนของผู้ช่วยไว้ใต้ feature เดียวกัน
 
 ทุกไฟล์ใช้ shared/api/client.js การอ่าน/เขียน Google Calendar ยังคงอยู่ใน features/calendar-connection/api/google-calendar.js ส่วนการส่ง Telegram อยู่ใน features/notifications/telegram/api.js

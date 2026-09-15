@@ -1,82 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant.js";
-import { toDateInputValue } from "../../../shared/lib/date-utils.js";
+import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant-api.js";
+import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
 import { getActivityAssistantConversationNode, getActivityAssistantKnowledgeFollowUps, getActivityAssistantRootQuestions } from "../config/activity-assistant-conversation-tree.js";
+import { buildDailySummaryChat } from "../lib/daily-summary-chat.js";
+import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
+import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
 
-const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม";
-const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
-const INITIAL_MESSAGE = { role: "assistant", text: WELCOME, source: "template" };
-
-function formatSummaryDuration(totalMinutes) {
-  const hours = Math.floor(Math.max(0, totalMinutes || 0) / 60);
-  const minutes = Math.max(0, totalMinutes || 0) % 60;
-  if (!hours) return `${minutes} นาที`;
-  return `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}`;
-}
-
-function formatSummaryTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-}
-
-// The daily summary is intentionally deterministic: it receives only the
-// already-fetched Calendar activities and does not call Gemini or consume AI
-// quota. Mini Timeline remains the detailed visual companion to this text.
-function buildDailySummaryChat(summary) {
-  const date = new Date(`${summary?.date || ""}T12:00:00`);
-  const dateLabel = Number.isNaN(date.getTime())
-    ? "วันนี้"
-    : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(date);
-  const totalActivities = summary?.totalActivities || 0;
-  if (!totalActivities) {
-    return `สรุปกิจกรรมวันนี้ · ${dateLabel}\n\nวันนี้ยังไม่มีกิจกรรมที่วางแผนไว้\nคุณสามารถเพิ่มกิจกรรมจากปุ่ม “สร้างกิจกรรม” ได้เลย\n\nMini Timeline ด้านซ้ายพร้อมแสดงรายละเอียดของวันนี้`;
-  }
-
-  const lines = [
-    `สรุปกิจกรรมวันนี้ · ${dateLabel}`,
-    "",
-    `วันนี้มี ${totalActivities} กิจกรรม`,
-    `เวลาที่วางแผนรวม ${formatSummaryDuration(summary.totalMinutes)}`
-  ];
-  const categories = (summary.byCategory || []).slice(0, 2);
-  if (categories.length) {
-    lines.push(`หมวดหมู่หลัก: ${categories.map((category) => `${category.name} ${formatSummaryDuration(category.minutes)}`).join(" · ")}`);
-  }
-
-  const now = Date.now();
-  const upcoming = (summary.activities || []).find((activity) => !activity.allDay && new Date(activity.start).getTime() > now);
-  if (upcoming) {
-    const start = formatSummaryTime(upcoming.start);
-    const end = formatSummaryTime(upcoming.end);
-    const minutesUntil = Math.max(1, Math.ceil((new Date(upcoming.start).getTime() - now) / 60_000));
-    lines.push("", "กิจกรรมถัดไป", `• ${upcoming.title} · ${start}${end ? `–${end}` : ""} · อีก ${minutesUntil} นาที`);
-  } else {
-    lines.push("", "กิจกรรมตามเวลาของวันนี้สิ้นสุดแล้ว");
-  }
-  lines.push("", "เปิด Mini Timeline ด้านซ้ายไว้ให้ดูรายละเอียดทั้งหมดแล้ว");
-  return lines.join("\n");
-}
-
-function loadSavedChat() {
-  if (typeof window === "undefined") return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null };
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
-    const messages = Array.isArray(saved?.messages)
-      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
-      : [];
-    return {
-      messages: messages.length ? messages : [INITIAL_MESSAGE],
-      conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
-      guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
-      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template",
-      draft: saved?.draft && typeof saved.draft === "object" ? saved.draft : null
-    };
-  } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
-}
-
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
-  const [initialChat] = useState(loadSavedChat);
+export default function ActivityAssistantDialog({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
+  const initialChat = useInitialAssistantChat();
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
   // old in-chat review card from local storage.
@@ -154,18 +85,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [cooldownUntil]);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
-        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode, draft
-      }));
-    } catch { /* Storage may be disabled or full; chat still works in memory. */ }
-  }, [messages, conversationNodeId, guidedActivity, guidedConversationMode, draft]);
+  usePersistAssistantChat({ messages, conversationNodeId, guidedActivity, guidedConversationMode, draft });
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setShowCenteredGeneralQuestions(true); };
+  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setShowCenteredGeneralQuestions(true); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -266,10 +191,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         await finishGuidedActivity(completedGuidedActivity);
       }
       if (result.ready) {
+        const popupHandoff = createActivityPopupHandoff(result);
+        if (!popupHandoff) throw new Error("ร่างกิจกรรมไม่ครบ จึงยังเปิดฟอร์มบันทึกไม่ได้");
         setDraft(null);
         setShowCenteredGeneralQuestions(true);
-        if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft: result.draft }, changedField: "activityDraft" });
-        else onOpenActivityForm?.(result.draft);
+        if (activityFormOpen) onUpdateActivityForm?.(popupHandoff);
+        else onOpenActivityForm?.(popupHandoff.values.formDraft);
       }
     } catch (requestError) {
       setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");

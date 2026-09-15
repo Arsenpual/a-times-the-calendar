@@ -1,4 +1,4 @@
-import { apiRequest, handleResponse } from "../../../shared/api/client.js";
+import { apiRequest, handleResponse } from "../../../../shared/api/client.js";
 
 /** A single planning turn. It can only propose a draft; it never saves Calendar data. */
 export async function continueActivityAssistant(input) {
