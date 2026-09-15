@@ -43,9 +43,12 @@ function SlowOverflowText({ children }) {
   </strong>;
 }
 
-function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, decorative = false }) {
+function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, onOpenDailySummary, decorative = false }) {
   return <>
-    <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
+    <div className="summary-panel-heading">
+      {onOpenDailySummary && <button type="button" className="summary-today-btn" onClick={onOpenDailySummary} disabled={decorative}>สรุปวันนี้</button>}
+      <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
+    </div>
     <p className="cycle-summary-range">{formatWeekRange(cycleStart)} – {formatWeekRange(new Date(cycleEnd))}</p>
     {loading && <p className="summary-loading">กำลังคำนวณ Cycle...</p>}
     {error && <p className="summary-error">{error}</p>}
@@ -94,6 +97,7 @@ export default function CycleSummaryPanel({
   activityCategoryMap = {},
   onSelectWeek,
   onSelectDay,
+  onOpenDailySummary,
   glass = false,
   theme = "light"
 }) {
@@ -147,7 +151,7 @@ export default function CycleSummaryPanel({
     return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
   }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weekCount]);
 
-  const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
+  const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, onOpenDailySummary };
   if (!glass) return <aside className="summary-panel cycle-summary-panel"><CycleSummaryContent {...content} /></aside>;
 
   return <div className="summary-panel-glass-stack">

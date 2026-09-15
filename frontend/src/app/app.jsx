@@ -268,6 +268,7 @@ function AccountApp({ auth }) {
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
   const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
+  const [activityAssistantDailySummaryRequest, setActivityAssistantDailySummaryRequest] = useState(0);
   const [assistantDailySummary, setAssistantDailySummary] = useState({ open: false, loading: false, error: "", data: null });
   const handleCloseActivityModal = () => {
     // An assistant hand-off belongs only to the current form.  Clearing it on
@@ -307,6 +308,10 @@ function AccountApp({ auth }) {
       throw error;
     }
   }, [calendarAccessToken, archivedActivityIds]);
+  const requestAssistantDailySummary = useCallback(() => {
+    setActivityAssistantOpen(true);
+    setActivityAssistantDailySummaryRequest((current) => current + 1);
+  }, []);
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -815,6 +820,7 @@ function AccountApp({ auth }) {
                             activityCategoryMap={activityCategoryMap}
                             onSelectWeek={selectCycleWeek}
                             onSelectDay={focusDate}
+                            onOpenDailySummary={requestAssistantDailySummary}
                             glass={summaryPanelGlassEnabled}
                             theme={theme}
                           /> : <WeeklySummaryPanel
@@ -823,6 +829,7 @@ function AccountApp({ auth }) {
                             loading={summaryLoading}
                             error={summaryError}
                             onSelectDay={openDay}
+                            onOpenDailySummary={requestAssistantDailySummary}
                             categories={categories}
                             glass={summaryPanelGlassEnabled}
                             theme={theme}
@@ -965,6 +972,7 @@ function AccountApp({ auth }) {
         activityFormOpen={modalOpen}
         dailySummaryOpen={assistantDailySummary.open}
         startActivityCreationRequest={activityAssistantStartRequest}
+        startDailySummaryRequest={activityAssistantDailySummaryRequest}
         onClose={() => {
           setActivityAssistantOpen(false);
           setAssistantDailySummary({ open: false, loading: false, error: "", data: null });

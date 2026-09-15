@@ -76,9 +76,12 @@ function CategoryPieChart({ byCategory, categories }) {
   );
 }
 
-function WeeklySummaryContent({ summary, loading, error, categories, onOpenBusiestDay, decorative = false }) {
+function WeeklySummaryContent({ summary, loading, error, categories, onOpenBusiestDay, onOpenDailySummary, decorative = false }) {
   return <>
-    <p className="summary-label">สรุปสัปดาห์นี้</p>
+    <div className="summary-panel-heading">
+      {onOpenDailySummary && <button type="button" className="summary-today-btn" onClick={onOpenDailySummary} disabled={decorative}>สรุปวันนี้</button>}
+      <p className="summary-label">สรุปสัปดาห์นี้</p>
+    </div>
 
     {loading && <p className="summary-loading">กำลังคำนวณ...</p>}
     {error && <p className="summary-error">{error}</p>}
@@ -129,6 +132,7 @@ export default function WeeklySummaryPanel({
   error,
   onSelectDay,
   categories,
+  onOpenDailySummary,
   glass = false,
   theme = "light"
 }) {
@@ -141,7 +145,7 @@ export default function WeeklySummaryPanel({
     onSelectDay?.(date);
   };
 
-  const content = { summary, loading, error, categories, onOpenBusiestDay: openBusiestDay };
+  const content = { summary, loading, error, categories, onOpenBusiestDay: openBusiestDay, onOpenDailySummary };
   if (!glass) return <aside className="summary-panel"><WeeklySummaryContent {...content} /></aside>;
 
   return <div className="summary-panel-glass-stack">

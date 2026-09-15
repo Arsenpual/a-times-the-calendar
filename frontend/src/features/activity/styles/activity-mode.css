@@ -1601,6 +1601,11 @@
   line-height: 1.4;
 }
 
+.summary-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.summary-today-btn { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--today) 60%, var(--border)); border-radius: 999px; padding: 4px 8px; background: color-mix(in srgb, var(--today) 12%, var(--bg)); color: var(--text-primary); font: 600 11px/1.2 inherit; cursor: pointer; }
+.summary-today-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--today) 22%, var(--bg)); }
+.summary-today-btn:disabled { opacity: .55; cursor: wait; }
+
 
 .settings-color-list {
   display: grid;

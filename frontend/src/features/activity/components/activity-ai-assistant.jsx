@@ -24,7 +24,7 @@ function loadSavedChat() {
   } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0 }) {
+export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -45,6 +45,22 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
   const handledStartActivityCreationRequest = useRef(startActivityCreationRequest);
+  const handledStartDailySummaryRequest = useRef(startDailySummaryRequest);
+  const runDailySummary = async () => {
+    if (!onOpenDailySummary || pending) return;
+    setShowCenteredGeneralQuestions(false);
+    setMessages((current) => [...current, { role: "user", text: "สรุปกิจกรรมวันนี้", source: "template" }]);
+    setPending(true); setPendingSource("template"); setError("");
+    try {
+      const summary = await onOpenDailySummary();
+      const hours = Math.floor((summary?.totalMinutes || 0) / 60);
+      const minutes = (summary?.totalMinutes || 0) % 60;
+      const duration = hours ? `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}` : `${minutes} นาที`;
+      setMessages((current) => [...current, { role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ และเปิดแผง Summary ด้านซ้ายไว้ให้ดูควบคู่กันแล้ว`, source: "template" }]);
+    } catch (requestError) {
+      setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
+    } finally { setPending(false); setPendingSource(""); }
+  };
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ block: "end" }); }, [open, messages, pending]);
   useEffect(() => {
     if (!open) return undefined;
@@ -78,6 +94,13 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       { role: "assistant", text: titleNode.prompt, source: "template" }
     ]);
   }, [open, startActivityCreationRequest]);
+  // The left-side Summary button triggers this same conversation flow, so
+  // both entry points create identical chat messages and deterministic data.
+  useEffect(() => {
+    if (!open || !startDailySummaryRequest || handledStartDailySummaryRequest.current === startDailySummaryRequest) return;
+    handledStartDailySummaryRequest.current = startDailySummaryRequest;
+    runDailySummary();
+  }, [open, startDailySummaryRequest]);
   useEffect(() => {
     if (!cooldownUntil || cooldownUntil <= Date.now()) return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -138,21 +161,6 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     const nextNode = getActivityAssistantConversationNode(option.next);
     setGuidedActivity(selected); setConversationNodeId(option.next); setGuidedConversationMode("template");
     addMessages({ role: "assistant", text: nextNode.prompt, source: "template" });
-  };
-  const openDailySummary = async () => {
-    if (!onOpenDailySummary || pending) return;
-    setShowCenteredGeneralQuestions(false);
-    addMessages({ role: "user", text: "สรุปกิจกรรมวันนี้", source: "template" });
-    setPending(true); setPendingSource("template"); setError("");
-    try {
-      const summary = await onOpenDailySummary();
-      const hours = Math.floor((summary?.totalMinutes || 0) / 60);
-      const minutes = (summary?.totalMinutes || 0) % 60;
-      const duration = hours ? `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}` : `${minutes} นาที`;
-      addMessages({ role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ และเปิดแผง Summary ด้านซ้ายไว้ให้ดูควบคู่กันแล้ว`, source: "template" });
-    } catch (requestError) {
-      setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
-    } finally { setPending(false); setPendingSource(""); }
   };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
   const quickReplies = conversationNode.options.filter((option) => option.available !== false);
@@ -272,7 +280,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}{onOpenDailySummary && <button type="button" onClick={openDailySummary} disabled={pending}>สรุปวันนี้</button>}</div></div>}
+      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}{onOpenDailySummary && <button type="button" onClick={runDailySummary} disabled={pending}>สรุปวันนี้</button>}</div></div>}
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
