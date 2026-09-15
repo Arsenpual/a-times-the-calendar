@@ -479,9 +479,6 @@ function AccountApp({ auth }) {
                 >
                   + เพิ่มกิจกรรม
                 </button>
-                <button type="button" className="activity-ai-launch" onClick={() => setActivityAssistantOpen(true)}>
-                  ✦ MR.Zettascale
-                </button>
                 {/* 🧪 DEV TEST BUTTON — เดิมไม่มี guard ใดๆ ทำให้ปุ่มนี้ขึ้น
                     ในโปรดักชันจริงด้วย ตอนนี้ห่อด้วย import.meta.env.DEV
                     (Vite inject ให้เป็น false เสมอใน build production —
