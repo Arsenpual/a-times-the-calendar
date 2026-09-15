@@ -265,6 +265,7 @@ function AccountApp({ auth }) {
   } = activityModal;
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
+  const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
   const handleCloseActivityModal = () => {
     // An assistant hand-off belongs only to the current form.  Clearing it on
     // close prevents an old chat reply from refilling the next blank form.
@@ -920,13 +921,17 @@ function AccountApp({ auth }) {
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
         googleCalendarSyncing={loading}
-        onOpenAssistant={() => setActivityAssistantOpen(true)}
+        onOpenAssistant={() => {
+          setActivityAssistantOpen(true);
+          setActivityAssistantStartRequest((current) => current + 1);
+        }}
         onClose={handleCloseActivityModal}
       />
 
       <ActivityAiAssistant
         open={activityAssistantOpen}
         activityFormOpen={modalOpen}
+        startActivityCreationRequest={activityAssistantStartRequest}
         onClose={() => setActivityAssistantOpen(false)}
         categories={categories}
         onConfirmDraft={handleConfirmAiActivityDraft}

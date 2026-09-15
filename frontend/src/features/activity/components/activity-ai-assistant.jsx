@@ -24,7 +24,7 @@ function loadSavedChat() {
   } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, activityFormOpen = false }) {
+export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, activityFormOpen = false, startActivityCreationRequest = 0 }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -44,6 +44,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
+  const handledStartActivityCreationRequest = useRef(startActivityCreationRequest);
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ block: "end" }); }, [open, messages, pending]);
   useEffect(() => {
     if (!open) return undefined;
@@ -55,6 +56,23 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     if (!open) return;
     getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch((requestError) => setError(requestError.message));
   }, [open]);
+  // Opening the assistant from an empty Activity Popup is a deliberate
+  // create-activity intent, not a generic chat launch. Keep the chat history
+  // intact, but reset only the guided-flow data and ask for the title at once.
+  useEffect(() => {
+    if (!open || !startActivityCreationRequest || handledStartActivityCreationRequest.current === startActivityCreationRequest) return;
+    handledStartActivityCreationRequest.current = startActivityCreationRequest;
+    const titleNode = getActivityAssistantConversationNode("activity.title");
+    setDraft(null);
+    setEditingDraft(false);
+    setError("");
+    setInput("");
+    setGuidedActivity({});
+    setConversationNodeId("activity.title");
+    setGuidedConversationMode("template");
+    setShowCenteredGeneralQuestions(false);
+    setMessages((current) => [...current, { role: "assistant", text: titleNode.prompt, source: "template" }]);
+  }, [open, startActivityCreationRequest]);
   useEffect(() => {
     if (!cooldownUntil || cooldownUntil <= Date.now()) return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
