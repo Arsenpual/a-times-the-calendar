@@ -12,3 +12,11 @@ export async function fetchWeeklySummary(activities) {
   });
   return handleResponse(res, "POST /api/summary/week");
 }
+
+export async function fetchDailySummary(date, activities) {
+  const res = await apiRequest("/api/summary/day", {
+    method: "POST",
+    body: JSON.stringify({ date, activities })
+  });
+  return handleResponse(res, "POST /api/summary/day");
+}

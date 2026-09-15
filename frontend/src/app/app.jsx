@@ -11,6 +11,7 @@ import loginGuideStep3 from "../../public/login-guide-step3.jpg";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
+import DailySummaryPanel from "../features/activity/components/daily-summary-panel.jsx";
 import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
 import ActivityDayGantt from "../features/activity/components/activity-day-gantt.jsx";
 import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
@@ -20,6 +21,8 @@ import AnnouncementTicker from "../features/announcements/components/announcemen
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
 import { validateActivityAssistantDraft } from "../features/activity/api/activity-assistant.js";
+import { fetchActivities } from "../features/calendar-connection/api/google-calendar.js";
+import { fetchDailySummary } from "../features/activity/api/summary.js";
 import ActivityAiAssistant from "../features/activity/components/activity-ai-assistant.jsx";
 import { useAuth } from "../features/auth/hooks/use-auth.js";
 import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
@@ -266,12 +269,45 @@ function AccountApp({ auth }) {
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
   const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
+  const [assistantDailySummary, setAssistantDailySummary] = useState({ open: false, loading: false, error: "", data: null });
   const handleCloseActivityModal = () => {
     // An assistant hand-off belongs only to the current form.  Clearing it on
     // close prevents an old chat reply from refilling the next blank form.
     setActivityAssistantFormUpdate(null);
     closeModal();
   };
+  const openAssistantDailySummary = useCallback(async () => {
+    if (!calendarAccessToken) throw new Error("กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม");
+    const now = new Date();
+    const date = toDateInputValue(now);
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    setAssistantDailySummary({ open: true, loading: true, error: "", data: null });
+    handleCloseActivityModal();
+    try {
+      const dayActivities = await fetchActivities(calendarAccessToken, dayStart, dayEnd);
+      const payload = dayActivities
+        .filter((activity) => !archivedActivityIds.has(activity.id))
+        .map((activity) => {
+          const allDay = Boolean(activity.start?.date && !activity.start?.dateTime);
+          return {
+            id: activity.id,
+            summary: activity.summary,
+            start: allDay ? `${activity.start.date}T00:00:00` : activity.start?.dateTime,
+            end: allDay ? `${activity.end?.date || activity.start.date}T00:00:00` : activity.end?.dateTime,
+            allDay
+          };
+        })
+        .filter((activity) => activity.start && activity.end);
+      const data = await fetchDailySummary(date, payload);
+      setAssistantDailySummary({ open: true, loading: false, error: "", data });
+      return data;
+    } catch (error) {
+      setAssistantDailySummary({ open: true, loading: false, error: error.message, data: null });
+      throw error;
+    }
+  }, [calendarAccessToken, archivedActivityIds]);
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -771,7 +807,12 @@ function AccountApp({ auth }) {
                 <div className="summary-column">
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
-                      {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
+                      {assistantDailySummary.open ? <DailySummaryPanel
+                            summary={assistantDailySummary.data}
+                            loading={assistantDailySummary.loading}
+                            error={assistantDailySummary.error}
+                            onClose={() => setAssistantDailySummary({ open: false, loading: false, error: "", data: null })}
+                          /> : weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
                             anchorDate={cycleAnchorDate}
                             activities={cycleData.activities}
                             loading={cycleData.loading}
@@ -928,6 +969,7 @@ function AccountApp({ auth }) {
       <ActivityAiAssistant
         open={activityAssistantOpen}
         activityFormOpen={modalOpen}
+        dailySummaryOpen={assistantDailySummary.open}
         startActivityCreationRequest={activityAssistantStartRequest}
         onClose={() => setActivityAssistantOpen(false)}
         categories={categories}
@@ -939,6 +981,7 @@ function AccountApp({ auth }) {
           openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: draft });
         }}
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
+        onOpenDailySummary={openAssistantDailySummary}
       />
 
       <SettingsDrawer

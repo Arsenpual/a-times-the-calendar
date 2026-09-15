@@ -24,7 +24,7 @@ function loadSavedChat() {
   } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, activityFormOpen = false, startActivityCreationRequest = 0 }) {
+export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0 }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -139,6 +139,21 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     setGuidedActivity(selected); setConversationNodeId(option.next); setGuidedConversationMode("template");
     addMessages({ role: "assistant", text: nextNode.prompt, source: "template" });
   };
+  const openDailySummary = async () => {
+    if (!onOpenDailySummary || pending) return;
+    setShowCenteredGeneralQuestions(false);
+    addMessages({ role: "user", text: "สรุปกิจกรรมวันนี้", source: "template" });
+    setPending(true); setPendingSource("template"); setError("");
+    try {
+      const summary = await onOpenDailySummary();
+      const hours = Math.floor((summary?.totalMinutes || 0) / 60);
+      const minutes = (summary?.totalMinutes || 0) % 60;
+      const duration = hours ? `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}` : `${minutes} นาที`;
+      addMessages({ role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ รายละเอียดแสดงใน Summary ด้านซ้ายแล้ว`, source: "template" });
+    } catch (requestError) {
+      setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
+    } finally { setPending(false); setPendingSource(""); }
+  };
   const conversationNode = getActivityAssistantConversationNode(conversationNodeId);
   const quickReplies = conversationNode.options.filter((option) => option.available !== false);
   const rootQuestions = getActivityAssistantRootQuestions();
@@ -238,7 +253,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     })();
     onOpenActivityForm?.(seed);
   };
-  return <div className={`activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}`} role="presentation" onMouseDown={onClose}>
+  return <div className={`activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}${dailySummaryOpen ? " is-daily-summary-open" : ""}`} role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
@@ -257,7 +272,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div></div>}
+      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}{onOpenDailySummary && <button type="button" onClick={openDailySummary} disabled={pending}>สรุปวันนี้</button>}</div></div>}
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;

@@ -141,6 +141,57 @@ router.post("/week", async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/summary/day
+ * Deterministic daily summary. Calendar events are supplied by the client
+ * after one explicit user action; this route never polls Calendar or Gemini.
+ */
+router.post("/day", async (req, res, next) => {
+  try {
+    const { activities, date } = req.body;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !Array.isArray(activities)) {
+      return res.status(400).json({ error: "ต้องส่ง date (YYYY-MM-DD) และ activities" });
+    }
+    if (activities.length > MAX_ACTIVITIES_PER_REQUEST) {
+      return res.status(400).json({ error: `activities เกินจำนวนสูงสุดที่รองรับ (${MAX_ACTIVITIES_PER_REQUEST} รายการ)` });
+    }
+    const categoriesSnapshot = await categoriesCol(req.userId).get();
+    const categoryById = Object.fromEntries(categoriesSnapshot.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+    const normalizedIds = [...new Set(activities.map((activity) => normalizeId(activity.id)).filter(Boolean))];
+    const activityCategoryById = {};
+    if (normalizedIds.length) {
+      const docs = await db.getAll(...normalizedIds.map((id) => activityCategoriesCol(req.userId).doc(id)));
+      docs.forEach((doc) => { if (doc.exists) activityCategoryById[doc.id] = doc.data().categoryId; });
+    }
+
+    const byCategoryMinutes = {};
+    const normalized = activities.map((activity) => {
+      const start = new Date(activity.start);
+      const end = new Date(activity.end);
+      const minutes = Math.max(0, Math.round((end - start) / 60000)) || (activity.allDay ? 24 * 60 : 30);
+      const categoryId = activityCategoryById[normalizeId(activity.id)] || null;
+      byCategoryMinutes[categoryId] = (byCategoryMinutes[categoryId] || 0) + minutes;
+      return { id: activity.id, title: String(activity.summary || "(ไม่มีชื่อกิจกรรม)"), start: activity.start, end: activity.end, allDay: Boolean(activity.allDay), minutes };
+    }).sort((a, b) => a.start.localeCompare(b.start));
+    const totalMinutes = normalized.reduce((total, activity) => total + activity.minutes, 0);
+    const byCategory = Object.entries(byCategoryMinutes).map(([categoryId, minutes]) => {
+      const category = categoryId === "null" ? UNCATEGORIZED : categoryById[categoryId] || UNCATEGORIZED;
+      return { categoryId: category.id, name: category.name, color: category.color, minutes, percent: totalMinutes ? Math.round((minutes / totalMinutes) * 100) : 0 };
+    }).sort((a, b) => b.minutes - a.minutes);
+    const timedActivities = normalized.filter((activity) => !activity.allDay);
+    res.json({
+      date,
+      totalActivities: normalized.length,
+      allDayActivities: normalized.filter((activity) => activity.allDay).length,
+      totalMinutes,
+      byCategory,
+      firstActivity: timedActivities[0] || null,
+      lastActivity: timedActivities.at(-1) || null,
+      activities: normalized
+    });
+  } catch (error) { next(error); }
+});
+
 function buildInsight(byCategory, busiestDay, totalActivities) {
   if (totalActivities === 0) {
     return "สัปดาห์นี้ยังไม่มีกิจกรรม";
