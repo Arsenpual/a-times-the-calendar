@@ -11,7 +11,6 @@ import loginGuideStep3 from "../../public/login-guide-step3.jpg";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
-import DailySummaryPanel from "../features/activity/components/daily-summary-panel.jsx";
 import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
 import ActivityDayGantt from "../features/activity/components/activity-day-gantt.jsx";
 import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
@@ -804,15 +803,10 @@ function AccountApp({ auth }) {
 
             {firebaseUser && (
               <div ref={activityDashboardRef} className="dashboard activity-dashboard" onScroll={handleActivityDashboardScroll}>
-                <div className="summary-column">
+                <div className={`summary-column${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`}>
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
-                      {assistantDailySummary.open ? <DailySummaryPanel
-                            summary={assistantDailySummary.data}
-                            loading={assistantDailySummary.loading}
-                            error={assistantDailySummary.error}
-                            onClose={() => setAssistantDailySummary({ open: false, loading: false, error: "", data: null })}
-                          /> : weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
+                      {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
                             anchorDate={cycleAnchorDate}
                             activities={cycleData.activities}
                             loading={cycleData.loading}
@@ -971,7 +965,10 @@ function AccountApp({ auth }) {
         activityFormOpen={modalOpen}
         dailySummaryOpen={assistantDailySummary.open}
         startActivityCreationRequest={activityAssistantStartRequest}
-        onClose={() => setActivityAssistantOpen(false)}
+        onClose={() => {
+          setActivityAssistantOpen(false);
+          setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
+        }}
         categories={categories}
         onConfirmDraft={handleConfirmAiActivityDraft}
         onOpenActivityForm={(draft) => {

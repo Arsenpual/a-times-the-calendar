@@ -149,7 +149,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       const hours = Math.floor((summary?.totalMinutes || 0) / 60);
       const minutes = (summary?.totalMinutes || 0) % 60;
       const duration = hours ? `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}` : `${minutes} นาที`;
-      addMessages({ role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ รายละเอียดแสดงใน Summary ด้านซ้ายแล้ว`, source: "template" });
+      addMessages({ role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ และเปิดแผง Summary ด้านซ้ายไว้ให้ดูควบคู่กันแล้ว`, source: "template" });
     } catch (requestError) {
       setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
     } finally { setPending(false); setPendingSource(""); }
