@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchReminders, saveReminder, deleteReminderRemote } from "../api/reminders.js";
 
+// A full reminder collection read is deliberately not a high-frequency clock.
+// The due clock uses the already-loaded local schedule every second; this
+// background sync only imports edits made by another device.
+const REMINDER_SYNC_INTERVAL_MS = 60_000;
+
 // Explicit mutations only. Serialize each ID so an earlier PUT cannot finish
 // after DELETE and recreate a document. A failed request is exposed to the UI.
 export function useRemindersSync({ firebaseUser }) {
@@ -34,7 +39,7 @@ export function useRemindersSync({ firebaseUser }) {
       }
     };
     refresh();
-    const pollId = window.setInterval(refresh, 15_000);
+    const pollId = window.setInterval(refresh, REMINDER_SYNC_INTERVAL_MS);
     return () => { cancelled = true; window.clearInterval(pollId); };
   }, [uid]);
 

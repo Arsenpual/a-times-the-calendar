@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
+const { FieldValue } = require("firebase-admin/firestore");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
 
 const router = express.Router();
@@ -58,10 +59,20 @@ async function sendTelegram(chatId, text, options = {}) {
 
 async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
   const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
-  await telegramMessagesCol(userId).doc(messageId).set({
-    direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
-    createdAt: Date.now(), readAt
-  }, { merge: true });
+  const messageRef = telegramMessagesCol(userId).doc(messageId);
+  // The unread badge is stored as a single counter document. This lets a
+  // closed web chat poll one document instead of repeatedly reading up to 100
+  // historical messages just to draw a badge.
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(messageRef);
+    transaction.set(messageRef, {
+      direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
+      createdAt: Date.now(), readAt
+    }, { merge: true });
+    if (!existing.exists && direction === "outgoing" && !readAt) {
+      transaction.set(telegramAuthDoc(userId), { unreadCount: FieldValue.increment(1) }, { merge: true });
+    }
+  });
 }
 
 async function sendChatReply(userId, chatId, text, options = {}) {
@@ -145,11 +156,20 @@ router.get("/status", async (req, res, next) => {
 
 router.get("/messages", async (req, res, next) => {
   try {
-    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(100).get();
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 30)) : 30;
+    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(limit).get();
     const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
     // A person's own messages are never unread. Only bot replies and sent
     // notifications wait for acknowledgement in the web chat.
     res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
+  } catch (error) { next(error); }
+});
+
+router.get("/messages/summary", async (req, res, next) => {
+  try {
+    const data = (await telegramAuthDoc(req.userId).get()).data();
+    res.json({ unreadCount: Math.max(0, Number(data?.unreadCount || 0)) });
   } catch (error) { next(error); }
 });
 
@@ -158,11 +178,16 @@ router.post("/messages/read", async (req, res, next) => {
     // Use the same newest-message window as GET /messages instead of a
     // compound Firestore query, so opening the chat never depends on a new
     // composite index being deployed.
-    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(100).get();
+    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(30).get();
     const batch = db.batch();
     const unread = snapshot.docs.filter((doc) => doc.data().direction === "outgoing" && !doc.data().readAt);
     unread.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
-    if (unread.length) await batch.commit();
+    if (unread.length) {
+      const auth = await telegramAuthDoc(req.userId).get();
+      const remainingUnread = Math.max(0, Number(auth.data()?.unreadCount || 0) - unread.length);
+      batch.set(telegramAuthDoc(req.userId), { unreadCount: remainingUnread }, { merge: true });
+      await batch.commit();
+    }
     res.json({ ok: true });
   } catch (error) { next(error); }
 });

@@ -1,24 +1,41 @@
 import { useCallback, useEffect, useState } from "react";
-import { getTelegramChat, markTelegramChatRead, sendTelegramChatMessage } from "../telegram-chat-api.js";
+import { getTelegramChat, getTelegramChatSummary, markTelegramChatRead, sendTelegramChatMessage } from "../telegram-chat-api.js";
+
+const CLOSED_CHAT_SUMMARY_INTERVAL_MS = 60_000;
+const OPEN_CHAT_REFRESH_INTERVAL_MS = 30_000;
 
 export function useTelegramWebChat(firebaseUser, connected) {
   const [chat, setChat] = useState({ isOpen: false, messages: [], unreadCount: 0, error: "" });
-  const refresh = useCallback(async () => {
+  const refreshMessages = useCallback(async () => {
     if (!firebaseUser || !connected) return;
     try {
       const data = await getTelegramChat();
       setChat((previous) => ({ ...previous, messages: data.messages || [], unreadCount: data.unreadCount || 0, error: "" }));
     } catch (error) { setChat((previous) => ({ ...previous, error: error.message })); }
   }, [firebaseUser, connected]);
+  const refreshSummary = useCallback(async () => {
+    if (!firebaseUser || !connected) return;
+    try {
+      const data = await getTelegramChatSummary();
+      setChat((previous) => ({ ...previous, unreadCount: data.unreadCount || 0, error: "" }));
+    } catch (error) { setChat((previous) => ({ ...previous, error: error.message })); }
+  }, [firebaseUser, connected]);
   useEffect(() => {
-    refresh();
-    const timer = window.setInterval(refresh, 10_000);
+    if (chat.isOpen) return undefined;
+    refreshSummary();
+    const timer = window.setInterval(refreshSummary, CLOSED_CHAT_SUMMARY_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [refresh]);
+  }, [chat.isOpen, refreshSummary]);
+  useEffect(() => {
+    if (!chat.isOpen) return undefined;
+    refreshMessages();
+    const timer = window.setInterval(refreshMessages, OPEN_CHAT_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [chat.isOpen, refreshMessages]);
   const openChat = useCallback(async () => {
     setChat((previous) => ({ ...previous, isOpen: true }));
-    await refresh();
-  }, [refresh]);
+    await refreshMessages();
+  }, [refreshMessages]);
   const closeChat = useCallback(() => setChat((previous) => ({ ...previous, isOpen: false })), []);
   const markRead = useCallback(async () => {
     await markTelegramChatRead().catch(() => {});
@@ -32,8 +49,8 @@ export function useTelegramWebChat(firebaseUser, connected) {
   }, []);
   const send = useCallback(async (text) => {
     await sendTelegramChatMessage(text);
-    await refresh();
+    await refreshMessages();
     await markRead();
-  }, [markRead, refresh]);
+  }, [markRead, refreshMessages]);
   return { ...chat, openChat, closeChat, markTelegramChatRead: markRead, sendChatMessage: send };
 }
