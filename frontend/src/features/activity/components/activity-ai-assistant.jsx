@@ -58,7 +58,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   }, [open]);
   // Opening the assistant from an empty Activity Popup is a deliberate
   // create-activity intent, not a generic chat launch. Keep the chat history
-  // intact, but reset only the guided-flow data and ask for the title at once.
+  // intact, but add the same two normal chat turns that selecting the
+  // "สร้างกิจกรรม" quick reply would have produced.
   useEffect(() => {
     if (!open || !startActivityCreationRequest || handledStartActivityCreationRequest.current === startActivityCreationRequest) return;
     handledStartActivityCreationRequest.current = startActivityCreationRequest;
@@ -71,7 +72,11 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     setConversationNodeId("activity.title");
     setGuidedConversationMode("template");
     setShowCenteredGeneralQuestions(false);
-    setMessages((current) => [...current, { role: "assistant", text: titleNode.prompt, source: "template" }]);
+    setMessages((current) => [
+      ...current,
+      { role: "user", text: "สร้างกิจกรรม", source: "template" },
+      { role: "assistant", text: titleNode.prompt, source: "template" }
+    ]);
   }, [open, startActivityCreationRequest]);
   useEffect(() => {
     if (!cooldownUntil || cooldownUntil <= Date.now()) return undefined;
