@@ -3,6 +3,7 @@
 const TEXT = `
 PRODUCT IDENTITY
 T.i.M.E.S. is a personal time-planning app. It separates scheduled activities from reminders while showing both in connected time views. Its purpose is to help a person see what is planned, what needs attention, and what is due next without treating every scheduled block as a reminder.
+T.i.M.E.S. stands for "Task Interactive & Management Efficiency Intelligent System". Its timeline concept is also described as "Time-in-Action Visualization": making the progress of time and scheduled activities visible on a real-time timeline.
 
 CORE TERMS
 - Activity: a scheduled block with a start and end time. It belongs to Activity Mode and can be placed on the calendar-like Week Spine.
@@ -50,6 +51,7 @@ Use only the facts above for product questions. Do not invent pricing, guarantee
 `;
 
 const TOPICS = [
+  { keywords: ["t.i.m.e.s ย่อมาจากอะไร", "t.i.m.e.s. ย่อมาจากอะไร", "times ย่อมาจากอะไร", "times ย่อมาจาก", "ชื่อเต็ม t.i.m.e.s", "ชื่อเต็ม times"], answer: "T.i.M.E.S. ย่อมาจาก “Task Interactive & Management Efficiency Intelligent System” ครับ เป็นระบบที่มุ่งช่วยให้ผู้ใช้จัดการงานและเวลาได้อย่างมีประสิทธิภาพ โดยมี Timeline เป็นภาพรวมให้เห็นกิจกรรมและสิ่งที่ต้องติดตามอย่างชัดเจน" },
   { keywords: ["ทำไมชื่อกิจกรรม", "ชื่อกิจกรรมสำคัญ", "ตั้งชื่อกิจกรรม", "ไม่แน่ใจชื่อกิจกรรม"], answer: "ชื่อกิจกรรมคือข้อมูลขั้นต่ำที่ทำให้ระบบและผู้ใช้รู้ว่าบล็อกเวลานี้มีไว้ทำอะไรครับ ถ้าไม่มีชื่อ MR.Zettascale ไม่ควรเดาว่าต้องสร้างกิจกรรมอะไร จึงยังสร้างร่างที่ตรวจสอบได้ไม่ได้ เลือกชื่อสั้น ๆ ที่บอกการกระทำได้ เช่น “ทำการบ้าน”, “ประชุมทีม” หรือ “ออกกำลังกาย” ก็เพียงพอครับ" },
   { keywords: ["ทำไมต้องระบุวัน", "ไม่แน่ใจวัน", "แก้วันของกิจกรรม"], answer: "วันช่วยระบุตำแหน่งของกิจกรรมบน Week Spine ครับ ถ้ายังไม่แน่ใจ สามารถเลือกวันที่ใกล้ที่สุดไว้ก่อนแล้วแก้ภายหลังได้ การเลือกวันตอนสร้างช่วยให้ร่างกิจกรรมมีจุดเริ่มต้นที่ชัดเจนและลดความสับสนกับกิจกรรมวันอื่น" },
   { keywords: ["ทำไมต้องระบุเวลาเริ่ม", "ไม่แน่ใจเวลาเริ่ม", "แก้เวลาเริ่ม"], answer: "เวลาเริ่มทำให้กิจกรรมวางลงบนตารางรายวันได้ตรงตำแหน่งครับ ถ้ายังไม่แน่ใจ ให้เลือกช่วงเวลาคร่าว ๆ ก่อน แล้วลากหรือแก้ไขเวลาใน Activity Mode ภายหลังได้ การระบุเวลาเริ่มช่วยให้เห็นกิจกรรมที่อาจชนกันได้ง่ายขึ้น" },
