@@ -24,7 +24,7 @@ function loadSavedChat() {
   } catch { return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null }; }
 }
 
-export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenManualEditor }) {
+export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, activityFormOpen = false }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
   const [draft, setDraft] = useState(initialChat.draft);
@@ -95,13 +95,16 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     if (option.kind === "start") {
       const nextNode = getActivityAssistantConversationNode(option.next);
       setDraft(null); setEditingDraft(false); setError(""); setGuidedActivity({}); setConversationNodeId(option.next); setGuidedConversationMode("template");
-      addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" }, { role: "assistant", text: nextNode.prompt, source: "template" });
+      addMessages({ role: "user", text: "ฉันต้องการสร้างกิจกรรม", source: "template" });
+      addMessages({ role: "assistant", text: nextNode.prompt, source: "template" });
+      openFullActivityForm({});
       return;
     }
     const node = getActivityAssistantConversationNode(conversationNodeId);
     const value = option.dateOffset === undefined ? option.value : (() => { const date = new Date(); date.setDate(date.getDate() + option.dateOffset); return toDateInputValue(date); })();
     const selected = { ...guidedActivity, [node.field]: value };
     addMessages({ role: "user", text: option.label, source: "template" });
+    onUpdateActivityForm?.({ values: selected, changedField: node.field });
     if (option.complete) { await finishGuidedActivity(selected); return; }
     const nextNode = getActivityAssistantConversationNode(option.next);
     setGuidedActivity(selected); setConversationNodeId(option.next); setGuidedConversationMode("template");
@@ -143,6 +146,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       const completedGuidedActivity = canAdvanceGuidedFlow ? { ...immediateGuidedActivity, ...result.collected } : null;
       if (canAdvanceGuidedFlow) {
         setGuidedActivity(completedGuidedActivity);
+        onUpdateActivityForm?.({ values: completedGuidedActivity, changedField: currentNode.field });
         if (nextNodeId) setConversationNodeId(nextNodeId);
         // Gemini has finished this turn. The next answer is the person's
         // choice again: tap a template option or type to ask Gemini directly.
@@ -185,18 +189,19 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     }
     return { ...current, [field]: value };
   });
-  const openManualEditor = () => {
+  const openFullActivityForm = (activityValues = guidedActivity) => {
     const seed = draft || (() => {
-      const date = guidedActivity?.date || toDateInputValue(new Date());
-      const time = guidedActivity?.time || "09:00";
+      const now = new Date();
+      const date = activityValues?.date || toDateInputValue(now);
+      const time = activityValues?.time || `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       const start = `${date}T${time}`;
       const end = new Date(start);
-      end.setMinutes(end.getMinutes() + (guidedActivity?.durationMinutes || 60));
-      return { title: guidedActivity?.title || "", startLocal: start, endLocal: `${toDateInputValue(end)}T${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`, allDay: false, categoryName: "", tags: [], notes: "" };
+      end.setMinutes(end.getMinutes() + (activityValues?.durationMinutes || 60));
+      return { title: activityValues?.title || "", startLocal: start, endLocal: `${toDateInputValue(end)}T${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`, allDay: false, categoryName: "", tags: [], notes: "" };
     })();
-    onOpenManualEditor?.(seed);
+    onOpenActivityForm?.(seed);
   };
-  return <div className="activity-ai-backdrop" role="presentation" onMouseDown={onClose}>
+  return <div className={`activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}`} role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
@@ -214,7 +219,6 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <div className="activity-ai-manual-launch"><button type="button" onClick={openManualEditor} disabled={pending}>กรอกเองในแบบฟอร์มกิจกรรมเต็มรูปแบบ</button><small>ไม่ใช้ AI quota · ตั้งค่าได้ครบเหมือนปุ่มเพิ่มกิจกรรม</small></div>
       <div className="activity-ai-choice-strip" aria-label="ตัวเลือกตอบกลับ">
         {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป">{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
         {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}

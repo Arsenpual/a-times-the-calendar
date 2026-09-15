@@ -263,6 +263,7 @@ function AccountApp({ auth }) {
     handleEditSeries
   } = activityModal;
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
+  const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -896,6 +897,7 @@ function AccountApp({ auth }) {
         defaultEnd={modalDefaultEnd}
         defaultTitle={modalDefaultTitle}
         initialDraft={modalInitialDraft}
+        assistantUpdate={activityAssistantFormUpdate}
         initialWarning={modalInitialWarning}
         missingFields={modalMissingFields}
         initialActivity={modalEditingActivity}
@@ -916,15 +918,17 @@ function AccountApp({ auth }) {
 
       <ActivityAiAssistant
         open={activityAssistantOpen}
+        activityFormOpen={modalOpen}
         onClose={() => setActivityAssistantOpen(false)}
         categories={categories}
         onConfirmDraft={handleConfirmAiActivityDraft}
-        onOpenManualEditor={(draft) => {
+        onOpenActivityForm={(draft) => {
+          setActivityAssistantFormUpdate(null);
           const start = new Date(draft.startLocal || new Date());
           const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
           openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: draft });
-          setActivityAssistantOpen(false);
         }}
+        onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
       />
 
       <SettingsDrawer

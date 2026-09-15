@@ -84,6 +84,7 @@ export default function ActivityModal({
   defaultEnd,
   defaultTitle = "",
   initialDraft = null,
+  assistantUpdate = null,
   initialWarning = "",
   missingFields = [],
   initialActivity,
@@ -224,6 +225,7 @@ export default function ActivityModal({
 
   const [notesOpen, setNotesOpen] = useState(Boolean(initialActivity?.description || initialDraft?.notes));
   const [notes, setNotes] = useState(initialActivity?.description || initialDraft?.notes || "");
+  const [assistantHighlightField, setAssistantHighlightField] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(initialWarning || null);
@@ -240,6 +242,32 @@ export default function ActivityModal({
     next.setDate(next.getDate() + amount);
     return toDateInputValue(next);
   };
+
+  // The guided chat and this full form stay open together. A reply selected
+  // in MR.Zettascale updates only the matching form values, then briefly
+  // highlights that field so the person can see the hand-off immediately.
+  useEffect(() => {
+    if (!assistantUpdate?.changedField || isEditing || !open) return undefined;
+    const { values = {}, changedField } = assistantUpdate;
+    if (changedField === "title" && values.title) setTitle(values.title);
+    if (["date", "time", "durationMinutes"].includes(changedField)) {
+      const nextDate = values.date || date;
+      const nextTime = values.time || startTime || "09:00";
+      const nextStart = new Date(`${nextDate}T${nextTime}`);
+      if (!Number.isNaN(nextStart.getTime())) {
+        const currentDuration = Math.max(30, Math.round((combineDateAndTime(endDate, endTime).getTime() - combineDateAndTime(date, startTime).getTime()) / 60000) || 60);
+        const duration = Number(values.durationMinutes) || currentDuration;
+        const nextEnd = new Date(nextStart.getTime() + duration * 60 * 1000);
+        setDate(toDateInputValue(nextStart));
+        setStartTime(toTimeInputValue(nextStart));
+        setEndDate(toDateInputValue(nextEnd));
+        setEndTime(toTimeInputValue(nextEnd));
+      }
+    }
+    setAssistantHighlightField(changedField);
+    const clearHighlight = window.setTimeout(() => setAssistantHighlightField(""), 1_100);
+    return () => window.clearTimeout(clearHighlight);
+  }, [assistantUpdate?.revision, isEditing, open]);
   const canonicalAllDayDate = (dateValue) => {
     const match = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) return "";
@@ -553,7 +581,7 @@ export default function ActivityModal({
         {initialWarning && <div className="modal-initial-warning" role="alert"><strong>ต้องกรอกข้อมูลเพิ่มเติม</strong><span>{initialWarning}</span></div>}
 
         <form onSubmit={handleSubmit} className="modal-form">
-          <label className="modal-field field-title">
+          <label className={`modal-field field-title${assistantHighlightField === "title" ? " is-assistant-highlight" : ""}`}>
             <span className="field-label">ชื่อกิจกรรม</span>
             <input
               type="text"
@@ -570,13 +598,13 @@ export default function ActivityModal({
           </button>
 
           <div className="modal-field-row">
-            <label className={`modal-field${startMissing ? " is-required-missing" : ""}`}>
+            <label className={`modal-field${startMissing ? " is-required-missing" : ""}${["date", "time"].includes(assistantHighlightField) ? " is-assistant-highlight" : ""}`}>
               <span className="field-label">{isAllDay ? "วันเริ่ม" : "วันและเวลาเริ่ม"}</span>
               {isAllDay
                 ? <input type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!endDate || endDate <= e.target.value) setEndDate(datePlusDays(e.target.value, 1)); }} required />
                 : <input type="datetime-local" value={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />}
             </label>
-            <label className={`modal-field${endMissing ? " is-required-missing" : ""}`}>
+            <label className={`modal-field${endMissing ? " is-required-missing" : ""}${assistantHighlightField === "durationMinutes" ? " is-assistant-highlight" : ""}`}>
               <span className="field-label">{isAllDay ? "วันสิ้นสุด" : "วันและเวลาสิ้นสุด"}</span>
               {isAllDay
                 ? <input type="date" value={endDate} min={datePlusDays(date, 1)} onChange={(e) => setEndDate(e.target.value)} required />
