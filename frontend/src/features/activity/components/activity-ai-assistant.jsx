@@ -40,6 +40,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const [guidedActivity, setGuidedActivity] = useState(initialChat.guidedActivity);
   const [conversationNodeId, setConversationNodeId] = useState(initialChat.conversationNodeId);
   const [guidedConversationMode, setGuidedConversationMode] = useState(initialChat.guidedConversationMode);
+  const [showCenteredGeneralQuestions, setShowCenteredGeneralQuestions] = useState(false);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
@@ -70,7 +71,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); };
+  const reset = () => { setMessages([INITIAL_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setShowCenteredGeneralQuestions(true); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -79,10 +80,12 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
       onUpdateActivityForm?.({ values: { ...selected, formDraft: result.draft }, changedField: "activityDraft" });
       setDraft(null);
+      setShowCenteredGeneralQuestions(true);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
   const selectQuickReply = async (option) => {
+    setShowCenteredGeneralQuestions(false);
     if (option.kind === "home") {
       const homeNode = getActivityAssistantConversationNode("home");
       setGuidedActivity(null); setConversationNodeId("home");
@@ -126,6 +129,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     const immediateGuidedActivity = directTitleReply ? { ...guidedActivity, title: text } : guidedActivity;
     const immediateGuidedStep = directTitleReply ? "activity.date" : conversationNodeId;
     if (directTitleReply) { setGuidedActivity(immediateGuidedActivity); setConversationNodeId("activity.date"); }
+    setShowCenteredGeneralQuestions(false);
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
     setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false);
     if (guidedActivity) setGuidedConversationMode("ai");
@@ -169,6 +173,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
       }
       if (result.ready) {
         setDraft(null);
+        setShowCenteredGeneralQuestions(true);
         if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft: result.draft }, changedField: "activityDraft" });
         else onOpenActivityForm?.(result.draft);
       }
@@ -225,13 +230,11 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
           <label>Tags (คั่นด้วย comma)<input value={(draft.tags || []).join(", ")} onChange={(event) => updateDraft("tags", event.target.value.split(",").map(tag => tag.trim()).filter(Boolean))} /></label>
           <label>โน้ต<textarea value={draft.notes || ""} onChange={(event) => updateDraft("notes", event.target.value)} /></label>
         </div> : <><span>{draft.title}</span><small>{draft.allDay ? `ทั้งวัน ${draft.startLocal.slice(0, 10)} ถึง ${draft.endLocal.slice(0, 10)} (ไม่รวมวันสิ้นสุด)` : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.tags?.length > 0 && <small>Tags: {draft.tags.map((tag) => `#${tag}`).join(" ")}</small>}{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}{draft.notes && <small>{draft.notes}</small>}</>}<div><button type="button" onClick={() => setEditingDraft((current) => !current)}>{editingDraft ? "เสร็จสิ้นการแก้ไข" : "Edit detail"}</button><button type="button" className="btn btn-primary" onClick={confirm} disabled={pending || !draft.title || !draft.startLocal || !draft.endLocal}>Confirm สร้างกิจกรรม</button></div></section>}
+        {showCenteredGeneralQuestions && suggestedQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>คำถามทั่วไป · ไม่ใช้ AI quota</small><div>{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
-      <div className="activity-ai-choice-strip" aria-label="ตัวเลือกตอบกลับ">
-        {suggestedQuestions.length > 0 && <div className="activity-ai-suggested-questions" aria-label="คำถามทั่วไป">{suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}
-        {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-quick-replies" aria-label="ข้อความสำเร็จรูป">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div>}
-      </div>
+      {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}</div></div>}
       <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
