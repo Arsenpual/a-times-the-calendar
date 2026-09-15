@@ -127,7 +127,26 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
 export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?"];
 
 const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
-  "t.i.m.e.s. คืออะไร?": ["Activity Mode คืออะไร?", "Reminder Mode คืออะไร?"]
+  "t.i.m.e.s. คืออะไร?": [
+    "Activity Mode คืออะไร?",
+    "Reminder Mode คืออะไร?",
+    "การซิงก์ข้อมูลและ Google Calendar ทำงานอย่างไร?"
+  ],
+  "activity mode คืออะไร?": [
+    "Week Spine และ Cycle คืออะไร?",
+    "กิจกรรมที่เวลาเหลื่อมกันจัดการอย่างไร?",
+    "Activity Popup แก้ไขอะไรได้บ้าง?"
+  ],
+  "reminder mode คืออะไร?": [
+    "Reminder มีประเภทอะไรบ้าง?",
+    "Buffer ของ Reminder ทำงานอย่างไร?",
+    "โควต้าการแจ้งเตือนทำงานอย่างไร?"
+  ],
+  "การซิงก์ข้อมูลและ google calendar ทำงานอย่างไร?": [
+    "Firestore เก็บข้อมูลอะไรบ้าง?",
+    "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?",
+    "Refresh Token ช่วยอะไร?"
+  ]
 };
 
 export function getActivityAssistantRootQuestions() {
