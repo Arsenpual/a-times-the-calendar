@@ -7,6 +7,57 @@ const WELCOME = "สวัสดีครับ ผม MR.Zettascale ✦ บอ�
 const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
 const INITIAL_MESSAGE = { role: "assistant", text: WELCOME, source: "template" };
 
+function formatSummaryDuration(totalMinutes) {
+  const hours = Math.floor(Math.max(0, totalMinutes || 0) / 60);
+  const minutes = Math.max(0, totalMinutes || 0) % 60;
+  if (!hours) return `${minutes} นาที`;
+  return `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}`;
+}
+
+function formatSummaryTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+// The daily summary is intentionally deterministic: it receives only the
+// already-fetched Calendar activities and does not call Gemini or consume AI
+// quota. Mini Timeline remains the detailed visual companion to this text.
+function buildDailySummaryChat(summary) {
+  const date = new Date(`${summary?.date || ""}T12:00:00`);
+  const dateLabel = Number.isNaN(date.getTime())
+    ? "วันนี้"
+    : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  const totalActivities = summary?.totalActivities || 0;
+  if (!totalActivities) {
+    return `สรุปกิจกรรมวันนี้ · ${dateLabel}\n\nวันนี้ยังไม่มีกิจกรรมที่วางแผนไว้\nคุณสามารถเพิ่มกิจกรรมจากปุ่ม “สร้างกิจกรรม” ได้เลย\n\nMini Timeline ด้านซ้ายพร้อมแสดงรายละเอียดของวันนี้`;
+  }
+
+  const lines = [
+    `สรุปกิจกรรมวันนี้ · ${dateLabel}`,
+    "",
+    `วันนี้มี ${totalActivities} กิจกรรม`,
+    `เวลาที่วางแผนรวม ${formatSummaryDuration(summary.totalMinutes)}`
+  ];
+  const categories = (summary.byCategory || []).slice(0, 2);
+  if (categories.length) {
+    lines.push(`หมวดหมู่หลัก: ${categories.map((category) => `${category.name} ${formatSummaryDuration(category.minutes)}`).join(" · ")}`);
+  }
+
+  const now = Date.now();
+  const upcoming = (summary.activities || []).find((activity) => !activity.allDay && new Date(activity.start).getTime() > now);
+  if (upcoming) {
+    const start = formatSummaryTime(upcoming.start);
+    const end = formatSummaryTime(upcoming.end);
+    const minutesUntil = Math.max(1, Math.ceil((new Date(upcoming.start).getTime() - now) / 60_000));
+    lines.push("", "กิจกรรมถัดไป", `• ${upcoming.title} · ${start}${end ? `–${end}` : ""} · อีก ${minutesUntil} นาที`);
+  } else {
+    lines.push("", "กิจกรรมตามเวลาของวันนี้สิ้นสุดแล้ว");
+  }
+  lines.push("", "เปิด Mini Timeline ด้านซ้ายไว้ให้ดูรายละเอียดทั้งหมดแล้ว");
+  return lines.join("\n");
+}
+
 function loadSavedChat() {
   if (typeof window === "undefined") return { messages: [INITIAL_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null };
   try {
@@ -53,10 +104,7 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     setPending(true); setPendingSource("template"); setError("");
     try {
       const summary = await onOpenDailySummary();
-      const hours = Math.floor((summary?.totalMinutes || 0) / 60);
-      const minutes = (summary?.totalMinutes || 0) % 60;
-      const duration = hours ? `${hours} ชม.${minutes ? ` ${minutes} นาที` : ""}` : `${minutes} นาที`;
-      setMessages((current) => [...current, { role: "assistant", text: `สรุปวันนี้มี ${summary?.totalActivities || 0} กิจกรรม ใช้เวลารวม ${duration} ครับ และเปิดแผง Summary ด้านซ้ายไว้ให้ดูควบคู่กันแล้ว`, source: "template" }]);
+      setMessages((current) => [...current, { role: "assistant", text: buildDailySummaryChat(summary), source: "template" }]);
     } catch (requestError) {
       setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
     } finally { setPending(false); setPendingSource(""); }
