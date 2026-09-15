@@ -27,7 +27,9 @@ function loadSavedChat() {
 export default function ActivityAiAssistant({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, activityFormOpen = false }) {
   const [initialChat] = useState(loadSavedChat);
   const [messages, setMessages] = useState(initialChat.messages);
-  const [draft, setDraft] = useState(initialChat.draft);
+  // Final activity review now belongs to ActivityModal. Do not restore the
+  // old in-chat review card from local storage.
+  const [draft, setDraft] = useState(null);
   const [editingDraft, setEditingDraft] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -75,7 +77,8 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
     setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setPending(true); setPendingSource("template"); setError("");
     try {
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
-      addMessages({ role: "assistant", text: result.reply, source: result.summarySource === "system-ai" ? "system" : "template" }); setDraft(result.draft);
+      onUpdateActivityForm?.({ values: { ...selected, formDraft: result.draft }, changedField: "activityDraft" });
+      setDraft(null);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
@@ -156,13 +159,19 @@ export default function ActivityAiAssistant({ open, onClose, categories, onConfi
         const withCorrectedUserSource = responseSource === "knowledge"
           ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
           : current;
-        const nextMessages = [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
+        const nextMessages = result.ready
+          ? withCorrectedUserSource
+          : [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource }];
         return nextMessages;
       });
       if (canAdvanceGuidedFlow && !nextNodeId && completedGuidedActivity?.title && completedGuidedActivity.date && completedGuidedActivity.time && completedGuidedActivity.durationMinutes) {
         await finishGuidedActivity(completedGuidedActivity);
       }
-      if (result.ready) setDraft(result.draft);
+      if (result.ready) {
+        setDraft(null);
+        if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft: result.draft }, changedField: "activityDraft" });
+        else onOpenActivityForm?.(result.draft);
+      }
     } catch (requestError) {
       setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
       if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);

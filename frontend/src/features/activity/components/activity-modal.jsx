@@ -249,6 +249,23 @@ export default function ActivityModal({
   useEffect(() => {
     if (!assistantUpdate?.changedField || isEditing || !open) return undefined;
     const { values = {}, changedField } = assistantUpdate;
+    const formDraft = values.formDraft;
+    if (changedField === "activityDraft" && formDraft) {
+      const nextStart = new Date(formDraft.startLocal);
+      const nextEnd = new Date(formDraft.endLocal);
+      if (formDraft.title) setTitle(formDraft.title);
+      if (!Number.isNaN(nextStart.getTime()) && !Number.isNaN(nextEnd.getTime())) {
+        setDate(toDateInputValue(nextStart));
+        setStartTime(toTimeInputValue(nextStart));
+        setEndDate(toDateInputValue(nextEnd));
+        setEndTime(toTimeInputValue(nextEnd));
+      }
+      setIsAllDay(Boolean(formDraft.allDay));
+      setCategoryId(categories.find((category) => category.name === formDraft.categoryName)?.id || "");
+      setTags(Array.isArray(formDraft.tags) ? formDraft.tags : []);
+      setNotes(formDraft.notes || "");
+      setNotesOpen(Boolean(formDraft.notes));
+    }
     if (changedField === "title" && values.title) setTitle(values.title);
     if (["date", "time", "durationMinutes"].includes(changedField)) {
       const nextDate = values.date || date;
