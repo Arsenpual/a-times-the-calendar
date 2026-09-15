@@ -124,7 +124,7 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
 // Deterministic product questions form a compact exploration tree. Only the
 // first root is placed in the middle of the chat; later roots attach below
 // the answer that introduced them.
-export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?"];
+export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"];
 
 const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
   "t.i.m.e.s. คืออะไร?": [
@@ -146,6 +146,26 @@ const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
     "Firestore เก็บข้อมูลอะไรบ้าง?",
     "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?",
     "Refresh Token ช่วยอะไร?"
+  ],
+  "t.i.m.e.s. มีฟีเจอร์อะไรบ้าง?": [
+    "ฟีเจอร์วางแผนกิจกรรมมีอะไรบ้าง?",
+    "ฟีเจอร์ Reminder และการแจ้งเตือนมีอะไรบ้าง?",
+    "ฟีเจอร์การเชื่อมต่อและการตั้งค่ามีอะไรบ้าง?"
+  ],
+  "ฟีเจอร์วางแผนกิจกรรมมีอะไรบ้าง?": [
+    "Week Spine และ Cycle ใช้อย่างไร?",
+    "ย้าย ปรับเวลา และทำสำเนากิจกรรมอย่างไร?",
+    "กิจกรรมทั้งวัน หมวดหมู่ และ Tag ใช้อย่างไร?"
+  ],
+  "ฟีเจอร์ reminder และการแจ้งเตือนมีอะไรบ้าง?": [
+    "Reminder มีประเภทอะไรบ้าง?",
+    "Buffer ของ Reminder ทำงานอย่างไร?",
+    "Telegram แจ้งเตือนแยกตามอุปกรณ์อย่างไร?"
+  ],
+  "ฟีเจอร์การเชื่อมต่อและการตั้งค่ามีอะไรบ้าง?": [
+    "Google Calendar เชื่อมต่ออย่างไร?",
+    "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?",
+    "ตั้งค่าธีมและภาษาได้อย่างไร?"
   ]
 };
 
