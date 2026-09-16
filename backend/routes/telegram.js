@@ -370,17 +370,9 @@ async function registerBotCommands() {
     await setCommandsForScope(scope);
   }
 
-  // Telegram gives a chat-specific (and chat-member-specific) menu priority
-  // over the global/private scopes. Earlier versions may have written one of
-  // those scopes, so overwrite them for every linked direct chat as well.
-  const linkedChats = await db.collection("telegram-chat-owners").limit(200).get();
-  for (const chat of linkedChats.docs) {
-    const chatId = String(chat.id);
-    if (!/^\d+$/.test(chatId)) continue;
-    await setCommandsForScope({ type: "chat", chat_id: chatId });
-    await setCommandsForScope({ type: "chat_member", chat_id: chatId, user_id: Number(chatId) });
-  }
-  console.log(`[telegram] อัปเดต Bot Command Menu สำหรับ ${linkedChats.size} แชตที่เชื่อมไว้`);
+  // BotCommandScopeChatMember is invalid for a private chat. The explicit
+  // all-private-chats scope above is the supported scope that overrides the
+  // default command menu for every direct conversation with this bot.
 }
 
 router.get("/status", async (req, res, next) => {
