@@ -13,9 +13,10 @@ const TYPE_ACCENT_COLOR = {
   [REMINDER_TYPE.STOPWATCH]: "var(--g-on-surface-variant)"
 };
 
-function priorityFor(reminder, nowTick, t) {
+function priorityFor(reminder, nowTick, t, hasRunningBuffer = false) {
   if (reminder.completedAt) return { label: t("reminder.completed"), tone: "completed" };
   if (!reminder.enabled) return { label: t("reminder.status.paused"), tone: "paused" };
+  if (hasRunningBuffer) return { label: t("reminder.status.active"), tone: "active" };
   if (Number.isFinite(reminder.nextDueAt)) {
     const remainingSeconds = Math.ceil((reminder.nextDueAt - nowTick) / 1000);
     if (remainingSeconds <= 0) return { label: t("reminder.status.due"), tone: "due" };
@@ -40,15 +41,6 @@ function formatBufferDuration(minutes) {
   return `${minutes} นาที`;
 }
 
-function describeBufferBrief(reminder) {
-  const before = Number(reminder.eventAnchorCountdownMinutes);
-  const after = Number(reminder.eventAnchorStopwatchMinutes);
-  const parts = [];
-  if (Number.isInteger(before) && before > 0) parts.push(`ก่อน ${formatBufferDuration(before)}`);
-  if (Number.isInteger(after) && after > 0) parts.push(`หลัง ${formatBufferDuration(after)}`);
-  return parts.join(" · ");
-}
-
 /** Presentational card; all state mutations remain in ReminderDashboard hooks. */
 export default function ReminderCard({
   reminder, nowTick, t, groups, typeOptions, daysOfWeek, cardMenu,
@@ -56,7 +48,6 @@ export default function ReminderCard({
   onToggleStopwatch, onResetStopwatch, onToggleReminder, onToggleMenu,
   onCloseMenu, onMarkCompleted, onDelete
 }) {
-  const priority = priorityFor(reminder, nowTick, t);
   const typeLabel = t(typeOptions.find((option) => option.type === reminder.type)?.labelKey);
   const group = reminder.groupId ? groups.find((item) => item.id === reminder.groupId) : null;
   const weeklyDaysLabel = reminder.type === REMINDER_TYPE.WEEKLY
@@ -70,11 +61,14 @@ export default function ReminderCard({
   const isDerivedSession = Boolean(reminder.isEventAnchorDerived);
   const sourceReminder = reminder.sourceReminder || reminder;
   const activeEventAnchorSessions = reminder.activeEventAnchorSessions || [];
+  const priority = priorityFor(reminder, nowTick, t, activeEventAnchorSessions.length > 0);
   const activeBufferPhases = new Set(activeEventAnchorSessions.map((session) => session.eventAnchorPhase));
   const hasCountdownBuffer = Number(sourceReminder.eventAnchorCountdownMinutes) > 0;
   const hasStopwatchBuffer = Number(sourceReminder.eventAnchorStopwatchMinutes) > 0;
   const hasEventBuffer = hasCountdownBuffer || hasStopwatchBuffer;
-  const activeBufferDescription = describeBufferBrief(sourceReminder);
+  const countdownBufferDescription = hasCountdownBuffer ? `ก่อน ${formatBufferDuration(Number(sourceReminder.eventAnchorCountdownMinutes))}` : "";
+  const stopwatchBufferDescription = hasStopwatchBuffer ? `หลัง ${formatBufferDuration(Number(sourceReminder.eventAnchorStopwatchMinutes))}` : "";
+  const activeBufferDescription = [countdownBufferDescription, stopwatchBufferDescription].filter(Boolean).join(" · ");
 
   return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${hasEventBuffer ? " has-event-buffer" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
     <button type="button" className="reminder-type-icon" style={{ backgroundColor: accentColor, color: reminder.type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff" }} onClick={() => onFocusTimeline(reminder)} title="เลื่อน Timeline มาที่เวลาของ Reminder" aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}>{typeIcon(reminder.type)}</button>
@@ -91,11 +85,14 @@ export default function ReminderCard({
       {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onAdvanceRoutine(reminder.id); }}>✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})</button>}
     </div>
     {hasEventBuffer && <div className="reminder-active-buffer-status" role="status" aria-label={activeBufferDescription} title={activeBufferDescription}>
-      <div className="reminder-active-buffer-icons" aria-hidden="true">
-        {hasCountdownBuffer && <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--countdown${activeBufferPhases.has("countdown") ? " is-running" : ""}`}>⏳</span>}
-        {hasStopwatchBuffer && <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--stopwatch${activeBufferPhases.has("stopwatch") ? " is-running" : ""}`}>⏱️</span>}
-      </div>
-      <span className="reminder-active-buffer-description">{activeBufferDescription}</span>
+      {hasCountdownBuffer && <div className="reminder-active-buffer-slot reminder-active-buffer-slot--countdown">
+        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--countdown${activeBufferPhases.has("countdown") ? " is-running" : ""}`} aria-hidden="true">⏳</span>
+        <span className="reminder-active-buffer-description">{countdownBufferDescription}</span>
+      </div>}
+      {hasStopwatchBuffer && <div className="reminder-active-buffer-slot reminder-active-buffer-slot--stopwatch">
+        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--stopwatch${activeBufferPhases.has("stopwatch") ? " is-running" : ""}`} aria-hidden="true">⏱️</span>
+        <span className="reminder-active-buffer-description">{stopwatchBufferDescription}</span>
+      </div>}
     </div>}
     {!isDerivedSession && (reminder.type === REMINDER_TYPE.STOPWATCH ? <div className="stopwatch-controls"><button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => onToggleStopwatch(reminder.id)}>{reminder.enabled ? "⏸ Stop" : "▶ Start"}</button><button type="button" className="icon-btn" onClick={() => onResetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">↺</button></div> : <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => onToggleReminder(reminder.id)} aria-label="สวิตช์เปิดปิด" />)}
     {!isDerivedSession && <div className={`reminder-card-actions ${isMenuOpen ? "menu-open" : ""}`}><button type="button" className="icon-btn" onClick={(event) => onToggleMenu(event, reminder.id)} title="ตัวเลือกเพิ่มเติม" aria-haspopup="true" aria-expanded={isMenuOpen}>⋮</button>

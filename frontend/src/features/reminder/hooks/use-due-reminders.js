@@ -27,6 +27,8 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
   const [dueReminders, setDueReminders] = useState([]);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const sentTelegramReminderKeysRef = useRef(new Set());
+  const pendingTelegramRemindersRef = useRef(new Map());
+  const sendingTelegramReminderKeysRef = useRef(new Set());
   const intervalTelegramSlotRef = useRef(new Map());
   const autoAdvancedBufferKeysRef = useRef(new Set());
 
@@ -73,16 +75,36 @@ export function useDueReminders({ reminders, setReminders, updateReminders, fire
             : reminder
         )));
       }
-      // ไม่มี scheduler: ส่งได้เฉพาะเมื่อหน้า Reminder Mode เปิดอยู่เท่านั้น.
-      // ใช้ due timestamp เป็น key เพื่อกัน tick ทุกวินาทีส่งข้อความซ้ำ.
+      // Queue a due delivery before the phase moves forward. Previously the
+      // phase advanced immediately and a transient Telegram/network failure
+      // discarded the only chance to deliver an automatic buffer notification.
+      // The queue remains in memory for this open client and retries safely;
+      // the backend's notification key remains the final cross-device dedupe.
       due.forEach((reminder) => {
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
         if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramReminderKeysRef.current.has(key)) return;
-        sentTelegramReminderKeysRef.current.add(key);
-        sendTelegramReminder(`${eventAnchorNotificationLabel(reminder)} · ${eventAnchorNotificationTitle(reminder)}`, "reminder", key).catch(() => {
-          // ยังไม่เชื่อม Telegram/เน็ตขัดข้อง ไม่ควรรบกวน reminder UI หลัก.
+        pendingTelegramRemindersRef.current.set(key, {
+          title: `${eventAnchorNotificationLabel(reminder)} · ${eventAnchorNotificationTitle(reminder)}`,
+          notificationKind: "reminder"
         });
       });
+      for (const [key, delivery] of pendingTelegramRemindersRef.current) {
+        if (sentTelegramReminderKeysRef.current.has(key) || sendingTelegramReminderKeysRef.current.has(key)) continue;
+        sendingTelegramReminderKeysRef.current.add(key);
+        sendTelegramReminder(delivery.title, delivery.notificationKind, key)
+          .then(() => {
+            // A resolved backend response has either sent, deduplicated, or
+            // intentionally declined the optional channel. In all cases it
+            // must not be retried every second by this browser.
+            sentTelegramReminderKeysRef.current.add(key);
+            pendingTelegramRemindersRef.current.delete(key);
+          })
+          .catch(() => {
+            // Keep the record queued: the next clock tick retries transient
+            // network/Render/Telegram failures even after the phase advanced.
+          })
+          .finally(() => sendingTelegramReminderKeysRef.current.delete(key));
+      }
       // Buffer phases are automatic: they notify, then immediately move to
       // the next phase. They never wait in the due banner for completion.
       const automaticBufferPhases = due.filter((reminder) => (

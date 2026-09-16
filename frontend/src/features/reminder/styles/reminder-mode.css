@@ -1279,6 +1279,8 @@
 
         .reminder-card.has-event-buffer {
           position: relative;
+          --reminder-buffer-slot-width: 42px;
+          --reminder-buffer-slot-gap: 18px;
         }
 
         /* dropdown-backdrop เป็น fixed layer (z-index: 40) สำหรับปิดเมนู
@@ -1333,24 +1335,33 @@
           top: 50%;
           left: 50%;
           display: grid;
+          grid-template-columns: var(--reminder-buffer-slot-width) var(--reminder-buffer-slot-width);
+          column-gap: var(--reminder-buffer-slot-gap);
           justify-items: center;
           align-items: center;
-          gap: 2px;
-          width: 120px;
+          width: calc(var(--reminder-buffer-slot-width) * 2 + var(--reminder-buffer-slot-gap));
           color: var(--g-blue);
           line-height: 1;
           pointer-events: none;
-          transform: translate(-16px, -50%);
+          isolation: isolate;
+          contain: layout paint;
+          /* ย้ายทั้งสอง slot ไปทางขวาเล็กน้อย แต่คงตำแหน่งสัมพันธ์กันไว้ */
+          transform: translate(calc(-21px + 15%), -50%);
         }
 
-        .reminder-active-buffer-icons {
+        .reminder-active-buffer-slot {
           display: grid;
-          grid-template-columns: 32px 32px;
+          grid-template-rows: 29px minmax(11px, auto);
           align-items: center;
           justify-content: center;
-          column-gap: 12px;
-          min-height: 29px;
+          justify-items: center;
+          gap: 2px;
+          width: var(--reminder-buffer-slot-width);
+          min-width: var(--reminder-buffer-slot-width);
         }
+
+        .reminder-active-buffer-slot--countdown { grid-column: 1; }
+        .reminder-active-buffer-slot--stopwatch { grid-column: 2; }
 
         .reminder-active-buffer-icon {
           display: inline-flex;
@@ -1362,14 +1373,14 @@
           transform-origin: center;
         }
 
-        .reminder-active-buffer-icon--countdown { grid-column: 1; }
-        .reminder-active-buffer-icon--stopwatch { grid-column: 2; }
         .reminder-active-buffer-icon--countdown.is-running { animation: reminder-buffer-countdown-pulse 1.3s ease-in-out infinite; }
         .reminder-active-buffer-icon--stopwatch.is-running { animation: reminder-buffer-stopwatch-tick .9s steps(2, end) infinite; }
 
         .reminder-active-buffer-description {
           display: block;
-          max-width: 120px;
+          width: 58px;
+          min-width: 0;
+          max-width: 58px;
           overflow: hidden;
           color: var(--g-on-surface-variant);
           font-size: 9px;
