@@ -1375,6 +1375,10 @@
 
         .reminder-active-buffer-icon--countdown.is-running { animation: reminder-buffer-countdown-pulse 1.3s ease-in-out infinite; }
         .reminder-active-buffer-icon--stopwatch.is-running { animation: reminder-buffer-stopwatch-tick .9s steps(2, end) infinite; }
+        .reminder-active-buffer-icon.is-completed {
+          filter: grayscale(1) brightness(.48);
+          opacity: .6;
+        }
 
         .reminder-active-buffer-description {
           display: block;

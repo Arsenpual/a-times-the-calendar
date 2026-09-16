@@ -69,6 +69,11 @@ export default function ReminderCard({
   const countdownBufferDescription = hasCountdownBuffer ? `ก่อน ${formatBufferDuration(Number(sourceReminder.eventAnchorCountdownMinutes))}` : "";
   const stopwatchBufferDescription = hasStopwatchBuffer ? `หลัง ${formatBufferDuration(Number(sourceReminder.eventAnchorStopwatchMinutes))}` : "";
   const activeBufferDescription = [countdownBufferDescription, stopwatchBufferDescription].filter(Boolean).join(" · ");
+  const lastPrimaryAt = Number(sourceReminder.eventAnchorStartedAt);
+  const countdownCompleted = hasCountdownBuffer && !activeBufferPhases.has("countdown") && Number.isFinite(lastPrimaryAt) && nowTick >= lastPrimaryAt;
+  const stopwatchCompleted = hasStopwatchBuffer && !activeBufferPhases.has("stopwatch") && Number.isFinite(lastPrimaryAt) && nowTick >= lastPrimaryAt + Number(sourceReminder.eventAnchorStopwatchMinutes) * 60_000;
+  const countdownVisualState = activeBufferPhases.has("countdown") ? " is-running" : countdownCompleted ? " is-completed" : "";
+  const stopwatchVisualState = activeBufferPhases.has("stopwatch") ? " is-running" : stopwatchCompleted ? " is-completed" : "";
 
   return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${hasEventBuffer ? " has-event-buffer" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
     <button type="button" className="reminder-type-icon" style={{ backgroundColor: accentColor, color: reminder.type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff" }} onClick={() => onFocusTimeline(reminder)} title="เลื่อน Timeline มาที่เวลาของ Reminder" aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}>{typeIcon(reminder.type)}</button>
@@ -86,11 +91,11 @@ export default function ReminderCard({
     </div>
     {hasEventBuffer && <div className="reminder-active-buffer-status" role="status" aria-label={activeBufferDescription} title={activeBufferDescription}>
       {hasCountdownBuffer && <div className="reminder-active-buffer-slot reminder-active-buffer-slot--countdown">
-        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--countdown${activeBufferPhases.has("countdown") ? " is-running" : ""}`} aria-hidden="true">⏳</span>
+        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--countdown${countdownVisualState}`} aria-hidden="true">⏳</span>
         <span className="reminder-active-buffer-description">{countdownBufferDescription}</span>
       </div>}
       {hasStopwatchBuffer && <div className="reminder-active-buffer-slot reminder-active-buffer-slot--stopwatch">
-        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--stopwatch${activeBufferPhases.has("stopwatch") ? " is-running" : ""}`} aria-hidden="true">⏱️</span>
+        <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--stopwatch${stopwatchVisualState}`} aria-hidden="true">⏱️</span>
         <span className="reminder-active-buffer-description">{stopwatchBufferDescription}</span>
       </div>}
     </div>}

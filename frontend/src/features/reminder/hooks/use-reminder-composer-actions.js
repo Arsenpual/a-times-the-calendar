@@ -1,6 +1,7 @@
 import { applyReminderTypeFields, buildReminderBase } from "../lib/reminder-composer-payload.js";
 import { REMINDER_TYPE, computeNextDueAt, hasWindow, initializeEventAnchorSchedule } from "../lib/reminder-due-logic.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
+import { findEventBufferOverlap } from "../lib/event-buffer-overlap.js";
 
 function toLocalDateInputValue(ms) {
   const d = new Date(ms);
@@ -49,6 +50,13 @@ export function useReminderComposerActions({
       }
     }
     applyReminderTypeFields(newReminder, { draft, editingId, existingReminder, defaultLineColor: DEFAULT_LINE_COLOR });
+
+    const bufferOverlap = findEventBufferOverlap(newReminder, reminders);
+    if (bufferOverlap) {
+      const target = bufferOverlap.sameReminder ? "เวลาอื่นของ Reminder เดียวกัน" : `Reminder “${bufferOverlap.conflict.title}”`;
+      alert(`ช่วงเวลา Countdown / Stopwatch ทับซ้อนกับ ${target}\nกรุณาลดระยะ buffer หรือปรับเวลา Reminder ก่อนบันทึก`);
+      return;
+    }
 
     // Interval เวอร์ชันพื้นฐานเก็บเพียงความถี่เพื่อใช้อ้างอิงใน UI ยังไม่
     // เข้าระบบ due/push จึงไม่สร้างงาน Cloud Run หรือ notification.
