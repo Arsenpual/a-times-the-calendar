@@ -111,7 +111,12 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
     setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setPending(true); setPendingSource("template"); setError("");
     try {
       const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
-      onUpdateActivityForm?.({ values: { ...selected, formDraft: result.draft }, changedField: "activityDraft" });
+      const activityDraft = result.draft;
+      // A guided conversation can begin from the compact assistant without
+      // an already-open ActivityPopup. Updating a closed form loses the
+      // review surface, so open it with the completed draft in that case.
+      if (activityFormOpen) onUpdateActivityForm?.({ values: { ...selected, formDraft: activityDraft }, changedField: "activityDraft" });
+      else onOpenActivityForm?.(activityDraft);
       setDraft(null);
       setShowCenteredGeneralQuestions(true);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
