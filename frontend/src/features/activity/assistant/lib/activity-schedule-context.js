@@ -14,6 +14,8 @@ export function buildAssistantScheduleContext(activities, lockedActivities, refe
   const end = new Date(start);
   end.setDate(end.getDate() + 9);
   return {
+    windowStartLocal: localDateTime(start),
+    windowEndLocal: localDateTime(end),
     activities: activities.filter((activity) => {
       if (!activity.start?.dateTime || !activity.end?.dateTime) return false;
       const activityStart = activityDate(activity.start);

@@ -2,7 +2,7 @@ const schema = require('./schema.js');
 const buildPrompt = require('./prompt.js');
 const { applyAssumptions } = require('./assumptions.js');
 const { validateDraft, localDateTime, bounded, fail } = require('./validator.js');
-const { normalizeScheduleContext, assessDraftSchedule } = require('./schedule-context.js');
+const { normalizeScheduleContext, buildAvailableWindows, assessDraftSchedule } = require('./schedule-context.js');
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -25,7 +25,11 @@ function prepareContext(body) {
     durationMinutes: Number.isInteger(body.guidedActivity.durationMinutes) ? body.guidedActivity.durationMinutes : 0
   } : null;
   const userTags = (Array.isArray(body.userTags) ? body.userTags : []).slice(0, 100).filter(tag => typeof tag === 'string').map(tag => tag.trim().slice(0, 40)).filter(Boolean);
-  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext: { activities: normalizeScheduleContext(body.scheduleContext) }, guidedStep, guidedActivity };
+  const scheduleContext = {
+    activities: normalizeScheduleContext(body.scheduleContext),
+    availableWindows: buildAvailableWindows(body.scheduleContext)
+  };
+  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity };
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');

@@ -1,5 +1,5 @@
 const MAX_OVERLAPPING_ACTIVITIES = 3;
-const SNAP_MINUTES = 15;
+const MIN_FREE_WINDOW_MINUTES = 30;
 
 function localStamp(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return NaN;
@@ -15,6 +15,43 @@ function normalizeScheduleContext(raw) {
     endLocal: typeof item?.endLocal === "string" ? item.endLocal.slice(0, 16) : "",
     locked: Boolean(item?.locked)
   })).filter((item) => Number.isFinite(localStamp(item.startLocal)) && Number.isFinite(localStamp(item.endLocal)) && localStamp(item.endLocal) > localStamp(item.startLocal));
+}
+
+function normalizePlanningWindow(raw) {
+  const start = localStamp(raw?.windowStartLocal);
+  const end = localStamp(raw?.windowEndLocal);
+  // Never let a request turn into a broad calendar query. The browser sends
+  // its small nine-day planning window and the backend enforces that cap.
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 10 * 24 * 60 * 60_000) return null;
+  return { start, end };
+}
+
+function buildAvailableWindows(raw) {
+  const window = normalizePlanningWindow(raw);
+  if (!window) return [];
+  const activities = normalizeScheduleContext(raw);
+  const windows = [];
+  for (let dayStart = window.start; dayStart < window.end && windows.length < 12; dayStart += 24 * 60 * 60_000) {
+    // Daytime planning hours are deliberately bounded. This is a hint for
+    // suggestion only; it does not prohibit the person from choosing another
+    // time manually in ActivityPopup.
+    const workStart = dayStart + 8 * 60 * 60_000;
+    const workEnd = dayStart + 22 * 60 * 60_000;
+    let cursor = workStart;
+    const dayActivities = activities
+      .map((activity) => ({ start: localStamp(activity.startLocal), end: localStamp(activity.endLocal) }))
+      .filter((activity) => activity.start < workEnd && activity.end > workStart)
+      .sort((left, right) => left.start - right.start || left.end - right.end);
+    for (const activity of dayActivities) {
+      const start = Math.max(workStart, activity.start);
+      const end = Math.min(workEnd, activity.end);
+      if (start - cursor >= MIN_FREE_WINDOW_MINUTES * 60_000) windows.push({ startLocal: localDateTime(cursor), endLocal: localDateTime(start) });
+      cursor = Math.max(cursor, end);
+      if (windows.length === 12) break;
+    }
+    if (windows.length < 12 && workEnd - cursor >= MIN_FREE_WINDOW_MINUTES * 60_000) windows.push({ startLocal: localDateTime(cursor), endLocal: localDateTime(workEnd) });
+  }
+  return windows.slice(0, 12);
 }
 
 function concurrentCount(candidateStart, candidateEnd, activities) {
@@ -63,4 +100,4 @@ function assessDraftSchedule(draft, scheduleContext) {
   };
 }
 
-module.exports = { MAX_OVERLAPPING_ACTIVITIES, normalizeScheduleContext, assessDraftSchedule };
+module.exports = { MAX_OVERLAPPING_ACTIVITIES, normalizeScheduleContext, buildAvailableWindows, assessDraftSchedule };

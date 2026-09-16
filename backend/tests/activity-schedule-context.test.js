@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { assessDraftSchedule } = require("../skills/activity-creation/schedule-context.js");
+const { assessDraftSchedule, buildAvailableWindows } = require("../skills/activity-creation/schedule-context.js");
 
 const draft = { title: "ร่างกิจกรรม", startLocal: "2026-09-16T10:00", endLocal: "2026-09-16T11:00", allDay: false };
 const activity = (id, title, startLocal, endLocal, locked = false) => ({ id, title, startLocal, endLocal, locked });
@@ -30,4 +30,16 @@ test("a fourth overlapping activity is blocked and offers nearby alternatives", 
 test("all-day drafts are not evaluated as timed overlaps", () => {
   const schedule = assessDraftSchedule({ ...draft, allDay: true }, { activities: [activity("one", "งานหนึ่ง", "2026-09-16T09:00", "2026-09-16T12:00")] });
   assert.equal(schedule.status, "not-applicable");
+});
+
+test("available windows are compact, daytime-only schedule hints", () => {
+  const windows = buildAvailableWindows({
+    windowStartLocal: "2026-09-16T00:00",
+    windowEndLocal: "2026-09-17T00:00",
+    activities: [activity("one", "ประชุม", "2026-09-16T10:00", "2026-09-16T11:00")]
+  });
+  assert.deepEqual(windows, [
+    { startLocal: "2026-09-16T08:00", endLocal: "2026-09-16T10:00" },
+    { startLocal: "2026-09-16T11:00", endLocal: "2026-09-16T22:00" }
+  ]);
 });
