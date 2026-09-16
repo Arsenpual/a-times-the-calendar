@@ -356,7 +356,7 @@ async function registerBotCommands() {
     { command: "times", description: "T.i.M.E.S. คืออะไร" },
     { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
   ];
-  for (const scope of [undefined, { type: "all_private_chats" }]) {
+  const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -364,7 +364,23 @@ async function registerBotCommands() {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(`ตั้งเมนูคำสั่ง Telegram ไม่สำเร็จ: ${data.description || response.status}`);
+  };
+
+  for (const scope of [undefined, { type: "all_private_chats" }]) {
+    await setCommandsForScope(scope);
   }
+
+  // Telegram gives a chat-specific (and chat-member-specific) menu priority
+  // over the global/private scopes. Earlier versions may have written one of
+  // those scopes, so overwrite them for every linked direct chat as well.
+  const linkedChats = await db.collection("telegram-chat-owners").limit(200).get();
+  for (const chat of linkedChats.docs) {
+    const chatId = String(chat.id);
+    if (!/^\d+$/.test(chatId)) continue;
+    await setCommandsForScope({ type: "chat", chat_id: chatId });
+    await setCommandsForScope({ type: "chat_member", chat_id: chatId, user_id: Number(chatId) });
+  }
+  console.log(`[telegram] อัปเดต Bot Command Menu สำหรับ ${linkedChats.size} แชตที่เชื่อมไว้`);
 }
 
 router.get("/status", async (req, res, next) => {
