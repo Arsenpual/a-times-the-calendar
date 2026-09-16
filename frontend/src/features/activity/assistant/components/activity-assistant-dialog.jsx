@@ -5,7 +5,7 @@ import { getActivityAssistantConversationNode, getActivityAssistantKnowledgeFoll
 import { buildDailySummaryChat } from "../lib/daily-summary-chat.js";
 import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
 import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
-import { buildAssistantScheduleContext, collectUserTags } from "../lib/activity-schedule-context.js";
+import { assessAssistantDraftOverlap, buildAssistantScheduleContext, collectUserTags } from "../lib/activity-schedule-context.js";
 
 function formatScheduleRange(startLocal, endLocal) {
   if (typeof startLocal !== "string" || typeof endLocal !== "string") return "ช่วงเวลาใกล้เคียง";
@@ -123,13 +123,15 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       // A guided conversation can begin from the compact assistant without
       // an already-open ActivityPopup. Updating a closed form loses the
       // review surface, so open it with the completed draft in that case.
-      if (result.schedule?.status === "overlap-limit") {
-        setScheduleResolution({ formDraft: activityDraft, alternatives: result.schedule.alternatives || [] });
+      const localSchedule = assessAssistantDraftOverlap(activityDraft, activities, lockedActivities);
+      const schedule = localSchedule.status === "overlap-limit" ? localSchedule : result.schedule;
+      if (schedule?.status === "overlap-limit") {
+        setScheduleResolution({ formDraft: activityDraft, alternatives: schedule.alternatives || [] });
         setMessages((current) => [...current, {
           role: "assistant",
-          text: describeScheduleConflict(result.schedule),
+          text: describeScheduleConflict(schedule),
           source: "template",
-          scheduleAlternatives: result.schedule.alternatives || []
+          scheduleAlternatives: schedule.alternatives || []
         }]);
         return;
       }
@@ -232,13 +234,15 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       if (result.ready) {
         const popupHandoff = createActivityPopupHandoff(result);
         if (!popupHandoff) throw new Error("ร่างกิจกรรมไม่ครบ จึงยังเปิดฟอร์มบันทึกไม่ได้");
-        if (result.schedule?.status === "overlap-limit") {
-          setScheduleResolution({ formDraft: popupHandoff.values.formDraft, alternatives: result.schedule.alternatives || [] });
+        const localSchedule = assessAssistantDraftOverlap(popupHandoff.values.formDraft, activities, lockedActivities);
+        const schedule = localSchedule.status === "overlap-limit" ? localSchedule : result.schedule;
+        if (schedule?.status === "overlap-limit") {
+          setScheduleResolution({ formDraft: popupHandoff.values.formDraft, alternatives: schedule.alternatives || [] });
           setMessages((current) => [...current, {
             role: "assistant",
-            text: describeScheduleConflict(result.schedule),
+            text: describeScheduleConflict(schedule),
             source: "template",
-            scheduleAlternatives: result.schedule.alternatives || []
+            scheduleAlternatives: schedule.alternatives || []
           }]);
           setShowCenteredGeneralQuestions(false);
           return;

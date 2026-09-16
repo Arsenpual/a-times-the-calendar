@@ -1,5 +1,6 @@
 import { activityDate } from "../../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../../shared/lib/id-utils.js";
+import { exceedsOverlapLimit } from "../../lib/timeline-layout.js";
 
 function localDateTime(date) {
   const pad = (value) => String(value).padStart(2, "0");
@@ -37,4 +38,51 @@ export function buildAssistantScheduleContext(activities, lockedActivities, refe
 
 export function collectUserTags(activityTagMap = {}) {
   return [...new Set(Object.values(activityTagMap).flat().filter((tag) => typeof tag === "string" && tag.trim()))].slice(0, 100);
+}
+
+function overlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function formatLocalDateTime(date) {
+  return localDateTime(date);
+}
+
+/**
+ * Last-mile guard before ActivityPopup opens. This deliberately calls the
+ * exact shared overlap function used by the save handler, so a stale or
+ * incomplete API schedule hint cannot let a fourth overlapping activity
+ * reach the form and fail only after the person presses Save.
+ */
+export function assessAssistantDraftOverlap(draft, activities = [], lockedActivities = {}) {
+  const start = new Date(draft?.startLocal || "");
+  const end = new Date(draft?.endLocal || "");
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return { status: "not-applicable", conflicts: [], alternatives: [] };
+  const existing = activities.map((activity) => ({
+    activity,
+    start: activityDate(activity.start),
+    end: activityDate(activity.end)
+  })).filter((entry) => entry.start instanceof Date && entry.end instanceof Date && entry.end > entry.start);
+  const candidate = { id: "assistant-draft", start, end };
+  if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), candidate])) {
+    return { status: "available", conflicts: [], alternatives: [] };
+  }
+  const conflicts = existing.filter(({ start: entryStart, end: entryEnd }) => overlap(entryStart, entryEnd, start, end)).map(({ activity }) => ({
+    id: activity.id,
+    title: activity.summary || "(ไม่มีชื่อกิจกรรม)",
+    startLocal: formatLocalDateTime(activityDate(activity.start)),
+    endLocal: formatLocalDateTime(activityDate(activity.end)),
+    locked: Boolean(lockedActivities[normalizeActivityId(activity.id)])
+  }));
+  const duration = end.getTime() - start.getTime();
+  const alternatives = [];
+  for (const minutes of [-180, -150, -120, -90, -60, -30, 30, 60, 90, 120, 150, 180]) {
+    const proposedStart = new Date(start.getTime() + minutes * 60_000);
+    const proposedEnd = new Date(proposedStart.getTime() + duration);
+    if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), { id: "assistant-draft", start: proposedStart, end: proposedEnd }])) {
+      alternatives.push({ startLocal: formatLocalDateTime(proposedStart), endLocal: formatLocalDateTime(proposedEnd) });
+      if (alternatives.length === 3) break;
+    }
+  }
+  return { status: "overlap-limit", conflicts, alternatives };
 }
