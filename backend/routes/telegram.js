@@ -37,42 +37,90 @@ const PRODUCT_QUESTION_NODES = Object.freeze({
   times: {
     question: "times คืออะไร",
     buttons: [
-      ["activity", "🗓️ Activity Mode"], ["reminder", "🔔 Reminder Mode"],
-      ["calendar", "Google Calendar"], ["telegram", "Telegram แจ้งเตือน"],
-      ["features", "ดูฟีเจอร์ทั้งหมด"]
+      ["purpose", "T.i.M.E.S. ใช้ทำอะไร"],
+      ["activity-reminder", "Activity กับ Reminder ต่างกันอย่างไร"],
+      ["assistant", "MR.Zettascale คืออะไร"]
     ]
   },
   features: {
     question: "times มีฟีเจอร์",
     buttons: [
-      ["activity", "🗓️ วางแผนกิจกรรม"], ["reminder", "🔔 Reminder และ Buffer"],
-      ["calendar", "Google Calendar และ Sync"], ["telegram", "Telegram"],
+      ["activity", "🗓️ ฟีเจอร์ Activity Mode"],
+      ["reminder", "🔔 ฟีเจอร์ Reminder Mode"],
+      ["connection", "การเชื่อมต่อและการซิงก์"]
+    ]
+  },
+  purpose: {
+    question: "times คืออะไร",
+    buttons: [
+      ["activity-reminder", "Activity กับ Reminder ต่างกันอย่างไร"],
+      ["features", "ดูฟีเจอร์ทั้งหมด"],
       ["assistant", "MR.Zettascale คืออะไร"]
+    ]
+  },
+  "activity-reminder": {
+    question: "activity กับ reminder",
+    buttons: [
+      ["activity", "ดู Activity Mode"],
+      ["reminder", "ดู Reminder Mode"],
+      ["times", "← กลับภาพรวม T.i.M.E.S."]
     ]
   },
   activity: {
     question: "activity mode",
-    buttons: [["times", "← ภาพรวม T.i.M.E.S."], ["features", "ฟีเจอร์ทั้งหมด"], ["reminder", "ดู Reminder Mode"]]
+    buttons: [
+      ["week-spine", "Week Spine และ Cycle"],
+      ["category-tag", "Category และ Tag"],
+      ["features", "← ฟีเจอร์ทั้งหมด"]
+    ]
   },
   reminder: {
     question: "reminder มีประเภท",
-    buttons: [["features", "← ฟีเจอร์ทั้งหมด"], ["activity", "ดู Activity Mode"], ["telegram", "การแจ้งเตือน Telegram"]]
+    buttons: [
+      ["buffer", "Buffer ทำงานอย่างไร"],
+      ["notifications", "การแจ้งเตือนและโควต้า"],
+      ["features", "← ฟีเจอร์ทั้งหมด"]
+    ]
+  },
+  connection: {
+    question: "ฟีเจอร์การเชื่อมต่อและการตั้งค่า",
+    buttons: [
+      ["calendar", "Google Calendar"],
+      ["telegram", "Telegram แจ้งเตือน"],
+      ["sync", "ข้อมูลซิงก์อย่างไร"]
+    ]
   },
   calendar: {
     question: "google calendar",
-    buttons: [["sync", "ข้อมูลซิงก์อย่างไร"], ["features", "← ฟีเจอร์ทั้งหมด"], ["times", "ภาพรวม T.i.M.E.S."]]
+    buttons: [["sync", "ข้อมูลซิงก์อย่างไร"], ["connection", "← การเชื่อมต่อทั้งหมด"], ["features", "ฟีเจอร์ทั้งหมด"]]
   },
   telegram: {
     question: "telegram",
-    buttons: [["reminder", "ดู Reminder Mode"], ["sync", "ข้อมูลซิงก์อย่างไร"], ["features", "← ฟีเจอร์ทั้งหมด"]]
+    buttons: [["notifications", "การแจ้งเตือนและโควต้า"], ["connection", "← การเชื่อมต่อทั้งหมด"], ["reminder", "ดู Reminder Mode"]]
   },
   sync: {
     question: "ข้อมูลซิงก์ข้ามอุปกรณ์",
-    buttons: [["calendar", "Google Calendar"], ["telegram", "Telegram"], ["times", "ภาพรวม T.i.M.E.S."]]
+    buttons: [["calendar", "Google Calendar"], ["telegram", "Telegram"], ["connection", "← การเชื่อมต่อทั้งหมด"]]
   },
   assistant: {
     question: "mr.zettascale",
-    buttons: [["activity", "ดู Activity Mode"], ["features", "← ฟีเจอร์ทั้งหมด"], ["times", "ภาพรวม T.i.M.E.S."]]
+    buttons: [["activity", "ดู Activity Mode"], ["purpose", "T.i.M.E.S. ใช้ทำอะไร"], ["times", "← กลับภาพรวม T.i.M.E.S."]]
+  },
+  "week-spine": {
+    question: "week spine และ cycle คือ",
+    buttons: [["activity", "← Activity Mode"], ["category-tag", "Category และ Tag"], ["features", "ฟีเจอร์ทั้งหมด"]]
+  },
+  "category-tag": {
+    question: "category กับ tag",
+    buttons: [["activity", "← Activity Mode"], ["week-spine", "Week Spine และ Cycle"], ["features", "ฟีเจอร์ทั้งหมด"]]
+  },
+  buffer: {
+    question: "buffer ของ reminder",
+    buttons: [["notifications", "การแจ้งเตือนและโควต้า"], ["reminder", "← Reminder Mode"], ["features", "ฟีเจอร์ทั้งหมด"]]
+  },
+  notifications: {
+    question: "โควต้าการแจ้งเตือน",
+    buttons: [["telegram", "Telegram แจ้งเตือน"], ["buffer", "Buffer ทำงานอย่างไร"], ["reminder", "← Reminder Mode"]]
   }
 });
 
