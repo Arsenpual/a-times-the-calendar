@@ -35,15 +35,6 @@ function typeIcon(type) {
   return "↻";
 }
 
-function activeEventSessionLabel(session, nowTick) {
-  if (session.eventAnchorPhase === "countdown") {
-    const remainingSeconds = Math.max(0, Math.ceil(((session.startedAt + session.durationMs) - nowTick) / 1000));
-    return `⏳ ${session.title} · ${formatDurationClock(remainingSeconds)}`;
-  }
-  const elapsedSeconds = Math.max(0, Math.floor((nowTick - session.startedAt) / 1000));
-  return `⏱ ${session.title} · ${formatDurationClock(elapsedSeconds)}`;
-}
-
 /** Presentational card; all state mutations remain in ReminderDashboard hooks. */
 export default function ReminderCard({
   reminder, nowTick, t, groups, typeOptions, daysOfWeek, cardMenu,
@@ -75,10 +66,6 @@ export default function ReminderCard({
       <div className="reminder-card-title-row"><p className="title">{reminder.title}</p><span className={`reminder-priority reminder-priority--${priority.tone}`}>{priority.label}</span></div>
       <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
       {eventAnchorSummary && <p className="reminder-buffer-detail">⏳ {eventAnchorSummary}</p>}
-      {eventAnchorSummary && <span className="reminder-type-chip">Event session พร้อมใช้</span>}
-      {activeEventAnchorSessions.map((session) => <p key={session.id} className="reminder-active-event-session" title={session.eventAnchorPhase === "countdown" ? "Countdown ชั่วคราวกำลังทำงาน" : "Stopwatch ชั่วคราวกำลังทำงาน"}>
-        {activeEventSessionLabel(session, nowTick)}
-      </p>)}
       {isDerivedSession && <p className="reminder-buffer-detail">ชั่วคราว · จาก {sourceReminder.title}</p>}
       {weeklyDaysLabel && <p className="reminder-weekly-days-detail"><span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}</p>}
       {reminder.completedAt && <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}</span>}
@@ -87,6 +74,9 @@ export default function ReminderCard({
       {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onTriggerAnchor(reminder.id); }}>⚡ เริ่มเหตุการณ์ "{reminder.eventName}"</button>}
       {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onAdvanceRoutine(reminder.id); }}>✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})</button>}
     </div>
+    {activeEventAnchorSessions.length > 0 && <div className="reminder-active-buffer-icons" role="status" aria-label={activeEventAnchorSessions.map((session) => session.eventAnchorPhase === "countdown" ? "Countdown กำลังทำงาน" : "Stopwatch กำลังทำงาน").join(" และ ")} title={activeEventAnchorSessions.map((session) => session.eventAnchorPhase === "countdown" ? "Countdown กำลังทำงาน" : "Stopwatch กำลังทำงาน").join(" · ")}>
+      {activeEventAnchorSessions.map((session) => <span key={session.id} aria-hidden="true">{session.eventAnchorPhase === "countdown" ? "⏳" : "⏱️"}</span>)}
+    </div>}
     {!isDerivedSession && (reminder.type === REMINDER_TYPE.STOPWATCH ? <div className="stopwatch-controls"><button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => onToggleStopwatch(reminder.id)}>{reminder.enabled ? "⏸ Stop" : "▶ Start"}</button><button type="button" className="icon-btn" onClick={() => onResetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">↺</button></div> : <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => onToggleReminder(reminder.id)} aria-label="สวิตช์เปิดปิด" />)}
     {!isDerivedSession && <div className={`reminder-card-actions ${isMenuOpen ? "menu-open" : ""}`}><button type="button" className="icon-btn" onClick={(event) => onToggleMenu(event, reminder.id)} title="ตัวเลือกเพิ่มเติม" aria-haspopup="true" aria-expanded={isMenuOpen}>⋮</button>
       {isMenuOpen && createPortal(<div className="card-dropdown-menu" role="menu" onPointerDown={(event) => event.stopPropagation()} style={{ "--card-menu-x": `${cardMenu.position.x}px`, "--card-menu-y": `${cardMenu.position.y}px` }}><button type="button" role="menuitem" onClick={() => { onCloseMenu(); onStartEdit(reminder); }}>✏️ แก้ไข</button>{isOneShotType(reminder.type) && !reminder.completedAt && <button type="button" role="menuitem" onClick={() => { onCloseMenu(); onMarkCompleted(reminder.id); }}>✓ ทำเสร็จแล้ว</button>}<button type="button" role="menuitem" className="is-danger" onClick={() => { onCloseMenu(); onDelete(reminder.id); }}>🗑️ ลบ</button></div>, document.body)}
