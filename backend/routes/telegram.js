@@ -17,6 +17,7 @@ const COMMAND_HELP_TEXT =
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/times — T.i.M.E.S. คืออะไร\n" +
+  "/features — T.i.M.E.S. มีฟีเจอร์อะไรบ้าง\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
@@ -28,6 +29,78 @@ const CUSTOM_COMMAND_KEYBOARD = {
   one_time_keyboard: true,
   input_field_placeholder: "เลือกคำสั่งด่วน หรือพิมพ์ข้อความ"
 };
+
+// The two roots belong in Telegram's persistent command menu. Everything
+// underneath is deliberately an inline, contextual follow-up—similar to the
+// guided question flow in the web Activity assistant, without invoking AI.
+const PRODUCT_QUESTION_NODES = Object.freeze({
+  times: {
+    question: "times คืออะไร",
+    buttons: [
+      ["activity", "🗓️ Activity Mode"], ["reminder", "🔔 Reminder Mode"],
+      ["calendar", "Google Calendar"], ["telegram", "Telegram แจ้งเตือน"],
+      ["features", "ดูฟีเจอร์ทั้งหมด"]
+    ]
+  },
+  features: {
+    question: "times มีฟีเจอร์",
+    buttons: [
+      ["activity", "🗓️ วางแผนกิจกรรม"], ["reminder", "🔔 Reminder และ Buffer"],
+      ["calendar", "Google Calendar และ Sync"], ["telegram", "Telegram"],
+      ["assistant", "MR.Zettascale คืออะไร"]
+    ]
+  },
+  activity: {
+    question: "activity mode",
+    buttons: [["times", "← ภาพรวม T.i.M.E.S."], ["features", "ฟีเจอร์ทั้งหมด"], ["reminder", "ดู Reminder Mode"]]
+  },
+  reminder: {
+    question: "reminder มีประเภท",
+    buttons: [["features", "← ฟีเจอร์ทั้งหมด"], ["activity", "ดู Activity Mode"], ["telegram", "การแจ้งเตือน Telegram"]]
+  },
+  calendar: {
+    question: "google calendar",
+    buttons: [["sync", "ข้อมูลซิงก์อย่างไร"], ["features", "← ฟีเจอร์ทั้งหมด"], ["times", "ภาพรวม T.i.M.E.S."]]
+  },
+  telegram: {
+    question: "telegram",
+    buttons: [["reminder", "ดู Reminder Mode"], ["sync", "ข้อมูลซิงก์อย่างไร"], ["features", "← ฟีเจอร์ทั้งหมด"]]
+  },
+  sync: {
+    question: "ข้อมูลซิงก์ข้ามอุปกรณ์",
+    buttons: [["calendar", "Google Calendar"], ["telegram", "Telegram"], ["times", "ภาพรวม T.i.M.E.S."]]
+  },
+  assistant: {
+    question: "mr.zettascale",
+    buttons: [["activity", "ดู Activity Mode"], ["features", "← ฟีเจอร์ทั้งหมด"], ["times", "ภาพรวม T.i.M.E.S."]]
+  }
+});
+
+function productQuestionKeyboard(node) {
+  return {
+    inline_keyboard: node.buttons.map(([id, label]) => [{ text: label, callback_data: `product:${id}` }])
+  };
+}
+
+function productQuestionResponse(nodeId) {
+  const node = PRODUCT_QUESTION_NODES[nodeId] || PRODUCT_QUESTION_NODES.times;
+  return {
+    node,
+    text: answerTimesQuestion(node.question) || "ผมยังไม่มีข้อมูลยืนยันเกี่ยวกับส่วนนั้นใน T.i.M.E.S. ครับ"
+  };
+}
+
+function productNodeForText(text) {
+  const normalized = String(text || "").toLowerCase();
+  if (/ฟีเจอร์|ทำอะไรได้บ้าง|ความสามารถ/.test(normalized)) return "features";
+  if (/activity|กิจกรรม|week spine|cycle/.test(normalized)) return "activity";
+  if (/reminder|buffer|countdown|stopwatch/.test(normalized)) return "reminder";
+  if (/google|calendar|ปฏิทิน/.test(normalized)) return "calendar";
+  if (/telegram|แจ้งเตือน|notification|noti/.test(normalized)) return "telegram";
+  if (/sync|ซิงก์|firestore|firebase/.test(normalized)) return "sync";
+  if (/zettascale|ผู้ช่วย|\bai\b/.test(normalized)) return "assistant";
+  return "times";
+}
 
 function announcementAdminChatIds() {
   return new Set(
@@ -183,6 +256,26 @@ async function handleAnnouncementCallback(callbackQuery) {
   await editTelegramMessage(chatId, messageId, formatAnnouncementPanel({ ...data, ...next }), { reply_markup: announcementInlineKeyboard(next) });
 }
 
+async function handleProductQuestionCallback(callbackQuery) {
+  const chatId = callbackQuery.message?.chat?.id;
+  const messageId = callbackQuery.message?.message_id;
+  const nodeId = String(callbackQuery.data || "").replace(/^product:/, "");
+  if (!chatId || !messageId || !callbackQuery.id || !PRODUCT_QUESTION_NODES[nodeId]) return;
+
+  const { node, text } = productQuestionResponse(nodeId);
+  await answerTelegramCallback(callbackQuery.id);
+  await editTelegramMessage(chatId, messageId, text, { reply_markup: productQuestionKeyboard(node) });
+
+  // The answer is edited in Telegram rather than sent as a stack of new
+  // messages. Mirror that final visible text into the web chat as well.
+  const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId;
+  if (chatOwner) {
+    await telegramMessagesCol(chatOwner).doc(String(messageId)).set({
+      direction: "outgoing", text, telegramMessageId: messageId
+    }, { merge: true });
+  }
+}
+
 async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
   const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
   const messageRef = telegramMessagesCol(userId).doc(messageId);
@@ -264,10 +357,7 @@ async function registerBotCommands() {
         // The permanent three-dash menu is a product-question launcher only.
         // Operational commands remain available through /cmd when needed.
         { command: "times", description: "T.i.M.E.S. คืออะไร" },
-        { command: "features", description: "ดูฟีเจอร์หลักของแอป" },
-        { command: "activity", description: "Activity Mode คืออะไร" },
-        { command: "reminder", description: "Reminder Mode คืออะไร" },
-        { command: "sync", description: "ข้อมูลซิงก์อย่างไร" }
+        { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
       ]
     })
   });
@@ -435,6 +525,10 @@ module.exports.webhook = async function telegramWebhook(req, res) {
       await handleAnnouncementCallback(callbackQuery);
       return res.sendStatus(200);
     }
+    if (callbackQuery?.data?.startsWith("product:")) {
+      await handleProductQuestionCallback(callbackQuery);
+      return res.sendStatus(200);
+    }
     const message = req.body?.message;
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
@@ -492,18 +586,17 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     // Telegram can answer only documented product questions here. This is a
     // deterministic knowledge lookup, so it never calls Gemini or consumes
     // the Activity Mode AI quota.
-    const commandQuestions = {
-      "/times": "times คืออะไร",
-      "/features": "times มีฟีเจอร์",
-      "/activity": "activity mode คืออะไร",
-      "/reminder": "reminder มีประเภท",
-      "/sync": "ข้อมูลซิงก์ข้ามอุปกรณ์"
+    const commandNodes = {
+      "/times": "times",
+      "/features": "features"
     };
-    const commandName = text.match(/^\/(times|features|activity|reminder|sync)(?:@\w+)?$/i)?.[1]?.toLowerCase();
-    const productQuestion = commandName ? commandQuestions[`/${commandName}`] : text;
+    const commandName = text.match(/^\/(times|features)(?:@\w+)?$/i)?.[1]?.toLowerCase();
+    const requestedNode = commandName ? commandNodes[`/${commandName}`] : productNodeForText(text);
+    const productQuestion = commandName ? PRODUCT_QUESTION_NODES[requestedNode].question : text;
     const productAnswer = answerTimesQuestion(productQuestion);
     if (productAnswer) {
-      await reply(productAnswer);
+      const node = PRODUCT_QUESTION_NODES[requestedNode];
+      await reply(productAnswer, { reply_markup: productQuestionKeyboard(node) });
       return res.sendStatus(200);
     }
 
