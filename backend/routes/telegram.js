@@ -261,9 +261,13 @@ async function registerBotCommands() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       commands: [
-        // Keep the permanent three-dash menu intentionally small. The rest
-        // remains available to people who need it through /cmd.
-        { command: "times", description: "T.i.M.E.S. คืออะไร" }
+        // The permanent three-dash menu is a product-question launcher only.
+        // Operational commands remain available through /cmd when needed.
+        { command: "times", description: "T.i.M.E.S. คืออะไร" },
+        { command: "features", description: "ดูฟีเจอร์หลักของแอป" },
+        { command: "activity", description: "Activity Mode คืออะไร" },
+        { command: "reminder", description: "Reminder Mode คืออะไร" },
+        { command: "sync", description: "ข้อมูลซิงก์อย่างไร" }
       ]
     })
   });
@@ -488,9 +492,15 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     // Telegram can answer only documented product questions here. This is a
     // deterministic knowledge lookup, so it never calls Gemini or consumes
     // the Activity Mode AI quota.
-    const productQuestion = /^\/times(?:@\w+)?$/i.test(text)
-      ? "times คืออะไร"
-      : text;
+    const commandQuestions = {
+      "/times": "times คืออะไร",
+      "/features": "times มีฟีเจอร์",
+      "/activity": "activity mode คืออะไร",
+      "/reminder": "reminder มีประเภท",
+      "/sync": "ข้อมูลซิงก์ข้ามอุปกรณ์"
+    };
+    const commandName = text.match(/^\/(times|features|activity|reminder|sync)(?:@\w+)?$/i)?.[1]?.toLowerCase();
+    const productQuestion = commandName ? commandQuestions[`/${commandName}`] : text;
     const productAnswer = answerTimesQuestion(productQuestion);
     if (productAnswer) {
       await reply(productAnswer);
