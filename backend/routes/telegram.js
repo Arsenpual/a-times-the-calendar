@@ -9,16 +9,14 @@ const BOT_API = "https://api.telegram.org";
 const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
+const ANNOUNCEMENT_EDIT_TTL_MS = 10 * 60 * 1000;
+const pendingAnnouncementMessageEdits = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
-  "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
-  "/announce — เปิดแผงปุ่มปรับ announcement-ticker\n" +
-  "/announce config interval=10 hold=2 speed=60 scramble=on — ปรับรูปแบบประกาศ\n" +
-  "/announce status — ดูการตั้งค่า announcement-ticker\n" +
-  "/announce off — ซ่อน announcement-ticker\n\n" +
+  "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
@@ -70,22 +68,6 @@ function announcementConfigSummary(config) {
     `เอฟเฟกต์ scramble: ${config.scrambleEnabled ? "เปิด" : "ปิด"}`;
 }
 
-function parseAnnouncementConfig(command) {
-  const updates = {};
-  for (const token of command.trim().split(/\s+/)) {
-    const [rawKey, rawValue] = token.split("=");
-    const key = rawKey?.toLowerCase();
-    const value = rawValue?.toLowerCase();
-    if (!key || value == null) continue;
-    if (key === "interval") updates.repeatIntervalMinutes = Number(value);
-    if (key === "hold") updates.holdDurationSeconds = Number(value);
-    if (key === "speed") updates.scrollSpeedPxPerSecond = Number(value);
-    if (key === "scramble") updates.scrambleEnabled = ["on", "true", "1"].includes(value);
-    if (key === "enabled") updates.enabled = ["on", "true", "1"].includes(value);
-  }
-  return updates;
-}
-
 function formatAnnouncementPanel(data = {}) {
   const config = normalizeAnnouncementConfig(data);
   const message = typeof data.message === "string" && data.message.trim()
@@ -118,6 +100,7 @@ function announcementInlineKeyboard(config) {
         { text: "เร็วขึ้น", callback_data: "announce:speed:+" }
       ],
       [{ text: `Scramble: ${scramble}`, callback_data: "announce:scramble" }],
+      [{ text: "✏️ เปลี่ยนข้อความ", callback_data: "announce:message" }],
       [{ text: "↻ อัปเดต", callback_data: "announce:refresh" }, { text: "✕ ปิดแผง", callback_data: "announce:close" }]
     ]
   };
@@ -167,6 +150,14 @@ async function handleAnnouncementCallback(callbackQuery) {
   if (action === "announce:close") {
     await answerTelegramCallback(callbackQuery.id, "ปิดแผงแล้ว");
     await editTelegramMessage(chatId, messageId, "📣 ปิดแผงตั้งค่า announcement-ticker แล้ว");
+    return;
+  }
+  if (action === "announce:message") {
+    pendingAnnouncementMessageEdits.set(String(chatId), Date.now() + ANNOUNCEMENT_EDIT_TTL_MS);
+    await answerTelegramCallback(callbackQuery.id, "ส่งข้อความใหม่ภายใน 10 นาที");
+    await sendTelegram(chatId, "✏️ ส่งข้อความประกาศใหม่ในข้อความถัดไป\n(หมดเวลาใน 10 นาที)", {
+      reply_markup: { force_reply: true, input_field_placeholder: "พิมพ์ข้อความ announcement…" }
+    });
     return;
   }
 
@@ -466,36 +457,30 @@ module.exports.webhook = async function telegramWebhook(req, res) {
         return res.sendStatus(200);
       }
 
-      const nextMessage = (announcementMatch[1] || "").trim();
-      if (!nextMessage) {
-        await sendAnnouncementPanel(reply);
+      if (announcementMatch[1]?.trim()) {
+        await reply("ใช้ /announce เพียงคำสั่งเดียว แล้วกด ✏️ เปลี่ยนข้อความ ในแผงตั้งค่า");
         return res.sendStatus(200);
       }
-      if (/^status$/i.test(nextMessage)) {
-        const data = (await announcementDoc().get()).data();
-        await reply(announcementConfigSummary(normalizeAnnouncementConfig(data)));
+      await sendAnnouncementPanel(reply);
+      return res.sendStatus(200);
+    }
+
+    const pendingEditExpiresAt = pendingAnnouncementMessageEdits.get(String(chatId));
+    if (pendingEditExpiresAt && pendingEditExpiresAt < Date.now()) pendingAnnouncementMessageEdits.delete(String(chatId));
+    if (pendingAnnouncementMessageEdits.has(String(chatId)) && text && !text.startsWith("/")) {
+      if (!isAnnouncementAdmin(chatId)) {
+        pendingAnnouncementMessageEdits.delete(String(chatId));
+        await reply("⛔ คุณไม่มีสิทธิ์เปลี่ยนประกาศ");
         return res.sendStatus(200);
       }
-      const configMatch = nextMessage.match(/^config\s+(.+)$/i);
-      if (configMatch) {
-        const current = (await announcementDoc().get()).data();
-        const config = normalizeAnnouncementConfig({ ...current, ...parseAnnouncementConfig(configMatch[1]) });
-        await announcementDoc().set({ ...config, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
-        await reply(`✅ อัปเดตการตั้งค่า announcement-ticker แล้ว\n\n${announcementConfigSummary(config)}`);
-        return res.sendStatus(200);
-      }
-      if (/^(off|clear)$/i.test(nextMessage)) {
-        await announcementDoc().set({ message: null, enabled: false, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
-        await reply("✅ ซ่อน announcement-ticker แล้ว");
-        return res.sendStatus(200);
-      }
-      if (nextMessage.length > MAX_ANNOUNCEMENT_LENGTH) {
+      if (text.length > MAX_ANNOUNCEMENT_LENGTH) {
         await reply(`ข้อความยาวเกินไป — จำกัด ${MAX_ANNOUNCEMENT_LENGTH} ตัวอักษร`);
         return res.sendStatus(200);
       }
-
-      await announcementDoc().set({ message: nextMessage, enabled: true, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
-      await reply(`✅ อัปเดต announcement-ticker แล้ว\n\n${nextMessage}`);
+      pendingAnnouncementMessageEdits.delete(String(chatId));
+      await announcementDoc().set({ message: text, enabled: true, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
+      await reply("✅ อัปเดตข้อความประกาศแล้ว");
+      await sendAnnouncementPanel(reply);
       return res.sendStatus(200);
     }
 
