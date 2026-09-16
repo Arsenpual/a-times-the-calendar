@@ -13,6 +13,18 @@ function hasCompleteExplicitTiming(draft) {
     || Number.isInteger(draft.durationMinutes) && draft.durationMinutes >= 30;
   return hasStart && hasEnd;
 }
+
+function fallbackReplyForDraft(raw) {
+  const title = typeof raw?.draft?.title === 'string' ? raw.draft.title.trim().slice(0, 200) : '';
+  if (raw?.ready) {
+    return title
+      ? `สรุปร่างกิจกรรม “${title}” พร้อมให้ตรวจสอบแล้วครับ`
+      : 'สรุปร่างกิจกรรมพร้อมให้ตรวจสอบแล้วครับ';
+  }
+  return title
+    ? `ผมรับรายละเอียดของ “${title}” แล้วครับ`
+    : 'ผมรับรายละเอียดกิจกรรมแล้วครับ';
+}
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -43,8 +55,10 @@ function prepareContext(body) {
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');
-  const reply = bounded(raw.reply, 4000, 'คำตอบ');
-  if (!reply) fail('AI ไม่ได้ส่งคำตอบ');
+  // Vertex may rarely return a schema-valid draft with an empty optional
+  // text part. The draft is still reviewable, so provide a deterministic
+  // Thai summary instead of discarding the complete activity request.
+  const reply = bounded(raw.reply, 4000, 'คำตอบ') || fallbackReplyForDraft(raw);
   // Product answers and out-of-scope replies must not be mistaken for a
   // stalled activity draft after the second user turn.
   if (raw.mode === 'about' || raw.mode === 'unsupported') return { reply, ready: false, draft: null };

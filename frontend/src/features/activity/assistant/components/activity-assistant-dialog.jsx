@@ -205,7 +205,10 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         guidedStep: immediateGuidedActivity ? immediateGuidedStep : "",
         guidedActivity: immediateGuidedActivity
       });
-      const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
+      // A complete explicit request is parsed by the backend without Gemini.
+      // Render it like other quota-free knowledge responses so this turn does
+      // not inflate the local AI usage indicator either.
+      const responseSource = ["knowledge", "deterministic"].includes(result.source) ? "knowledge" : "ai";
       const currentNode = getActivityAssistantConversationNode(conversationNodeId);
       const collectedFieldValue = result.collected?.[currentNode.field] || immediateGuidedActivity?.[currentNode.field];
       const canAdvanceGuidedFlow = responseSource === "ai" && immediateGuidedActivity && currentNode.field && collectedFieldValue;
@@ -223,9 +226,12 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         const withCorrectedUserSource = responseSource === "knowledge"
           ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
           : current;
-        const nextMessages = result.ready
-          ? withCorrectedUserSource
-          : [...withCorrectedUserSource, { role: "assistant", text: result.reply, source: responseSource, followUpQuestions: responseSource === "knowledge" ? getActivityAssistantKnowledgeFollowUps(text) : [] }];
+        const nextMessages = [...withCorrectedUserSource, {
+          role: "assistant",
+          text: result.reply,
+          source: responseSource,
+          followUpQuestions: !result.ready && responseSource === "knowledge" ? getActivityAssistantKnowledgeFollowUps(text) : []
+        }];
         return nextMessages;
       });
       if (canAdvanceGuidedFlow && !nextNodeId && completedGuidedActivity?.title && completedGuidedActivity.date && completedGuidedActivity.time && completedGuidedActivity.durationMinutes) {

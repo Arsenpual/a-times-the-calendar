@@ -163,6 +163,17 @@ test('current text is removed when it is duplicated as newest history', () => {
   assert.deepEqual(ctx.history, []);
 });
 test('incomplete AI result rejected', () => assert.throws(() => finishResult({}, context())));
+test('a usable Gemini draft receives a local summary when reply is empty', () => {
+  const result = finishResult({
+    ready: true,
+    reply: '',
+    draft: extraction({ title: 'ทำงาน', date: '2026-09-15', startTime: '08:30', durationMinutes: 180 })
+  }, context('ทำงาน พรุ่งนี้ 08.30 3 ชม.'));
+  assert.equal(result.ready, true);
+  assert.match(result.reply, /ทำงาน/);
+  assert.equal(result.draft.startLocal, '2026-09-15T08:30');
+  assert.equal(result.draft.endLocal, '2026-09-15T11:30');
+});
 test('unclear title can request clarification', () => assert.equal(finishResult({ ready: false, reply: 'ทำอะไรครับ?', draft: {} }, context()).draft, null));
 test('third unclear turn requests manual title without inventing one', () => {
   const ctx = context(); ctx.history = [{ role: 'user', text: 'นัด' }, { role: 'user', text: 'ไม่รู้' }];

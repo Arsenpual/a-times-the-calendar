@@ -69,6 +69,28 @@ test("knowledge answer is deterministic and skips Gemini quota", async () => {
   assert.equal(geminiCalls, 0);
 });
 
+test("a complete explicit activity request skips AI quota and opens a reviewable draft", async () => {
+  let quotaCalls = 0;
+  let geminiCalls = 0;
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => { quotaCalls += 1; return { status: "claimed" }; },
+    generateActivity: async () => { geminiCalls += 1; return validGeminiDraft(); }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, { text: "ทำงาน 08.30 พรุ่งนี้ 3 ชม." });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, "deterministic");
+    assert.equal(result.ready, true);
+    assert.match(result.reply, /Activity Popup/);
+    assert.equal(result.draft.title, "ทำงาน");
+    assert.equal(result.draft.startLocal, "2026-09-17T08:30");
+    assert.equal(result.draft.endLocal, "2026-09-17T11:30");
+  });
+  assert.equal(quotaCalls, 0);
+  assert.equal(geminiCalls, 0);
+});
+
 test("valid Gemini result becomes a reviewable draft and never calls a Calendar writer", async () => {
   let geminiCalls = 0;
   await withTestServer({

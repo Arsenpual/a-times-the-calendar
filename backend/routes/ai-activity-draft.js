@@ -39,6 +39,54 @@ function templateFallback(context, { title, date, time, durationMinutes, categor
   }, context);
 }
 
+function calendarDateAfter(date, days) {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+function explicitDateFromText(text, referenceDate) {
+  const isoDate = String(text).match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+  if (isoDate) return isoDate;
+  if (/พรุ่งนี้|\btomorrow\b/i.test(text)) return calendarDateAfter(referenceDate, 1);
+  if (/วันนี้|\btoday\b/i.test(text)) return referenceDate;
+  return "";
+}
+
+function durationMinutesFromText(text) {
+  const hours = String(text).match(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b|(\d+(?:\.\d+)?)\s*(?:ชั่วโมง|ชม\.?)/i);
+  if (hours) return Math.round(Number(hours[1] || hours[2]) * 60);
+  const minutes = String(text).match(/\b(\d+)\s*(?:minutes?|mins?)\b|(\d+)\s*นาที/i);
+  return minutes ? Number(minutes[1] || minutes[2]) : 0;
+}
+
+function explicitTimeFromText(text) {
+  const match = String(text).match(/\b([01]?\d|2[0-3])[.:]([0-5]\d)\b/);
+  return match ? `${match[1].padStart(2, "0")}:${match[2]}` : "";
+}
+
+function completeActivityRequest(context) {
+  const { text, referenceDate } = context;
+  const date = explicitDateFromText(text, referenceDate);
+  const startTime = explicitTimeFromText(text);
+  const durationMinutes = durationMinutesFromText(text);
+  // This strict branch intentionally accepts only a complete, explicit
+  // request. Anything ambiguous still goes to Gemini for a conversation.
+  if (!date || !startTime || durationMinutes < 1 || durationMinutes > 720) return null;
+  const title = String(text)
+    .replace(/\b([01]?\d|2[0-3])[.:]([0-5]\d)\b/g, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?)/gi, " ")
+    .replace(/\b\d+\s*(?:minutes?|mins?)\b|\d+\s*นาที/gi, " ")
+    .replace(/พรุ่งนี้|วันนี้|\btomorrow\b|\btoday\b|\b\d{4}-\d{2}-\d{2}\b/gi, " ")
+    .replace(/\s+/g, " ").trim();
+  if (!title || title.length > 200) return null;
+  return finishResult({
+    ready: true,
+    reply: `ร่างกิจกรรม “${title}” สำเร็จแล้วครับ ตรวจสอบรายละเอียดได้ใน Activity Popup`,
+    draft: { title, date, startTime, startLocal: "", endLocal: "", durationMinutes, allDay: false, categoryName: "", tags: [], notes: "", assumptions: ["สร้างจากข้อมูลวัน เวลา และระยะเวลาที่ระบุครบถ้วน"] }
+  }, context);
+}
+
 // The guided flow collects mandatory facts without Gemini. At summary time it
 // may use the application's separate AI budget to enrich category and tags.
 router.post("/activity-template-draft", async (req, res) => {
@@ -120,6 +168,10 @@ router.post("/activity-conversation", async (req, res, next) => {
     // Gemini, so they never consume the person's AI quota.
     const knowledgeReply = answerKnowledge(context.text);
     if (knowledgeReply) return res.json({ reply: knowledgeReply, ready: false, draft: null, source: "knowledge" });
+    const deterministicDraft = completeActivityRequest(context);
+    if (deterministicDraft) {
+      return res.json({ ...deterministicDraft, schedule: assessDraftSchedule(deterministicDraft.draft, context.scheduleContext), source: "deterministic" });
+    }
     claim = await claimChatUsage(req.userId);
     if (claim.status !== "claimed") {
       const errors = {
