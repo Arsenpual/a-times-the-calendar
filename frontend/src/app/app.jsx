@@ -977,6 +977,9 @@ function AccountApp({ auth }) {
           setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
         }}
         categories={categories}
+        activities={activities}
+        activityTagMap={activityTagMap}
+        lockedActivities={lockedActivities}
         onConfirmDraft={handleConfirmAiActivityDraft}
         onOpenActivityForm={(draft) => {
           setActivityAssistantFormUpdate(null);

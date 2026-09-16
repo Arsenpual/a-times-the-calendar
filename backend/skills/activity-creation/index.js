@@ -2,6 +2,7 @@ const schema = require('./schema.js');
 const buildPrompt = require('./prompt.js');
 const { applyAssumptions } = require('./assumptions.js');
 const { validateDraft, localDateTime, bounded, fail } = require('./validator.js');
+const { normalizeScheduleContext, assessDraftSchedule } = require('./schedule-context.js');
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -23,7 +24,8 @@ function prepareContext(body) {
     time: typeof body.guidedActivity.time === 'string' ? body.guidedActivity.time.slice(0, 5) : '',
     durationMinutes: Number.isInteger(body.guidedActivity.durationMinutes) ? body.guidedActivity.durationMinutes : 0
   } : null;
-  return { text, referenceDate, timeZone, history, categories, guidedStep, guidedActivity };
+  const userTags = (Array.isArray(body.userTags) ? body.userTags : []).slice(0, 100).filter(tag => typeof tag === 'string').map(tag => tag.trim().slice(0, 40)).filter(Boolean);
+  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext: { activities: normalizeScheduleContext(body.scheduleContext) }, guidedStep, guidedActivity };
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');
@@ -57,4 +59,4 @@ function finishResult(raw, context) {
   }
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
-module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft };
+module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule };

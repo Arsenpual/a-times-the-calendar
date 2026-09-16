@@ -2,7 +2,7 @@ const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
 
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const { schema, buildPrompt, prepareContext, finishResult, validateDraft } = require("../skills/activity-creation");
+const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule } = require("../skills/activity-creation");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
 function createActivityAssistantRouter({
@@ -135,7 +135,7 @@ router.post("/activity-conversation", async (req, res, next) => {
     }
 
     const result = finishResult(await generateActivity(context), context);
-    res.json(result);
+    res.json(result.ready ? { ...result, schedule: assessDraftSchedule(result.draft, context.scheduleContext) } : result);
   } catch (error) {
     if (claim?.status === "claimed") await releaseChatUsage(claim).catch(() => {});
     res.status(error.status || 502).json({ error: error.message });

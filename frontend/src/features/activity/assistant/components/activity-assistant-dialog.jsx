@@ -5,8 +5,9 @@ import { getActivityAssistantConversationNode, getActivityAssistantKnowledgeFoll
 import { buildDailySummaryChat } from "../lib/daily-summary-chat.js";
 import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
 import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
+import { buildAssistantScheduleContext, collectUserTags } from "../lib/activity-schedule-context.js";
 
-export default function ActivityAssistantDialog({ open, onClose, categories, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
+export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
   const initialChat = useInitialAssistantChat();
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -161,6 +162,8 @@ export default function ActivityAssistantDialog({ open, onClose, categories, onC
         text, history, referenceDate: toDateInputValue(new Date()),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name),
+        userTags: collectUserTags(activityTagMap),
+        scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, toDateInputValue(new Date())),
         guidedStep: immediateGuidedActivity ? immediateGuidedStep : "",
         guidedActivity: immediateGuidedActivity
       });
