@@ -247,7 +247,12 @@ export default function ReminderDashboard({
           ตาม reminder-dashboard-mockup.jsx, migration plan v2 เฟส 1.1) */}
       {syncError && <p className="error-banner" role="alert">{syncError}</p>}
       {reminderCalendar.error && <p className="error-banner" role="alert">{reminderCalendar.error}</p>}
-      {reminderCalendar.loading && <p role="status">กำลังโหลดกิจกรรมในปฏิทิน…</p>}
+      {reminderCalendar.loading && (
+        <div className="reminder-calendar-loading-float" role="status" aria-live="polite">
+          <span className="reminder-calendar-loading-spinner" aria-hidden="true" />
+          <span>กำลังโหลดกิจกรรมในปฏิทิน…</span>
+        </div>
+      )}
       <div className="dashboard-body">
         {/* Left Nav — มุมมองทั้งหมด/วันนี้/วันที่เลือก, ตัวกรองประเภท และ
             กลุ่ม/โปรเจกต์ ใช้ reminderDateFilter ชุดเดียวกับ list/timeline */}

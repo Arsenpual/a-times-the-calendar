@@ -1,5 +1,6 @@
 const express = require("express");
 const { announcementDoc } = require("../firestore-db.js");
+const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 
 const router = express.Router();
 
@@ -12,7 +13,8 @@ router.get("/", async (req, res, next) => {
     const data = snapshot.data();
     res.json({
       configured: snapshot.exists,
-      message: typeof data?.message === "string" ? data.message : null
+      message: typeof data?.message === "string" ? data.message : null,
+      config: normalizeAnnouncementConfig(data)
     });
   } catch (error) {
     next(error);

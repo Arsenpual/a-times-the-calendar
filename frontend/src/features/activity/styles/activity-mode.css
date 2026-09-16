@@ -1630,26 +1630,26 @@
 
 /* Activity Mode ใช้ scrollbar แบบเดียวกับ Reminder Mode เพื่อให้คอลัมน์
    Agenda, mini timeline, editor และ modal ไม่เห็นแถบขาวหนาเกินจำเป็น. */
-:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box) {
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages) {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-secondary) 42%, transparent) transparent;
 }
 
-:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box)::-webkit-scrollbar {
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
-:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box)::-webkit-scrollbar-track { background: transparent; }
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-track { background: transparent; }
 
-:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box)::-webkit-scrollbar-thumb {
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text-secondary) 46%, transparent);
   background-clip: padding-box;
 }
 
-:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box)::-webkit-scrollbar-thumb:hover {
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--text-secondary) 66%, transparent);
   background-clip: padding-box;
 }

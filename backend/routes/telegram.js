@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { FieldValue } = require("firebase-admin/firestore");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
+const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -14,6 +15,8 @@ const COMMAND_HELP_TEXT =
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
+  "/announce config interval=10 hold=2 speed=60 scramble=on — ปรับรูปแบบประกาศ\n" +
+  "/announce status — ดูการตั้งค่า announcement-ticker\n" +
   "/announce off — ซ่อน announcement-ticker\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
@@ -55,6 +58,31 @@ async function sendTelegram(chatId, text, options = {}) {
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(`Telegram ส่งข้อความไม่สำเร็จ: ${data.description || response.status}`);
   return data.result;
+}
+
+function announcementConfigSummary(config) {
+  return "⚙️ การตั้งค่า announcement-ticker\n" +
+    `สถานะ: ${config.enabled ? "เปิด" : "ปิด"}\n` +
+    `แสดงซ้ำทุก: ${config.repeatIntervalMinutes} นาที\n` +
+    `ค้างข้อความ: ${config.holdDurationSeconds} วินาที\n` +
+    `ความเร็วเลื่อน: ${config.scrollSpeedPxPerSecond} px/s\n` +
+    `เอฟเฟกต์ scramble: ${config.scrambleEnabled ? "เปิด" : "ปิด"}`;
+}
+
+function parseAnnouncementConfig(command) {
+  const updates = {};
+  for (const token of command.trim().split(/\s+/)) {
+    const [rawKey, rawValue] = token.split("=");
+    const key = rawKey?.toLowerCase();
+    const value = rawValue?.toLowerCase();
+    if (!key || value == null) continue;
+    if (key === "interval") updates.repeatIntervalMinutes = Number(value);
+    if (key === "hold") updates.holdDurationSeconds = Number(value);
+    if (key === "speed") updates.scrollSpeedPxPerSecond = Number(value);
+    if (key === "scramble") updates.scrambleEnabled = ["on", "true", "1"].includes(value);
+    if (key === "enabled") updates.enabled = ["on", "true", "1"].includes(value);
+  }
+  return updates;
 }
 
 async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
@@ -138,7 +166,7 @@ async function registerBotCommands() {
         { command: "start", description: "เชื่อมต่อ T.i.M.E.S." },
         { command: "cmd", description: "ดูคำสั่งทั้งหมด" },
         { command: "myid", description: "ดู Telegram chat ID ของฉัน" },
-        { command: "announce", description: "ตั้งข้อความ announcement (ผู้ดูแล)" }
+        { command: "announce", description: "ตั้งค่า announcement (ผู้ดูแล)" }
       ]
     })
   });
@@ -330,11 +358,24 @@ module.exports.webhook = async function telegramWebhook(req, res) {
 
       const nextMessage = (announcementMatch[1] || "").trim();
       if (!nextMessage) {
-        await reply("ใช้ /announce ข้อความประกาศ\nหรือ /announce off เพื่อซ่อนประกาศ");
+        await reply("ใช้ /announce ข้อความประกาศ\n/announce config interval=10 hold=2 speed=60 scramble=on\n/announce status\nหรือ /announce off เพื่อซ่อนประกาศ");
+        return res.sendStatus(200);
+      }
+      if (/^status$/i.test(nextMessage)) {
+        const data = (await announcementDoc().get()).data();
+        await reply(announcementConfigSummary(normalizeAnnouncementConfig(data)));
+        return res.sendStatus(200);
+      }
+      const configMatch = nextMessage.match(/^config\s+(.+)$/i);
+      if (configMatch) {
+        const current = (await announcementDoc().get()).data();
+        const config = normalizeAnnouncementConfig({ ...current, ...parseAnnouncementConfig(configMatch[1]) });
+        await announcementDoc().set({ ...config, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
+        await reply(`✅ อัปเดตการตั้งค่า announcement-ticker แล้ว\n\n${announcementConfigSummary(config)}`);
         return res.sendStatus(200);
       }
       if (/^(off|clear)$/i.test(nextMessage)) {
-        await announcementDoc().set({ message: null, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
+        await announcementDoc().set({ message: null, enabled: false, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
         await reply("✅ ซ่อน announcement-ticker แล้ว");
         return res.sendStatus(200);
       }
@@ -343,7 +384,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
         return res.sendStatus(200);
       }
 
-      await announcementDoc().set({ message: nextMessage, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
+      await announcementDoc().set({ message: nextMessage, enabled: true, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
       await reply(`✅ อัปเดต announcement-ticker แล้ว\n\n${nextMessage}`);
       return res.sendStatus(200);
     }

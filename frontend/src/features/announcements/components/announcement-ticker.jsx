@@ -1,19 +1,24 @@
 import React, { useLayoutEffect, useRef } from "react";
 import { animate, scrambleText } from "animejs";
 
-const HIDDEN_DURATION_MS = 5 * 60 * 1000;
 const REVEAL_DURATION_MS = 1200;
-const HOLD_DURATION_MS = 1800;
-const SCROLL_SPEED_PX_PER_SEC = 60;
+const DEFAULT_CONFIG = Object.freeze({
+  enabled: true,
+  repeatIntervalMinutes: 5,
+  holdDurationSeconds: 1.8,
+  scrollSpeedPxPerSecond: 60,
+  scrambleEnabled: true
+});
 
 // React owns the layout; Anime.js owns only the empty display span and transform.
-export default function AnnouncementTicker({ message }) {
+export default function AnnouncementTicker({ message, config }) {
   const containerRef = useRef(null);
   const itemRef = useRef(null);
   const textRef = useRef(null);
 
   useLayoutEffect(() => {
-    if (!message) return undefined;
+    if (!message || !config?.enabled) return undefined;
+    const settings = { ...DEFAULT_CONFIG, ...config };
     const container = containerRef.current;
     const item = itemRef.current;
     const text = textRef.current;
@@ -25,7 +30,7 @@ export default function AnnouncementTicker({ message }) {
     const hide = () => {
       if (cancelled) return;
       container.style.visibility = "hidden";
-      timer = window.setTimeout(play, HIDDEN_DURATION_MS);
+      timer = window.setTimeout(play, settings.repeatIntervalMinutes * 60 * 1000);
     };
     const scroll = () => {
       if (cancelled) return;
@@ -34,7 +39,7 @@ export default function AnnouncementTicker({ message }) {
       container.dataset.phase = "scroll";
       animation = animate(item, {
         translateX: -distance,
-        duration: Math.max(1000, distance / SCROLL_SPEED_PX_PER_SEC * 1000),
+        duration: Math.max(1000, distance / settings.scrollSpeedPxPerSecond * 1000),
         ease: "linear",
         onComplete: hide
       });
@@ -44,7 +49,7 @@ export default function AnnouncementTicker({ message }) {
       text.textContent = message;
       container.dataset.phase = "hold";
       timer = window.setTimeout(motion.matches ? hide : scroll,
-        motion.matches ? Math.max(6000, message.length * 80) : HOLD_DURATION_MS);
+        motion.matches ? Math.max(6000, message.length * 80) : settings.holdDurationSeconds * 1000);
     };
     function play() {
       if (cancelled) return;
@@ -52,7 +57,7 @@ export default function AnnouncementTicker({ message }) {
       container.dataset.phase = "reveal";
       item.style.transform = "translateX(0)";
       text.textContent = message;
-      if (motion.matches) { hold(); return; }
+      if (motion.matches || !settings.scrambleEnabled) { hold(); return; }
       // Animate a plain object, then copy via textContent: announcement strings
       // (including <, >, &) must never be interpreted as HTML.
       const target = { textContent: message, innerHTML: "" };
@@ -77,9 +82,9 @@ export default function AnnouncementTicker({ message }) {
       window.clearTimeout(timer);
       motion.removeEventListener("change", restart);
     };
-  }, [message]);
+  }, [message, config]);
 
-  if (!message) return null;
+  if (!message || !config?.enabled) return null;
   return (
     <div className="announcement-ticker" ref={containerRef} role="status" aria-label={message}>
       <div className="announcement-ticker-track" aria-hidden="true">

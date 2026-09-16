@@ -612,7 +612,7 @@
           display: inline-flex;
           align-items: center;
           gap: 4px;
-          font-size: 11px;
+          font-size: 9px;
           color: var(--g-on-surface-variant);
           min-height: 20px;
           padding: 2px 7px;
@@ -644,6 +644,47 @@
           overflow: hidden;
           padding: 16px;
           gap: 16px;
+        }
+
+        /* สถานะโหลดปฏิทินเป็น floating status ไม่ดัน dashboard ให้เลื่อนลง */
+        .reminder-calendar-loading-float {
+          position: fixed;
+          top: 72px;
+          left: 50%;
+          z-index: 9200;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          max-width: min(360px, calc(100vw - 32px));
+          min-height: 32px;
+          padding: 8px 12px;
+          border: 1px solid var(--g-outline-variant);
+          border-radius: 10px;
+          background: color-mix(in srgb, var(--g-surface) 94%, transparent);
+          box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+          color: var(--g-on-surface);
+          font-size: 12px;
+          line-height: 1.35;
+          transform: translateX(-50%);
+          pointer-events: none;
+        }
+
+        .reminder-calendar-loading-spinner {
+          width: 12px;
+          height: 12px;
+          flex: 0 0 auto;
+          border: 2px solid color-mix(in srgb, var(--g-blue) 24%, transparent);
+          border-top-color: var(--g-blue);
+          border-radius: 50%;
+          animation: reminder-calendar-loading-spin .8s linear infinite;
+        }
+
+        @keyframes reminder-calendar-loading-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+          .reminder-calendar-loading-float { top: 64px; }
         }
 
         .timeline-panel {
@@ -1097,7 +1138,7 @@
         .tab-bar {
           display: flex;
           gap: 4px;
-          padding: 0 16px;
+          padding: 0 12px;
           border-bottom: 1px solid var(--g-outline-variant);
           flex-shrink: 0;
         }
@@ -1106,16 +1147,16 @@
           background: none;
           border: none;
           border-bottom: 2px solid transparent;
-          padding: 10px 4px;
+          padding: 6px 3px;
           margin-bottom: -1px;
           font-family: inherit;
-          font-size: 13px;
+          font-size: 11px;
           font-weight: 500;
           color: var(--g-on-surface-variant);
           cursor: pointer;
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
         }
 
         .reminder-status-tab:disabled {
@@ -1129,11 +1170,11 @@
         }
 
         .reminder-status-tab-count {
-          font-size: 11px;
+          font-size: 9px;
           color: var(--g-on-surface-variant);
           background: var(--g-background);
           border-radius: 10px;
-          padding: 1px 7px;
+          padding: 1px 5px;
         }
 
         .reminder-status-tab.is-active .reminder-status-tab-count {
@@ -1145,30 +1186,38 @@
           align-items: center;
           gap: 2px;
           margin-left: auto;
-          padding: 5px 0;
+          padding: 3px 0;
         }
 
         .tab-bar-sort-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          min-height: 24px;
           border: 1px solid transparent;
-          border-radius: 7px;
+          border-radius: 6px;
           background: transparent;
           color: var(--g-on-surface-variant);
-          font: 600 10px/1 inherit;
-          padding: 6px 7px;
+          font: 600 9px/1 inherit;
+          letter-spacing: .01em;
+          padding: 3px 6px;
           cursor: pointer;
           white-space: nowrap;
+          transition: background .14s ease, border-color .14s ease, color .14s ease, transform .14s ease;
         }
 
-        .tab-bar-sort-button:hover { background: var(--g-background); }
-        .tab-bar-sort-button.is-active { color: var(--g-blue); border-color: color-mix(in srgb, var(--g-blue) 35%, var(--g-outline)); background: color-mix(in srgb, var(--g-blue) 8%, var(--g-surface)); }
+        .tab-bar-sort-button:hover { background: var(--g-background); transform: translateY(-1px); }
+        .tab-bar-sort-button:active { transform: translateY(0); }
+        .tab-bar-sort-button.is-active { color: var(--g-blue); border-color: color-mix(in srgb, var(--g-blue) 35%, var(--g-outline)); background: color-mix(in srgb, var(--g-blue) 8%, var(--g-surface)); box-shadow: 0 1px 3px rgb(0 0 0 / 8%); }
         .tab-bar-filter-select {
           max-width: 122px;
-          min-height: 28px;
+          min-height: 24px;
           border: 1px solid var(--g-outline);
           border-radius: 7px;
           background: var(--g-surface);
           color: var(--g-on-surface-variant);
-          font: 600 10px/1 inherit;
+          font: 600 9px/1 inherit;
           padding: 0 6px;
           cursor: pointer;
         }
@@ -1307,6 +1356,11 @@
         .reminder-priority--active {
           background: var(--g-blue-light);
           color: var(--g-blue-hover);
+        }
+
+        .reminder-card.active .reminder-priority--active {
+          background: color-mix(in srgb, var(--g-green) 14%, var(--g-surface));
+          color: var(--g-green);
         }
 
         .reminder-priority--due {

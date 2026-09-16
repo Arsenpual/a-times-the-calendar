@@ -131,7 +131,7 @@ function AccountApp({ auth }) {
   const error = authError || activityError;
 
   const archivedActivityIds = useArchivedActivityIds(firebaseUser);
-  const announcementMessage = useAnnouncementMessage(firebaseUser);
+  const announcement = useAnnouncementMessage(firebaseUser);
 
   useEffect(() => {
     if (!error) return undefined;
@@ -599,7 +599,7 @@ function AccountApp({ auth }) {
         </header>
       )}
 
-      {firebaseUser && <AnnouncementTicker message={announcementMessage} />}
+      {firebaseUser && <AnnouncementTicker message={announcement.message} config={announcement.config} />}
 
       {/* Render อาจต้องตื่นก่อนตอบสถานะ Calendar หลังผู้ใช้หายไปนาน.
           ระหว่าง retry ให้สื่อสารว่าแอปกำลังทำงาน แทนปล่อยให้ดูเหมือน
