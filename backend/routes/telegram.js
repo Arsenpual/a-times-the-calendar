@@ -3,6 +3,7 @@ const express = require("express");
 const { FieldValue } = require("firebase-admin/firestore");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
 const { normalizeAnnouncementConfig } = require("../announcement-config.js");
+const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -15,6 +16,7 @@ const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
+  "/times — T.i.M.E.S. คืออะไร\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
@@ -259,10 +261,9 @@ async function registerBotCommands() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       commands: [
-        { command: "start", description: "เชื่อมต่อ T.i.M.E.S." },
-        { command: "cmd", description: "ดูคำสั่งทั้งหมด" },
-        { command: "myid", description: "ดู Telegram chat ID ของฉัน" },
-        { command: "announce", description: "ตั้งค่า announcement (ผู้ดูแล)" }
+        // Keep the permanent three-dash menu intentionally small. The rest
+        // remains available to people who need it through /cmd.
+        { command: "times", description: "T.i.M.E.S. คืออะไร" }
       ]
     })
   });
@@ -481,6 +482,18 @@ module.exports.webhook = async function telegramWebhook(req, res) {
       await announcementDoc().set({ message: text, enabled: true, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
       await reply("✅ อัปเดตข้อความประกาศแล้ว");
       await sendAnnouncementPanel(reply);
+      return res.sendStatus(200);
+    }
+
+    // Telegram can answer only documented product questions here. This is a
+    // deterministic knowledge lookup, so it never calls Gemini or consumes
+    // the Activity Mode AI quota.
+    const productQuestion = /^\/times(?:@\w+)?$/i.test(text)
+      ? "times คืออะไร"
+      : text;
+    const productAnswer = answerTimesQuestion(productQuestion);
+    if (productAnswer) {
+      await reply(productAnswer);
       return res.sendStatus(200);
     }
 
