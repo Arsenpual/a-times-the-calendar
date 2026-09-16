@@ -169,6 +169,16 @@ test('third unclear turn requests manual title without inventing one', () => {
   const result = finishResult({ ready: false, reply: 'ถามต่อ', draft: {} }, ctx);
   assert.equal(result.ready, false); assert.match(result.reply, /ชื่อกิจกรรม/);
 });
+test('a complete explicit request is promoted to an ActivityPopup draft even when Gemini asks for confirmation', () => {
+  const result = finishResult({
+    ready: false,
+    reply: 'พรุ่งนี้ กิจกรรม "ทำงาน" จะเริ่มเวลา 09:00 น. และใช้เวลา 1 ชั่วโมง 30 นาที ใช่ไหมครับ?',
+    draft: extraction({ title: 'ทำงาน', date: '2026-09-15', startTime: '09:00', durationMinutes: 90 })
+  }, context('พรุ่งนี้ ทำงาน 09:00 90 นาที'));
+  assert.equal(result.ready, true);
+  assert.equal(result.draft.startLocal, '2026-09-15T09:00');
+  assert.equal(result.draft.endLocal, '2026-09-15T10:30');
+});
 test('guided flow keeps Gemini next-field question after earlier answers', () => {
   const ctx = context('08.00');
   ctx.guidedStep = 'activity.time';

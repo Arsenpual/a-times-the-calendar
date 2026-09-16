@@ -3,6 +3,16 @@ const buildPrompt = require('./prompt.js');
 const { applyAssumptions } = require('./assumptions.js');
 const { validateDraft, localDateTime, bounded, fail } = require('./validator.js');
 const { normalizeScheduleContext, buildAvailableWindows, assessDraftSchedule } = require('./schedule-context.js');
+
+function hasCompleteExplicitTiming(draft) {
+  if (!draft || typeof draft.title !== 'string' || !draft.title.trim()) return false;
+  const hasDate = typeof draft.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(draft.date);
+  const hasStart = typeof draft.startLocal === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(draft.startLocal)
+    || hasDate && typeof draft.startTime === 'string' && /^\d{2}:\d{2}$/.test(draft.startTime);
+  const hasEnd = typeof draft.endLocal === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(draft.endLocal)
+    || Number.isInteger(draft.durationMinutes) && draft.durationMinutes >= 30;
+  return hasStart && hasEnd;
+}
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -41,7 +51,11 @@ function finishResult(raw, context) {
   // Gemini may decide a short input is enough for a draft. During the guided
   // flow it is only a field collector: final drafting is allowed exclusively
   // after title, date, start time, and duration have all been collected.
-  if (!raw.ready || context.guidedStep) {
+  // Gemini sometimes returns a complete structured draft but phrases its
+  // reply as a confirmation question. A complete explicit request should
+  // still go straight to ActivityPopup; that popup is the real review gate.
+  const promoteCompleteDraft = !context.guidedStep && !raw.ready && hasCompleteExplicitTiming(raw.draft);
+  if ((!raw.ready && !promoteCompleteDraft) || context.guidedStep) {
     // Keep safe, partial facts from Gemini so a typed reply to a guided
     // question (for example the activity title) survives into the next step.
     const partial = raw.draft || {};
