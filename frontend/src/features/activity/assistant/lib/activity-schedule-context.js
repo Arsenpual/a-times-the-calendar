@@ -17,9 +17,14 @@ export function buildAssistantScheduleContext(activities, lockedActivities, refe
     windowStartLocal: localDateTime(start),
     windowEndLocal: localDateTime(end),
     activities: activities.filter((activity) => {
-      if (!activity.start?.dateTime || !activity.end?.dateTime) return false;
+      // The save handler counts all-day Calendar activities as their full
+      // midnight-to-midnight range for the three-overlap limit. Preserve
+      // them here as well, otherwise the assistant can falsely describe a
+      // timed slot as available and leave the final save to reject it.
+      if (!activity.start || !activity.end) return false;
       const activityStart = activityDate(activity.start);
-      return activityStart && activityStart >= start && activityStart < end;
+      const activityEnd = activityDate(activity.end);
+      return activityStart && activityEnd && activityEnd > start && activityStart < end;
     }).slice(0, 80).map((activity) => ({
       id: activity.id,
       title: activity.summary || "(ไม่มีชื่อกิจกรรม)",

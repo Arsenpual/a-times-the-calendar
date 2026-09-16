@@ -32,6 +32,16 @@ test("all-day drafts are not evaluated as timed overlaps", () => {
   assert.equal(schedule.status, "not-applicable");
 });
 
+test("an existing all-day range counts toward a timed draft's overlap limit", () => {
+  const schedule = assessDraftSchedule(draft, { activities: [
+    activity("all-day", "กิจกรรมทั้งวัน", "2026-09-16T00:00", "2026-09-17T00:00"),
+    activity("one", "งานหนึ่ง", "2026-09-16T09:30", "2026-09-16T11:30"),
+    activity("two", "งานสอง", "2026-09-16T09:45", "2026-09-16T11:15")
+  ] });
+  assert.equal(schedule.status, "overlap-limit");
+  assert.equal(schedule.conflicts.length, 3);
+});
+
 test("available windows are compact, daytime-only schedule hints", () => {
   const windows = buildAvailableWindows({
     windowStartLocal: "2026-09-16T00:00",
