@@ -326,7 +326,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
       {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}{onOpenDailySummary && <button type="button" onClick={runDailySummary} disabled={pending}>สรุปวันนี้</button>}</div></div>}
-      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "พิมพ์เพื่อให้ AI ช่วยต่อจากบทสนทนานี้…"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
+      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "ทำงาน 08.30 พรุ่งนี้ 3 ชม."} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
 }
