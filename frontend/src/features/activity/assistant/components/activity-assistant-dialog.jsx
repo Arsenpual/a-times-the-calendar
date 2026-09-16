@@ -110,11 +110,29 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
     setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setPending(true); setPendingSource("template"); setError("");
     try {
-      const result = await createActivityTemplateDraft({ title: selected.title, date: selected.date, time: selected.time, durationMinutes: selected.durationMinutes, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: categories.map((category) => category.name) });
+      const result = await createActivityTemplateDraft({
+        title: selected.title,
+        date: selected.date,
+        time: selected.time,
+        durationMinutes: selected.durationMinutes,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        categories: categories.map((category) => category.name),
+        scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, selected.date)
+      });
       const activityDraft = result.draft;
       // A guided conversation can begin from the compact assistant without
       // an already-open ActivityPopup. Updating a closed form loses the
       // review surface, so open it with the completed draft in that case.
+      if (result.schedule?.status === "overlap-limit") {
+        setScheduleResolution({ formDraft: activityDraft, alternatives: result.schedule.alternatives || [] });
+        setMessages((current) => [...current, {
+          role: "assistant",
+          text: describeScheduleConflict(result.schedule),
+          source: "template",
+          scheduleAlternatives: result.schedule.alternatives || []
+        }]);
+        return;
+      }
       if (activityFormOpen) onUpdateActivityForm?.({ values: { ...selected, formDraft: activityDraft }, changedField: "activityDraft" });
       else onOpenActivityForm?.(activityDraft);
       setDraft(null);

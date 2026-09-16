@@ -45,6 +45,14 @@ function post(baseUrl, body) {
   });
 }
 
+function postTemplate(baseUrl, body) {
+  return fetch(`${baseUrl}/activity-template-draft`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date: "2026-09-16", time: "10:00", durationMinutes: 60, title: "ร่างกิจกรรม", timeZone: "Asia/Bangkok", categories: ["งาน"], ...body })
+  });
+}
+
 test("knowledge answer is deterministic and skips Gemini quota", async () => {
   let quotaCalls = 0;
   let geminiCalls = 0;
@@ -92,4 +100,25 @@ test("malformed Gemini datetime is rejected and its claimed quota is released", 
     assert.match((await response.json()).error, /YYYY-MM-DDTHH:mm/);
   });
   assert.equal(releases, 1);
+});
+
+test("guided template drafts use the same overlap limit as typed AI drafts", async () => {
+  await withTestServer({
+    claimDraftUsage: async () => ({ status: "day-limited" })
+  }, async (baseUrl) => {
+    const response = await postTemplate(baseUrl, {
+      scheduleContext: {
+        activities: [
+          { id: "one", title: "หนึ่ง", startLocal: "2026-09-16T09:30", endLocal: "2026-09-16T11:30" },
+          { id: "two", title: "สอง", startLocal: "2026-09-16T09:45", endLocal: "2026-09-16T11:15" },
+          { id: "three", title: "สาม", startLocal: "2026-09-16T10:00", endLocal: "2026-09-16T11:00" }
+        ]
+      }
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.ready, true);
+    assert.equal(result.schedule.status, "overlap-limit");
+    assert.ok(result.schedule.alternatives.length > 0);
+  });
 });

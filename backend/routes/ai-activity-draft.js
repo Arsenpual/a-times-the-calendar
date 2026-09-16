@@ -49,18 +49,19 @@ router.post("/activity-template-draft", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) throw new Error("วันที่ไม่ถูกต้อง");
     if (!/^\d{2}:\d{2}$/.test(time || "")) throw new Error("เวลาไม่ถูกต้อง");
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 720) throw new Error("ระยะเวลาต้องอยู่ระหว่าง 30 ถึง 720 นาที");
-    const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories });
+    const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories, scheduleContext: req.body.scheduleContext });
     claim = await claimDraftUsage(req.userId);
     if (claim.status === "claimed") {
       try {
         const result = finishResult(await generateActivity(context), context);
-        if (result.ready) return res.json({ ...result, summarySource: "system-ai" });
+        if (result.ready) return res.json({ ...result, schedule: assessDraftSchedule(result.draft, context.scheduleContext), summarySource: "system-ai" });
       } catch (error) {
         await releaseDraftUsage(claim).catch(() => {});
         claim = null;
       }
     }
-    return res.json({ ...templateFallback(context, { title, date, time, durationMinutes, categoryName }), summarySource: "deterministic" });
+    const result = templateFallback(context, { title, date, time, durationMinutes, categoryName });
+    return res.json({ ...result, schedule: assessDraftSchedule(result.draft, context.scheduleContext), summarySource: "deterministic" });
   } catch (error) {
     if (claim?.status === "claimed") await releaseDraftUsage(claim).catch(() => {});
     res.status(400).json({ error: error.message });
