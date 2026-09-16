@@ -349,20 +349,22 @@ async function releaseDeliveryClaim(claim) {
 }
 
 async function registerBotCommands() {
-  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      commands: [
-        // The permanent three-dash menu is a product-question launcher only.
-        // Operational commands remain available through /cmd when needed.
-        { command: "times", description: "T.i.M.E.S. คืออะไร" },
-        { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
-      ]
-    })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.ok) throw new Error(`ตั้งเมนูคำสั่ง Telegram ไม่สำเร็จ: ${data.description || response.status}`);
+  // A bot can have a separate menu for all private chats. Updating only the
+  // default scope leaves an older private-chat menu visible, so publish the
+  // same two roots to both scopes every time the backend starts.
+  const commands = [
+    { command: "times", description: "T.i.M.E.S. คืออะไร" },
+    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
+  ];
+  for (const scope of [undefined, { type: "all_private_chats" }]) {
+    const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commands, ...(scope ? { scope } : {}) })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(`ตั้งเมนูคำสั่ง Telegram ไม่สำเร็จ: ${data.description || response.status}`);
+  }
 }
 
 router.get("/status", async (req, res, next) => {
