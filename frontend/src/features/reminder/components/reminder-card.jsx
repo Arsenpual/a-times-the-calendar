@@ -41,6 +41,14 @@ function formatBufferDuration(minutes) {
   return `${minutes} นาที`;
 }
 
+function isSameLocalDay(firstTimestamp, secondTimestamp) {
+  const first = new Date(firstTimestamp);
+  const second = new Date(secondTimestamp);
+  return first.getFullYear() === second.getFullYear() &&
+    first.getMonth() === second.getMonth() &&
+    first.getDate() === second.getDate();
+}
+
 /** Presentational card; all state mutations remain in ReminderDashboard hooks. */
 export default function ReminderCard({
   reminder, nowTick, t, groups, typeOptions, daysOfWeek, cardMenu,
@@ -70,8 +78,12 @@ export default function ReminderCard({
   const stopwatchBufferDescription = hasStopwatchBuffer ? `หลัง ${formatBufferDuration(Number(sourceReminder.eventAnchorStopwatchMinutes))}` : "";
   const activeBufferDescription = [countdownBufferDescription, stopwatchBufferDescription].filter(Boolean).join(" · ");
   const lastPrimaryAt = Number(sourceReminder.eventAnchorStartedAt);
-  const countdownCompleted = hasCountdownBuffer && !activeBufferPhases.has("countdown") && Number.isFinite(lastPrimaryAt) && nowTick >= lastPrimaryAt;
-  const stopwatchCompleted = hasStopwatchBuffer && !activeBufferPhases.has("stopwatch") && Number.isFinite(lastPrimaryAt) && nowTick >= lastPrimaryAt + Number(sourceReminder.eventAnchorStopwatchMinutes) * 60_000;
+  // Completion tint is a same-day visual history only. At local midnight a
+  // new reminder day starts, so completed buffers return to their neutral
+  // colour until that day's session actually runs again.
+  const isCurrentBufferDay = Number.isFinite(lastPrimaryAt) && isSameLocalDay(lastPrimaryAt, nowTick);
+  const countdownCompleted = hasCountdownBuffer && !activeBufferPhases.has("countdown") && isCurrentBufferDay && nowTick >= lastPrimaryAt;
+  const stopwatchCompleted = hasStopwatchBuffer && !activeBufferPhases.has("stopwatch") && isCurrentBufferDay && nowTick >= lastPrimaryAt + Number(sourceReminder.eventAnchorStopwatchMinutes) * 60_000;
   const countdownVisualState = activeBufferPhases.has("countdown") ? " is-running" : countdownCompleted ? " is-completed" : "";
   const stopwatchVisualState = activeBufferPhases.has("stopwatch") ? " is-running" : stopwatchCompleted ? " is-completed" : "";
 
