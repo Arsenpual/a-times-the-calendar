@@ -7,6 +7,18 @@ import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
 import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
 import { buildAssistantScheduleContext, collectUserTags } from "../lib/activity-schedule-context.js";
 
+function formatScheduleRange(startLocal, endLocal) {
+  if (typeof startLocal !== "string" || typeof endLocal !== "string") return "ช่วงเวลาใกล้เคียง";
+  return `${startLocal.slice(11, 16)}–${endLocal.slice(11, 16)}`;
+}
+
+function describeScheduleConflict(schedule) {
+  const conflicts = Array.isArray(schedule?.conflicts) ? schedule.conflicts : [];
+  const labels = conflicts.slice(0, 3).map((activity) => `${activity.title}${activity.locked ? " 🔒" : ""}`);
+  const suffix = conflicts.length > 3 ? ` และอีก ${conflicts.length - 3} กิจกรรม` : "";
+  return `ช่วงเวลาที่ร่างไว้มีงานซ้อนกันเกิน 3 รายการ${labels.length ? `: ${labels.join(", ")}${suffix}` : ""}\nเลือกช่วงเวลาใกล้เคียงด้านล่าง หรือแก้ไขเวลาเองในฟอร์มได้ครับ`;
+}
+
 export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
   const initialChat = useInitialAssistantChat();
   const [messages, setMessages] = useState(initialChat.messages);
@@ -24,6 +36,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const [conversationNodeId, setConversationNodeId] = useState(initialChat.conversationNodeId);
   const [guidedConversationMode, setGuidedConversationMode] = useState(initialChat.guidedConversationMode);
   const [showCenteredGeneralQuestions, setShowCenteredGeneralQuestions] = useState(false);
+  const [scheduleResolution, setScheduleResolution] = useState(null);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const savingRef = useRef(false);
@@ -91,7 +104,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setShowCenteredGeneralQuestions(true); };
+  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); setShowCenteredGeneralQuestions(true); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -196,6 +209,17 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       if (result.ready) {
         const popupHandoff = createActivityPopupHandoff(result);
         if (!popupHandoff) throw new Error("ร่างกิจกรรมไม่ครบ จึงยังเปิดฟอร์มบันทึกไม่ได้");
+        if (result.schedule?.status === "overlap-limit") {
+          setScheduleResolution({ formDraft: popupHandoff.values.formDraft, alternatives: result.schedule.alternatives || [] });
+          setMessages((current) => [...current, {
+            role: "assistant",
+            text: describeScheduleConflict(result.schedule),
+            source: "template",
+            scheduleAlternatives: result.schedule.alternatives || []
+          }]);
+          setShowCenteredGeneralQuestions(false);
+          return;
+        }
         setDraft(null);
         setShowCenteredGeneralQuestions(true);
         if (activityFormOpen) onUpdateActivityForm?.(popupHandoff);
@@ -209,6 +233,22 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       setPending(false); setPendingSource("");
       getActivityAssistantStatus().then(result => setAiStatus(result.aiChat)).catch(() => {});
     }
+  };
+  const selectScheduleAlternative = (alternative) => {
+    if (!scheduleResolution?.formDraft || !alternative?.startLocal || !alternative?.endLocal) return;
+    const formDraft = {
+      ...scheduleResolution.formDraft,
+      startLocal: alternative.startLocal,
+      endLocal: alternative.endLocal,
+      assumptions: [...(scheduleResolution.formDraft.assumptions || []), `เลือกช่วงเวลาที่ไม่ชนเกินขีดจำกัด ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`]
+    };
+    setScheduleResolution(null);
+    setMessages((current) => [...current,
+      { role: "user", text: `เลือกเวลา ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`, source: "template" },
+      { role: "assistant", text: "ปรับเวลาในฟอร์มให้แล้ว ตรวจสอบรายละเอียดและกดบันทึกได้เลยครับ", source: "template" }
+    ]);
+    if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft }, changedField: "activityDraft" });
+    else onOpenActivityForm?.(formDraft);
   };
   const confirm = async () => {
     if (!draft || pending || savingRef.current) return;
@@ -244,7 +284,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}</div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative)} disabled={pending || !scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
