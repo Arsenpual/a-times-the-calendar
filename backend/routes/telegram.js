@@ -15,6 +15,7 @@ const COMMAND_HELP_TEXT =
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce <ข้อความ> — เปลี่ยนข้อความ announcement-ticker\n" +
+  "/announce — เปิดแผงปุ่มปรับ announcement-ticker\n" +
   "/announce config interval=10 hold=2 speed=60 scramble=on — ปรับรูปแบบประกาศ\n" +
   "/announce status — ดูการตั้งค่า announcement-ticker\n" +
   "/announce off — ซ่อน announcement-ticker\n\n" +
@@ -83,6 +84,110 @@ function parseAnnouncementConfig(command) {
     if (key === "enabled") updates.enabled = ["on", "true", "1"].includes(value);
   }
   return updates;
+}
+
+function formatAnnouncementPanel(data = {}) {
+  const config = normalizeAnnouncementConfig(data);
+  const message = typeof data.message === "string" && data.message.trim()
+    ? data.message.trim()
+    : "ยังไม่มีข้อความประกาศ";
+  return "📣 ตั้งค่า announcement-ticker\n\n" +
+    `ข้อความ: ${message.slice(0, 180)}${message.length > 180 ? "…" : ""}\n\n` +
+    announcementConfigSummary(config) + "\n\nเลือกปุ่มด้านล่างเพื่อปรับค่า";
+}
+
+function announcementInlineKeyboard(config) {
+  const active = config.enabled ? "🟢 เปิดอยู่" : "⚫ ปิดอยู่";
+  const scramble = config.scrambleEnabled ? "✨ เปิด" : "○ ปิด";
+  return {
+    inline_keyboard: [
+      [{ text: `Ticker: ${active}`, callback_data: "announce:toggle" }],
+      [
+        { text: "− รอบ", callback_data: "announce:interval:-" },
+        { text: `${config.repeatIntervalMinutes} นาที`, callback_data: "announce:status" },
+        { text: "+ รอบ", callback_data: "announce:interval:+" }
+      ],
+      [
+        { text: "− ค้าง", callback_data: "announce:hold:-" },
+        { text: `${config.holdDurationSeconds} วิ`, callback_data: "announce:status" },
+        { text: "+ ค้าง", callback_data: "announce:hold:+" }
+      ],
+      [
+        { text: "ช้าลง", callback_data: "announce:speed:-" },
+        { text: `ความเร็ว ${config.scrollSpeedPxPerSecond}`, callback_data: "announce:status" },
+        { text: "เร็วขึ้น", callback_data: "announce:speed:+" }
+      ],
+      [{ text: `Scramble: ${scramble}`, callback_data: "announce:scramble" }],
+      [{ text: "↻ อัปเดต", callback_data: "announce:refresh" }, { text: "✕ ปิดแผง", callback_data: "announce:close" }]
+    ]
+  };
+}
+
+async function answerTelegramCallback(callbackQueryId, text = "") {
+  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`ตอบ Telegram Inline Keyboard ไม่สำเร็จ: ${data.description || response.status}`);
+}
+
+async function editTelegramMessage(chatId, messageId, text, options = {}) {
+  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, ...options })
+  });
+  const data = await response.json().catch(() => ({}));
+  // Pressing a read-only button can intentionally produce the same content.
+  if (!response.ok || !data.ok) {
+    if (data.description?.includes("message is not modified")) return;
+    throw new Error(`แก้ไขข้อความ Telegram ไม่สำเร็จ: ${data.description || response.status}`);
+  }
+}
+
+async function sendAnnouncementPanel(reply) {
+  const data = (await announcementDoc().get()).data() || {};
+  const config = normalizeAnnouncementConfig(data);
+  await reply(formatAnnouncementPanel(data), { reply_markup: announcementInlineKeyboard(config) });
+}
+
+async function handleAnnouncementCallback(callbackQuery) {
+  const chatId = callbackQuery.message?.chat?.id;
+  const messageId = callbackQuery.message?.message_id;
+  if (!chatId || !messageId || !callbackQuery.id) return;
+  if (!isAnnouncementAdmin(chatId)) {
+    await answerTelegramCallback(callbackQuery.id, "คุณไม่มีสิทธิ์เปลี่ยนประกาศ");
+    return;
+  }
+
+  const action = String(callbackQuery.data || "");
+  if (!action.startsWith("announce:")) return;
+  if (action === "announce:close") {
+    await answerTelegramCallback(callbackQuery.id, "ปิดแผงแล้ว");
+    await editTelegramMessage(chatId, messageId, "📣 ปิดแผงตั้งค่า announcement-ticker แล้ว");
+    return;
+  }
+
+  const data = (await announcementDoc().get()).data() || {};
+  const config = normalizeAnnouncementConfig(data);
+  const updates = {};
+  if (action === "announce:toggle") updates.enabled = !config.enabled;
+  if (action === "announce:scramble") updates.scrambleEnabled = !config.scrambleEnabled;
+  if (action === "announce:interval:-") updates.repeatIntervalMinutes = Math.max(1, config.repeatIntervalMinutes - 1);
+  if (action === "announce:interval:+") updates.repeatIntervalMinutes = Math.min(1_440, config.repeatIntervalMinutes + 1);
+  if (action === "announce:hold:-") updates.holdDurationSeconds = Math.max(0.5, Number((config.holdDurationSeconds - 0.5).toFixed(1)));
+  if (action === "announce:hold:+") updates.holdDurationSeconds = Math.min(60, Number((config.holdDurationSeconds + 0.5).toFixed(1)));
+  if (action === "announce:speed:-") updates.scrollSpeedPxPerSecond = Math.max(20, config.scrollSpeedPxPerSecond - 10);
+  if (action === "announce:speed:+") updates.scrollSpeedPxPerSecond = Math.min(240, config.scrollSpeedPxPerSecond + 10);
+
+  const next = normalizeAnnouncementConfig({ ...config, ...updates });
+  if (Object.keys(updates).length) {
+    await announcementDoc().set({ ...next, updatedAt: new Date().toISOString(), updatedByTelegramChatId: String(chatId) }, { merge: true });
+  }
+  await answerTelegramCallback(callbackQuery.id, action === "announce:status" ? "ดูสถานะล่าสุด" : "บันทึกแล้ว");
+  await editTelegramMessage(chatId, messageId, formatAnnouncementPanel({ ...data, ...next }), { reply_markup: announcementInlineKeyboard(next) });
 }
 
 async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
@@ -329,6 +434,11 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
 module.exports.webhook = async function telegramWebhook(req, res) {
   if (req.get("X-Telegram-Bot-Api-Secret-Token") !== process.env.TELEGRAM_WEBHOOK_SECRET) return res.sendStatus(401);
   try {
+    const callbackQuery = req.body?.callback_query;
+    if (callbackQuery?.data?.startsWith("announce:")) {
+      await handleAnnouncementCallback(callbackQuery);
+      return res.sendStatus(200);
+    }
     const message = req.body?.message;
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
@@ -358,7 +468,7 @@ module.exports.webhook = async function telegramWebhook(req, res) {
 
       const nextMessage = (announcementMatch[1] || "").trim();
       if (!nextMessage) {
-        await reply("ใช้ /announce ข้อความประกาศ\n/announce config interval=10 hold=2 speed=60 scramble=on\n/announce status\nหรือ /announce off เพื่อซ่อนประกาศ");
+        await sendAnnouncementPanel(reply);
         return res.sendStatus(200);
       }
       if (/^status$/i.test(nextMessage)) {

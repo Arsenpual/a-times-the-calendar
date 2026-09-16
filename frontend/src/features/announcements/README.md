@@ -40,7 +40,7 @@ announcements/
 }
 ```
 
-ผู้ดูแล Telegram สามารถใช้ `/announce config interval=10 hold=2 speed=60 scramble=on` หรือ `/announce status` ได้เช่นกัน.
+ผู้ดูแล Telegram ใช้ `/announce` เพื่อเปิด Inline Keyboard สำหรับปรับค่าได้โดยตรง หรือใช้ `/announce config interval=10 hold=2 speed=60 scramble=on` และ `/announce status` แบบพิมพ์คำสั่งได้เช่นกัน.
 
 การวัดความกว้างและการเลื่อนยังคงอยู่ใน component เดียวกัน เพื่อให้ความยาวข้อความและขนาดหน้าจอมีผลต่อเวลาอย่างถูกต้อง ส่วน CSS ไม่ถือ state ของรอบการแสดง
 
