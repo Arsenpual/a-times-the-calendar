@@ -500,7 +500,16 @@ router.post("/notify", async (req, res, next) => {
 module.exports = router;
 
 module.exports.registerWebhook = async function registerWebhook(baseUrl) {
-  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_WEBHOOK_SECRET || !baseUrl) return;
+  const missing = [
+    !process.env.TELEGRAM_BOT_TOKEN && "TELEGRAM_BOT_TOKEN",
+    !process.env.TELEGRAM_WEBHOOK_SECRET && "TELEGRAM_WEBHOOK_SECRET",
+    !baseUrl && "webhook base URL"
+  ].filter(Boolean);
+  if (missing.length) {
+    // Deliberately report only variable names—never token or secret values.
+    console.warn(`[telegram] ข้ามการตั้ง webhook และ Bot Command Menu: ไม่พบ ${missing.join(", ")}`);
+    return;
+  }
   const identityResponse = await fetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
   const identity = await identityResponse.json().catch(() => ({}));
   if (!identityResponse.ok || !identity.ok) {
