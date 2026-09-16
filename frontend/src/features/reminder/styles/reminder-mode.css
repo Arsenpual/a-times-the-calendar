@@ -1256,7 +1256,7 @@
 
         .reminder-card {
           display: grid;
-          grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
+          grid-template-columns: 28px minmax(0, 1fr) auto auto;
           align-items: center;
           gap: 12px;
           padding: 8px 10px;
@@ -1275,6 +1275,10 @@
         .reminder-card.active {
           background: var(--g-active-bg);
           border-color: var(--g-active-border);
+        }
+
+        .reminder-card.has-event-buffer {
+          position: relative;
         }
 
         /* dropdown-backdrop เป็น fixed layer (z-index: 40) สำหรับปิดเมนู
@@ -1323,24 +1327,71 @@
           gap: 4px;
         }
 
+        .reminder-active-buffer-status {
+          position: absolute;
+          z-index: 1;
+          top: 50%;
+          left: 50%;
+          display: grid;
+          justify-items: center;
+          align-items: center;
+          gap: 2px;
+          width: 120px;
+          color: var(--g-blue);
+          line-height: 1;
+          pointer-events: none;
+          transform: translate(-16px, -50%);
+        }
+
         .reminder-active-buffer-icons {
+          display: grid;
+          grid-template-columns: 32px 32px;
+          align-items: center;
+          justify-content: center;
+          column-gap: 12px;
+          min-height: 29px;
+        }
+
+        .reminder-active-buffer-icon {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 5px;
-          min-width: 34px;
-          margin-right: 4px;
-          color: var(--g-blue);
-          font-size: 17px;
+          font-size: 25px;
           line-height: 1;
+          filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--g-blue) 30%, transparent));
+          transform-origin: center;
+        }
+
+        .reminder-active-buffer-icon--countdown { grid-column: 1; }
+        .reminder-active-buffer-icon--stopwatch { grid-column: 2; }
+        .reminder-active-buffer-icon--countdown.is-running { animation: reminder-buffer-countdown-pulse 1.3s ease-in-out infinite; }
+        .reminder-active-buffer-icon--stopwatch.is-running { animation: reminder-buffer-stopwatch-tick .9s steps(2, end) infinite; }
+
+        .reminder-active-buffer-description {
+          display: block;
+          max-width: 120px;
+          overflow: hidden;
+          color: var(--g-on-surface-variant);
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1.2;
+          text-align: center;
+          text-overflow: ellipsis;
           white-space: nowrap;
         }
 
-        .reminder-active-buffer-icons span {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--g-blue) 28%, transparent));
+        @keyframes reminder-buffer-countdown-pulse {
+          0%, 100% { transform: scale(1); opacity: .82; }
+          50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        @keyframes reminder-buffer-stopwatch-tick {
+          0%, 100% { transform: rotate(-7deg) scale(1); }
+          50% { transform: rotate(7deg) scale(1.12); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .reminder-active-buffer-icon { animation: none; }
         }
 
         .reminder-card-title-row {
@@ -1406,13 +1457,6 @@
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-        }
-
-        .reminder-buffer-detail {
-          margin: -1px 0 0;
-          color: var(--g-blue-hover);
-          font-size: 11px;
-          line-height: 1.35;
         }
 
         .reminder-weekly-days-detail {

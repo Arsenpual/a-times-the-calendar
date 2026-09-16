@@ -1,4 +1,4 @@
-import { formatDurationClock, describeReminder, describeEventAnchorSession } from "../lib/reminder-formatters.js";
+import { formatDurationClock, describeReminder } from "../lib/reminder-formatters.js";
 import { createPortal } from "react-dom";
 import { REMINDER_TYPE, isOneShotType } from "../lib/reminder-due-logic.js";
 import { getIntervalWorkSummary } from "../lib/interval-schedule.js";
@@ -35,6 +35,20 @@ function typeIcon(type) {
   return "↻";
 }
 
+function formatBufferDuration(minutes) {
+  if (minutes % 60 === 0) return `${minutes / 60} ชม.`;
+  return `${minutes} นาที`;
+}
+
+function describeBufferBrief(reminder) {
+  const before = Number(reminder.eventAnchorCountdownMinutes);
+  const after = Number(reminder.eventAnchorStopwatchMinutes);
+  const parts = [];
+  if (Number.isInteger(before) && before > 0) parts.push(`ก่อน ${formatBufferDuration(before)}`);
+  if (Number.isInteger(after) && after > 0) parts.push(`หลัง ${formatBufferDuration(after)}`);
+  return parts.join(" · ");
+}
+
 /** Presentational card; all state mutations remain in ReminderDashboard hooks. */
 export default function ReminderCard({
   reminder, nowTick, t, groups, typeOptions, daysOfWeek, cardMenu,
@@ -53,20 +67,22 @@ export default function ReminderCard({
   const intervalWorkLabel = intervalHours % 1 === 0 ? `${intervalHours} ชม.` : `${intervalWorkSummary?.workMinutes} นาที`;
   const isMenuOpen = cardMenu?.id === reminder.id;
   const accentColor = TYPE_ACCENT_COLOR[reminder.type];
-  const eventAnchorSummary = describeEventAnchorSession(reminder);
   const isDerivedSession = Boolean(reminder.isEventAnchorDerived);
   const sourceReminder = reminder.sourceReminder || reminder;
   const activeEventAnchorSessions = reminder.activeEventAnchorSessions || [];
+  const activeBufferPhases = new Set(activeEventAnchorSessions.map((session) => session.eventAnchorPhase));
+  const hasCountdownBuffer = Number(sourceReminder.eventAnchorCountdownMinutes) > 0;
+  const hasStopwatchBuffer = Number(sourceReminder.eventAnchorStopwatchMinutes) > 0;
+  const hasEventBuffer = hasCountdownBuffer || hasStopwatchBuffer;
+  const activeBufferDescription = describeBufferBrief(sourceReminder);
 
-  return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
+  return <div className={`reminder-card ${reminder.enabled ? "active" : ""}${hasEventBuffer ? " has-event-buffer" : ""}${isMenuOpen ? " menu-open" : ""}`} style={{ borderLeftColor: accentColor }}>
     <button type="button" className="reminder-type-icon" style={{ backgroundColor: accentColor, color: reminder.type === REMINDER_TYPE.COUNTDOWN ? "#202124" : "#fff" }} onClick={() => onFocusTimeline(reminder)} title="เลื่อน Timeline มาที่เวลาของ Reminder" aria-label={`เลื่อน Timeline มาที่ ${reminder.title}`}>{typeIcon(reminder.type)}</button>
     <div className="reminder-info" role="button" tabIndex={0} onClick={() => onStartEdit(sourceReminder)} onKeyDown={(event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onStartEdit(sourceReminder); }
     }} title="คลิกเพื่อแก้ไข Reminder">
       <div className="reminder-card-title-row"><p className="title">{reminder.title}</p><span className={`reminder-priority reminder-priority--${priority.tone}`}>{priority.label}</span></div>
       <p className="reminder-schedule-detail">{describeReminder(reminder, nowTick)}</p>
-      {eventAnchorSummary && <p className="reminder-buffer-detail">⏳ {eventAnchorSummary}</p>}
-      {isDerivedSession && <p className="reminder-buffer-detail">ชั่วคราว · จาก {sourceReminder.title}</p>}
       {weeklyDaysLabel && <p className="reminder-weekly-days-detail"><span>{t("reminder.weeklyDays")}</span>{weeklyDaysLabel}</p>}
       {reminder.completedAt && <span className="reminder-completed-badge">✓ ทำเสร็จแล้ว{reminder.type === REMINDER_TYPE.ROUTINE ? ` · ทำครบ ${reminder.completionCount || 0} ครั้ง` : ""}</span>}
       {intervalWorkSummary && <p className="reminder-interval-summary" title={`ช่วงทำงาน ${intervalWorkSummary.range || "ตลอดวัน"} · แจ้งเตือน ${intervalWorkSummary.notificationCount} ครั้ง`}><span>{intervalWorkLabel}</span><span aria-hidden="true">·</span><strong>{intervalWorkSummary.notificationCount} รอบ</strong></p>}
@@ -74,8 +90,12 @@ export default function ReminderCard({
       {reminder.type === REMINDER_TYPE.EVENT_ANCHORED && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onTriggerAnchor(reminder.id); }}>⚡ เริ่มเหตุการณ์ "{reminder.eventName}"</button>}
       {reminder.type === REMINDER_TYPE.ROUTINE && reminder.enabled && <button type="button" className="btn-action-small" onClick={(event) => { event.stopPropagation(); onAdvanceRoutine(reminder.id); }}>✓ ทำเสร็จแล้ว ({reminder.steps[reminder.currentIndex]})</button>}
     </div>
-    {activeEventAnchorSessions.length > 0 && <div className="reminder-active-buffer-icons" role="status" aria-label={activeEventAnchorSessions.map((session) => session.eventAnchorPhase === "countdown" ? "Countdown กำลังทำงาน" : "Stopwatch กำลังทำงาน").join(" และ ")} title={activeEventAnchorSessions.map((session) => session.eventAnchorPhase === "countdown" ? "Countdown กำลังทำงาน" : "Stopwatch กำลังทำงาน").join(" · ")}>
-      {activeEventAnchorSessions.map((session) => <span key={session.id} aria-hidden="true">{session.eventAnchorPhase === "countdown" ? "⏳" : "⏱️"}</span>)}
+    {hasEventBuffer && <div className="reminder-active-buffer-status" role="status" aria-label={activeBufferDescription} title={activeBufferDescription}>
+      <div className="reminder-active-buffer-icons" aria-hidden="true">
+        {hasCountdownBuffer && <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--countdown${activeBufferPhases.has("countdown") ? " is-running" : ""}`}>⏳</span>}
+        {hasStopwatchBuffer && <span className={`reminder-active-buffer-icon reminder-active-buffer-icon--stopwatch${activeBufferPhases.has("stopwatch") ? " is-running" : ""}`}>⏱️</span>}
+      </div>
+      <span className="reminder-active-buffer-description">{activeBufferDescription}</span>
     </div>}
     {!isDerivedSession && (reminder.type === REMINDER_TYPE.STOPWATCH ? <div className="stopwatch-controls"><button type="button" className={`btn-stopwatch ${reminder.enabled ? "stop" : "start"}`} onClick={() => onToggleStopwatch(reminder.id)}>{reminder.enabled ? "⏸ Stop" : "▶ Start"}</button><button type="button" className="icon-btn" onClick={() => onResetStopwatch(reminder.id)} title="รีเซ็ตเป็น 0">↺</button></div> : <button type="button" className={`toggle-switch ${reminder.enabled ? "on" : ""}`} onClick={() => onToggleReminder(reminder.id)} aria-label="สวิตช์เปิดปิด" />)}
     {!isDerivedSession && <div className={`reminder-card-actions ${isMenuOpen ? "menu-open" : ""}`}><button type="button" className="icon-btn" onClick={(event) => onToggleMenu(event, reminder.id)} title="ตัวเลือกเพิ่มเติม" aria-haspopup="true" aria-expanded={isMenuOpen}>⋮</button>
