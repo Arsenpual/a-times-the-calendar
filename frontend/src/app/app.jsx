@@ -181,14 +181,20 @@ function AccountApp({ auth }) {
     focusWeeklySummary,
     activityHeaderTitle
   } = useActivityView({ cursorDate, selectWeek, closeDay, userId: firebaseUser?.uid ?? null });
-  const cycleRange = getYearCycle(cycleAnchorDate);
+  const [streamgraphRange, setStreamgraphRange] = useState("week");
+  // In the normal Week Spine, Cycle Streamgraph follows the week currently
+  // on screen. The four-week overview continues to own its own cycle anchor.
+  const cycleRange = getYearCycle(
+    weekSpineViewMode === "four-weeks" ? cycleAnchorDate : (streamgraphRange === "cycle" ? cursorDate : cycleAnchorDate)
+  );
   const cycleData = useCycleActivities({
     viewMode: mode === "activity" && firebaseUser ? weekSpineViewMode : "week",
     calendarAccessToken,
     cycleStart: cycleRange.start,
     cycleEnd: cycleRange.end,
     userId: firebaseUser?.uid,
-    archivedActivityIds
+    archivedActivityIds,
+    includeWhenWeek: mode === "activity" && streamgraphRange === "cycle"
   });
   const {
     isActivityReading,
@@ -913,8 +919,13 @@ function AccountApp({ auth }) {
                     weekStreamgraph={weekSpineViewMode === "week" ? <ActivityTimeStreamgraph
                       anchorDate={cursorDate}
                       activities={visibleActivities}
+                      cycleAnchorDate={streamgraphRange === "cycle" ? cursorDate : cycleAnchorDate}
+                      cycleActivities={cycleData.activities}
+                      cycleLoading={cycleData.loading}
                       categories={categories}
                       activityCategoryMap={activityCategoryMap}
+                      range={streamgraphRange}
+                      onRangeChange={setStreamgraphRange}
                       onSelectDay={openDay}
                     /> : null}
                   />

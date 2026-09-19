@@ -8,11 +8,12 @@ const EMPTY_ARCHIVED_IDS = new Set();
 /** One Cycle dataset shared by overview and summary; old requests cannot replace a new scope. */
 export function useCycleActivities({
   viewMode, calendarAccessToken, cycleStart, cycleEnd, userId,
-  archivedActivityIds = EMPTY_ARCHIVED_IDS
+  archivedActivityIds = EMPTY_ARCHIVED_IDS,
+  includeWhenWeek = false
 }) {
   const startMs = cycleStart.getTime();
   const endMs = cycleEnd.getTime();
-  const enabled = viewMode === "four-weeks" && Boolean(calendarAccessToken);
+  const enabled = (viewMode === "four-weeks" || includeWhenWeek) && Boolean(calendarAccessToken);
   const scope = JSON.stringify([userId || "", calendarAccessToken, startMs, endMs, enabled]);
   const [snapshot, setSnapshot] = useState({ scope: null, activities: EMPTY_ACTIVITIES, loading: false, error: "" });
 

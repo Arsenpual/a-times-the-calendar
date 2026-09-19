@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { activityDate, getWeekRange, toDateInputValue } from "../../../shared/lib/date-utils.js";
+import { activityDate, getWeekRange, getYearCycle, toDateInputValue } from "../../../shared/lib/date-utils.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { getDisplayColor, UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
@@ -24,10 +24,11 @@ function formatMinutes(minutes) {
 }
 
 function areaPath(upper, lower, maxMinutes) {
-  const x = (index) => (index / 6) * CHART_WIDTH;
+  const lastIndex = Math.max(1, upper.length - 1);
+  const x = (index) => (index / lastIndex) * CHART_WIDTH;
   const y = (minutes) => CHART_HEIGHT - (minutes / Math.max(1, maxMinutes)) * CHART_HEIGHT;
   const top = upper.map((value, index) => `${index ? "L" : "M"}${x(index)} ${y(value)}`).join(" ");
-  const bottom = [...lower].reverse().map((value, index) => `L${x(6 - index)} ${y(value)}`).join(" ");
+  const bottom = [...lower].reverse().map((value, index) => `L${x(lastIndex - index)} ${y(value)}`).join(" ");
   return `${top} ${bottom} Z`;
 }
 
@@ -36,19 +37,27 @@ function areaPath(upper, lower, maxMinutes) {
  * activity durations by category instead of duplicating the editable Week
  * Spine. Selecting a day opens the existing per-day activity panel.
  */
-export default function ActivityTimeStreamgraph({ anchorDate, activities = [], categories = [], activityCategoryMap = {}, onSelectDay }) {
+export default function ActivityTimeStreamgraph({
+  anchorDate, cycleAnchorDate, activities = [], cycleActivities = [], cycleLoading = false,
+  categories = [], activityCategoryMap = {}, range = "week", onRangeChange, onSelectDay
+}) {
   const { language } = useLanguage();
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const model = useMemo(() => {
-    const [weekStart] = getWeekRange(anchorDate instanceof Date ? anchorDate : new Date());
-    const days = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(weekStart);
-      date.setDate(weekStart.getDate() + index);
+    const safeAnchor = anchorDate instanceof Date ? anchorDate : new Date();
+    const cycle = getYearCycle(cycleAnchorDate instanceof Date ? cycleAnchorDate : safeAnchor);
+    const [weekStart] = getWeekRange(safeAnchor);
+    const rangeStart = range === "cycle" ? cycle.start : weekStart;
+    const dayCount = range === "cycle" ? cycle.weekCount * 7 : 7;
+    const sourceActivities = range === "cycle" ? cycleActivities : activities;
+    const days = Array.from({ length: dayCount }, (_, index) => {
+      const date = new Date(rangeStart);
+      date.setDate(rangeStart.getDate() + index);
       return date;
     });
     const categoryRows = new Map();
 
-    for (const activity of activities) {
+    for (const activity of sourceActivities) {
       const start = activityDate(activity.start);
       const end = activityDate(activity.end);
       // All-day records represent availability rather than measured focused
@@ -63,7 +72,7 @@ export default function ActivityTimeStreamgraph({ anchorDate, activities = [], c
           id: key,
           name: category?.name || UNCATEGORIZED_COLOR.name,
           color: display.border,
-          minutes: Array(7).fill(0)
+          minutes: Array(dayCount).fill(0)
         });
       }
       const row = categoryRows.get(key);
@@ -80,15 +89,15 @@ export default function ActivityTimeStreamgraph({ anchorDate, activities = [], c
       .sort((left, right) => right.minutes.reduce((sum, value) => sum + value, 0) - left.minutes.reduce((sum, value) => sum + value, 0));
     const totals = days.map((_, index) => rows.reduce((sum, row) => sum + row.minutes[index], 0));
     const maxMinutes = Math.max(60, ...totals);
-    let lower = Array(7).fill(0);
+    let lower = Array(dayCount).fill(0);
     const streams = rows.map((row) => {
       const upper = row.minutes.map((value, index) => lower[index] + value);
       const stream = { ...row, lower, upper, path: areaPath(upper, lower, maxMinutes) };
       lower = upper;
       return stream;
     });
-    return { days, rows, streams, totals, maxMinutes };
-  }, [anchorDate, activities, activityCategoryMap, categories]);
+    return { days, rows, streams, totals, maxMinutes, cycle };
+  }, [anchorDate, activities, activityCategoryMap, categories, cycleActivities, cycleAnchorDate, range]);
 
   const safeActiveIndex = Math.min(Math.max(activeDayIndex, 0), model.days.length - 1);
   const activeDay = model.days[safeActiveIndex];
@@ -97,16 +106,27 @@ export default function ActivityTimeStreamgraph({ anchorDate, activities = [], c
   const totalMinutes = model.totals.reduce((sum, value) => sum + value, 0);
   const largestCategory = model.rows[0] || null;
 
-  return <section className="activity-time-streamgraph" aria-label="ภาพรวมเวลาตามหมวดหมู่รายสัปดาห์">
+  const isCycle = range === "cycle";
+  const title = isCycle
+    ? (language === "th" ? `ภาพรวม Cycle ${model.cycle.cycleNumber}/${model.cycle.totalCycles}` : `Cycle ${model.cycle.cycleNumber}/${model.cycle.totalCycles} overview`)
+    : (language === "th" ? "ภาพรวมเวลาตามหมวดหมู่" : "Time by category");
+
+  return <section className={`activity-time-streamgraph ${isCycle ? "is-cycle" : "is-week"}`} aria-label="ภาพรวมเวลาตามหมวดหมู่">
     <header className="activity-time-streamgraph-header">
       <div>
-        <p>WEEKLY TIME FLOW</p>
-        <h3>{language === "th" ? "ภาพรวมเวลาตามหมวดหมู่" : "Time by category"}</h3>
+        <p>{isCycle ? "CYCLE TIME FLOW" : "WEEKLY TIME FLOW"}</p>
+        <h3>{title}</h3>
       </div>
-      <small>{language === "th" ? "เลือกวันเพื่อดูรายการกิจกรรม" : "Select a day to inspect activities"}</small>
+      <div className="activity-time-streamgraph-controls">
+        <div role="group" aria-label="ช่วงเวลาของกราฟ">
+          <button type="button" className={!isCycle ? "is-active" : ""} onClick={() => onRangeChange?.("week")}>7 วัน</button>
+          <button type="button" className={isCycle ? "is-active" : ""} onClick={() => onRangeChange?.("cycle")}>Cycle</button>
+        </div>
+        <small>{language === "th" ? "เลือกวันเพื่อดูรายการกิจกรรม" : "Select a day to inspect activities"}</small>
+      </div>
     </header>
 
-    {model.rows.length === 0 ? <p className="activity-time-streamgraph-empty">ยังไม่มีกิจกรรมที่ระบุเวลาในสัปดาห์นี้</p> : <>
+    {isCycle && cycleLoading ? <p className="activity-time-streamgraph-empty">กำลังรวบรวมกิจกรรมใน Cycle…</p> : model.rows.length === 0 ? <p className="activity-time-streamgraph-empty">ยังไม่มีกิจกรรมที่ระบุเวลาใน{isCycle ? " Cycle นี้" : "สัปดาห์นี้"}</p> : <>
       <div className="activity-time-streamgraph-chart" role="group" aria-label="กราฟเวลาแต่ละวัน">
         <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
           {model.streams.map((stream) => <path key={stream.id} d={stream.path} fill={stream.color} opacity="0.86" />)}
