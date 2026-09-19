@@ -83,7 +83,7 @@ function WeekSpineContent({
   onFocusOverviewSummary,
   onFocusWeekSummary,
   cycleData = { activities: [], loading: false, error: "" },
-  dayGantt,
+  weekStreamgraph,
 }) {
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
@@ -408,7 +408,7 @@ function WeekSpineContent({
       </>}
       </section>
       {viewMode !== "four-weeks" && <>
-      {dayGantt}
+      {weekStreamgraph}
       <section className="activity-archive" aria-label="คลังกิจกรรม">
         <div className="activity-archive-heading"><h3>คลังกิจกรรม</h3><span>{activityArchive.length} รายการ</span><button type="button" className="activity-archive-add" onClick={addArchiveDraft}>+ เพิ่มกิจกรรม</button></div>
         {activityArchive.length === 0 ? <p>ยังไม่มีกิจกรรมที่เก็บไว้</p> : (

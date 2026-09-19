@@ -12,7 +12,7 @@ import ActivityModeWeekSpine from "../features/activity/components/activity-mode
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
 import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
-import ActivityDayGantt from "../features/activity/components/activity-day-gantt.jsx";
+import ActivityTimeStreamgraph from "../features/activity/components/activity-time-streamgraph.jsx";
 import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
@@ -910,12 +910,12 @@ function AccountApp({ auth }) {
                     onFocusOverviewSummary={focusCycleSummary}
                     onFocusWeekSummary={focusWeeklySummary}
                     cycleData={cycleData}
-                    dayGantt={weekSpineViewMode === "week" ? <ActivityDayGantt
-                      day={expandedDate || cursorDate}
+                    weekStreamgraph={weekSpineViewMode === "week" ? <ActivityTimeStreamgraph
+                      anchorDate={cursorDate}
                       activities={visibleActivities}
                       categories={categories}
                       activityCategoryMap={activityCategoryMap}
-                      onEditActivity={openEditActivity}
+                      onSelectDay={openDay}
                     /> : null}
                   />
                 )}
