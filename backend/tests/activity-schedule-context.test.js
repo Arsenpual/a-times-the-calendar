@@ -23,7 +23,7 @@ test("a fourth overlapping activity is blocked and offers nearby alternatives", 
   assert.equal(schedule.status, "overlap-limit");
   assert.equal(schedule.conflicts.length, 3);
   assert.equal(schedule.conflicts[0].locked, true);
-  assert.ok(schedule.alternatives.length > 0);
+  assert.equal(schedule.alternatives.length, 3);
   assert.ok(schedule.alternatives.every((alternative) => alternative.startLocal !== draft.startLocal));
 });
 

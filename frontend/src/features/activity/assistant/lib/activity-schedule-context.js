@@ -76,12 +76,15 @@ export function assessAssistantDraftOverlap(draft, activities = [], lockedActivi
   }));
   const duration = end.getTime() - start.getTime();
   const alternatives = [];
-  for (const minutes of [-180, -150, -120, -90, -60, -30, 30, 60, 90, 120, 150, 180]) {
-    const proposedStart = new Date(start.getTime() + minutes * 60_000);
-    const proposedEnd = new Date(proposedStart.getTime() + duration);
-    if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), { id: "assistant-draft", start: proposedStart, end: proposedEnd }])) {
-      alternatives.push({ startLocal: formatLocalDateTime(proposedStart), endLocal: formatLocalDateTime(proposedEnd) });
-      if (alternatives.length === 3) break;
+  const maximumSearchMinutes = 7 * 24 * 60;
+  for (let distance = 30; distance <= maximumSearchMinutes && alternatives.length < 3; distance += 30) {
+    for (const minutes of [-distance, distance]) {
+      const proposedStart = new Date(start.getTime() + minutes * 60_000);
+      const proposedEnd = new Date(proposedStart.getTime() + duration);
+      if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), { id: "assistant-draft", start: proposedStart, end: proposedEnd }])) {
+        alternatives.push({ startLocal: formatLocalDateTime(proposedStart), endLocal: formatLocalDateTime(proposedEnd) });
+        if (alternatives.length === 3) break;
+      }
     }
   }
   return { status: "overlap-limit", conflicts, alternatives };

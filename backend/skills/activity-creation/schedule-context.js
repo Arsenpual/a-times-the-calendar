@@ -74,12 +74,18 @@ function localDateTime(timestamp) {
 
 function findAlternatives(start, duration, activities) {
   const candidates = [];
-  for (const delta of [-120, -90, -60, -30, 30, 60, 90, 120, 150, 180]) {
-    const proposedStart = start + delta * 60_000;
-    const proposedEnd = proposedStart + duration;
-    if (concurrentCount(proposedStart, proposedEnd, activities) <= MAX_OVERLAPPING_ACTIVITIES) {
-      candidates.push({ startLocal: localDateTime(proposedStart), endLocal: localDateTime(proposedEnd) });
-      if (candidates.length === 3) break;
+  // Search outward in 30-minute steps, not only inside a ±3-hour window.
+  // This normally guarantees three actionable alternatives even on a dense
+  // day, while still preferring the nearest times first.
+  const maxSearchMinutes = 7 * 24 * 60;
+  for (let distance = 30; distance <= maxSearchMinutes && candidates.length < 3; distance += 30) {
+    for (const delta of [-distance, distance]) {
+      const proposedStart = start + delta * 60_000;
+      const proposedEnd = proposedStart + duration;
+      if (concurrentCount(proposedStart, proposedEnd, activities) <= MAX_OVERLAPPING_ACTIVITIES) {
+        candidates.push({ startLocal: localDateTime(proposedStart), endLocal: localDateTime(proposedEnd) });
+        if (candidates.length === 3) break;
+      }
     }
   }
   return candidates;

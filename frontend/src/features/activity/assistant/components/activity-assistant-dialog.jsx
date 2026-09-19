@@ -126,12 +126,14 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       const localSchedule = assessAssistantDraftOverlap(activityDraft, activities, lockedActivities);
       const schedule = localSchedule.status === "overlap-limit" ? localSchedule : result.schedule;
       if (schedule?.status === "overlap-limit") {
-        setScheduleResolution({ formDraft: activityDraft, alternatives: schedule.alternatives || [] });
+        const resolution = { formDraft: activityDraft, alternatives: schedule.alternatives || [] };
+        setScheduleResolution(resolution);
         setMessages((current) => [...current, {
           role: "assistant",
           text: describeScheduleConflict(schedule),
           source: "template",
-          scheduleAlternatives: schedule.alternatives || []
+          scheduleAlternatives: resolution.alternatives,
+          scheduleResolution: resolution
         }]);
         return;
       }
@@ -243,12 +245,14 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         const localSchedule = assessAssistantDraftOverlap(popupHandoff.values.formDraft, activities, lockedActivities);
         const schedule = localSchedule.status === "overlap-limit" ? localSchedule : result.schedule;
         if (schedule?.status === "overlap-limit") {
-          setScheduleResolution({ formDraft: popupHandoff.values.formDraft, alternatives: schedule.alternatives || [] });
+          const resolution = { formDraft: popupHandoff.values.formDraft, alternatives: schedule.alternatives || [] };
+          setScheduleResolution(resolution);
           setMessages((current) => [...current, {
             role: "assistant",
             text: describeScheduleConflict(schedule),
             source: "template",
-            scheduleAlternatives: schedule.alternatives || []
+            scheduleAlternatives: resolution.alternatives,
+            scheduleResolution: resolution
           }]);
           setShowCenteredGeneralQuestions(false);
           return;
@@ -267,15 +271,17 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       getActivityAssistantStatus().then(result => setAiStatus(result.aiChat)).catch(() => {});
     }
   };
-  const selectScheduleAlternative = (alternative) => {
-    if (!scheduleResolution?.formDraft || !alternative?.startLocal || !alternative?.endLocal) return;
+  const selectScheduleAlternative = (alternative, resolution = scheduleResolution) => {
+    if (!resolution?.formDraft || !alternative?.startLocal || !alternative?.endLocal) return;
     const formDraft = {
-      ...scheduleResolution.formDraft,
+      ...resolution.formDraft,
       startLocal: alternative.startLocal,
       endLocal: alternative.endLocal,
-      assumptions: [...(scheduleResolution.formDraft.assumptions || []), `เลือกช่วงเวลาที่ไม่ชนเกินขีดจำกัด ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`]
+      assumptions: [...(resolution.formDraft.assumptions || []), `เลือกช่วงเวลาที่ไม่ชนเกินขีดจำกัด ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`]
     };
-    setScheduleResolution(null);
+    // Keep the whole proposed set alive. The person can return to this chat
+    // and choose another suggested slot until they finally save or cancel.
+    setScheduleResolution({ ...resolution, selected: alternative });
     setMessages((current) => [...current,
       { role: "user", text: `เลือกเวลา ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`, source: "template" },
       { role: "assistant", text: "ปรับเวลาในฟอร์มให้แล้ว ตรวจสอบรายละเอียดและกดบันทึกได้เลยครับ", source: "template" }
@@ -317,7 +323,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative)} disabled={pending || !scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative, message.scheduleResolution)} disabled={pending || !message.scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
