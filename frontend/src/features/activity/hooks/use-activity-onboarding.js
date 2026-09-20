@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getWeekRange } from "../../../shared/lib/date-utils.js";
+import { getYearWeekRange } from "../../../shared/lib/date-utils.js";
 
 const ONBOARDING_VERSION = 1;
 const ONBOARDING_ROLLOUT_AT = Date.parse("2026-08-21T00:00:00+07:00");
@@ -61,7 +61,7 @@ export function useActivityOnboarding({ mode, firebaseUser, categories, cursorDa
     }
     const nextSamples = Array.isArray(record?.samples) && record.samples.length === 10
       ? record.samples
-      : buildSamples(getWeekRange(cursorDate)[0]);
+      : buildSamples(getYearWeekRange(cursorDate)[0]);
 
     // A record written by the earlier network-based onboarding already
     // represents an attempted real Calendar seed. Do not layer local samples

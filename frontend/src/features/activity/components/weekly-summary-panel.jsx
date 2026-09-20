@@ -1,5 +1,5 @@
 import React from "react";
-import { dateForWeekdayLabel, getWeekRange } from "../../../shared/lib/date-utils.js";
+import { dateForWeekdayLabel, getYearWeekRange } from "../../../shared/lib/date-utils.js";
 import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
 const WEEKDAY_FULL = {
@@ -132,7 +132,7 @@ export default function WeeklySummaryPanel({
   glass = false,
   theme = "light"
 }) {
-  const [weekStart] = getWeekRange(anchorDate);
+  const [weekStart] = getYearWeekRange(anchorDate);
 
   const openBusiestDay = () => {
     if (!summary?.busiestDay) return;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getWeekRange } from "../../../shared/lib/date-utils.js";
+import { getYearWeekRange } from "../../../shared/lib/date-utils.js";
 
 /** Owns Activity week/day navigation. App supplies the active mode for shortcuts. */
 export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
@@ -52,8 +52,8 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
       setExpandedDate(next);
     }
 
-    const [currentWeekStart] = getWeekRange(cursorDate);
-    const [nextWeekStart] = getWeekRange(next);
+    const [currentWeekStart] = getYearWeekRange(cursorDate);
+    const [nextWeekStart] = getYearWeekRange(next);
     if (currentWeekStart.getTime() !== nextWeekStart.getTime()) {
       setCursorDate(next);
     }
@@ -101,7 +101,7 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
       return;
     }
     setExpandedDate((prev) => {
-      const [defaultWeekStart, defaultWeekEnd] = getWeekRange(cursorDate);
+      const [defaultWeekStart, defaultWeekEnd] = getYearWeekRange(cursorDate);
       const weekStart = weekRangeOverride?.start || defaultWeekStart;
       const weekEnd = weekRangeOverride?.end || defaultWeekEnd;
       if (!prev) return null;

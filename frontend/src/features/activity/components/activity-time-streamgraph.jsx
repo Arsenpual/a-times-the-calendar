@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { activityDate, getWeekRange, getYearCycle, toDateInputValue } from "../../../shared/lib/date-utils.js";
+import { activityDate, getYearWeekRange, getYearCycle, toDateInputValue } from "../../../shared/lib/date-utils.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { getDisplayColor, UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
@@ -66,7 +66,7 @@ export default function ActivityTimeStreamgraph({
   const model = useMemo(() => {
     const safeAnchor = anchorDate instanceof Date ? anchorDate : new Date();
     const cycle = getYearCycle(cycleAnchorDate instanceof Date ? cycleAnchorDate : safeAnchor);
-    const [weekStart] = getWeekRange(safeAnchor);
+    const [weekStart] = getYearWeekRange(safeAnchor);
     const rangeStart = range === "cycle" ? cycle.start : weekStart;
     const dayCount = range === "cycle"
       ? Math.max(1, Math.round((startOfDay(cycle.end) - startOfDay(cycle.start)) / 86_400_000) + 1)

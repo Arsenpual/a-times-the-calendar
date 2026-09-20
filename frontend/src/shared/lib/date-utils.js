@@ -88,11 +88,12 @@ export function formatTime(date, lang = DEFAULT_LANGUAGE) {
  * "Sun") back into an actual Date within the week starting at `weekStart`.
  */
 export function dateForWeekdayLabel(weekStart, label, lang = DEFAULT_LANGUAGE) {
-  const index = WEEKDAYS_SHORT[lang].indexOf(label);
-  if (index === -1) return null;
-  const d = new Date(weekStart);
-  d.setDate(weekStart.getDate() + index);
-  return d;
+  for (let offset = 0; offset < 7; offset += 1) {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + offset);
+    if (WEEKDAYS_SHORT[lang][date.getDay()] === label) return date;
+  }
+  return null;
 }
 
 function pad2(n) {
@@ -149,18 +150,33 @@ export function formatWeekRange(date, lang = DEFAULT_LANGUAGE) {
  * Language-independent — a week number is the same number regardless of
  * display language, so this function intentionally has no lang parameter.
  */
-export function weekOfYear(date) {
-  const [weekStart] = getWeekRange(date);
-  const jan1 = new Date(weekStart.getFullYear(), 0, 1);
-  const jan1WeekStart = new Date(jan1);
-  jan1WeekStart.setDate(jan1.getDate() - jan1.getDay());
-  const diffDays = Math.round((weekStart - jan1WeekStart) / (1000 * 60 * 60 * 24));
-  return Math.floor(diffDays / 7) + 1;
+export function getYearWeekRange(date) {
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const year = safeDate.getFullYear();
+  const yearStart = new Date(year, 0, 1);
+  yearStart.setHours(0, 0, 0, 0);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysInYear = Math.round((yearEnd.getTime() - yearStart.getTime() + 1) / dayMs);
+  const dayIndex = Math.min(daysInYear - 1, Math.max(0, Math.floor((safeDate.getTime() - yearStart.getTime()) / dayMs)));
+  const start = new Date(yearStart);
+  start.setDate(start.getDate() + Math.floor(dayIndex / 7) * 7);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  if (end > yearEnd) end.setTime(yearEnd.getTime());
+  return [start, end];
 }
 
-/** Total number of Sunday-start weeks (using the same counting as weekOfYear) that touch `year`. Language-independent, same reasoning as weekOfYear. */
+/** One-based fixed seven-day Activity Week within its calendar year. */
+export function weekOfYear(date) {
+  const [weekStart] = getYearWeekRange(date);
+  const yearStart = new Date(weekStart.getFullYear(), 0, 1);
+  return Math.floor((weekStart - yearStart) / (7 * 24 * 60 * 60 * 1000)) + 1;
+}
+
+/** Total fixed seven-day Activity Week blocks in a calendar year. */
 export function totalWeeksInYear(year) {
-  return weekOfYear(new Date(year, 11, 31));
+  return Math.ceil(((new Date(year, 11, 31) - new Date(year, 0, 1)) / (7 * 24 * 60 * 60 * 1000) + 1) / 7);
 }
 
 /**
@@ -203,7 +219,7 @@ export function getYearCycle(date, cycleWeeks = 4) {
 
 /** e.g. "26 กรกฎาคม สัปดาห์ที่ 31/52 ของปี" (th) or "26 July, week 31/52 of the year" (en) — the first day of the week containing `date`. */
 export function formatWeekLabel(date, lang = DEFAULT_LANGUAGE) {
-  const [weekStart] = getWeekRange(date);
+  const [weekStart] = getYearWeekRange(date);
   const total = totalWeeksInYear(weekStart.getFullYear());
   const monthName = MONTHS[lang][weekStart.getMonth()];
   if (lang === "th") {

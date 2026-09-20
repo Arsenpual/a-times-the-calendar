@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { getWeekRange, isSameDay, weekdayShortLabels, formatTime } from "../../../shared/lib/date-utils.js";
+import { getYearWeekRange, isSameDay, weekdayShortLabels, formatTime } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import WeekNameField from "./week-name-field.jsx";
 
@@ -13,7 +13,7 @@ function formatVisibleRange(start, end, language) {
 
 export default function FourWeekOverview({ weekStart, weekCount = 4, cycleStart, cycleEnd, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, weekNames, editingWeekKey, weekNameDraft, onStartEditingWeekName, onWeekNameDraftChange, onCommitWeekName, onCancelWeekName, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor, onOpenWeekView }) {
   const labels = weekdayShortLabels(language);
-  const [focusedWeekStart] = getWeekRange(focusedWeekDate || weekStart);
+  const [focusedWeekStart] = getYearWeekRange(focusedWeekDate || weekStart);
   const weeks = useMemo(() => Array.from({ length: weekCount }, (_, offset) => {
     const start = new Date(weekStart);
     start.setDate(start.getDate() + offset * 7);

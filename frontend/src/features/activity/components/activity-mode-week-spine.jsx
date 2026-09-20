@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from "react";
-import { formatTime, getWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
+import { formatTime, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
@@ -87,7 +87,7 @@ function WeekSpineContent({
   weekStreamgraph,
 }) {
   const { language } = useLanguage();
-  const [defaultWeekStart, defaultWeekEnd] = getWeekRange(anchorDate);
+  const [defaultWeekStart, defaultWeekEnd] = getYearWeekRange(anchorDate);
   const weekStart = weekRangeOverride?.start instanceof Date ? weekRangeOverride.start : defaultWeekStart;
   const weekEnd = weekRangeOverride?.end instanceof Date ? weekRangeOverride.end : defaultWeekEnd;
   const visibleYearStart = useMemo(() => new Date(anchorDate.getFullYear(), 0, 1), [anchorDate.getFullYear()]);

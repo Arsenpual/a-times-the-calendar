@@ -4,7 +4,7 @@ import { fetchCategories, fetchActivityCategoryMap } from "../api/categories.js"
 import { fetchActivityTagMap } from "../api/tags.js";
 import { fetchLockedActivities } from "../api/locks.js";
 import { fetchWeeklySummary } from "../api/summary.js";
-import { getWeekRange, activityDate, toDateInputValue } from "../../../shared/lib/date-utils.js";
+import { getYearWeekRange, activityDate, toDateInputValue } from "../../../shared/lib/date-utils.js";
 
 /**
  * Owns everything read (not written — see useActivityMutations for
@@ -39,7 +39,7 @@ import { getWeekRange, activityDate, toDateInputValue } from "../../../shared/li
 const EMPTY_ARCHIVED_IDS = new Set();
 export function useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds = EMPTY_ARCHIVED_IDS }) {
   const uid = firebaseUser?.uid;
-  const [startOfWeek, endOfWeek] = getWeekRange(cursorDate).map(date => date.getTime());
+  const [startOfWeek, endOfWeek] = getYearWeekRange(cursorDate).map(date => date.getTime());
   const scope = `${uid || "guest"}:${startOfWeek}:${endOfWeek}:${calendarAccessToken || ""}`;
   const currentScope = useRef(scope);
   currentScope.current = scope;
