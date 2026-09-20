@@ -2810,15 +2810,21 @@ html[data-theme="dark"] .new-category-name-input {
 .activity-ai-review > .activity-ai-manual-editor { display: grid; justify-content: stretch; }
 
 /* Category time summary: one stacked bar for the selected week or cycle. */
-.activity-time-category-bars-summary { display: grid; gap: 10px; padding: clamp(18px, 3vw, 34px) clamp(12px, 3vw, 32px); border: 1px solid color-mix(in srgb, var(--border) 72%, transparent); border-radius: 11px; background: var(--bg); }
-.activity-time-category-bars-summary > strong { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
-.activity-time-category-bars-summary > strong b { color: var(--text-primary); font-size: clamp(18px, 2.3vw, 28px); font-variant-numeric: tabular-nums; }
-.activity-time-category-bars-track { display: flex; min-height: clamp(34px, 5vw, 52px); overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: 8px; background: var(--bg-muted); }
+.activity-time-category-bars { padding: 9px; border-radius: 11px; }
+.activity-time-category-bars .activity-time-streamgraph-header { margin-bottom: 7px; gap: 8px; }
+.activity-time-category-bars .activity-time-streamgraph-header p { margin-bottom: 2px; font-size: 8px; }
+.activity-time-category-bars .activity-time-streamgraph-header h3 { font-size: 12px; }
+.activity-time-category-bars .activity-time-streamgraph-controls { gap: 5px; }
+.activity-time-category-bars .activity-time-streamgraph-controls button { padding: 2px 5px; font-size: 9px; }
+.activity-time-category-bars-summary { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid color-mix(in srgb, var(--border) 72%, transparent); border-radius: 7px; background: var(--bg); }
+.activity-time-category-bars-summary > strong { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 9px; font-weight: 600; }
+.activity-time-category-bars-summary > strong b { color: var(--text-primary); font-size: 15px; font-variant-numeric: tabular-nums; }
+.activity-time-category-bars-track { display: flex; min-height: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: 4px; background: var(--bg-muted); }
 .activity-time-category-bars-segment { display: block; flex: 0 0 var(--category-share); min-width: 2px; background: var(--category-color); box-shadow: inset -1px 0 color-mix(in srgb, #000 13%, transparent); transition: filter 150ms ease, transform 150ms ease; cursor: help; }
 .activity-time-category-bars-segment:hover { filter: brightness(1.16); transform: scaleY(1.12); }
-.activity-time-category-bars-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 7px 11px; margin-top: 12px; }
-.activity-time-category-bars-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto auto; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--border) 68%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--bg) 75%, transparent); color: var(--text-secondary); font-size: 11px; }
-.activity-time-category-bars-row i { width: 9px; height: 9px; border-radius: 50%; }
+.activity-time-category-bars-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 4px 6px; margin-top: 6px; }
+.activity-time-category-bars-row { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; align-items: center; gap: 4px; min-width: 0; padding: 4px 5px; border: 1px solid color-mix(in srgb, var(--border) 68%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--bg) 75%, transparent); color: var(--text-secondary); font-size: 9px; }
+.activity-time-category-bars-row i { width: 6px; height: 6px; border-radius: 50%; }
 .activity-time-category-bars-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-time-category-bars-row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .activity-time-category-bars-row small { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
