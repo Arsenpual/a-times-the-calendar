@@ -20,10 +20,10 @@ export function useCycleActivities({
   useEffect(() => {
     if (!enabled) return undefined;
     let cancelled = false;
-    const rangeStart = new Date(startMs);
-    rangeStart.setDate(rangeStart.getDate() - 1);
     setSnapshot({ scope, activities: EMPTY_ACTIVITIES, loading: true, error: "" });
-    fetchActivities(calendarAccessToken, rangeStart, new Date(endMs))
+    // The Cycle range is already inclusive and clipped to its calendar year.
+    // Never widen it by a day or the first/last Cycle can import another year.
+    fetchActivities(calendarAccessToken, new Date(startMs), new Date(endMs))
       .then((activities) => {
         if (!cancelled) setSnapshot({ scope, activities, loading: false, error: "" });
       })

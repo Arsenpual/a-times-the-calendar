@@ -2604,6 +2604,7 @@ html[data-theme="dark"] .new-category-name-input {
 .week-spine-overview-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .week-spine-overview-day { min-width: 0; min-height: 156px; padding: 4px; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 6px; background: var(--bg); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .week-spine-overview-day:hover { border-color: var(--today); background: var(--hover); }
+.week-spine-overview-day.is-outside-cycle { visibility: hidden; pointer-events: none; }
 .week-spine-overview-day header { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; margin-bottom: 4px; color: var(--text-secondary); font-size: 10px; }
 .week-spine-overview-day header strong { color: var(--text-primary); font-size: 11px; }
 .week-spine-overview-day.is-today { border-color: var(--today); box-shadow: inset 0 2px 0 var(--today); }
@@ -2806,3 +2807,23 @@ html[data-theme="dark"] .new-category-name-input {
   .week-spine-overview-day { min-height: 100px; }
 }
 .activity-ai-review > .activity-ai-manual-editor { display: grid; justify-content: stretch; }
+
+/* Cumulative Streamgraph: lightweight category lines that may cross. */
+.activity-time-streamgraph-gridline { stroke: color-mix(in srgb, var(--border) 85%, transparent); stroke-width: 1; }
+.activity-time-streamgraph-y-label { fill: var(--text-secondary); font-size: 18px; font-family: inherit; }
+.activity-time-streamgraph-line { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.activity-time-streamgraph-hit-targets { left: 5.2%; right: 1.6%; }
+.activity-time-streamgraph-days { margin-left: 5.2%; margin-right: 1.6%; }
+.activity-time-streamgraph-y-label { font-size: 9px; }
+.activity-time-streamgraph-chart { height: var(--streamgraph-chart-height, 250px) !important; }
+.activity-time-streamgraph:fullscreen { padding: 0 !important; overflow: auto; background: var(--bg) !important; }
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-chart { height: var(--streamgraph-chart-height, 100vh) !important; min-height: 100vh; border: 0; border-radius: 0; }
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-y-label { font-size: 10px !important; }
+.activity-time-streamgraph:fullscreen { padding: 0; background: var(--bg); }
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-header,
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-days,
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-detail,
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-footer { display: none; }
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-chart { height: 100vh; border: 0; border-radius: 0; }
+.activity-time-streamgraph:fullscreen .activity-time-streamgraph-y-label { font-size: 10px; }
+.activity-time-streamgraph-crosshair { position: absolute; z-index: 3; display: block; pointer-events: none; background: color-mix(in srgb, var(--text-primary) 65%, transparent); }.activity-time-streamgraph-crosshair--vertical { top: 0; bottom: 0; width: 1px; }.activity-time-streamgraph-crosshair--horizontal { left: 0; right: 0; height: 1px; }.activity-time-streamgraph-tooltip { position: absolute; z-index: 4; min-width: 126px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; transform: translate(-50%, calc(-100% - 10px)); background: color-mix(in srgb, var(--bg) 94%, transparent); box-shadow: 0 5px 18px color-mix(in srgb, #000 18%, transparent); color: var(--text-secondary); font-size: 10px; line-height: 1.45; pointer-events: none; }.activity-time-streamgraph-tooltip b, .activity-time-streamgraph-tooltip span { display: block; }.activity-time-streamgraph-tooltip b { color: var(--text-primary); font-size: 11px; }.activity-time-streamgraph-fullscreen { min-width: 26px; padding: 3px 6px !important; color: var(--text-primary) !important; font-size: 16px !important; line-height: 1; }.activity-time-streamgraph:fullscreen { width: 100vw; height: 100vh; box-sizing: border-box; padding: 24px; border: 0; border-radius: 0; background: var(--bg-muted); }.activity-time-streamgraph:fullscreen .activity-time-streamgraph-chart { height: calc(100vh - 192px); }.activity-time-streamgraph:fullscreen .activity-time-streamgraph-y-label { font-size: 14px; }

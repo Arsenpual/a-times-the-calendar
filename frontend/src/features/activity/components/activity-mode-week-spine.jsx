@@ -88,7 +88,7 @@ function WeekSpineContent({
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
   const cycle = getYearCycle(cycleStartDate || anchorDate);
-  const cycleStart = cycle.start;
+  const cycleStart = cycle.calendarWeekStart;
   const dragState = useWeekSpineDragState();
   const {
     draft,
@@ -270,7 +270,7 @@ function WeekSpineContent({
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
-              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
+              : <FourWeekOverview weekStart={cycleStart} weekCount={cycle.weekCount} cycleStart={cycle.start} cycleEnd={cycle.end} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
         ) : <>
         <section ref={timelineFullscreenSurfaceRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}${effectiveHoursPerCell === 2 ? " is-two-hour-grid" : ""}${effectiveHoursPerCell === 4 ? " is-four-hour-grid" : ""}`}>
         <button className="week-spine-fullscreen-btn" type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เปิด timeline แบบเต็มหน้าจอ"} title={timelineFullscreen ? "ออกจากเต็มหน้าจอ" : "เต็มหน้าจอ"}>{timelineFullscreen ? "⤢" : "⛶"}</button>

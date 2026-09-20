@@ -166,30 +166,36 @@ export function totalWeeksInYear(year) {
 /**
  * Returns the fixed four-week Cycle that contains `date`.
  *
- * Cycles always begin with week 1 of the calendar year (the Sunday-start
- * week containing 1 January), never with whichever week happened to be
- * selected when the user opened Cycle view. The final Cycle may contain
- * fewer than four weeks so it never leaks into the following year.
+ * Cycles are grouped from the first calendar week of the selected year, but
+ * their usable data boundary is always 1 Jan – 31 Dec of that same year.
+ * A Sunday-start week may cross a year boundary; its foreign days are never
+ * included in a Cycle, fetched, or summarised with this year's data.
  */
 export function getYearCycle(date, cycleWeeks = 4) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
   const year = safeDate.getFullYear();
   const jan1 = new Date(year, 0, 1);
+  jan1.setHours(0, 0, 0, 0);
+  const dec31 = new Date(year, 11, 31, 23, 59, 59, 999);
   const [firstWeekStart] = getWeekRange(jan1);
   const [selectedWeekStart] = getWeekRange(safeDate);
   const weekIndex = Math.max(0, Math.floor((selectedWeekStart - firstWeekStart) / (7 * 24 * 60 * 60 * 1000)));
   const totalWeeks = totalWeeksInYear(year);
   const cycleIndex = Math.min(Math.floor(weekIndex / cycleWeeks), Math.ceil(totalWeeks / cycleWeeks) - 1);
-  const start = new Date(firstWeekStart);
-  start.setDate(start.getDate() + cycleIndex * cycleWeeks * 7);
+  const calendarWeekStart = new Date(firstWeekStart);
+  calendarWeekStart.setDate(calendarWeekStart.getDate() + cycleIndex * cycleWeeks * 7);
   const weekCount = Math.min(cycleWeeks, totalWeeks - cycleIndex * cycleWeeks);
-  const end = new Date(start);
-  end.setDate(end.getDate() + weekCount * 7 - 1);
-  end.setHours(23, 59, 59, 999);
+  const calendarWeekEnd = new Date(calendarWeekStart);
+  calendarWeekEnd.setDate(calendarWeekEnd.getDate() + weekCount * 7 - 1);
+  calendarWeekEnd.setHours(23, 59, 59, 999);
+  const start = new Date(Math.max(calendarWeekStart.getTime(), jan1.getTime()));
+  const end = new Date(Math.min(calendarWeekEnd.getTime(), dec31.getTime()));
   return {
     year,
     start,
     end,
+    calendarWeekStart,
+    calendarWeekEnd,
     weekCount,
     cycleNumber: cycleIndex + 1,
     totalCycles: Math.ceil(totalWeeks / cycleWeeks)

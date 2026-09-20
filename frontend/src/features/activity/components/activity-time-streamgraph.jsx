@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { activityDate, getWeekRange, getYearCycle, toDateInputValue } from "../../../shared/lib/date-utils.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
@@ -6,6 +6,13 @@ import { getDisplayColor, UNCATEGORIZED_COLOR } from "../lib/activity-colors.js"
 
 const CHART_WIDTH = 1_000;
 const CHART_HEIGHT = 250;
+// A compact overview scale. Precise values remain available through the
+// crosshair, so the chart does not need a tall row for every single hour.
+const PIXELS_PER_HOUR = 3;
+const PLOT_LEFT = 52;
+const PLOT_RIGHT = 16;
+const PLOT_TOP = 12;
+const PLOT_BOTTOM = 26;
 
 function startOfDay(day) {
   const start = new Date(day);
@@ -23,19 +30,29 @@ function formatMinutes(minutes) {
   return hours ? `${hours}h${remainingMinutes ? ` ${remainingMinutes}m` : ""}` : `${remainingMinutes}m`;
 }
 
-function areaPath(upper, lower, maxMinutes) {
-  const lastIndex = Math.max(1, upper.length - 1);
-  const x = (index) => (index / lastIndex) * CHART_WIDTH;
-  const y = (minutes) => CHART_HEIGHT - (minutes / Math.max(1, maxMinutes)) * CHART_HEIGHT;
-  const top = upper.map((value, index) => `${index ? "L" : "M"}${x(index)} ${y(value)}`).join(" ");
-  const bottom = [...lower].reverse().map((value, index) => `L${x(lastIndex - index)} ${y(value)}`).join(" ");
-  return `${top} ${bottom} Z`;
+function formatAxisHours(minutes, language) {
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return language === "th" ? `${hours} ชม.` : `${hours}h`;
+}
+
+function chartX(index, count) {
+  // Every day owns one equal-width cell; plot at the centre of that cell so
+  // the line, day label and pointer target always share the same rhythm.
+  return PLOT_LEFT + ((index + 0.5) / Math.max(1, count)) * (CHART_WIDTH - PLOT_LEFT - PLOT_RIGHT);
+}
+
+function chartY(minutes, maxMinutes, chartHeight) {
+  return chartHeight - PLOT_BOTTOM - (minutes / Math.max(1, maxMinutes)) * (chartHeight - PLOT_TOP - PLOT_BOTTOM);
+}
+
+function linePath(values, maxMinutes, chartHeight) {
+  return values.map((value, index) => `${index ? "L" : "M"}${chartX(index, values.length)} ${chartY(value, maxMinutes, chartHeight)}`).join(" ");
 }
 
 /**
- * Full-width weekly time-composition view. It deliberately summarizes real
- * activity durations by category instead of duplicating the editable Week
- * Spine. Selecting a day opens the existing per-day activity panel.
+ * Full-width cumulative time view. Each category is a thin line whose Y
+ * position is its accumulated hours; lines can cross naturally as a person's
+ * time distribution changes. Selecting a day opens the usual activity panel.
  */
 export default function ActivityTimeStreamgraph({
   anchorDate, cycleAnchorDate, activities = [], cycleActivities = [], cycleLoading = false,
@@ -43,12 +60,17 @@ export default function ActivityTimeStreamgraph({
 }) {
   const { language } = useLanguage();
   const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [pointer, setPointer] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const chartRef = useRef(null);
   const model = useMemo(() => {
     const safeAnchor = anchorDate instanceof Date ? anchorDate : new Date();
     const cycle = getYearCycle(cycleAnchorDate instanceof Date ? cycleAnchorDate : safeAnchor);
     const [weekStart] = getWeekRange(safeAnchor);
     const rangeStart = range === "cycle" ? cycle.start : weekStart;
-    const dayCount = range === "cycle" ? cycle.weekCount * 7 : 7;
+    const dayCount = range === "cycle"
+      ? Math.max(1, Math.round((startOfDay(cycle.end) - startOfDay(cycle.start)) / 86_400_000) + 1)
+      : 7;
     const sourceActivities = range === "cycle" ? cycleActivities : activities;
     const days = Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(rangeStart);
@@ -88,15 +110,16 @@ export default function ActivityTimeStreamgraph({
       .filter((row) => row.minutes.some(Boolean))
       .sort((left, right) => right.minutes.reduce((sum, value) => sum + value, 0) - left.minutes.reduce((sum, value) => sum + value, 0));
     const totals = days.map((_, index) => rows.reduce((sum, row) => sum + row.minutes[index], 0));
-    const maxMinutes = Math.max(60, ...totals);
-    let lower = Array(dayCount).fill(0);
     const streams = rows.map((row) => {
-      const upper = row.minutes.map((value, index) => lower[index] + value);
-      const stream = { ...row, lower, upper, path: areaPath(upper, lower, maxMinutes) };
-      lower = upper;
-      return stream;
+      let cumulative = 0;
+      const accumulated = row.minutes.map((value) => {
+        cumulative += value;
+        return cumulative;
+      });
+      return { ...row, accumulated };
     });
-    return { days, rows, streams, totals, maxMinutes, cycle };
+    const maxAccumulatedMinutes = Math.max(60, ...streams.flatMap((stream) => stream.accumulated));
+    return { days, rows, streams, totals, maxAccumulatedMinutes, cycle };
   }, [anchorDate, activities, activityCategoryMap, categories, cycleActivities, cycleAnchorDate, range]);
 
   const safeActiveIndex = Math.min(Math.max(activeDayIndex, 0), model.days.length - 1);
@@ -105,6 +128,48 @@ export default function ActivityTimeStreamgraph({
   const formatter = new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-US", { weekday: "short", day: "numeric", month: "short" });
   const totalMinutes = model.totals.reduce((sum, value) => sum + value, 0);
   const largestCategory = model.rows[0] || null;
+  // Keep a fixed Y scale: growing accumulated time expands the chart instead
+  // of compressing the data into the same small rectangle.
+  const minimumScaleMinutes = Math.ceil((CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM) / PIXELS_PER_HOUR) * 60;
+  const yScaleMinutes = Math.max(minimumScaleMinutes, Math.ceil(model.maxAccumulatedMinutes / 60) * 60);
+  const chartHeight = Math.ceil((yScaleMinutes / 60) * PIXELS_PER_HOUR) + PLOT_TOP + PLOT_BOTTOM;
+  // Keep the graph precise, but use fewer labelled/grid steps as the amount
+  // grows so the Y axis remains scannable instead of listing every hour.
+  const axisStepMinutes = yScaleMinutes <= 12 * 60 ? 2 * 60
+    : yScaleMinutes <= 24 * 60 ? 4 * 60
+      : yScaleMinutes <= 48 * 60 ? 6 * 60 : 12 * 60;
+  const yTickMinutes = Array.from({ length: Math.floor(yScaleMinutes / axisStepMinutes) + 1 }, (_, index) => index * axisStepMinutes);
+  if (yTickMinutes.at(-1) !== yScaleMinutes) yTickMinutes.push(yScaleMinutes);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === chartRef.current?.closest(".activity-time-streamgraph"));
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+
+  const updatePointer = (event) => {
+    const bounds = chartRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const xPercent = Math.min(100, Math.max(0, ((event.clientX - bounds.left) / bounds.width) * 100));
+    const yPercent = Math.min(100, Math.max(0, ((event.clientY - bounds.top) / bounds.height) * 100));
+    const plotXPercent = Math.min(1, Math.max(0, (xPercent - (PLOT_LEFT / CHART_WIDTH) * 100) / ((CHART_WIDTH - PLOT_LEFT - PLOT_RIGHT) / CHART_WIDTH * 100)));
+    const plotYPercent = Math.min(1, Math.max(0, (yPercent - (PLOT_TOP / chartHeight) * 100) / ((chartHeight - PLOT_TOP - PLOT_BOTTOM) / chartHeight * 100)));
+    const dayIndex = Math.min(model.days.length - 1, Math.max(0, Math.round(plotXPercent * (model.days.length - 1))));
+    setActiveDayIndex(dayIndex);
+    setPointer({
+      xPercent, yPercent, dayIndex,
+      tooltipXPercent: Math.min(88, Math.max(12, xPercent)),
+      tooltipYPercent: Math.min(88, Math.max(26, yPercent)),
+      accumulatedMinutes: (1 - plotYPercent) * yScaleMinutes
+    });
+  };
+
+  const toggleFullscreen = async () => {
+    const section = chartRef.current?.closest(".activity-time-streamgraph");
+    if (!section) return;
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await section.requestFullscreen();
+  };
 
   const isCycle = range === "cycle";
   const title = isCycle
@@ -122,15 +187,29 @@ export default function ActivityTimeStreamgraph({
           <button type="button" className={!isCycle ? "is-active" : ""} onClick={() => onRangeChange?.("week")}>7 วัน</button>
           <button type="button" className={isCycle ? "is-active" : ""} onClick={() => onRangeChange?.("cycle")}>Cycle</button>
         </div>
-        <small>{language === "th" ? "เลือกวันเพื่อดูรายการกิจกรรม" : "Select a day to inspect activities"}</small>
+        <small>{language === "th" ? "แกน Y = ชั่วโมงสะสม · เลือกวันเพื่อดูรายการ" : "Y axis = cumulative hours · Select a day to inspect"}</small>
+        <button type="button" className="activity-time-streamgraph-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? "ออกจากโหมดเต็มจอ" : "ดูกราฟเต็มจอ"}>{isFullscreen ? "×" : "⛶"}</button>
       </div>
     </header>
 
     {isCycle && cycleLoading ? <p className="activity-time-streamgraph-empty">กำลังรวบรวมกิจกรรมใน Cycle…</p> : model.rows.length === 0 ? <p className="activity-time-streamgraph-empty">ยังไม่มีกิจกรรมที่ระบุเวลาใน{isCycle ? " Cycle นี้" : "สัปดาห์นี้"}</p> : <>
-      <div className="activity-time-streamgraph-chart" role="group" aria-label="กราฟเวลาแต่ละวัน">
-        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
-          {model.streams.map((stream) => <path key={stream.id} d={stream.path} fill={stream.color} opacity="0.86" />)}
+      <div className="activity-time-streamgraph-chart" ref={chartRef} style={{ "--streamgraph-chart-height": `${chartHeight}px` }} role="group" aria-label="กราฟเวลาแต่ละวัน" onMouseMove={updatePointer} onMouseLeave={() => setPointer(null)}>
+        <svg viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+          {yTickMinutes.map((minutes) => <g key={minutes}>
+            <line className="activity-time-streamgraph-gridline" x1={PLOT_LEFT} x2={CHART_WIDTH - PLOT_RIGHT} y1={chartY(minutes, yScaleMinutes, chartHeight)} y2={chartY(minutes, yScaleMinutes, chartHeight)} />
+            <text className="activity-time-streamgraph-y-label" x="4" y={chartY(minutes, yScaleMinutes, chartHeight) + 3}>{formatAxisHours(minutes, language)}</text>
+          </g>)}
+          {model.streams.map((stream) => <path key={stream.id} className="activity-time-streamgraph-line" d={linePath(stream.accumulated, yScaleMinutes, chartHeight)} stroke={stream.color} />)}
         </svg>
+        {pointer && <>
+          <i className="activity-time-streamgraph-crosshair activity-time-streamgraph-crosshair--vertical" style={{ left: `${pointer.xPercent}%` }} />
+          <i className="activity-time-streamgraph-crosshair activity-time-streamgraph-crosshair--horizontal" style={{ top: `${pointer.yPercent}%` }} />
+          <output className="activity-time-streamgraph-tooltip" style={{ left: `${pointer.tooltipXPercent}%`, top: `${pointer.tooltipYPercent}%` }}>
+            <b>{formatter.format(model.days[pointer.dayIndex])}</b>
+            <span>{language === "th" ? "สะสมประมาณ" : "Approx. accumulated"} {formatMinutes(Math.round(pointer.accumulatedMinutes))}</span>
+            <span>{language === "th" ? "วันนี้" : "Day total"} {formatMinutes(model.totals[pointer.dayIndex])}</span>
+          </output>
+        </>}
         <div className="activity-time-streamgraph-hit-targets">
           {model.days.map((day, index) => <button
             key={toDateInputValue(day)}
