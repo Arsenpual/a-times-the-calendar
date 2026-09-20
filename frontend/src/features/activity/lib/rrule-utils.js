@@ -4,6 +4,7 @@
 // exposes (FREQ, INTERVAL, BYDAY, COUNT, UNTIL) — Google is the source of
 // truth for actually expanding the series, we never store occurrences
 // ourselves.
+import { getYearWeekRange } from "../../../shared/lib/date-utils.js";
 
 const RRULE_WEEKDAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 export const MAX_REPEAT_OCCURRENCES = 28;
@@ -37,13 +38,11 @@ export function maxRepeatUntil(state, startDate, limit = MAX_REPEAT_OCCURRENCES)
   }
 
   const weekdays = new Set(state?.byDay?.length ? state.byDay : [RRULE_WEEKDAYS[start.getDay()]]);
-  const initialWeek = new Date(start);
-  initialWeek.setDate(initialWeek.getDate() - initialWeek.getDay());
+  const [initialWeek] = getYearWeekRange(start);
   const cursor = new Date(start);
   let occurrences = 0;
   for (let guard = 0; guard < 10000; guard += 1) {
-    const cursorWeek = new Date(cursor);
-    cursorWeek.setDate(cursorWeek.getDate() - cursorWeek.getDay());
+    const [cursorWeek] = getYearWeekRange(cursor);
     const weeksApart = Math.round((cursorWeek - initialWeek) / (7 * 24 * 60 * 60 * 1000));
     if (weeksApart % interval === 0 && weekdays.has(RRULE_WEEKDAYS[cursor.getDay()])) {
       occurrences += 1;

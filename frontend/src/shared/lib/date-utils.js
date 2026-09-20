@@ -163,6 +163,7 @@ export function getYearWeekRange(date) {
   start.setDate(start.getDate() + Math.floor(dayIndex / 7) * 7);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
   if (end > yearEnd) end.setTime(yearEnd.getTime());
   return [start, end];
 }
@@ -201,6 +202,7 @@ export function getYearCycle(date, cycleWeeks = 4) {
   start.setDate(start.getDate() + cycleIndex * blockDays);
   const end = new Date(start);
   end.setDate(end.getDate() + blockDays - 1);
+  end.setHours(23, 59, 59, 999);
   if (end > dec31) end.setTime(dec31.getTime());
   const weekCount = Math.ceil((end.getTime() - start.getTime() + 1) / (7 * 24 * 60 * 60 * 1000));
   return {

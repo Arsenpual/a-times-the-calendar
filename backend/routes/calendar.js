@@ -13,6 +13,18 @@ function dateOnly(value) {
   return date;
 }
 
+// Matches the frontend's Activity Week: seven-day blocks beginning 1 Jan,
+// rather than the old Sunday-start calculation.
+function activityWeekStart(value) {
+  const date = dateOnly(value);
+  if (!date) return null;
+  const yearStart = new Date(date.getFullYear(), 0, 1);
+  const dayIndex = Math.max(0, Math.floor((date - yearStart) / (24 * 60 * 60 * 1000)));
+  const start = new Date(yearStart);
+  start.setDate(start.getDate() + Math.floor(dayIndex / 7) * 7);
+  return start;
+}
+
 function occurrenceCountUntil(fields, startValue, limit) {
   const start = dateOnly(startValue);
   const untilDigits = String(fields.UNTIL || "").slice(0, 8);
@@ -34,11 +46,9 @@ function occurrenceCountUntil(fields, startValue, limit) {
 
   if (frequency !== "WEEKLY") return limit + 1;
   const weekdays = new Set((fields.BYDAY || RRULE_WEEKDAYS[start.getDay()]).split(","));
-  const initialWeek = new Date(start);
-  initialWeek.setDate(initialWeek.getDate() - initialWeek.getDay());
+  const initialWeek = activityWeekStart(start);
   while (cursor <= until && count <= limit) {
-    const cursorWeek = new Date(cursor);
-    cursorWeek.setDate(cursorWeek.getDate() - cursorWeek.getDay());
+    const cursorWeek = activityWeekStart(cursor);
     const weeksApart = Math.round((cursorWeek - initialWeek) / (7 * 24 * 60 * 60 * 1000));
     if (weeksApart % interval === 0 && weekdays.has(RRULE_WEEKDAYS[cursor.getDay()])) count += 1;
     cursor.setDate(cursor.getDate() + 1);

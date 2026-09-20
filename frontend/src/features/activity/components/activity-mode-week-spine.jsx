@@ -335,7 +335,7 @@ function WeekSpineContent({
                 aria-pressed={!isOutsideVisibleYear && isSelected}
                 aria-current={isToday ? "date" : undefined}
               >
-                {!isOutsideVisibleYear && <><span className="week-spine-day-label">{labels[index]}</span>
+                {!isOutsideVisibleYear && <><span className="week-spine-day-label">{labels[day.getDay()]}</span>
                 <strong><span>{day.getDate()}</span></strong>
                 <span className="week-spine-track" data-day-index={index} onPointerDown={(event) => beginDraft(event, day)} onPointerMove={(event) => { updateDraft(event); updateExistingDrag(event); }} onPointerUp={(event) => { finishDraft(event); finishExistingDrag(event); }} onPointerCancel={() => { setDraft(null); setDragged(null); clearDragFeedback(); }}>
                   {dayAllDayActivities.filter((activity) => !(dragged?.isAllDay && dragged.calendarId === activity.calendarId)).map((activity, allDayIndex) => <span
