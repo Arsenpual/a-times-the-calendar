@@ -87,6 +87,10 @@ function WeekSpineContent({
 }) {
   const { language } = useLanguage();
   const [weekStart, weekEnd] = getWeekRange(anchorDate);
+  const visibleYearStart = useMemo(() => new Date(anchorDate.getFullYear(), 0, 1), [anchorDate.getFullYear()]);
+  const visibleYearEnd = useMemo(() => new Date(anchorDate.getFullYear(), 11, 31, 23, 59, 59, 999), [anchorDate.getFullYear()]);
+  const visibleWeekStart = weekStart < visibleYearStart ? visibleYearStart : weekStart;
+  const visibleWeekEnd = weekEnd > visibleYearEnd ? visibleYearEnd : weekEnd;
   const cycle = getYearCycle(cycleStartDate || anchorDate);
   const cycleStart = cycle.calendarWeekStart;
   const dragState = useWeekSpineDragState();
@@ -182,8 +186,8 @@ function WeekSpineContent({
     };
   }), [activities, pendingTimeChanges]);
   const { timedSegments, allDayActivities } = useMemo(
-    () => buildWeekSpineData({ activities: timelineActivities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities }),
-    [timelineActivities, weekStart, weekEnd, activityCategoryMap, categories, lockedActivities]
+    () => buildWeekSpineData({ activities: timelineActivities, weekStart: visibleWeekStart, weekEnd: visibleWeekEnd, activityCategoryMap, categories, lockedActivities }),
+    [timelineActivities, visibleWeekStart, visibleWeekEnd, activityCategoryMap, categories, lockedActivities]
   );
   const archivedCalendarIds = useMemo(
     () => new Set(activityArchive.map((item) => item.calendarId).filter(Boolean)),
@@ -214,7 +218,9 @@ function WeekSpineContent({
     onMoveActivityToDay: moveActivityToDay,
     showInteractionWarning
   });
-  const visibleSelectedDay = weekDays.find((day) => isSameDay(day, selectedDay)) || weekDays[0];
+  const visibleSelectedDay = weekDays.find((day) => day >= visibleYearStart && day <= visibleYearEnd && isSameDay(day, selectedDay))
+    || weekDays.find((day) => day >= visibleYearStart && day <= visibleYearEnd)
+    || weekDays[0];
   const labels = weekdayShortLabels(language);
   const today = new Date();
 
@@ -294,7 +300,7 @@ function WeekSpineContent({
           <button type="button" className={hoursPerCell === 4 ? "is-active" : ""} onClick={() => onHoursPerCellChange?.(4)} aria-pressed={hoursPerCell === 4} title="4 ชั่วโมงต่อช่อง">4h</button>
         </div>}
         {!timelineFullscreen && <aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
-          <WeekNameField className="week-spine-week-name" weekStart={weekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
+          <WeekNameField className="week-spine-week-name" weekStart={visibleWeekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
         </aside>}
         <div className="week-spine-hours" aria-hidden="true" style={{ "--week-spine-hour-cell-count": (DAY_END_HOUR - DAY_START_HOUR) / effectiveHoursPerCell }}>
           {hourMarks.map((hour) => <span key={hour} style={{ top: `${((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100}%` }}>{String(hour).padStart(2, "0")}:00</span>)}
@@ -302,6 +308,7 @@ function WeekSpineContent({
         {resizeAlignmentGuide && <span className="week-spine-resize-alignment-guide" aria-hidden="true" style={{ top: `${resizeAlignmentGuide.top}px` }} />}
         <div className="week-spine-days">
           {weekDays.map((day, index) => {
+            const isOutsideVisibleYear = day < visibleYearStart || day > visibleYearEnd;
             const daySegments = timelineSegments.filter((segment) => isSameDay(segment.day, day));
             const dayStart = new Date(day);
             dayStart.setHours(0, 0, 0, 0);
@@ -317,14 +324,15 @@ function WeekSpineContent({
             const isToday = isSameDay(day, today);
             return (
               <button
-                className={`week-spine-day${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
+                className={`week-spine-day${isOutsideVisibleYear ? " is-outside-year" : ""}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
                 key={day.toISOString()}
                 type="button"
-                onClick={() => selectDay(day)}
-                aria-pressed={isSelected}
+                disabled={isOutsideVisibleYear}
+                onClick={() => { if (!isOutsideVisibleYear) selectDay(day); }}
+                aria-pressed={!isOutsideVisibleYear && isSelected}
                 aria-current={isToday ? "date" : undefined}
               >
-                <span className="week-spine-day-label">{labels[index]}</span>
+                {!isOutsideVisibleYear && <><span className="week-spine-day-label">{labels[index]}</span>
                 <strong><span>{day.getDate()}</span></strong>
                 <span className="week-spine-track" data-day-index={index} onPointerDown={(event) => beginDraft(event, day)} onPointerMove={(event) => { updateDraft(event); updateExistingDrag(event); }} onPointerUp={(event) => { finishDraft(event); finishExistingDrag(event); }} onPointerCancel={() => { setDraft(null); setDragged(null); clearDragFeedback(); }}>
                   {dayAllDayActivities.filter((activity) => !(dragged?.isAllDay && dragged.calendarId === activity.calendarId)).map((activity, allDayIndex) => <span
@@ -372,7 +380,7 @@ function WeekSpineContent({
                   })}
                   {draft && isSameDay(draft.day, day) && <span className="week-spine-draft" style={{ top: `${((draft.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((draft.endMinutes - draft.startMinutes) / DAY_SPAN_MINUTES) * 100}%` }} />}
                   {dragged && !dragged.isAllDay && isSameDay(dragged.day, day) && <span className="week-spine-block is-dragging" style={{ top: `${((dragged.startMinutes - DAY_START_HOUR * 60) / DAY_SPAN_MINUTES) * 100}%`, height: `${((dragged.endMinutes - dragged.startMinutes) / DAY_SPAN_MINUTES) * 100}%`, zIndex: 100, backgroundColor: dragged.source ? timelineSegments.find((segment) => segment.calendarId === dragged.calendarId)?.color.border : undefined }}><AutoShrinkText text={dragged.source?.summary || "(ไม่มีชื่อกิจกรรม)"} minScale={0.01} baseFontSize="12px" className="week-spine-block-title" /></span>}
-                </span>
+                </span></>}
               </button>
             );
           })}
