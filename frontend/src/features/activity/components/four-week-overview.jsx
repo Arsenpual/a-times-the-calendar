@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { getYearWeekRange, isSameDay, weekdayShortLabels, formatTime } from "../../../shared/lib/date-utils.js";
+import { getWeekRange, getYearWeekRange, isSameDay, weekdayShortLabels, formatTime } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import WeekNameField from "./week-name-field.jsx";
 
@@ -16,11 +16,12 @@ export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, c
   const [focusedWeekStart] = getYearWeekRange(focusedWeekDate || cycleStart);
   const weeks = useMemo(() => cycleWeeks.map(({ start, end }) => {
     const { timedSegments, allDayActivities } = buildWeekSpineData({ activities, weekStart: start, weekEnd: end, activityCategoryMap, categories, lockedActivities });
+    const [calendarWeekStart] = getWeekRange(start);
     const days = Array.from({ length: 7 }, (_, offset) => {
-      const day = new Date(start);
+      const day = new Date(calendarWeekStart);
       day.setDate(day.getDate() + offset);
       return day;
-    }).sort((left, right) => left.getDay() - right.getDay());
+    });
     return { start, end, visibleStart: start, visibleEnd: end, days, timedSegments, allDayActivities };
   }), [cycleWeeks, activities, activityCategoryMap, categories, lockedActivities]);
 

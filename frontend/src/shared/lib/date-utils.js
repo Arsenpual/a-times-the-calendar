@@ -143,9 +143,9 @@ export function formatWeekRange(date, lang = DEFAULT_LANGUAGE) {
 }
 
 /**
- * Activity weeks are numbered from the 1 January block, never from an
- * ISO/Sunday-start calendar week. This keeps four consecutive Week blocks
- * identical to one Cycle everywhere in the app.
+ * Activity weeks use normal Sunday–Saturday calendar weeks. Only the first
+ * and final week of a year may be partial, and their foreign-year days are
+ * excluded. Four such Week blocks form a Cycle.
  */
 export function getYearWeekBlock(date) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
@@ -154,16 +154,33 @@ export function getYearWeekBlock(date) {
   yearStart.setHours(0, 0, 0, 0);
   const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
   const dayMs = 24 * 60 * 60 * 1000;
-  const daysInYear = Math.round((yearEnd.getTime() - yearStart.getTime() + 1) / dayMs);
-  const dayIndex = Math.min(daysInYear - 1, Math.max(0, Math.floor((safeDate.getTime() - yearStart.getTime()) / dayMs)));
-  const start = new Date(yearStart);
-  const index = Math.floor(dayIndex / 7);
-  start.setDate(start.getDate() + index * 7);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
+  const firstSunday = new Date(yearStart);
+  firstSunday.setDate(firstSunday.getDate() + ((7 - firstSunday.getDay()) % 7));
+  const hasPartialFirstWeek = firstSunday.getTime() !== yearStart.getTime();
+  const dateAtMidnight = new Date(safeDate);
+  dateAtMidnight.setHours(0, 0, 0, 0);
+  let index;
+  let start;
+
+  if (hasPartialFirstWeek && dateAtMidnight < firstSunday) {
+    index = 0;
+    start = new Date(yearStart);
+  } else {
+    index = (hasPartialFirstWeek ? 1 : 0) + Math.floor((dateAtMidnight - firstSunday) / (7 * dayMs));
+    start = new Date(firstSunday);
+    start.setDate(start.getDate() + (index - (hasPartialFirstWeek ? 1 : 0)) * 7);
+  }
+  const end = hasPartialFirstWeek && index === 0
+    ? new Date(firstSunday.getFullYear(), firstSunday.getMonth(), firstSunday.getDate() - 1, 23, 59, 59, 999)
+    : new Date(start);
+  if (!(hasPartialFirstWeek && index === 0)) {
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  }
   if (end > yearEnd) end.setTime(yearEnd.getTime());
-  return { year, index, total: Math.ceil(daysInYear / 7), start, end };
+  const firstWeekCount = hasPartialFirstWeek ? 1 : 0;
+  const regularWeekCount = Math.ceil((yearEnd.getTime() - firstSunday.getTime() + 1) / (7 * dayMs));
+  return { year, index, total: firstWeekCount + regularWeekCount, start, end };
 }
 
 export function getYearWeekRange(date) {
@@ -184,9 +201,8 @@ export function totalWeeksInYear(year) {
 /**
  * Returns the fixed four-week Cycle that contains `date`.
  *
- * Cycles are fixed 28-day blocks beginning on 1 January of the selected
- * year. Therefore Cycle 1 always has four complete weeks, and only the
- * final Cycle may be shorter. No Cycle can ever include another year.
+ * Cycles group four canonical Activity Week blocks. The first/last Cycle may
+ * contain a partial boundary week, but never include days from another year.
  */
 export function getYearCycle(date, cycleWeeks = 4) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();

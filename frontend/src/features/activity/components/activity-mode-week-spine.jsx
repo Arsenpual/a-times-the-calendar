@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from "react";
-import { formatTime, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
+import { formatTime, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { getDisplayColor } from "../lib/activity-colors.js";
 import { layoutOverlaps } from "../lib/timeline-layout.js";
@@ -172,11 +172,14 @@ function WeekSpineContent({
   });
   const effectiveHoursPerCell = timelineFullscreen ? 1 : hoursPerCell;
   const hourMarks = useMemo(() => Array.from({ length: (DAY_END_HOUR - DAY_START_HOUR) / effectiveHoursPerCell + 1 }, (_, index) => DAY_START_HOUR + index * effectiveHoursPerCell), [effectiveHoursPerCell]);
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, offset) => {
-    const day = new Date(weekStart);
-    day.setDate(day.getDate() + offset);
-    return day;
-  }).sort((left, right) => left.getDay() - right.getDay()), [weekStart.getTime()]);
+  const weekDays = useMemo(() => {
+    const [calendarWeekStart] = getWeekRange(weekStart);
+    return Array.from({ length: 7 }, (_, offset) => {
+      const day = new Date(calendarWeekStart);
+      day.setDate(day.getDate() + offset);
+      return day;
+    });
+  }, [weekStart.getTime()]);
   const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = cycleData;
   const timelineActivities = useMemo(() => activities.map((activity) => {
     const pending = pendingTimeChanges.get(activity.id);
@@ -220,8 +223,8 @@ function WeekSpineContent({
     onMoveActivityToDay: moveActivityToDay,
     showInteractionWarning
   });
-  const visibleSelectedDay = weekDays.find((day) => day >= visibleYearStart && day <= visibleYearEnd && isSameDay(day, selectedDay))
-    || weekDays.find((day) => day >= visibleYearStart && day <= visibleYearEnd)
+  const visibleSelectedDay = weekDays.find((day) => day >= weekStart && day <= weekEnd && isSameDay(day, selectedDay))
+    || weekDays.find((day) => day >= weekStart && day <= weekEnd)
     || weekDays[0];
   const labels = weekdayShortLabels(language);
   const today = new Date();
@@ -310,7 +313,7 @@ function WeekSpineContent({
         {resizeAlignmentGuide && <span className="week-spine-resize-alignment-guide" aria-hidden="true" style={{ top: `${resizeAlignmentGuide.top}px` }} />}
         <div className="week-spine-days">
           {weekDays.map((day, index) => {
-            const isOutsideVisibleYear = day < visibleYearStart || day > visibleYearEnd;
+            const isOutsideVisibleYear = day < weekStart || day > weekEnd;
             const daySegments = timelineSegments.filter((segment) => isSameDay(segment.day, day));
             const dayStart = new Date(day);
             dayStart.setHours(0, 0, 0, 0);
