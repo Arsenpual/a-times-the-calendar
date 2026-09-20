@@ -166,10 +166,9 @@ export function totalWeeksInYear(year) {
 /**
  * Returns the fixed four-week Cycle that contains `date`.
  *
- * Cycles are grouped from the first calendar week of the selected year, but
- * their usable data boundary is always 1 Jan – 31 Dec of that same year.
- * A Sunday-start week may cross a year boundary; its foreign days are never
- * included in a Cycle, fetched, or summarised with this year's data.
+ * Cycles are fixed 28-day blocks beginning on 1 January of the selected
+ * year. Therefore Cycle 1 always has four complete weeks, and only the
+ * final Cycle may be shorter. No Cycle can ever include another year.
  */
 export function getYearCycle(date, cycleWeeks = 4) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
@@ -177,28 +176,28 @@ export function getYearCycle(date, cycleWeeks = 4) {
   const jan1 = new Date(year, 0, 1);
   jan1.setHours(0, 0, 0, 0);
   const dec31 = new Date(year, 11, 31, 23, 59, 59, 999);
-  const [firstWeekStart] = getWeekRange(jan1);
-  const [selectedWeekStart] = getWeekRange(safeDate);
-  const weekIndex = Math.max(0, Math.floor((selectedWeekStart - firstWeekStart) / (7 * 24 * 60 * 60 * 1000)));
-  const totalWeeks = totalWeeksInYear(year);
-  const cycleIndex = Math.min(Math.floor(weekIndex / cycleWeeks), Math.ceil(totalWeeks / cycleWeeks) - 1);
-  const calendarWeekStart = new Date(firstWeekStart);
-  calendarWeekStart.setDate(calendarWeekStart.getDate() + cycleIndex * cycleWeeks * 7);
-  const weekCount = Math.min(cycleWeeks, totalWeeks - cycleIndex * cycleWeeks);
-  const calendarWeekEnd = new Date(calendarWeekStart);
-  calendarWeekEnd.setDate(calendarWeekEnd.getDate() + weekCount * 7 - 1);
-  calendarWeekEnd.setHours(23, 59, 59, 999);
-  const start = new Date(Math.max(calendarWeekStart.getTime(), jan1.getTime()));
-  const end = new Date(Math.min(calendarWeekEnd.getTime(), dec31.getTime()));
+  const daysInYear = Math.round((dec31.getTime() - jan1.getTime() + 1) / (24 * 60 * 60 * 1000));
+  const blockDays = cycleWeeks * 7;
+  const dayOfYear = Math.min(daysInYear - 1, Math.max(0, Math.floor((safeDate.getTime() - jan1.getTime()) / (24 * 60 * 60 * 1000))));
+  const cycleIndex = Math.floor(dayOfYear / blockDays);
+  const totalCycles = Math.ceil(daysInYear / blockDays);
+  const start = new Date(jan1);
+  start.setDate(start.getDate() + cycleIndex * blockDays);
+  const end = new Date(start);
+  end.setDate(end.getDate() + blockDays - 1);
+  if (end > dec31) end.setTime(dec31.getTime());
+  const weekCount = Math.ceil((end.getTime() - start.getTime() + 1) / (7 * 24 * 60 * 60 * 1000));
   return {
     year,
     start,
     end,
-    calendarWeekStart,
-    calendarWeekEnd,
+    // Kept as aliases for the read-only four-week overview. They are now
+    // guaranteed to be inside this calendar year, too.
+    calendarWeekStart: new Date(start),
+    calendarWeekEnd: new Date(end),
     weekCount,
     cycleNumber: cycleIndex + 1,
-    totalCycles: Math.ceil(totalWeeks / cycleWeeks)
+    totalCycles
   };
 }
 

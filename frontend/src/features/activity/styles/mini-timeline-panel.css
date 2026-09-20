@@ -1,6 +1,7 @@
 .mini-timeline-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 28px; min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); }
 .mini-timeline-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mini-timeline-heading .day-timeline-title { min-width: 0; }
+.mini-timeline-date-title { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; margin: 0; }.mini-timeline-date-title span { font-weight: 700; }.mini-timeline-date-title time { color: var(--text-primary); font-variant-numeric: tabular-nums; }.mini-timeline-date-title small { color: var(--text-secondary); font-size: 10px; font-weight: 500; white-space: nowrap; }
 .mini-timeline-summary-btn { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--today) 60%, var(--border)); border-radius: 999px; padding: 4px 8px; background: color-mix(in srgb, var(--today) 12%, var(--bg)); color: var(--text-primary); font: 600 11px/1.2 inherit; cursor: pointer; white-space: nowrap; }
 .mini-timeline-summary-btn:hover { background: color-mix(in srgb, var(--today) 22%, var(--bg)); }
 .mini-start-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px; }

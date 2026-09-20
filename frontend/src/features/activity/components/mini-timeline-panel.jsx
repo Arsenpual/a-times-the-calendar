@@ -93,7 +93,9 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
   }, [previewActivities, archivedIds, previewDate]);
 
   if (!previewDate) return null;
-  const displayedDate = new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(previewDate);
+  const compactDate = `${String(previewDate.getDate()).padStart(2, "0")}/${String(previewDate.getMonth() + 1).padStart(2, "0")}/${previewDate.getFullYear()}`;
+  const weekday = WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]];
+  const activityCount = dayView.scheduledActivities.length;
   const usedCategoryIds = new Set(dayView.scheduledActivities.map((activity) => previewCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId).filter(Boolean));
   const usedCategories = previewCategories.filter((category) => usedCategoryIds.has(category.id));
 
@@ -101,7 +103,11 @@ export default function MiniTimelinePanel({ activities = [], categories = [], ac
     <div className="day-timeline-header">
       <div className="mini-timeline-heading">
         {!previewOnly && onOpenDailySummary && <button type="button" className="mini-timeline-summary-btn" onClick={onOpenDailySummary}>สรุปวันนี้</button>}
-        <p className="day-timeline-title">{WEEKDAY_FULL[WEEKDAY_SHORT[previewDate.getDay()]]} ที่ {displayedDate}</p>
+        <p className="day-timeline-title mini-timeline-date-title">
+          <span>{weekday}</span>
+          <time dateTime={previewDate.toISOString().slice(0, 10)}>{compactDate}</time>
+          <small>{activityCount} {activityCount === 1 ? "กิจกรรม" : "กิจกรรม"}</small>
+        </p>
       </div>
       {previewOnly ? <span className="mini-timeline-preview-label">ตัวอย่าง</span> : <div className="day-timeline-header-actions">
         <button type="button" className="day-timeline-nav" onClick={() => downloadDayTimelineImage({ day: previewDate, activities: dayView.scheduledActivities, allActivities: dayView.visibleActivities, categories: previewCategories, activityCategoryMap: previewCategoryMap })} aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ" title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)">📷</button>
