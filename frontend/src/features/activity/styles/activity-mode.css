@@ -2809,7 +2809,25 @@ html[data-theme="dark"] .new-category-name-input {
 }
 .activity-ai-review > .activity-ai-manual-editor { display: grid; justify-content: stretch; }
 
-/* Cumulative Streamgraph: lightweight category lines that may cross. */
+/* Category time summary: one stacked bar for the selected week or cycle. */
+.activity-time-category-bars-summary { display: grid; gap: 10px; padding: clamp(18px, 3vw, 34px) clamp(12px, 3vw, 32px); border: 1px solid color-mix(in srgb, var(--border) 72%, transparent); border-radius: 11px; background: var(--bg); }
+.activity-time-category-bars-summary > strong { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.activity-time-category-bars-summary > strong b { color: var(--text-primary); font-size: clamp(18px, 2.3vw, 28px); font-variant-numeric: tabular-nums; }
+.activity-time-category-bars-track { display: flex; min-height: clamp(34px, 5vw, 52px); overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: 8px; background: var(--bg-muted); }
+.activity-time-category-bars-segment { display: block; flex: 0 0 var(--category-share); min-width: 2px; background: var(--category-color); box-shadow: inset -1px 0 color-mix(in srgb, #000 13%, transparent); transition: filter 150ms ease, transform 150ms ease; cursor: help; }
+.activity-time-category-bars-segment:hover { filter: brightness(1.16); transform: scaleY(1.12); }
+.activity-time-category-bars-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 7px 11px; margin-top: 12px; }
+.activity-time-category-bars-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto auto; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--border) 68%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--bg) 75%, transparent); color: var(--text-secondary); font-size: 11px; }
+.activity-time-category-bars-row i { width: 9px; height: 9px; border-radius: 50%; }
+.activity-time-category-bars-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-time-category-bars-row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.activity-time-category-bars-row small { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.activity-time-category-bars:fullscreen { display: grid; place-items: center; box-sizing: border-box; width: 100vw; height: 100vh; padding: clamp(24px, 7vw, 100px); overflow: auto; background: var(--bg-muted); }
+.activity-time-category-bars:fullscreen .activity-time-streamgraph-header { display: none; }
+.activity-time-category-bars:fullscreen .activity-time-category-bars-summary { width: min(100%, 1100px); min-height: min(40vh, 300px); align-content: center; }
+.activity-time-category-bars:fullscreen .activity-time-category-bars-legend { width: min(100%, 1100px); }
+
+/* Legacy line-chart rules remain harmless while the bar summary is active. */
 .activity-time-streamgraph-gridline { stroke: color-mix(in srgb, var(--border) 85%, transparent); stroke-width: 1; }
 .activity-time-streamgraph-y-label { fill: var(--text-secondary); font-size: 18px; font-family: inherit; }
 .activity-time-streamgraph-line { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
