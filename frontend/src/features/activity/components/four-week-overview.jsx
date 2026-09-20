@@ -16,7 +16,12 @@ export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, c
   const [focusedWeekStart] = getYearWeekRange(focusedWeekDate || cycleStart);
   const weeks = useMemo(() => cycleWeeks.map(({ start, end }) => {
     const { timedSegments, allDayActivities } = buildWeekSpineData({ activities, weekStart: start, weekEnd: end, activityCategoryMap, categories, lockedActivities });
-    return { start, end, visibleStart: start, visibleEnd: end, timedSegments, allDayActivities };
+    const days = Array.from({ length: 7 }, (_, offset) => {
+      const day = new Date(start);
+      day.setDate(day.getDate() + offset);
+      return day;
+    }).sort((left, right) => left.getDay() - right.getDay());
+    return { start, end, visibleStart: start, visibleEnd: end, days, timedSegments, allDayActivities };
   }), [cycleWeeks, activities, activityCategoryMap, categories, lockedActivities]);
 
   return <section className="week-spine-four-week" aria-label="Cycle สี่สัปดาห์ อ่านอย่างเดียว">
@@ -33,8 +38,7 @@ export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, c
         </header>
         {week.allDayActivities.length > 0 && <div className="week-spine-overview-all-day">{week.allDayActivities.slice(0, 3).map((activity) => <span key={activity.calendarId} style={{ "--activity-color": activity.color.border }} title={`กิจกรรมทั้งวัน: ${activity.title}`} />)}{week.allDayActivities.length > 3 && <small>+{week.allDayActivities.length - 3}</small>}</div>}
         <div className="week-spine-overview-days">
-          {Array.from({ length: 7 }, (_, offset) => {
-            const day = new Date(week.start); day.setDate(day.getDate() + offset);
+          {week.days.map((day) => {
             const isOutsideCycle = day < week.visibleStart || day > week.visibleEnd;
             const items = week.timedSegments.filter((segment) => isSameDay(segment.day, day)).sort((a, b) => a.start - b.start);
             return <button type="button" disabled={isOutsideCycle} className={`week-spine-overview-day${isOutsideCycle ? " is-outside-cycle" : ""}${isSameDay(day, new Date()) ? " is-today" : ""}`} key={day.toISOString()} onClick={(event) => { event.stopPropagation(); onSelectDay?.(day); }} aria-label={isOutsideCycle ? "อยู่นอกขอบเขต Cycle ของปีนี้" : `เปิดรายการกิจกรรม ${labels[day.getDay()]} ${day.getDate()}`}>

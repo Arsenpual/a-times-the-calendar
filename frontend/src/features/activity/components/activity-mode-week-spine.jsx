@@ -176,7 +176,7 @@ function WeekSpineContent({
     const day = new Date(weekStart);
     day.setDate(day.getDate() + offset);
     return day;
-  }), [weekStart.getTime()]);
+  }).sort((left, right) => left.getDay() - right.getDay()), [weekStart.getTime()]);
   const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = cycleData;
   const timelineActivities = useMemo(() => activities.map((activity) => {
     const pending = pendingTimeChanges.get(activity.id);
