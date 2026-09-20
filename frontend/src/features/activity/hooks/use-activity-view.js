@@ -47,14 +47,14 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
     // inside the Cycle; returning to 7-day view then restores that focus.
     setCycleAnchorDate(nextCycle.start);
   }, [cycleAnchorDate]);
-  const openCycleWeekEditor = useCallback((date) => {
+  const openCycleWeekEditor = useCallback((date, range = null) => {
     cycleViewToRestoreRef.current = new Date(cycleAnchorDate);
-    selectWeek(date);
+    selectWeek(date, range);
     setWeekSpineViewMode("week");
     setWeekSpineFullscreenRequest((request) => request + 1);
   }, [cycleAnchorDate, selectWeek]);
-  const openCycleWeekView = useCallback((date) => {
-    selectWeek(date);
+  const openCycleWeekView = useCallback((date, range = null) => {
+    selectWeek(date, range);
     setSummaryPanelMode("week");
     setWeekSpineViewMode("week");
   }, [selectWeek]);

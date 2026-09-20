@@ -158,6 +158,7 @@ function AccountApp({ auth }) {
   const {
     cursorDate,
     expandedDate,
+    weekRangeOverride,
     navigateWeek,
     navigateDay,
     goToday,
@@ -905,6 +906,7 @@ function AccountApp({ auth }) {
                     hoursPerCell={weekSpineHoursPerCell}
                     onHoursPerCellChange={setWeekSpineHoursPerCell}
                     viewMode={weekSpineViewMode}
+                    weekRangeOverride={weekRangeOverride}
                     cycleStartDate={cycleAnchorDate}
                     fullscreenRequestId={weekSpineFullscreenRequest}
                     onTimelineFullscreenChange={handleTimelineFullscreenChange}

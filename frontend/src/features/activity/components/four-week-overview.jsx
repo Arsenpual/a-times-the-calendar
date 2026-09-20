@@ -31,11 +31,11 @@ export default function FourWeekOverview({ weekStart, weekCount = 4, cycleStart,
       <button type="button" onClick={() => onNavigateCycle?.(1)} aria-label="Cycle ถัดไป">›</button>
     </div>
     <div className="week-spine-four-week-grid">
-      {weeks.map((week) => <section className={`week-spine-overview-week${isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`} key={week.start.toISOString()} aria-current={isSameDay(week.start, focusedWeekStart) ? "true" : undefined} onDoubleClick={() => onOpenWeekView?.(week.visibleStart)}>
+      {weeks.map((week) => <section className={`week-spine-overview-week${isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`} key={week.start.toISOString()} aria-current={isSameDay(week.start, focusedWeekStart) ? "true" : undefined} onDoubleClick={() => onOpenWeekView?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd })}>
         <header className="week-spine-overview-week-header">
           <h3><button type="button" onClick={(event) => { event.stopPropagation(); onSelectWeek?.(week.visibleStart); }}>{formatVisibleRange(week.visibleStart, week.visibleEnd, language)}</button></h3>
           <WeekNameField className="week-spine-overview-week-name" weekStart={week.start} weekNames={weekNames} editingWeekKey={editingWeekKey} weekNameDraft={weekNameDraft} onStartEditing={onStartEditingWeekName} onDraftChange={onWeekNameDraftChange} onCommit={onCommitWeekName} onCancel={onCancelWeekName} />
-          <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.visibleStart); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatVisibleRange(week.visibleStart, week.visibleEnd, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
+          <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd }); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatVisibleRange(week.visibleStart, week.visibleEnd, language)}`} title="เปิดเพื่อแก้ไขแบบเต็มจอ">⛶</button>
         </header>
         {week.allDayActivities.length > 0 && <div className="week-spine-overview-all-day">{week.allDayActivities.slice(0, 3).map((activity) => <span key={activity.calendarId} style={{ "--activity-color": activity.color.border }} title={`กิจกรรมทั้งวัน: ${activity.title}`} />)}{week.allDayActivities.length > 3 && <small>+{week.allDayActivities.length - 3}</small>}</div>}
         <div className="week-spine-overview-days">

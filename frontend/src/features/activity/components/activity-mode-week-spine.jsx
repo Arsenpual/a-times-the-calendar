@@ -72,6 +72,7 @@ function WeekSpineContent({
   hoursPerCell = 1,
   onHoursPerCellChange,
   viewMode = "week",
+  weekRangeOverride,
   cycleStartDate,
   fullscreenRequestId = 0,
   onTimelineFullscreenChange,
@@ -86,7 +87,9 @@ function WeekSpineContent({
   weekStreamgraph,
 }) {
   const { language } = useLanguage();
-  const [weekStart, weekEnd] = getWeekRange(anchorDate);
+  const [defaultWeekStart, defaultWeekEnd] = getWeekRange(anchorDate);
+  const weekStart = weekRangeOverride?.start instanceof Date ? weekRangeOverride.start : defaultWeekStart;
+  const weekEnd = weekRangeOverride?.end instanceof Date ? weekRangeOverride.end : defaultWeekEnd;
   const visibleYearStart = useMemo(() => new Date(anchorDate.getFullYear(), 0, 1), [anchorDate.getFullYear()]);
   const visibleYearEnd = useMemo(() => new Date(anchorDate.getFullYear(), 11, 31, 23, 59, 59, 999), [anchorDate.getFullYear()]);
   const visibleWeekStart = weekStart < visibleYearStart ? visibleYearStart : weekStart;

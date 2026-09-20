@@ -6,10 +6,12 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
   const [ownerId, setOwnerId] = useState(userId);
   const [cursorDate, setCursorDate] = useState(new Date());
   const [expandedDate, setExpandedDate] = useState(null);
+  const [weekRangeOverride, setWeekRangeOverride] = useState(null);
   if (ownerId !== userId) {
     setOwnerId(userId);
     setCursorDate(new Date());
     setExpandedDate(null);
+    setWeekRangeOverride(null);
   }
 
   /**
@@ -24,6 +26,7 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
    * dependency array ของ useCallback ว่างเปล่าคงที่ได้
    */
   const navigateWeek = useCallback((direction) => {
+    setWeekRangeOverride(null);
     setCursorDate((prevCursorDate) => {
       const next = new Date(prevCursorDate);
       next.setDate(next.getDate() + direction * 7);
@@ -56,11 +59,17 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
     }
   }, [cursorDate, expandedDate]);
 
-  const goToday = useCallback(() => setCursorDate(new Date()), []);
-  const selectWeek = useCallback((date) => {
+  const goToday = useCallback(() => {
+    setWeekRangeOverride(null);
+    setCursorDate(new Date());
+  }, []);
+  const selectWeek = useCallback((date, range = null) => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return;
     setCursorDate(new Date(date));
     setExpandedDate(null);
+    const start = range?.start instanceof Date ? new Date(range.start) : null;
+    const end = range?.end instanceof Date ? new Date(range.end) : null;
+    setWeekRangeOverride(start && end && end >= start ? { start, end } : null);
   }, []);
   // Used when an activity is restored from the archive: unlike openDay(),
   // this deliberately moves the visible week as well as selecting its day.
@@ -69,6 +78,7 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
     const next = new Date(date);
     setCursorDate(next);
     setExpandedDate(next);
+    setWeekRangeOverride(null);
   }, []);
   const openDay = useCallback((date) => setExpandedDate(date), []);
   const closeDay = useCallback(() => setExpandedDate(null), []);
@@ -91,11 +101,13 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
       return;
     }
     setExpandedDate((prev) => {
-      const [weekStart, weekEnd] = getWeekRange(cursorDate);
+      const [defaultWeekStart, defaultWeekEnd] = getWeekRange(cursorDate);
+      const weekStart = weekRangeOverride?.start || defaultWeekStart;
+      const weekEnd = weekRangeOverride?.end || defaultWeekEnd;
       if (!prev) return null;
       return prev >= weekStart && prev <= weekEnd ? prev : null;
     });
-  }, [cursorDate]);
+  }, [cursorDate, weekRangeOverride]);
 
   /**
    * Global arrow-key shortcuts, independent of focus inside ActivityMode.
@@ -128,6 +140,7 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
   return {
     cursorDate,
     expandedDate,
+    weekRangeOverride,
     navigateWeek,
     navigateDay,
     goToday,
