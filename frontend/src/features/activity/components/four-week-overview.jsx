@@ -11,19 +11,13 @@ function formatVisibleRange(start, end, language) {
   return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
 }
 
-export default function FourWeekOverview({ weekStart, weekCount = 4, cycleStart, cycleEnd, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, weekNames, editingWeekKey, weekNameDraft, onStartEditingWeekName, onWeekNameDraftChange, onCommitWeekName, onCancelWeekName, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor, onOpenWeekView }) {
+export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, cycleEnd, focusedWeekDate, activities, categories, activityCategoryMap, lockedActivities, weekNames, editingWeekKey, weekNameDraft, onStartEditingWeekName, onWeekNameDraftChange, onCommitWeekName, onCancelWeekName, language, onSelectWeek, onSelectDay, onNavigateCycle, onOpenWeekEditor, onOpenWeekView }) {
   const labels = weekdayShortLabels(language);
-  const [focusedWeekStart] = getYearWeekRange(focusedWeekDate || weekStart);
-  const weeks = useMemo(() => Array.from({ length: weekCount }, (_, offset) => {
-    const start = new Date(weekStart);
-    start.setDate(start.getDate() + offset * 7);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
+  const [focusedWeekStart] = getYearWeekRange(focusedWeekDate || cycleStart);
+  const weeks = useMemo(() => cycleWeeks.map(({ start, end }) => {
     const { timedSegments, allDayActivities } = buildWeekSpineData({ activities, weekStart: start, weekEnd: end, activityCategoryMap, categories, lockedActivities });
-    const visibleStart = new Date(Math.max(start.getTime(), cycleStart?.getTime?.() ?? start.getTime()));
-    const visibleEnd = new Date(Math.min(end.getTime(), cycleEnd?.getTime?.() ?? end.getTime()));
-    return { start, end, visibleStart, visibleEnd, timedSegments, allDayActivities };
-  }), [weekStart.getTime(), weekCount, cycleStart?.getTime(), cycleEnd?.getTime(), activities, activityCategoryMap, categories, lockedActivities]);
+    return { start, end, visibleStart: start, visibleEnd: end, timedSegments, allDayActivities };
+  }), [cycleWeeks, activities, activityCategoryMap, categories, lockedActivities]);
 
   return <section className="week-spine-four-week" aria-label="Cycle สี่สัปดาห์ อ่านอย่างเดียว">
     <div className="week-spine-overview-cycle-nav" aria-label="เปลี่ยน Cycle">

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { activityDate, formatWeekRange, getYearCycle } from "../../../shared/lib/date-utils.js";
+import { activityDate, getYearCycle } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
@@ -7,6 +7,11 @@ function formatHours(minutes) {
   if (minutes < 60) return `${minutes} นาที`;
   const hours = minutes / 60;
   return `${hours % 1 === 0 ? hours : hours.toFixed(1)} ชม.`;
+}
+
+function formatCycleRange(start, end) {
+  const options = { day: "numeric", month: "short", year: "numeric" };
+  return `${start.toLocaleDateString("th-TH", options)} – ${end.toLocaleDateString("th-TH", options)}`;
 }
 
 function formatCategoryPercent(percent) {
@@ -46,7 +51,7 @@ function SlowOverflowText({ children }) {
 function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, decorative = false }) {
   return <>
     <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
-    <p className="cycle-summary-range">{formatWeekRange(cycleStart)} – {formatWeekRange(new Date(cycleEnd))}</p>
+    <p className="cycle-summary-range">{formatCycleRange(cycleStart, cycleEnd)}</p>
     {loading && <p className="summary-loading">กำลังคำนวณ Cycle...</p>}
     {error && <p className="summary-error">{error}</p>}
     {!loading && !error && <>
@@ -102,11 +107,7 @@ export default function CycleSummaryPanel({
   const cycleEnd = cycle.end;
 
   const summary = useMemo(() => {
-    const weeks = Array.from({ length: cycle.weekCount }, (_, index) => {
-      const start = new Date(cycleStart);
-      start.setDate(start.getDate() + index * 7);
-      return { start, count: 0, minutes: 0 };
-    });
+    const weeks = cycle.weeks.map((week) => ({ start: new Date(week.start), end: new Date(week.end), count: 0, minutes: 0 }));
     const categoryStats = new Map();
     const dayStats = new Map();
     let totalMinutes = 0;
@@ -124,9 +125,11 @@ export default function CycleSummaryPanel({
       previous.count += 1;
       categoryStats.set(categoryId, previous);
 
-      const weekIndex = Math.min(cycle.weekCount - 1, Math.max(0, Math.floor((start - cycleStart) / (7 * 24 * 60 * 60 * 1000))));
-      weeks[weekIndex].count += 1;
-      weeks[weekIndex].minutes += minutes;
+      const weekIndex = weeks.findIndex((week) => start >= week.start && start <= week.end);
+      if (weekIndex >= 0) {
+        weeks[weekIndex].count += 1;
+        weeks[weekIndex].minutes += minutes;
+      }
 
       const dayKey = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
       const day = dayStats.get(dayKey) || { date: new Date(start), count: 0 };
@@ -145,7 +148,7 @@ export default function CycleSummaryPanel({
       .sort((left, right) => right.minutes - left.minutes);
     const busiestDay = [...dayStats.values()].sort((left, right) => right.count - left.count)[0] || null;
     return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
-  }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weekCount]);
+  }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weeks]);
 
   const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
   if (!glass) return <aside className="summary-panel cycle-summary-panel"><CycleSummaryContent {...content} /></aside>;

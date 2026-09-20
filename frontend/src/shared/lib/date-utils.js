@@ -143,14 +143,11 @@ export function formatWeekRange(date, lang = DEFAULT_LANGUAGE) {
 }
 
 /**
- * Week-of-year for the week containing `date` (Sunday-start weeks, to match
- * getWeekRange/buildMonthGrid elsewhere in this file): the week containing
- * Jan 1st is week 1, and each following Sunday-to-Saturday span increments
- * by one. This is a simple sequential count, not the ISO-8601 definition.
- * Language-independent — a week number is the same number regardless of
- * display language, so this function intentionally has no lang parameter.
+ * Activity weeks are numbered from the 1 January block, never from an
+ * ISO/Sunday-start calendar week. This keeps four consecutive Week blocks
+ * identical to one Cycle everywhere in the app.
  */
-export function getYearWeekRange(date) {
+export function getYearWeekBlock(date) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
   const year = safeDate.getFullYear();
   const yearStart = new Date(year, 0, 1);
@@ -160,24 +157,28 @@ export function getYearWeekRange(date) {
   const daysInYear = Math.round((yearEnd.getTime() - yearStart.getTime() + 1) / dayMs);
   const dayIndex = Math.min(daysInYear - 1, Math.max(0, Math.floor((safeDate.getTime() - yearStart.getTime()) / dayMs)));
   const start = new Date(yearStart);
-  start.setDate(start.getDate() + Math.floor(dayIndex / 7) * 7);
+  const index = Math.floor(dayIndex / 7);
+  start.setDate(start.getDate() + index * 7);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   end.setHours(23, 59, 59, 999);
   if (end > yearEnd) end.setTime(yearEnd.getTime());
+  return { year, index, total: Math.ceil(daysInYear / 7), start, end };
+}
+
+export function getYearWeekRange(date) {
+  const { start, end } = getYearWeekBlock(date);
   return [start, end];
 }
 
 /** One-based fixed seven-day Activity Week within its calendar year. */
 export function weekOfYear(date) {
-  const [weekStart] = getYearWeekRange(date);
-  const yearStart = new Date(weekStart.getFullYear(), 0, 1);
-  return Math.floor((weekStart - yearStart) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return getYearWeekBlock(date).index + 1;
 }
 
 /** Total fixed seven-day Activity Week blocks in a calendar year. */
 export function totalWeeksInYear(year) {
-  return Math.ceil(((new Date(year, 11, 31) - new Date(year, 0, 1)) / (7 * 24 * 60 * 60 * 1000) + 1) / 7);
+  return getYearWeekBlock(new Date(year, 11, 31)).total;
 }
 
 /**
@@ -189,33 +190,25 @@ export function totalWeeksInYear(year) {
  */
 export function getYearCycle(date, cycleWeeks = 4) {
   const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
-  const year = safeDate.getFullYear();
-  const jan1 = new Date(year, 0, 1);
-  jan1.setHours(0, 0, 0, 0);
-  const dec31 = new Date(year, 11, 31, 23, 59, 59, 999);
-  const daysInYear = Math.round((dec31.getTime() - jan1.getTime() + 1) / (24 * 60 * 60 * 1000));
-  const blockDays = cycleWeeks * 7;
-  const dayOfYear = Math.min(daysInYear - 1, Math.max(0, Math.floor((safeDate.getTime() - jan1.getTime()) / (24 * 60 * 60 * 1000))));
-  const cycleIndex = Math.floor(dayOfYear / blockDays);
-  const totalCycles = Math.ceil(daysInYear / blockDays);
-  const start = new Date(jan1);
-  start.setDate(start.getDate() + cycleIndex * blockDays);
-  const end = new Date(start);
-  end.setDate(end.getDate() + blockDays - 1);
-  end.setHours(23, 59, 59, 999);
-  if (end > dec31) end.setTime(dec31.getTime());
-  const weekCount = Math.ceil((end.getTime() - start.getTime() + 1) / (7 * 24 * 60 * 60 * 1000));
+  const activeWeek = getYearWeekBlock(safeDate);
+  const cycleIndex = Math.floor(activeWeek.index / cycleWeeks);
+  const firstWeekIndex = cycleIndex * cycleWeeks;
+  const weekCount = Math.min(cycleWeeks, activeWeek.total - firstWeekIndex);
+  const weeks = Array.from({ length: weekCount }, (_, offset) => {
+    const dateInWeek = new Date(activeWeek.year, 0, 1);
+    dateInWeek.setDate(dateInWeek.getDate() + (firstWeekIndex + offset) * 7);
+    return getYearWeekBlock(dateInWeek);
+  });
+  const start = new Date(weeks[0].start);
+  const end = new Date(weeks.at(-1).end);
   return {
-    year,
+    year: activeWeek.year,
     start,
     end,
-    // Kept as aliases for the read-only four-week overview. They are now
-    // guaranteed to be inside this calendar year, too.
-    calendarWeekStart: new Date(start),
-    calendarWeekEnd: new Date(end),
     weekCount,
+    weeks,
     cycleNumber: cycleIndex + 1,
-    totalCycles
+    totalCycles: Math.ceil(activeWeek.total / cycleWeeks)
   };
 }
 
