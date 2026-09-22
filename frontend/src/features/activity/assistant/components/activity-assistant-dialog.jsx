@@ -35,7 +35,6 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const [guidedActivity, setGuidedActivity] = useState(initialChat.guidedActivity);
   const [conversationNodeId, setConversationNodeId] = useState(initialChat.conversationNodeId);
   const [guidedConversationMode, setGuidedConversationMode] = useState(initialChat.guidedConversationMode);
-  const [showCenteredGeneralQuestions, setShowCenteredGeneralQuestions] = useState(false);
   const [scheduleResolution, setScheduleResolution] = useState(null);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
@@ -44,7 +43,6 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const handledStartDailySummaryRequest = useRef(startDailySummaryRequest);
   const runDailySummary = async () => {
     if (!onOpenDailySummary || pending) return;
-    setShowCenteredGeneralQuestions(false);
     setMessages((current) => [...current, { role: "user", text: "สรุปกิจกรรมวันนี้", source: "template" }]);
     setPending(true); setPendingSource("template"); setError("");
     try {
@@ -80,7 +78,6 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
     setGuidedActivity({});
     setConversationNodeId("activity.title");
     setGuidedConversationMode("template");
-    setShowCenteredGeneralQuestions(false);
     setMessages((current) => [
       ...current,
       { role: "user", text: "สร้างกิจกรรม", source: "template" },
@@ -104,7 +101,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => ["ai", "calendar"].includes(message.source) && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); setShowCenteredGeneralQuestions(true); };
+  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -140,12 +137,10 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       if (activityFormOpen) onUpdateActivityForm?.({ values: { ...selected, formDraft: activityDraft }, changedField: "activityDraft" });
       else onOpenActivityForm?.(activityDraft);
       setDraft(null);
-      setShowCenteredGeneralQuestions(true);
     } catch (requestError) { setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
   const selectQuickReply = async (option) => {
-    setShowCenteredGeneralQuestions(false);
     if (option.kind === "home") {
       const homeNode = getActivityAssistantConversationNode("home");
       setGuidedActivity(null); setConversationNodeId("home");
@@ -189,7 +184,6 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
     const immediateGuidedActivity = directTitleReply ? { ...guidedActivity, title: text } : guidedActivity;
     const immediateGuidedStep = directTitleReply ? "activity.date" : conversationNodeId;
     if (directTitleReply) { setGuidedActivity(immediateGuidedActivity); setConversationNodeId("activity.date"); }
-    setShowCenteredGeneralQuestions(false);
     const nextMessages = [...messages, { role: "user", text, source: "ai" }];
     setMessages(nextMessages); setInput(""); setPending(true); setPendingSource("ai"); setError(""); setDraft(null); setEditingDraft(false);
     if (guidedActivity) setGuidedConversationMode("ai");
@@ -254,11 +248,9 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
             scheduleAlternatives: resolution.alternatives,
             scheduleResolution: resolution
           }]);
-          setShowCenteredGeneralQuestions(false);
           return;
         }
         setDraft(null);
-        setShowCenteredGeneralQuestions(true);
         if (activityFormOpen) onUpdateActivityForm?.(popupHandoff);
         else onOpenActivityForm?.(popupHandoff.values.formDraft);
       }
@@ -323,6 +315,8 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
+        {rootQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>เริ่มสำรวจ T.i.M.E.S. · ไม่ใช้ AI quota</small><div>{rootQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
+        <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="ถาม Google Calendar"><small>ถาม Google Calendar · ใช้ AI quota 1 ครั้งต่อคำถาม · อ่านอย่างเดียว</small><div>{CALENDAR_QUESTION_SUGGESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending || aiStatus?.enabled === false || cooldownSeconds > 0}>{question}</button>)}</div></section>
         {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.source === "calendar" ? message.role === "user" ? "✦ คำถามเกี่ยวกับ Google Calendar · ใช้ AI quota 1 ครั้ง" : "✦ คำตอบจาก Gemini โดยอ่านเฉพาะช่วงเวลาที่ถาม" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative, message.scheduleResolution)} disabled={pending || !message.scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
@@ -333,8 +327,6 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
           <label>Tags (คั่นด้วย comma)<input value={(draft.tags || []).join(", ")} onChange={(event) => updateDraft("tags", event.target.value.split(",").map(tag => tag.trim()).filter(Boolean))} /></label>
           <label>โน้ต<textarea value={draft.notes || ""} onChange={(event) => updateDraft("notes", event.target.value)} /></label>
         </div> : <><span>{draft.title}</span><small>{draft.allDay ? `ทั้งวัน ${draft.startLocal.slice(0, 10)} ถึง ${draft.endLocal.slice(0, 10)} (ไม่รวมวันสิ้นสุด)` : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.tags?.length > 0 && <small>Tags: {draft.tags.map((tag) => `#${tag}`).join(" ")}</small>}{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}{draft.notes && <small>{draft.notes}</small>}</>}<div><button type="button" onClick={() => setEditingDraft((current) => !current)}>{editingDraft ? "เสร็จสิ้นการแก้ไข" : "Edit detail"}</button><button type="button" className="btn btn-primary" onClick={confirm} disabled={pending || !draft.title || !draft.startLocal || !draft.endLocal}>Confirm สร้างกิจกรรม</button></div></section>}
-        {showCenteredGeneralQuestions && rootQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>เริ่มสำรวจ T.i.M.E.S. · ไม่ใช้ AI quota</small><div>{rootQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
-        {showCenteredGeneralQuestions && <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="ถาม Google Calendar"><small>ถาม Google Calendar · ใช้ AI quota 1 ครั้งต่อคำถาม · อ่านอย่างเดียว</small><div>{CALENDAR_QUESTION_SUGGESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending || aiStatus?.enabled === false || cooldownSeconds > 0}>{question}</button>)}</div></section>}
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
