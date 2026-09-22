@@ -35,6 +35,7 @@ import { useActivityTelegramNotifications } from "../features/notifications/tele
 import { useAnnouncementMessage } from "../features/announcements/hooks/use-announcement-message.js";
 import ActivityModeMockupPreview from "../dev/mockups/activity-mode-mockup-preview.jsx";
 import { useAppShellUi } from "./hooks/use-app-shell-ui.js";
+import { useAssistantPreferences } from "../features/activity/assistant/hooks/use-assistant-preferences.js";
 
 const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/activity-mode-*-mockup.jsx", { eager: true }))
   .map(([path, module]) => {
@@ -127,6 +128,7 @@ function AccountApp({ auth }) {
     handleReauthCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
+  const assistantPreferences = useAssistantPreferences(firebaseUser?.uid);
   const { error: activityError, setError } = useActivityError(firebaseUser?.uid);
   const error = authError || activityError;
 
@@ -992,6 +994,7 @@ function AccountApp({ auth }) {
         categories={categories}
         activities={activities}
         activityTagMap={activityTagMap}
+        assistantPreferences={assistantPreferences.values}
         lockedActivities={lockedActivities}
         onConfirmDraft={handleConfirmAiActivityDraft}
         onOpenActivityForm={(draft) => {
@@ -1013,6 +1016,10 @@ function AccountApp({ auth }) {
         onReminderTimelineColorsChange={setReminderTimelineColors}
         summaryPanelGlassEnabled={summaryPanelGlassEnabled}
         onSummaryPanelGlassChange={setSummaryPanelGlassEnabled}
+        assistantPreferences={assistantPreferences.values}
+        assistantPreferencesLoading={assistantPreferences.loading}
+        onSaveAssistantPreference={assistantPreferences.save}
+        onDeleteAssistantPreference={assistantPreferences.remove}
       />
 
     </div>

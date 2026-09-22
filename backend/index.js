@@ -17,6 +17,7 @@ const calendarRouter = require("./routes/calendar.js");
 const telegramRouter = require("./routes/telegram.js");
 const announcementRouter = require("./routes/announcement.js");
 const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
+const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -98,6 +99,7 @@ app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
 app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
 app.use("/api/calendar", requireAuth, calendarRouter);
 app.use("/api/announcement", requireAuth, announcementRouter);
+app.use("/api/assistant-preferences", requireAuth, assistantPreferencesRouter);
 // Gemini is used only to propose a draft. The client still confirms before
 // saving anything to Google Calendar.
 const aiLimiter = rateLimit({

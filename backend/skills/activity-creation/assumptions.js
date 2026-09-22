@@ -85,6 +85,9 @@ function explicitClockFromText(text) {
 function hasExplicitDuration(text) {
   return /\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?|นาที|mins?|minutes?)/i.test(text);
 }
+function enabledPreference(context, key) {
+  return context.assistantPreferences?.[key] || null;
+}
 // Only fill missing values. Explicit dates/times from extraction win.
 function applyAssumptions(raw, context) {
   const draft = { ...raw, assumptions: [...(raw.assumptions || [])] };
@@ -104,6 +107,22 @@ function applyAssumptions(raw, context) {
   const explicitClock = explicitClockFromText(text);
   const hasExplicitClockTime = Boolean(explicitClock) || /\d{1,2}\s*โมง|\b\d{1,2}\s*(?:am|pm)\b/i.test(text);
   const explicitDuration = hasExplicitDuration(text);
+  // Preferences are deliberately narrow defaults. They are used only when
+  // the person did not state a clock/duration; an explicit instruction always
+  // has priority over this saved personal preference.
+  const activityText = `${draft.title || ''} ${text}`;
+  const isHomework = /ทำการบ้าน|\bhomework\b/i.test(activityText);
+  const isExercise = /ออกกำลังกาย|\bexercise\b|\bworkout\b/i.test(activityText);
+  const preferredStart = !hasExplicitClockTime
+    ? (isHomework ? enabledPreference(context, 'homeworkDefaultStart') : null)
+      || (statedPeriod === 'evening' ? enabledPreference(context, 'preferredEveningStart') : null)
+    : null;
+  const preferredDuration = !explicitDuration
+    ? (isHomework ? enabledPreference(context, 'homeworkDefaultDurationMinutes') : null)
+      || (isExercise ? enabledPreference(context, 'exerciseDefaultDurationMinutes') : null)
+    : null;
+  if (preferredStart) draft.assumptions.push(`ใช้ค่าเริ่มต้นส่วนตัว: เวลาเริ่ม ${preferredStart}`);
+  if (preferredDuration) draft.assumptions.push(`ใช้ค่าเริ่มต้นส่วนตัว: ระยะเวลา ${preferredDuration} นาที`);
   if (!draft.startLocal && !draft.startTime && explicitClock) draft.startTime = explicitClock;
   // A recognisable phrase from the person wins over any incorrect period tag
   // proposed by the model.
@@ -120,7 +139,7 @@ function applyAssumptions(raw, context) {
   }
   const period = selectedPeriod(draft.tags);
   const taggedHour = selectedHourTag(draft.tags);
-  const duration = draft.allDay ? 1440 : (!explicitDuration && situation?.durationMinutes) || draft.durationMinutes || 60;
+  const duration = draft.allDay ? 1440 : preferredDuration || (!explicitDuration && situation?.durationMinutes) || draft.durationMinutes || 60;
   if (!Number.isInteger(duration) || duration < 1 || duration > 10080) throw new Error('ระยะเวลากิจกรรมไม่ถูกต้อง');
   // Gemini may return an arbitrary exact time for a broad phrase. When the
   // person gave no clock time, choose a suitable slot inside the tag's window;
@@ -131,7 +150,7 @@ function applyAssumptions(raw, context) {
   if (!draft.allDay && (situation || statedPeriod) && !hasExplicitClockTime) {
     draft.startLocal = '';
     draft.endLocal = '';
-    draft.startTime = situation?.preferredStart || timeForHourTag(taggedHour) || defaultTimeForPeriod(period);
+    draft.startTime = preferredStart || situation?.preferredStart || timeForHourTag(taggedHour) || defaultTimeForPeriod(period);
     draft.durationMinutes = duration;
   }
   // An actual clock from the person (including a previous turn followed by
@@ -143,7 +162,7 @@ function applyAssumptions(raw, context) {
     draft.durationMinutes = duration;
   }
   if (!draft.startLocal) {
-    const time = draft.allDay ? '00:00' : draft.startTime || timeForHourTag(taggedHour) || (period ? defaultTimeForPeriod(period) : '') || (/ช่วงเช้า|\bmorning\b/i.test(text) ? '09:00' : /ช่วงบ่าย|\bafternoon\b/i.test(text) ? '14:00' : '19:00');
+    const time = draft.allDay ? '00:00' : draft.startTime || preferredStart || timeForHourTag(taggedHour) || (period ? defaultTimeForPeriod(period) : '') || (/ช่วงเช้า|\bmorning\b/i.test(text) ? '09:00' : /ช่วงบ่าย|\bafternoon\b/i.test(text) ? '14:00' : '19:00');
     draft.startLocal = `${date}T${time}`;
     if (!raw.startTime && !raw.startLocal) draft.assumptions.push(`เวลาเริ่ม ${time}${period && !draft.allDay ? ` ภายใน tag ${period} (${describePeriod(period)})` : ''}`);
   }
@@ -161,4 +180,4 @@ function applyAssumptions(raw, context) {
   }
   return draft;
 }
-module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText, normalizeClock, normalizeLocalDateTime, explicitClockFromText, hasExplicitDuration };
+module.exports = { applyAssumptions, addMinutes, inferSituation, inferPeriodFromText, normalizeClock, normalizeLocalDateTime, explicitClockFromText, hasExplicitDuration, enabledPreference };

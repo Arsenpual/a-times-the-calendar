@@ -1608,6 +1608,54 @@
   gap: 4px;
 }
 
+.settings-section-note {
+  margin: -2px 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-assistant-preference {
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.settings-assistant-preference:first-of-type { border-top: 0; }
+
+.settings-assistant-preference-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.settings-assistant-preference-controls input {
+  width: 92px;
+  min-height: 30px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  padding: 3px 7px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-assistant-unit { color: var(--text-secondary); font-size: 12px; margin-right: auto; }
+.settings-assistant-action, .settings-assistant-delete {
+  min-height: 29px;
+  border-radius: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--divider);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-assistant-action:hover { border-color: var(--accent); color: var(--accent); }
+.settings-assistant-delete { color: var(--text-secondary); }
+.settings-assistant-error { margin: 6px 0 0; color: var(--danger, #c7432f); font-size: 12px; }
+
 .settings-color-row {
   display: flex;
   align-items: center;

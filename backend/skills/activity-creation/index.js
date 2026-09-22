@@ -25,6 +25,20 @@ function fallbackReplyForDraft(raw) {
     ? `ผมรับรายละเอียดของ “${title}” แล้วครับ`
     : 'ผมรับรายละเอียดกิจกรรมแล้วครับ';
 }
+
+function normalizeAssistantPreferences(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const time = (key) => /^([01]\d|2[0-3]):[0-5]\d$/.test(source[key]?.value || "") && source[key]?.enabled !== false
+    ? source[key].value : "";
+  const duration = (key) => Number.isInteger(source[key]?.value) && source[key]?.value >= 15 && source[key]?.value <= 720 && source[key]?.enabled !== false
+    ? source[key].value : 0;
+  return {
+    homeworkDefaultStart: time("homeworkDefaultStart"),
+    homeworkDefaultDurationMinutes: duration("homeworkDefaultDurationMinutes"),
+    exerciseDefaultDurationMinutes: duration("exerciseDefaultDurationMinutes"),
+    preferredEveningStart: time("preferredEveningStart")
+  };
+}
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -51,7 +65,8 @@ function prepareContext(body) {
     activities: normalizeScheduleContext(body.scheduleContext),
     availableWindows: buildAvailableWindows(body.scheduleContext)
   };
-  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity };
+  const assistantPreferences = normalizeAssistantPreferences(body.assistantPreferences);
+  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity, assistantPreferences };
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');
@@ -91,4 +106,4 @@ function finishResult(raw, context) {
   }
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
-module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule };
+module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, normalizeAssistantPreferences };

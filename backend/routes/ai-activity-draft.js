@@ -101,7 +101,7 @@ router.post("/activity-template-draft", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) throw new Error("วันที่ไม่ถูกต้อง");
     if (!/^\d{2}:\d{2}$/.test(time || "")) throw new Error("เวลาไม่ถูกต้อง");
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 720) throw new Error("ระยะเวลาต้องอยู่ระหว่าง 30 ถึง 720 นาที");
-    const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories, scheduleContext: req.body.scheduleContext });
+    const context = prepareContext({ text: `${title} ${date} ${time} ${durationMinutes} นาที`, referenceDate: date, timeZone: req.body.timeZone || "Asia/Bangkok", categories, scheduleContext: req.body.scheduleContext, assistantPreferences: req.body.assistantPreferences });
     claim = await claimDraftUsage(req.userId);
     if (claim.status === "claimed") {
       try {

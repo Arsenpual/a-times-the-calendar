@@ -208,3 +208,30 @@ test('guided flow never returns a final draft before the guided summary step', (
   assert.equal(result.draft, null);
   assert.equal(result.collected.title, 'ประชุมทีม');
 });
+
+test('personal homework defaults apply only when timing is not explicit', () => {
+  const ctx = prepareContext({
+    text: 'ทำการบ้าน', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', categories: ['งาน'], history: [],
+    assistantPreferences: {
+      homeworkDefaultStart: { value: '18:30', enabled: true },
+      homeworkDefaultDurationMinutes: { value: 90, enabled: true }
+    }
+  });
+  const draft = finishResult({ ready: true, reply: 'พร้อม', draft: extraction({ title: 'ทำการบ้าน', tags: ['evening'] }) }, ctx).draft;
+  assert.equal(draft.startLocal, '2026-09-14T18:30');
+  assert.equal(draft.endLocal, '2026-09-14T20:00');
+  assert.ok(draft.assumptions.some((item) => item.includes('ค่าเริ่มต้นส่วนตัว')));
+});
+
+test('an explicit activity time and duration override personal defaults', () => {
+  const ctx = prepareContext({
+    text: 'ทำการบ้าน 20.00 45 นาที', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', categories: ['งาน'], history: [],
+    assistantPreferences: {
+      homeworkDefaultStart: { value: '18:30', enabled: true },
+      homeworkDefaultDurationMinutes: { value: 90, enabled: true }
+    }
+  });
+  const draft = finishResult({ ready: true, reply: 'พร้อม', draft: extraction({ title: 'ทำการบ้าน', startTime: '20:00', durationMinutes: 45, tags: ['evening'] }) }, ctx).draft;
+  assert.equal(draft.startLocal, '2026-09-14T20:00');
+  assert.equal(draft.endLocal, '2026-09-14T20:45');
+});

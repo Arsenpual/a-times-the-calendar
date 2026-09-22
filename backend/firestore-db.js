@@ -120,6 +120,13 @@ function telegramAuthDoc(userId) {
   return userDoc(userId).collection("private").doc("telegramAuth");
 }
 
+// Preferences are private, deliberate assistant memory. They are accessed
+// through an authenticated backend route rather than browser Firestore rules,
+// so their validation and ownership stay in one place.
+function assistantPreferencesDoc(userId) {
+  return userDoc(userId).collection("private").doc("assistantPreferences");
+}
+
 // Chat history is server-owned: the browser accesses it only through the
 // authenticated Telegram routes, never directly through Firestore rules.
 function telegramMessagesCol(userId) {
@@ -434,6 +441,7 @@ module.exports = {
   reminderModeDoc,
   activityModeDoc,
   calendarAuthDoc,
+  assistantPreferencesDoc,
   telegramAuthDoc,
   telegramMessagesCol,
   telegramChatOwnerDoc,

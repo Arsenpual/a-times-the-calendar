@@ -19,7 +19,7 @@ function describeScheduleConflict(schedule) {
   return `ช่วงเวลาที่ร่างไว้มีงานซ้อนกันเกิน 3 รายการ${labels.length ? `: ${labels.join(", ")}${suffix}` : ""}\nเลือกช่วงเวลาใกล้เคียงด้านล่าง หรือแก้ไขเวลาเองในฟอร์มได้ครับ`;
 }
 
-export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
+export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, assistantPreferences = {}, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
   const initialChat = useInitialAssistantChat();
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -114,6 +114,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         durationMinutes: selected.durationMinutes,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name),
+        assistantPreferences,
         scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, selected.date)
       });
       const activityDraft = result.draft;
@@ -197,6 +198,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name),
         userTags: collectUserTags(activityTagMap),
+        assistantPreferences,
         scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, toDateInputValue(new Date())),
         guidedStep: immediateGuidedActivity ? immediateGuidedStep : "",
         guidedActivity: immediateGuidedActivity

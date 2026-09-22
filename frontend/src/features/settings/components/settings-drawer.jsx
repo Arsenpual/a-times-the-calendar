@@ -1,5 +1,34 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
+import { ASSISTANT_PREFERENCE_FIELDS } from "../../activity/assistant/hooks/use-assistant-preferences.js";
+
+function AssistantPreferenceRow({ field, item, onSave, onDelete }) {
+  const [draft, setDraft] = useState(item?.value ?? "");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setDraft(item?.value ?? ""); }, [item?.value]);
+  const save = async (enabled = item?.enabled !== false) => {
+    if (draft === "") return setError("กรุณาระบุค่า");
+    setPending(true); setError("");
+    try { await onSave?.(field.key, field.type === "duration" ? Number(draft) : draft, enabled); }
+    catch (requestError) { setError(requestError.message || "บันทึกไม่สำเร็จ"); }
+    finally { setPending(false); }
+  };
+  return <div className="settings-assistant-preference">
+    <div className="settings-row-label">
+      <span className="settings-row-title">{field.label}</span>
+      <span className="settings-row-desc">{item ? (item.enabled ? "ใช้งานเป็นค่าเริ่มต้น" : "บันทึกไว้แต่ยังไม่ใช้งาน") : "ยังไม่ได้ตั้งค่า"}</span>
+    </div>
+    <div className="settings-assistant-preference-controls">
+      <input type={field.type === "time" ? "time" : "number"} min={field.type === "duration" ? "15" : undefined} max={field.type === "duration" ? "720" : undefined} step={field.type === "duration" ? "15" : undefined} value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={field.label} />
+      {field.type === "duration" && <span className="settings-assistant-unit">นาที</span>}
+      <button type="button" className="settings-assistant-action" disabled={pending} onClick={() => save()}>บันทึก</button>
+      {item && <button type="button" className={`settings-toggle${item.enabled ? " is-on" : ""}`} role="switch" aria-checked={item.enabled} disabled={pending} aria-label={`เปิดหรือปิด ${field.label}`} onClick={() => save(!item.enabled)}><span className="settings-toggle-knob" /></button>}
+      {item && <button type="button" className="settings-assistant-delete" disabled={pending} onClick={async () => { setPending(true); setError(""); try { await onDelete?.(field.key); } catch (requestError) { setError(requestError.message || "ลบไม่สำเร็จ"); } finally { setPending(false); } }}>ลบ</button>}
+    </div>
+    {error && <p className="settings-assistant-error" role="alert">{error}</p>}
+  </div>;
+}
 
 /**
  * Slide-over settings drawer, opened from the ⚙️ icon in the header — in
@@ -40,7 +69,11 @@ export default function SettingsDrawer({
   reminderTimelineColors,
   onReminderTimelineColorsChange,
   summaryPanelGlassEnabled = false,
-  onSummaryPanelGlassChange
+  onSummaryPanelGlassChange,
+  assistantPreferences = {},
+  assistantPreferencesLoading = false,
+  onSaveAssistantPreference,
+  onDeleteAssistantPreference
 }) {
   const { language, setLanguage, t } = useLanguage();
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
@@ -158,6 +191,12 @@ export default function SettingsDrawer({
                 </label>
               ))}
             </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">ค่าเริ่มต้นของ MR.Zettascale</h3>
+            <p className="settings-section-note">ใช้เฉพาะเมื่อคุณไม่ได้ระบุเวลา/ระยะเวลาด้วยตัวเอง แก้ไข ปิดใช้ หรือลบได้ทุกเมื่อ</p>
+            {assistantPreferencesLoading ? <p className="settings-section-note">กำลังโหลดค่าเริ่มต้น…</p> : ASSISTANT_PREFERENCE_FIELDS.map((field) => <AssistantPreferenceRow key={field.key} field={field} item={assistantPreferences[field.key]} onSave={onSaveAssistantPreference} onDelete={onDeleteAssistantPreference} />)}
           </section>
         </div>
       </div>
