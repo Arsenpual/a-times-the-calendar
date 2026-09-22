@@ -36,6 +36,8 @@ import { useAnnouncementMessage } from "../features/announcements/hooks/use-anno
 import ActivityModeMockupPreview from "../dev/mockups/activity-mode-mockup-preview.jsx";
 import { useAppShellUi } from "./hooks/use-app-shell-ui.js";
 import { useAssistantPreferences } from "../features/activity/assistant/hooks/use-assistant-preferences.js";
+import { useTelegramConnection } from "../features/reminder/hooks/use-telegram-connection.js";
+import { useTelegramWebChat } from "../features/notifications/telegram/hooks/use-telegram-web-chat.js";
 
 const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/activity-mode-*-mockup.jsx", { eager: true }))
   .map(([path, module]) => {
@@ -129,6 +131,8 @@ function AccountApp({ auth }) {
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
   const assistantPreferences = useAssistantPreferences(firebaseUser?.uid);
+  const telegramIntegration = useTelegramConnection(firebaseUser);
+  const telegramChat = useTelegramWebChat(firebaseUser, telegramIntegration.telegramConnection.isConnected);
   const { error: activityError, setError } = useActivityError(firebaseUser?.uid);
   const error = authError || activityError;
 
@@ -279,6 +283,10 @@ function AccountApp({ auth }) {
   const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
   const [activityAssistantDailySummaryRequest, setActivityAssistantDailySummaryRequest] = useState(0);
   const [assistantDailySummary, setAssistantDailySummary] = useState({ open: false, loading: false, error: "", data: null });
+  const openMrZettascaleChat = useCallback(() => {
+    setActivityAssistantOpen(true);
+    telegramChat.openChat();
+  }, [telegramChat.openChat]);
   const handleCloseActivityModal = () => {
     // An assistant hand-off belongs only to the current form.  Clearing it on
     // close prevents an old chat reply from refilling the next blank form.
@@ -717,6 +725,9 @@ function AccountApp({ auth }) {
               onEditActivity={openEditActivity}
               onToggleActivityLock={handleToggleLock}
               timelineColors={reminderTimelineColors}
+              telegramIntegration={telegramIntegration}
+              telegramChat={telegramChat}
+              onOpenMrZettascaleChat={openMrZettascaleChat}
             />
           </div>
         )}
@@ -1014,12 +1025,18 @@ function AccountApp({ auth }) {
         startDailySummaryRequest={activityAssistantDailySummaryRequest}
         onClose={() => {
           setActivityAssistantOpen(false);
+          telegramChat.closeChat();
           setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
         }}
         categories={categories}
         activities={activities}
         activityTagMap={activityTagMap}
         assistantPreferences={assistantPreferences.values}
+        telegramMessages={telegramChat.messages}
+        telegramError={telegramChat.error}
+        onOpenTelegramChat={telegramChat.openChat}
+        onSendTelegramMessage={telegramChat.sendChatMessage}
+        onReadTelegramMessages={telegramChat.markTelegramChatRead}
         lockedActivities={lockedActivities}
         onConfirmDraft={handleConfirmAiActivityDraft}
         onOpenActivityForm={(draft) => {

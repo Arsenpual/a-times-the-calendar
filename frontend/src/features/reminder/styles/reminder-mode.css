@@ -347,7 +347,11 @@
         .topbar-telegram-menu button { display:block; width:100%; border:0; border-radius:7px; padding:8px 10px; background:transparent; color:var(--g-on-surface); text-align:left; cursor:pointer; font:inherit; font-size:12px; }
         .topbar-telegram-menu button:hover { background:var(--g-surface-variant); }
 
-        .telegram-web-chat-backdrop { position:fixed; inset:0; z-index:1002; display:flex; justify-content:flex-end; align-items:flex-end; padding:18px; background:color-mix(in srgb, var(--g-on-surface) 16%, transparent); }
+        /* Portal lives outside .reminder-app-container so it remains visible
+           in Activity Mode. Re-declare the small local palette here; without
+           it unresolved var(--g-*) values make the chat transparent. */
+        .telegram-chat-portal { --g-blue:#D85A30; --g-blue-hover:#B74623; --g-blue-light:#F9E8E1; --g-surface:#fff; --g-background:#F7F6F2; --g-on-surface:#1C1C1A; --g-on-surface-variant:#8A8A85; --g-outline:#E4E2DC; --g-outline-variant:#EDEBE5; font-family:'Google Sans','Roboto',system-ui,sans-serif; }
+        html[data-theme="dark"] .telegram-chat-portal { --g-blue:#E8703F; --g-blue-hover:#F08A60; --g-blue-light:#4A2920; --g-surface:#292927; --g-background:#20201E; --g-on-surface:#F2F1ED; --g-on-surface-variant:#9C9C97; --g-outline:#3A3A38; --g-outline-variant:#30302E; }
         .telegram-web-chat { width:min(380px,100%); height:min(570px,calc(100vh - 36px)); display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--g-outline); border-radius:16px; background:var(--g-surface); box-shadow:0 18px 52px color-mix(in srgb, var(--g-on-surface) 28%, transparent); }
         .telegram-web-chat header { display:flex; align-items:center; justify-content:space-between; padding:13px 15px; color:var(--g-blue); background:color-mix(in srgb, var(--g-blue) 9%, var(--g-surface)); border-bottom:1px solid var(--g-outline); }
         .telegram-web-chat__header-actions { display:flex; align-items:center; gap:10px; }
@@ -374,15 +378,14 @@
         .telegram-web-chat input { min-width:0; flex:1; border:1px solid var(--g-outline); border-radius:9px; padding:9px; background:transparent; color:var(--g-on-surface); }
         .telegram-web-chat form button { border:0; border-radius:9px; padding:0 12px; background:var(--g-blue); color:#fff; font-weight:700; cursor:pointer; }
         .telegram-web-chat form button:hover { background:var(--g-blue-hover); }
-        .telegram-chat-launcher { position:fixed; right:18px; bottom:84px; z-index:1001; display:flex; align-items:center; min-height:46px; border:1px solid var(--g-outline); border-radius:14px; overflow:hidden; background:var(--g-surface); box-shadow:0 12px 30px color-mix(in srgb, var(--g-on-surface) 24%, transparent); }
-        .telegram-chat-launcher button { min-height:46px; border:0; color:var(--g-on-surface); background:transparent; cursor:pointer; }
-        .telegram-chat-launcher__drag { width:25px; padding:0 3px; overflow:hidden; color:var(--g-on-surface-variant) !important; touch-action:none; }
-        .telegram-chat-launcher__main { position:relative; display:flex; align-items:center; gap:7px; padding:0 13px; font-weight:800; color:var(--g-blue) !important; }
-        .telegram-chat-launcher__name { max-width:0; overflow:hidden; white-space:nowrap; transition:max-width .16s ease; }
-        .telegram-chat-launcher.is-expanded .telegram-chat-launcher__name { max-width:112px; }
-        .telegram-chat-launcher__unread { position:absolute; top:4px; right:5px; min-width:17px; padding:1px 4px; border-radius:999px; background:#c7432f; color:#fff; font-size:10px; line-height:15px; }
-        .telegram-chat-launcher__toggle { width:0; overflow:hidden; font-size:20px; transition:width .16s ease; }
-        .telegram-chat-launcher.is-expanded .telegram-chat-launcher__toggle { width:31px; border-left:1px solid var(--g-outline-variant); }
+        .telegram-chat-launcher { position:fixed; right:18px; bottom:18px; z-index:1001; }
+        .telegram-chat-launcher button { border:0; color:var(--g-on-surface); background:transparent; cursor:pointer; font:inherit; }
+        .telegram-chat-launcher__main { position:relative; display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--g-outline) !important; border-radius:50%; background:var(--g-surface) !important; color:var(--g-blue) !important; font-size:15px !important; box-shadow:0 8px 18px color-mix(in srgb, var(--g-on-surface) 22%, transparent); }
+        .telegram-chat-launcher__unread { position:absolute; top:-4px; right:-5px; min-width:15px; padding:0 3px; border-radius:999px; background:#c7432f; color:#fff; font-size:9px; line-height:14px; }
+        .telegram-chat-launcher__commands { position:absolute; right:0; bottom:46px; display:grid; gap:3px; min-width:116px; padding:5px; border:1px solid var(--g-outline); border-radius:10px; background:var(--g-surface); box-shadow:0 10px 26px color-mix(in srgb, var(--g-on-surface) 22%, transparent); }
+        .telegram-chat-launcher__commands button { min-height:30px; padding:5px 8px; border-radius:7px; color:var(--g-on-surface); text-align:left; font-size:12px; }
+        .telegram-chat-launcher__commands button:hover { background:color-mix(in srgb, var(--g-blue) 9%, var(--g-surface)); }
+        .telegram-chat-launcher__drag { touch-action:none; color:var(--g-on-surface-variant) !important; }
 
         .reminder-stats-backdrop {
           position: fixed;

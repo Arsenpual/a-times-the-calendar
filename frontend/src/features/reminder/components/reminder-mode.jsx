@@ -8,7 +8,6 @@ import { useReminderComposerPreview } from "../hooks/use-reminder-composer-previ
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
 import { usePushNotifications } from "../../notifications/push/hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
-import { useTelegramConnection } from "../hooks/use-telegram-connection.js";
 import { useReminderStats } from "../hooks/use-reminder-stats.js";
 import { useActivityContextMenu } from "../hooks/use-activity-context-menu.js";
 import { useReminderOmnibar } from "../hooks/use-reminder-omnibar.js";
@@ -33,10 +32,9 @@ import { formatDurationClock } from "../lib/reminder-formatters.js";
 import ReminderTimelineRows from "./reminder-timeline-rows.jsx";
 import ReminderTopbar from "./reminder-topbar.jsx";
 import TelegramConnectionToast from "./telegram-connection-toast.jsx";
-import TelegramWebChat from "../../notifications/telegram/components/telegram-web-chat.jsx";
 import TelegramChatLauncher from "../../notifications/telegram/components/telegram-chat-launcher.jsx";
-import { useTelegramWebChat } from "../../notifications/telegram/hooks/use-telegram-web-chat.js";
 import ReminderAlerts from "./reminder-alerts.jsx";
+import { createPortal } from "react-dom";
 
 export default function ReminderDashboard({
   firebaseUser,
@@ -50,7 +48,10 @@ export default function ReminderDashboard({
   lockedActivities = {},
   onEditActivity,
   onToggleActivityLock,
-  timelineColors
+  timelineColors,
+  telegramIntegration,
+  telegramChat,
+  onOpenMrZettascaleChat
 }) {
   const { t } = useLanguage();
   // Runtime reminder state belongs to a person, not to this browser. The
@@ -67,8 +68,7 @@ export default function ReminderDashboard({
     isEnabled: isPushEnabled
   } = usePushNotifications({ firebaseUser });
 
-  const { telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, dismissTelegramStatus } = useTelegramConnection(firebaseUser);
-  const telegramChat = useTelegramWebChat(firebaseUser, telegramConnection.isConnected);
+  const { telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, dismissTelegramStatus } = telegramIntegration;
   const { activityContextMenu, openActivityContextMenu, closeActivityContextMenu } = useActivityContextMenu();
   const { reminderStats, recordStatsEvent, isStatsOpen, openStats, closeStats } = useReminderStats({ firebaseUser, reminders });
   const { dueReminders, nowTick, scheduleNext, markCompleted } = useDueReminders({
@@ -229,8 +229,9 @@ export default function ReminderDashboard({
       />
 
       <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
-      <TelegramChatLauncher connected={telegramConnection.isConnected} unreadCount={telegramChat.unreadCount} onOpenChat={telegramChat.openChat} />
-      <TelegramWebChat isOpen={telegramChat.isOpen} messages={telegramChat.messages} error={telegramChat.error} onClose={telegramChat.closeChat} onSend={telegramChat.sendChatMessage} onRead={telegramChat.markTelegramChatRead} />
+      {createPortal(<div className="telegram-chat-portal">
+        <TelegramChatLauncher connected={telegramConnection.isConnected} unreadCount={telegramChat.unreadCount} onOpenChat={onOpenMrZettascaleChat} />
+      </div>, document.body)}
 
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />
 
