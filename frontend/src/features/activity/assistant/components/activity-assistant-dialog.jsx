@@ -103,7 +103,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   if (!open) return null;
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
-  const aiRequestCount = messages.filter((message) => message.source === "ai" && message.role === "user").length;
+  const aiRequestCount = messages.filter((message) => ["ai", "calendar"].includes(message.source) && message.role === "user").length;
   const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); setShowCenteredGeneralQuestions(true); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
@@ -210,7 +210,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       // A complete explicit request is parsed by the backend without Gemini.
       // Render it like other quota-free knowledge responses so this turn does
       // not inflate the local AI usage indicator either.
-      const responseSource = ["knowledge", "deterministic"].includes(result.source) ? "knowledge" : "ai";
+      const responseSource = ["knowledge", "deterministic"].includes(result.source) ? "knowledge" : result.source === "calendar" ? "calendar" : "ai";
       const currentNode = getActivityAssistantConversationNode(conversationNodeId);
       const collectedFieldValue = result.collected?.[currentNode.field] || immediateGuidedActivity?.[currentNode.field];
       const canAdvanceGuidedFlow = responseSource === "ai" && immediateGuidedActivity && currentNode.field && collectedFieldValue;
@@ -225,8 +225,8 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
         setGuidedConversationMode("template");
       } else if (responseSource === "ai") { setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); }
       setMessages((current) => {
-        const withCorrectedUserSource = responseSource === "knowledge"
-          ? current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message)
+        const withCorrectedUserSource = responseSource !== "ai"
+          ? current.map((message, index) => index === current.length - 1 ? { ...message, source: responseSource } : message)
           : current;
         const nextMessages = [...withCorrectedUserSource, {
           role: "assistant",
@@ -323,7 +323,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
       <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
-        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative, message.scheduleResolution)} disabled={pending || !message.scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
+        {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.source === "calendar" ? message.role === "user" ? "✦ คำถามเกี่ยวกับ Google Calendar · ใช้ AI quota 1 ครั้ง" : "✦ คำตอบจาก Gemini โดยอ่านเฉพาะช่วงเวลาที่ถาม" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative, message.scheduleResolution)} disabled={pending || !message.scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
         {pending && <p className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}>{pendingSource === "ai" ? "กำลังให้ AI ช่วยคิดรายละเอียด…" : "กำลังสร้างร่างกิจกรรม…"}</p>}
         {draft && <section className="activity-ai-review"><strong>ร่างกิจกรรมพร้อมตรวจสอบ</strong>{draft.assumptions?.length > 0 && <small>ค่าที่สันนิษฐาน: {draft.assumptions.join(" · ")}</small>}{editingDraft ? <div className="activity-ai-manual-editor">
           <label>ชื่อกิจกรรม<input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>

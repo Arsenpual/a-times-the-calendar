@@ -2,7 +2,10 @@ const crypto = require("crypto");
 const { calendarAuthDoc } = require("./firestore-db.js");
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+// Event access keeps the existing Activity Mode create/edit capability. The
+// calendar-list scope lets the read-only AI branch discover the calendars the
+// person has chosen to show, without requesting the broader `calendar` scope.
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function requiredEnv(name) {

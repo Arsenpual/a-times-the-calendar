@@ -69,6 +69,38 @@ test("knowledge answer is deterministic and skips Gemini quota", async () => {
   assert.equal(geminiCalls, 0);
 });
 
+test("calendar question reads a bounded context and returns a Gemini answer without any Calendar write", async () => {
+  let calendarReads = 0;
+  let activityGenerations = 0;
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => ({ status: "claimed" }),
+    readCalendarQuestion: async (_userId, context) => {
+      calendarReads += 1;
+      assert.equal(context.text, "พรุ่งนี้ว่างไหม?");
+      return {
+        range: { start: "2026-09-17", end: "2026-09-17", label: "2026-09-17" },
+        events: [{ calendar: "Primary", title: "ประชุมทีม", start: "2026-09-17T10:00:00+07:00", end: "2026-09-17T11:00:00+07:00", allDay: false }],
+        calendarCount: 1
+      };
+    },
+    generateCalendarAnswer: async ({ calendarContext }) => {
+      assert.equal(calendarContext.events[0].title, "ประชุมทีม");
+      return "พรุ่งนี้ว่างก่อน 10:00 และหลัง 11:00 ครับ";
+    },
+    generateActivity: async () => { activityGenerations += 1; return validGeminiDraft(); }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, { text: "พรุ่งนี้ว่างไหม?" });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, "calendar");
+    assert.equal(result.ready, false);
+    assert.match(result.reply, /ก่อน 10:00/);
+  });
+  assert.equal(calendarReads, 1);
+  assert.equal(activityGenerations, 0);
+});
+
 test("a complete explicit activity request skips AI quota and opens a reviewable draft", async () => {
   let quotaCalls = 0;
   let geminiCalls = 0;
