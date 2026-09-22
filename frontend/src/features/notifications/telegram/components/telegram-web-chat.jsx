@@ -28,7 +28,10 @@ export default function TelegramWebChat({ isOpen, messages, error, onClose, onSe
       <header><strong>✈ Telegram</strong><span className="telegram-web-chat__header-actions"><button type="button" onClick={onClose} aria-label="ปิดข้อความ">×</button></span></header>
       <div className="telegram-web-chat__messages">
         {messages.length === 0 && <p>ยังไม่มีข้อความในแชตนี้</p>}
-        {messages.map((message) => <p key={message.id} ref={(node) => { if (node) messageNodes.current[message.id] = node; }} className={`telegram-web-chat__message is-${message.direction}`}>{message.text}</p>)}
+        {messages.map((message) => <div key={message.id} ref={(node) => { if (node) messageNodes.current[message.id] = node; }} className={`telegram-web-chat__message is-${message.direction}${message.kind === "notification" ? " is-notification" : ""}`}>
+          {message.kind === "notification" && <span className="telegram-web-chat__notification-label">MR.Zettascale · แจ้งเตือน</span>}
+          <p>{message.text}</p>
+        </div>)}
       </div>
       {error && <p className="telegram-web-chat__error">{error}</p>}
       <form onSubmit={submit}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="พิมพ์ข้อความถึงบอต" maxLength="4000" autoFocus /><button type="submit">ส่ง</button></form>

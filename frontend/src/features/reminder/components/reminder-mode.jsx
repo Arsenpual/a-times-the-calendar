@@ -34,6 +34,7 @@ import ReminderTimelineRows from "./reminder-timeline-rows.jsx";
 import ReminderTopbar from "./reminder-topbar.jsx";
 import TelegramConnectionToast from "./telegram-connection-toast.jsx";
 import TelegramWebChat from "../../notifications/telegram/components/telegram-web-chat.jsx";
+import TelegramChatLauncher from "../../notifications/telegram/components/telegram-chat-launcher.jsx";
 import { useTelegramWebChat } from "../../notifications/telegram/hooks/use-telegram-web-chat.js";
 import ReminderAlerts from "./reminder-alerts.jsx";
 
@@ -228,6 +229,7 @@ export default function ReminderDashboard({
       />
 
       <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
+      <TelegramChatLauncher connected={telegramConnection.isConnected} unreadCount={telegramChat.unreadCount} onOpenChat={telegramChat.openChat} />
       <TelegramWebChat isOpen={telegramChat.isOpen} messages={telegramChat.messages} error={telegramChat.error} onClose={telegramChat.closeChat} onSend={telegramChat.sendChatMessage} onRead={telegramChat.markTelegramChatRead} />
 
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />

@@ -322,7 +322,7 @@ async function handleProductQuestionCallback(callbackQuery) {
   if (chatOwner) await saveChatMessage(chatOwner, { direction: "outgoing", text, telegramMessageId: messageId });
 }
 
-async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt } = {}) {
+async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt, kind = "chat" } = {}) {
   const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
   const messageRef = telegramMessagesCol(userId).doc(messageId);
   // The unread badge is stored as a single counter document. This lets a
@@ -332,6 +332,7 @@ async function saveChatMessage(userId, { direction, text, telegramMessageId = nu
     const existing = await transaction.get(messageRef);
     const data = {
       direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
+      kind: kind === "notification" ? "notification" : "chat",
       createdAt: existing.data()?.createdAt || Date.now()
     };
     // Do not erase an acknowledgement when a Telegram inline keyboard edits
@@ -545,7 +546,8 @@ router.post("/notify", async (req, res, next) => {
     await saveChatMessage(req.userId, {
       direction: "outgoing",
       text: notificationText,
-      telegramMessageId: sentMessage?.message_id
+      telegramMessageId: sentMessage?.message_id,
+      kind: "notification"
     });
     res.json({ sent: true, limit: DAILY_NOTIFICATION_LIMIT, remaining: deliveryClaim.remaining, dayKey: deliveryClaim.dayKey });
   } catch (error) {
