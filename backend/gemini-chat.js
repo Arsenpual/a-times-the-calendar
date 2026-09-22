@@ -28,8 +28,15 @@ function waitDetails(status, now = Date.now()) {
 function isAllowedUser(userId) {
   const allowed = String(process.env.GEMINI_CHAT_ALLOWED_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
   // Fail closed during the pilot. An omitted allowlist must never turn a
-  // public chat widget into unrestricted paid Gemini access.
-  return allowed.includes(userId);
+  // public chat widget into unrestricted paid Gemini access. Local work is a
+  // deliberate exception only when the developer explicitly switches it on;
+  // production can never inherit that shortcut accidentally.
+  return allowed.includes(userId) || isLocalDevelopmentAccessEnabled();
+}
+
+function isLocalDevelopmentAccessEnabled() {
+  return process.env.NODE_ENV !== "production"
+    && String(process.env.GEMINI_CHAT_ALLOW_LOCAL_DEVELOPMENT || "").toLowerCase() === "true";
 }
 function isDeveloperUser(userId) {
   const developers = String(process.env.GEMINI_CHAT_DEVELOPER_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
