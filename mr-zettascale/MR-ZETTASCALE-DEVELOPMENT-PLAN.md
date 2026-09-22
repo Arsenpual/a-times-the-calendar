@@ -106,9 +106,10 @@ Store only deliberate, inspectable preferences, for example:
 The first delivery stores only the four explicit preferences above in
 `users/{uid}/private/assistantPreferences`. They are editable in Settings and
 are applied deterministically only where the person did not specify a time or
-duration. Candidate learning from repeated corrections remains a later Phase 3
-step: it must first present a suggested preference for approval, and must never
-silently turn chat text into memory.
+duration. Candidate learning now observes only a timing/duration correction to
+an MR.Zettascale activity proposal after that proposal is saved. The same
+correction must occur twice before Settings offers it for approval; it never
+silently turns chat text into memory.
 
 ## Phase 4 — Scheduling Skill
 

@@ -17,3 +17,17 @@ export function deleteAssistantPreference(key) {
     "DELETE /api/assistant-preferences/:key"
   );
 }
+
+export function recordAssistantPreferenceCorrections(corrections) {
+  return handleResponse(
+    apiRequest("/api/assistant-preferences/observations", { method: "POST", body: JSON.stringify({ corrections }) }),
+    "POST /api/assistant-preferences/observations"
+  );
+}
+
+export function dismissAssistantPreferenceCandidate(key) {
+  return handleResponse(
+    apiRequest(`/api/assistant-preferences/candidates/${encodeURIComponent(key)}`, { method: "DELETE" }),
+    "DELETE /api/assistant-preferences/candidates/:key"
+  );
+}

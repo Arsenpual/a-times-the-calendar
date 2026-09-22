@@ -71,9 +71,11 @@ export default function SettingsDrawer({
   summaryPanelGlassEnabled = false,
   onSummaryPanelGlassChange,
   assistantPreferences = {},
+  assistantPreferenceCandidates = {},
   assistantPreferencesLoading = false,
   onSaveAssistantPreference,
-  onDeleteAssistantPreference
+  onDeleteAssistantPreference,
+  onDismissAssistantPreferenceCandidate
 }) {
   const { language, setLanguage, t } = useLanguage();
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
@@ -196,6 +198,15 @@ export default function SettingsDrawer({
           <section className="settings-section">
             <h3 className="settings-section-title">ค่าเริ่มต้นของ MR.Zettascale</h3>
             <p className="settings-section-note">ใช้เฉพาะเมื่อคุณไม่ได้ระบุเวลา/ระยะเวลาด้วยตัวเอง แก้ไข ปิดใช้ หรือลบได้ทุกเมื่อ</p>
+            {Object.entries(assistantPreferenceCandidates).map(([key, candidate]) => {
+              const field = ASSISTANT_PREFERENCE_FIELDS.find((item) => item.key === key);
+              if (!field) return null;
+              const label = field.type === "duration" ? `${candidate.value} นาที` : candidate.value;
+              return <div className="settings-assistant-candidate" key={key}>
+                <span>MR.Zettascale สังเกตว่าคุณแก้ “{field.label}” เป็น <strong>{label}</strong> ซ้ำ {candidate.count} ครั้ง</span>
+                <div><button type="button" className="settings-assistant-action" onClick={() => onSaveAssistantPreference?.(key, candidate.value, true)}>ใช้เป็นค่าเริ่มต้น</button><button type="button" className="settings-assistant-delete" onClick={() => onDismissAssistantPreferenceCandidate?.(key)}>ไม่ใช้</button></div>
+              </div>;
+            })}
             {assistantPreferencesLoading ? <p className="settings-section-note">กำลังโหลดค่าเริ่มต้น…</p> : ASSISTANT_PREFERENCE_FIELDS.map((field) => <AssistantPreferenceRow key={field.key} field={field} item={assistantPreferences[field.key]} onSave={onSaveAssistantPreference} onDelete={onDeleteAssistantPreference} />)}
           </section>
         </div>

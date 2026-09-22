@@ -1622,6 +1622,21 @@
 
 .settings-assistant-preference:first-of-type { border-top: 0; }
 
+.settings-assistant-candidate {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--divider));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.settings-assistant-candidate strong { color: var(--text); }
+.settings-assistant-candidate > div { display: flex; gap: 6px; }
+
 .settings-assistant-preference-controls {
   display: flex;
   align-items: center;

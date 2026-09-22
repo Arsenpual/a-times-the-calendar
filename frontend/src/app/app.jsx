@@ -368,6 +368,31 @@ function AccountApp({ auth }) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error("เวลาเริ่มและสิ้นสุดของกิจกรรมไม่ถูกต้อง");
     await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } }, categoryId, tags: draft.tags });
   }, [categories, handleSaveActivity]);
+  const saveActivityWithAssistantLearning = useCallback(async (payload) => {
+    const saved = await handleSaveActivity(payload);
+    const proposal = payload.assistantProposal;
+    if (!proposal?.title || !proposal.startLocal || !proposal.endLocal || !payload.activityBody?.start?.dateTime || !payload.activityBody?.end?.dateTime) return saved;
+    const title = String(proposal.title).toLowerCase();
+    const isHomework = /ทำการบ้าน|\bhomework\b/i.test(title);
+    const isExercise = /ออกกำลังกาย|\bexercise\b|\bworkout\b/i.test(title);
+    if (!isHomework && !isExercise) return saved;
+    const toClock = (value) => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "" : `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    };
+    const proposedStart = proposal.startLocal.slice(11, 16);
+    const actualStart = toClock(payload.activityBody.start.dateTime);
+    const proposedDuration = (new Date(proposal.endLocal) - new Date(proposal.startLocal)) / 60000;
+    const actualDuration = (new Date(payload.activityBody.end.dateTime) - new Date(payload.activityBody.start.dateTime)) / 60000;
+    const corrections = [];
+    if (isHomework && actualStart && actualStart !== proposedStart) corrections.push({ key: "homeworkDefaultStart", value: actualStart });
+    if (isHomework && Number.isInteger(actualDuration) && actualDuration > 0 && actualDuration !== proposedDuration) corrections.push({ key: "homeworkDefaultDurationMinutes", value: actualDuration });
+    if (isExercise && Number.isInteger(actualDuration) && actualDuration > 0 && actualDuration !== proposedDuration) corrections.push({ key: "exerciseDefaultDurationMinutes", value: actualDuration });
+    // Preference learning is never allowed to make a Calendar save look as if
+    // it failed. It is an optional follow-up and has its own visible UI.
+    if (corrections.length) assistantPreferences.recordCorrections(corrections).catch(() => {});
+    return saved;
+  }, [assistantPreferences, handleSaveActivity]);
 
   const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
     mode,
@@ -970,7 +995,7 @@ function AccountApp({ auth }) {
         activityTagMap={activityTagMap}
         onCreateCategory={handleCreateCategory}
         onDeleteCategory={handleDeleteCategory}
-        onSave={handleSaveActivity}
+        onSave={saveActivityWithAssistantLearning}
         onDelete={handleDeleteActivity}
         onSyncGoogleCalendar={handleManualCalendarSync}
         googleCalendarSyncing={loading}
@@ -1001,7 +1026,7 @@ function AccountApp({ auth }) {
           setActivityAssistantFormUpdate(null);
           const start = new Date(draft.startLocal || new Date());
           const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
-          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: draft });
+          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: { ...draft, assistantOrigin: "mr-zettascale" } });
         }}
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
         onOpenDailySummary={openAssistantDailySummary}
@@ -1017,9 +1042,11 @@ function AccountApp({ auth }) {
         summaryPanelGlassEnabled={summaryPanelGlassEnabled}
         onSummaryPanelGlassChange={setSummaryPanelGlassEnabled}
         assistantPreferences={assistantPreferences.values}
+        assistantPreferenceCandidates={assistantPreferences.candidates}
         assistantPreferencesLoading={assistantPreferences.loading}
         onSaveAssistantPreference={assistantPreferences.save}
         onDeleteAssistantPreference={assistantPreferences.remove}
+        onDismissAssistantPreferenceCandidate={assistantPreferences.dismissCandidate}
       />
 
     </div>

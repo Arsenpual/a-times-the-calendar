@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { deleteAssistantPreference, getAssistantPreferences, saveAssistantPreference } from "../api/assistant-preferences-api.js";
+import { deleteAssistantPreference, dismissAssistantPreferenceCandidate, getAssistantPreferences, recordAssistantPreferenceCorrections, saveAssistantPreference } from "../api/assistant-preferences-api.js";
 
 export const ASSISTANT_PREFERENCE_FIELDS = [
   { key: "homeworkDefaultStart", label: "เวลาเริ่มทำการบ้าน", type: "time" },
@@ -10,13 +10,14 @@ export const ASSISTANT_PREFERENCE_FIELDS = [
 
 export function useAssistantPreferences(userId) {
   const [values, setValues] = useState({});
+  const [candidates, setCandidates] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
-    if (!userId) { setValues({}); return; }
+    if (!userId) { setValues({}); setCandidates({}); return; }
     setLoading(true); setError("");
-    try { setValues((await getAssistantPreferences()).values || {}); }
+    try { const result = await getAssistantPreferences(); setValues(result.values || {}); setCandidates(result.candidates || {}); }
     catch (requestError) { setError(requestError.message || "โหลดค่าเริ่มต้นของ MR.Zettascale ไม่สำเร็จ"); }
     finally { setLoading(false); }
   }, [userId]);
@@ -25,14 +26,24 @@ export function useAssistantPreferences(userId) {
 
   const save = useCallback(async (key, value, enabled = true) => {
     const result = await saveAssistantPreference(key, value, enabled);
-    setValues(result.values || {});
+    setValues(result.values || {}); setCandidates(result.candidates || {});
     return result;
   }, []);
   const remove = useCallback(async (key) => {
     const result = await deleteAssistantPreference(key);
-    setValues(result.values || {});
+    setValues(result.values || {}); setCandidates(result.candidates || {});
     return result;
   }, []);
 
-  return { values, loading, error, reload, save, remove };
+  const recordCorrections = useCallback(async (corrections) => {
+    if (!corrections?.length) return;
+    const result = await recordAssistantPreferenceCorrections(corrections);
+    setValues(result.values || {}); setCandidates(result.candidates || {});
+  }, []);
+  const dismissCandidate = useCallback(async (key) => {
+    const result = await dismissAssistantPreferenceCandidate(key);
+    setValues(result.values || {}); setCandidates(result.candidates || {});
+  }, []);
+
+  return { values, candidates, loading, error, reload, save, remove, recordCorrections, dismissCandidate };
 }
