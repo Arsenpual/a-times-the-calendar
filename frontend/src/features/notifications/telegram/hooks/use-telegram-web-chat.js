@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTelegramChat, getTelegramChatSummary, markTelegramChatRead, sendTelegramChatMessage } from "../telegram-chat-api.js";
 
-const CLOSED_CHAT_SUMMARY_INTERVAL_MS = 60_000;
-const OPEN_CHAT_REFRESH_INTERVAL_MS = 30_000;
+// The web chat is deliberately backend-polled rather than a second direct
+// Firestore client: private Telegram data stays behind requireAuth. A short
+// interval while the dialog is visible makes a Telegram reply feel live;
+// the closed state only refreshes its tiny unread counter.
+const CLOSED_CHAT_SUMMARY_INTERVAL_MS = 30_000;
+const OPEN_CHAT_REFRESH_INTERVAL_MS = 8_000;
 
 export function useTelegramWebChat(firebaseUser, connected) {
   const [chat, setChat] = useState({ isOpen: false, messages: [], unreadCount: 0, error: "" });
@@ -32,6 +36,19 @@ export function useTelegramWebChat(firebaseUser, connected) {
     const timer = window.setInterval(refreshMessages, OPEN_CHAT_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [chat.isOpen, refreshMessages]);
+  useEffect(() => {
+    const refreshWhenReturning = () => {
+      if (document.visibilityState !== "visible") return;
+      if (chat.isOpen) refreshMessages();
+      else refreshSummary();
+    };
+    document.addEventListener("visibilitychange", refreshWhenReturning);
+    window.addEventListener("focus", refreshWhenReturning);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWhenReturning);
+      window.removeEventListener("focus", refreshWhenReturning);
+    };
+  }, [chat.isOpen, refreshMessages, refreshSummary]);
   const openChat = useCallback(async () => {
     setChat((previous) => ({ ...previous, isOpen: true }));
     await refreshMessages();

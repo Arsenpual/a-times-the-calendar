@@ -315,16 +315,14 @@ async function handleProductQuestionCallback(callbackQuery) {
   await editTelegramMessage(chatId, messageId, text, { reply_markup: productQuestionKeyboard(node) });
 
   // The answer is edited in Telegram rather than sent as a stack of new
-  // messages. Mirror that final visible text into the web chat as well.
+  // messages. Route the final visible text through the same persistence
+  // function as every other bot reply: this keeps ordering, unread state and
+  // the web-chat mirror consistent instead of creating a partial message.
   const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId;
-  if (chatOwner) {
-    await telegramMessagesCol(chatOwner).doc(String(messageId)).set({
-      direction: "outgoing", text, telegramMessageId: messageId
-    }, { merge: true });
-  }
+  if (chatOwner) await saveChatMessage(chatOwner, { direction: "outgoing", text, telegramMessageId: messageId });
 }
 
-async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt = null }) {
+async function saveChatMessage(userId, { direction, text, telegramMessageId = null, readAt } = {}) {
   const messageId = telegramMessageId ? String(telegramMessageId) : crypto.randomUUID();
   const messageRef = telegramMessagesCol(userId).doc(messageId);
   // The unread badge is stored as a single counter document. This lets a
@@ -332,10 +330,15 @@ async function saveChatMessage(userId, { direction, text, telegramMessageId = nu
   // historical messages just to draw a badge.
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(messageRef);
-    transaction.set(messageRef, {
+    const data = {
       direction, text: String(text || "").slice(0, 4_000), telegramMessageId,
-      createdAt: Date.now(), readAt
-    }, { merge: true });
+      createdAt: existing.data()?.createdAt || Date.now()
+    };
+    // Do not erase an acknowledgement when a Telegram inline keyboard edits
+    // an already-rendered message. New outgoing messages remain unread when
+    // no readAt is supplied.
+    if (readAt !== undefined) data.readAt = readAt;
+    transaction.set(messageRef, data, { merge: true });
     if (!existing.exists && direction === "outgoing" && !readAt) {
       transaction.set(telegramAuthDoc(userId), { unreadCount: FieldValue.increment(1) }, { merge: true });
     }
