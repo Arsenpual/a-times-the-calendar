@@ -126,6 +126,16 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
 // the answer that introduced them.
 export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"];
 
+// These go through the read-only Calendar branch and consume one normal AI
+// chat turn. They are kept separate from product FAQ questions, which are
+// deterministic and intentionally free of AI quota.
+export const CALENDAR_QUESTION_SUGGESTIONS = [
+  "วันนี้มีอะไรบ้าง?",
+  "พรุ่งนี้ว่างช่วงไหน?",
+  "สัปดาห์นี้มีนัดอะไรบ้าง?",
+  "เดือนนี้มีตารางชนกันไหม?"
+];
+
 const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
   "t.i.m.e.s. คืออะไร?": [
     "Activity Mode คืออะไร?",

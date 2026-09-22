@@ -31,20 +31,23 @@ function calendarRangeForQuestion(text, referenceDate) {
   const base = parseDate(referenceDate) || new Date();
   const explicit = normalized.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
   let start = explicit ? parseDate(explicit) : new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+  if (/เมื่อวาน|yesterday/.test(normalized)) start = addDays(start, -1);
   if (/พรุ่งนี้|tomorrow/.test(normalized)) start = addDays(start, 1);
   let end = start;
   let label = toDateKey(start);
 
-  if (/สัปดาห์นี้|สัปดาห์หน้า|this week|next week/.test(normalized)) {
+  if (/สัปดาห์นี้|สัปดาห์หน้า|สัปดาห์ก่อน|this week|next week|last week/.test(normalized)) {
     start = startOfSundayWeek(start);
     if (/สัปดาห์หน้า|next week/.test(normalized)) start = addDays(start, 7);
+    if (/สัปดาห์ก่อน|last week/.test(normalized)) start = addDays(start, -7);
     end = addDays(start, 6);
     label = `${toDateKey(start)} ถึง ${toDateKey(end)}`;
-  } else if (/เดือนนี้|เดือนหน้า|this month|next month/.test(normalized)) {
-    start = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + (/เดือนหน้า|next month/.test(normalized) ? 1 : 0), 1));
+  } else if (/เดือนนี้|เดือนหน้า|เดือนก่อน|this month|next month|last month/.test(normalized)) {
+    const monthOffset = /เดือนหน้า|next month/.test(normalized) ? 1 : /เดือนก่อน|last month/.test(normalized) ? -1 : 0;
+    start = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + monthOffset, 1));
     end = endOfMonth(start);
     label = `${toDateKey(start)} ถึง ${toDateKey(end)}`;
-  } else if (!explicit && !/วันนี้|พรุ่งนี้|today|tomorrow/.test(normalized)) {
+  } else if (!explicit && !/วันนี้|พรุ่งนี้|เมื่อวาน|today|tomorrow|yesterday/.test(normalized)) {
     // A question without a date receives a useful but bounded upcoming-week
     // context instead of silently exposing an unlimited calendar history.
     end = addDays(start, 6);
@@ -118,8 +121,9 @@ async function readCalendarQuestionContext(userId, { text, referenceDate }) {
 
 function isCalendarQuestion(text) {
   const value = String(text || "").toLowerCase();
-  return /calendar|ตาราง|ปฏิทิน|ว่าง|free|available|busy|ยุ่ง|มีอะไร|นัด|ชน|ทับ|กำหนดการ|schedule/.test(value)
-    && (/[?？]/.test(value) || /ไหม|อะไร|กี่|หา|สรุป|ดู|บอก|tell|what|when|how/.test(value));
+  const calendarTopic = /calendar|ตาราง|ปฏิทิน|ว่าง|free|available|busy|ยุ่ง|มีอะไร|นัด|ชน|ทับ|กำหนดการ|schedule|ประชุม|event|กิจกรรม/.test(value);
+  const questionIntent = /[?？]|ไหม|อะไร|กี่|หา|สรุป|ดู|บอก|เช็ค|ตรวจ|ค้น|tell|what|when|where|how|show|find|list|check/.test(value);
+  return calendarTopic && questionIntent;
 }
 
 module.exports = { calendarRangeForQuestion, readCalendarQuestionContext, isCalendarQuestion };

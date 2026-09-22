@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { continueActivityAssistant, createActivityTemplateDraft, getActivityAssistantStatus } from "../api/activity-assistant-api.js";
 import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
-import { getActivityAssistantConversationNode, getActivityAssistantKnowledgeFollowUps, getActivityAssistantRootQuestions } from "../config/activity-assistant-conversation-tree.js";
+import { CALENDAR_QUESTION_SUGGESTIONS, getActivityAssistantConversationNode, getActivityAssistantKnowledgeFollowUps, getActivityAssistantRootQuestions } from "../config/activity-assistant-conversation-tree.js";
 import { buildDailySummaryChat } from "../lib/daily-summary-chat.js";
 import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
 import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
@@ -334,11 +334,12 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
           <label>โน้ต<textarea value={draft.notes || ""} onChange={(event) => updateDraft("notes", event.target.value)} /></label>
         </div> : <><span>{draft.title}</span><small>{draft.allDay ? `ทั้งวัน ${draft.startLocal.slice(0, 10)} ถึง ${draft.endLocal.slice(0, 10)} (ไม่รวมวันสิ้นสุด)` : `${draft.startLocal.replace("T", " ")} – ${draft.endLocal.replace("T", " ")}`}</small>{draft.tags?.length > 0 && <small>Tags: {draft.tags.map((tag) => `#${tag}`).join(" ")}</small>}{draft.categoryName && <small>หมวดหมู่: {draft.categoryName}</small>}{draft.notes && <small>{draft.notes}</small>}</>}<div><button type="button" onClick={() => setEditingDraft((current) => !current)}>{editingDraft ? "เสร็จสิ้นการแก้ไข" : "Edit detail"}</button><button type="button" className="btn btn-primary" onClick={confirm} disabled={pending || !draft.title || !draft.startLocal || !draft.endLocal}>Confirm สร้างกิจกรรม</button></div></section>}
         {showCenteredGeneralQuestions && rootQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>เริ่มสำรวจ T.i.M.E.S. · ไม่ใช้ AI quota</small><div>{rootQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
+        {showCenteredGeneralQuestions && <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="ถาม Google Calendar"><small>ถาม Google Calendar · ใช้ AI quota 1 ครั้งต่อคำถาม · อ่านอย่างเดียว</small><div>{CALENDAR_QUESTION_SUGGESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending || aiStatus?.enabled === false || cooldownSeconds > 0}>{question}</button>)}</div></section>}
         <div ref={bottomRef} />
       </main>
       {error && <p className="activity-ai-error">{error}</p>}
       {(!guidedActivity || guidedConversationMode === "template") && <div className="activity-ai-choice-strip" aria-label="ข้อความสำเร็จรูป"><div className="activity-ai-quick-replies">{quickReplies.map((reply) => <button key={reply.id} type="button" onClick={() => selectQuickReply(reply)} disabled={pending}>{reply.label}</button>)}{onOpenDailySummary && <button type="button" onClick={runDailySummary} disabled={pending}>สรุปวันนี้</button>}</div></div>}
-      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "ทำงาน 08.30 พรุ่งนี้ 3 ชม."} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
+      <form className="activity-ai-composer" onSubmit={send}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={guidedActivity ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…" : "ทำงาน 08.30 พรุ่งนี้ 3 ชม. · หรือ พรุ่งนี้ว่างช่วงไหน?"} maxLength="1200" autoFocus /><button type="submit" className="btn btn-primary" disabled={pending || !input.trim() || aiStatus?.enabled === false || cooldownSeconds > 0}>{cooldownSeconds > 0 ? `รอ ${cooldownLabel}` : "ส่งให้ AI"}</button></form>
     </section>
   </div>;
 }

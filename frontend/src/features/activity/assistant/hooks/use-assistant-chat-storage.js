@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export const INITIAL_ASSISTANT_MESSAGE = {
   role: "assistant",
-  text: "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” แล้วผมจะช่วยเก็บรายละเอียดให้ครบก่อนสร้างกิจกรรม",
+  text: "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” หรือถาม Google Calendar เช่น “พรุ่งนี้ว่างช่วงไหน?” ได้ครับ",
   source: "template"
 };
 
@@ -17,7 +17,7 @@ function loadSavedChat() {
   try {
     const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
     const messages = Array.isArray(saved?.messages)
-      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
+      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
       : [];
     return {
       messages: messages.length ? messages : [INITIAL_ASSISTANT_MESSAGE],
