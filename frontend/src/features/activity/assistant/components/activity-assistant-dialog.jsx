@@ -4,7 +4,7 @@ import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
 import { CALENDAR_QUESTION_SUGGESTIONS, getActivityAssistantConversationNode, getActivityAssistantKnowledgeFollowUps, getActivityAssistantRootQuestions } from "../config/activity-assistant-conversation-tree.js";
 import { buildDailySummaryChat } from "../lib/daily-summary-chat.js";
 import { createActivityPopupHandoff } from "../lib/activity-popup-handoff.js";
-import { INITIAL_ASSISTANT_MESSAGE, useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
+import { useInitialAssistantChat, usePersistAssistantChat } from "../hooks/use-assistant-chat-storage.js";
 import { assessAssistantDraftOverlap, buildAssistantScheduleContext, collectUserTags } from "../lib/activity-schedule-context.js";
 
 function formatScheduleRange(startLocal, endLocal) {
@@ -19,7 +19,7 @@ function describeScheduleConflict(schedule) {
   return `ช่วงเวลาที่ร่างไว้มีงานซ้อนกันเกิน 3 รายการ${labels.length ? `: ${labels.join(", ")}${suffix}` : ""}\nเลือกช่วงเวลาใกล้เคียงด้านล่าง หรือแก้ไขเวลาเองในฟอร์มได้ครับ`;
 }
 
-export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, assistantPreferences = {}, telegramMessages = [], telegramError = "", onOpenTelegramChat, onSendTelegramMessage, onReadTelegramMessages, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
+export default function ActivityAssistantDialog({ open, onClose, categories, activities = [], activityTagMap = {}, lockedActivities = {}, assistantPreferences = {}, telegramMessages = [], telegramError = "", onOpenTelegramChat, onSendTelegramMessage, onReadTelegramMessages, onClearTelegramMessages, onConfirmDraft, onOpenActivityForm, onUpdateActivityForm, onOpenDailySummary, activityFormOpen = false, dailySummaryOpen = false, startActivityCreationRequest = 0, startDailySummaryRequest = 0 }) {
   const initialChat = useInitialAssistantChat();
   const [messages, setMessages] = useState(initialChat.messages);
   // Final activity review now belongs to ActivityModal. Do not restore the
@@ -104,7 +104,7 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownLabel = cooldownSeconds > 0 ? `${Math.floor(cooldownSeconds / 60)}:${String(cooldownSeconds % 60).padStart(2, "0")}` : "";
   const aiRequestCount = messages.filter((message) => ["ai", "calendar"].includes(message.source) && message.role === "user").length;
-  const reset = () => { setMessages([INITIAL_ASSISTANT_MESSAGE]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); };
+  const reset = () => { setMessages([]); setDraft(null); setEditingDraft(false); setError(""); setInput(""); setGuidedActivity(null); setConversationNodeId("home"); setGuidedConversationMode("template"); setScheduleResolution(null); };
   const addMessages = (...newMessages) => setMessages((current) => [...current, ...newMessages]);
   const finishGuidedActivity = async (selected) => {
     if (!selected?.title || !selected.date || !selected.time || !selected.durationMinutes) return;
@@ -278,6 +278,13 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
     } catch (requestError) { setError(requestError.message || "ส่งข้อความไป Telegram ไม่สำเร็จ"); }
     finally { setPending(false); setPendingSource(""); }
   };
+  const clearTelegramThread = async () => {
+    if (!onClearTelegramMessages || !window.confirm("ล้างข้อความและแจ้งเตือน Telegram ที่แสดงใน MR.Zettascale ใช่ไหม? ข้อความในแอป Telegram จริงจะไม่ถูกลบ")) return;
+    setPending(true); setPendingSource("telegram"); setError("");
+    try { await onClearTelegramMessages(); }
+    catch (requestError) { setError(requestError.message || "ล้างประวัติ Telegram ไม่สำเร็จ"); }
+    finally { setPending(false); setPendingSource(""); }
+  };
   const selectScheduleAlternative = (alternative, resolution = scheduleResolution) => {
     if (!resolution?.formDraft || !alternative?.startLocal || !alternative?.endLocal) return;
     const formDraft = {
@@ -327,14 +334,14 @@ export default function ActivityAssistantDialog({ open, onClose, categories, act
   };
   return <div className={`activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}${dailySummaryOpen ? " is-daily-summary-open" : ""}`} role="presentation" onMouseDown={onClose}>
     <section className="activity-ai-assistant" role="dialog" aria-modal="true" aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม" onMouseDown={(event) => event.stopPropagation()}>
-      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เริ่มใหม่</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
+      <header className="activity-ai-header"><div><span>✦</span><strong>MR.Zettascale</strong><small>ผู้ช่วยวางแผนกิจกรรม</small></div><div><button type="button" onClick={reset} disabled={pending}>เคลียร์แชท</button><button type="button" onClick={onClose} aria-label="ปิดแชต">×</button></div></header>
       {aiStatus && <p className="activity-ai-quota">{aiStatus.isDeveloper ? "Developer quota · " : ""}เหลือ {Math.max(0, aiStatus.userDay.limit - aiStatus.userDay.used)}/{aiStatus.userDay.limit} วันนี้ · {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/{aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้ {aiRequestCount} ครั้ง</p>}
       <main className="activity-ai-messages">
         {rootQuestions.length > 0 && <section className="activity-ai-centered-questions" aria-label="คำถามทั่วไป"><small>เริ่มสำรวจ T.i.M.E.S. · ไม่ใช้ AI quota</small><div>{rootQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div></section>}
         <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="ถาม Google Calendar"><small>ถาม Google Calendar · ใช้ AI quota 1 ครั้งต่อคำถาม · อ่านอย่างเดียว</small><div>{CALENDAR_QUESTION_SUGGESTIONS.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending || aiStatus?.enabled === false || cooldownSeconds > 0}>{question}</button>)}</div></section>
         {messages.map((message, index) => <div key={`${message.role}-${index}`} className="activity-ai-message-group"><div className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}><small className="activity-ai-source">{message.source === "template" ? "● ข้อความสำเร็จรูป · ไม่ใช้ AI quota" : message.source === "system" ? "● AI สรุปร่างกิจกรรม · ไม่ใช้โควต้าผู้ใช้" : message.source === "knowledge" ? message.role === "user" ? "● คำถามทั่วไป · ไม่ใช้ AI quota" : "● คำตอบทั่วไปจาก T.i.M.E.S. · ไม่ใช้ AI quota" : message.source === "calendar" ? message.role === "user" ? "✦ คำถามเกี่ยวกับ Google Calendar · ใช้ AI quota 1 ครั้ง" : "✦ คำตอบจาก Gemini โดยอ่านเฉพาะช่วงเวลาที่ถาม" : message.role === "user" ? "✦ คำถามเฉพาะ/สร้างกิจกรรม · ใช้ AI quota 1 ครั้งวันนี้" : "✦ คำตอบจาก Gemini · ใช้ quota จากคำถามสีม่วงก่อนหน้าแล้ว"}</small><span>{message.text}</span></div>{message.followUpQuestions?.length > 0 && <div className="activity-ai-answer-followups">{message.followUpQuestions.map((question) => <button key={question} type="button" onClick={() => send(null, question)} disabled={pending}>{question}</button>)}</div>}{message.scheduleAlternatives?.length > 0 && <div className="activity-ai-schedule-options">{message.scheduleAlternatives.map((alternative) => <button key={`${alternative.startLocal}-${alternative.endLocal}`} type="button" onClick={() => selectScheduleAlternative(alternative, message.scheduleResolution)} disabled={pending || !message.scheduleResolution}>เลือก {formatScheduleRange(alternative.startLocal, alternative.endLocal)}</button>)}</div>}</div>)}
         {onSendTelegramMessage && <section className="activity-ai-telegram-thread" aria-label="ข้อความ Telegram">
-          <small>✈ Telegram · ประวัติและการแจ้งเตือนจาก MR.Zettascale</small>
+          <div className="activity-ai-telegram-thread-header"><small>✈ Telegram · ประวัติและการแจ้งเตือนจาก MR.Zettascale</small><button type="button" onClick={clearTelegramThread} disabled={pending}>ล้าง Telegram</button></div>
           {telegramMessages.length === 0 ? <p>ยังไม่มีข้อความ Telegram</p> : telegramMessages.map((message) => <div key={message.id} className={`activity-ai-telegram-message is-${message.direction}${message.kind === "notification" ? " is-notification" : ""}`}><span>{message.kind === "notification" ? "🔔 " : ""}{message.text}</span></div>)}
           {telegramError && <p className="activity-ai-telegram-error">{telegramError}</p>}
         </section>}

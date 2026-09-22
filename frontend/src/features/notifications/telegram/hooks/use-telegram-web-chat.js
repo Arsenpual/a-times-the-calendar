@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getTelegramChat, getTelegramChatSummary, markTelegramChatRead, sendTelegramChatMessage } from "../telegram-chat-api.js";
+import { clearTelegramChat, getTelegramChat, getTelegramChatSummary, markTelegramChatRead, sendTelegramChatMessage } from "../telegram-chat-api.js";
 
 // The web chat is deliberately backend-polled rather than a second direct
 // Firestore client: private Telegram data stays behind requireAuth. A short
@@ -69,5 +69,9 @@ export function useTelegramWebChat(firebaseUser, connected) {
     await refreshMessages();
     await markRead();
   }, [markRead, refreshMessages]);
-  return { ...chat, openChat, closeChat, markTelegramChatRead: markRead, sendChatMessage: send };
+  const clear = useCallback(async () => {
+    await clearTelegramChat();
+    setChat((previous) => ({ ...previous, messages: [], unreadCount: 0, error: "" }));
+  }, []);
+  return { ...chat, openChat, closeChat, markTelegramChatRead: markRead, sendChatMessage: send, clearChatMessages: clear };
 }

@@ -15,3 +15,7 @@ export async function markTelegramChatRead() {
 export async function sendTelegramChatMessage(text) {
   return handleResponse(await apiRequest("/api/telegram/messages", { method: "POST", body: JSON.stringify({ text }) }), "POST /api/telegram/messages");
 }
+
+export async function clearTelegramChat() {
+  return handleResponse(await apiRequest("/api/telegram/messages", { method: "DELETE" }), "DELETE /api/telegram/messages");
+}

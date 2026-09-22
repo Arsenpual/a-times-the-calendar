@@ -17,6 +17,7 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
   const [position, setPosition] = useState(loadPosition);
   const [expanded, setExpanded] = useState(false);
   const drag = useRef(null);
+  const lastDragWasMove = useRef(false);
   const launcherRef = useRef(null);
 
   useEffect(() => {
@@ -25,13 +26,14 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
   if (!connected) return null;
 
   const startDrag = (event) => {
-    event.preventDefault();
     const rect = launcherRef.current?.getBoundingClientRect() || event.currentTarget.getBoundingClientRect();
-    drag.current = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+    drag.current = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top, startX: event.clientX, startY: event.clientY };
+    lastDragWasMove.current = false;
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const moveDrag = (event) => {
     if (!drag.current || drag.current.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientX - drag.current.startX) > 3 || Math.abs(event.clientY - drag.current.startY) > 3) lastDragWasMove.current = true;
     const width = launcherRef.current?.offsetWidth || 52;
     const height = launcherRef.current?.offsetHeight || 52;
     const x = Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - drag.current.offsetX));
@@ -47,7 +49,7 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
       <button type="button" role="menuitem" onClick={() => { onOpenChat?.(); setExpanded(false); }}>เปิดแชท</button>
       <button type="button" role="menuitem" className="telegram-chat-launcher__drag" aria-label="ลากปุ่ม MR.Zettascale" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>⠿ ลากย้าย</button>
     </div>}
-    <button type="button" className="telegram-chat-launcher__main" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-label={expanded ? "ปิดกล่องคำสั่ง MR.Zettascale" : "เปิดกล่องคำสั่ง MR.Zettascale"} title="MR.Zettascale">
+    <button type="button" className="telegram-chat-launcher__main" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onClick={() => { if (lastDragWasMove.current) { lastDragWasMove.current = false; return; } setExpanded((value) => !value); }} aria-expanded={expanded} aria-label={expanded ? "ปิดกล่องคำสั่ง MR.Zettascale" : "เปิดกล่องคำสั่ง MR.Zettascale"} title="MR.Zettascale">
       <span aria-hidden="true">✈</span>
       {unreadCount > 0 && <span className="telegram-chat-launcher__unread">{unreadCount > 99 ? "99+" : unreadCount}</span>}
     </button>

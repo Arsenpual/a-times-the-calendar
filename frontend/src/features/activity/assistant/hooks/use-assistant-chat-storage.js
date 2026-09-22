@@ -20,7 +20,10 @@ function loadSavedChat() {
       ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
       : [];
     return {
-      messages: messages.length ? messages : [INITIAL_ASSISTANT_MESSAGE],
+      // An intentional clear is different from first use. Preserve the empty
+      // chat across a reload while the fixed green/purple starter panels are
+      // rendered by the dialog itself.
+      messages: saved?.cleared ? [] : (messages.length ? messages : [INITIAL_ASSISTANT_MESSAGE]),
       conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
       guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
       guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template",
@@ -38,7 +41,7 @@ export function usePersistAssistantChat({ messages, conversationNodeId, guidedAc
   useEffect(() => {
     try {
       window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
-        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode, draft
+        messages: messages.slice(-120), cleared: messages.length === 0, conversationNodeId, guidedActivity, guidedConversationMode, draft
       }));
     } catch { /* Storage may be disabled or full; chat still works in memory. */ }
   }, [messages, conversationNodeId, guidedActivity, guidedConversationMode, draft]);

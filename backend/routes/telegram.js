@@ -493,6 +493,26 @@ router.post("/messages", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// Clears only the app-owned mirror used by MR.Zettascale. Telegram's native
+// conversation remains intact: a bot cannot safely erase a person's complete
+// chat history on another client, while this mirror is explicitly disposable.
+router.delete("/messages", async (req, res, next) => {
+  try {
+    const collection = telegramMessagesCol(req.userId);
+    let removed = 0;
+    while (true) {
+      const snapshot = await collection.limit(400).get();
+      if (snapshot.empty) break;
+      const batch = db.batch();
+      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+      removed += snapshot.size;
+    }
+    await telegramAuthDoc(req.userId).set({ unreadCount: 0, chatClearedAt: Date.now() }, { merge: true });
+    res.json({ ok: true, removed });
+  } catch (error) { next(error); }
+});
+
 router.post("/connect", async (req, res, next) => {
   try {
     const username = requiredEnv("TELEGRAM_BOT_USERNAME").replace(/^@/, "");

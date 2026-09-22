@@ -1037,6 +1037,7 @@ function AccountApp({ auth }) {
         onOpenTelegramChat={telegramChat.openChat}
         onSendTelegramMessage={telegramChat.sendChatMessage}
         onReadTelegramMessages={telegramChat.markTelegramChatRead}
+        onClearTelegramMessages={telegramChat.clearChatMessages}
         lockedActivities={lockedActivities}
         onConfirmDraft={handleConfirmAiActivityDraft}
         onOpenActivityForm={(draft) => {
