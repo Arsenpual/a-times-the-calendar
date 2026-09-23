@@ -41,6 +41,9 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
     if (drag.current?.pointerId === event.pointerId) drag.current = null;
   };
   const style = position ? { left: `${position.x}px`, top: `${position.y}px`, right: "auto", bottom: "auto" } : undefined;
+  // GitHub Pages serves this app below /a-times-the-calendar/, while local
+  // Vite serves it at /.  BASE_URL keeps the public mascot asset valid in both.
+  const avatarSrc = `${import.meta.env.BASE_URL}mr_zettascale_avatar_profile.png`;
   return <div ref={launcherRef} className={`telegram-chat-launcher${expanded ? " is-expanded" : ""}`} style={style}>
     {expanded && <div className="telegram-chat-launcher__commands" role="menu" aria-label="คำสั่ง MR.Zettascale">
       <button type="button" role="menuitem" onClick={() => { onOpenChat?.(); setExpanded(false); }}>เปิดแชท</button>
@@ -48,7 +51,7 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
     </div>}
     <nav className="telegram-chat-launcher__bar" aria-label="ทางลัด MR.Zettascale">
       <button type="button" className="telegram-chat-launcher__avatar" onClick={() => onOpenChat?.()} aria-label="เปิดแชท MR.Zettascale" title="เปิดแชท MR.Zettascale">
-        <img src="/mr_zettascale_avatar_profile.png" alt="" />
+        <img src={avatarSrc} alt="" />
         {unreadCount > 0 && <span className="telegram-chat-launcher__unread">{unreadCount > 99 ? "99+" : unreadCount}</span>}
       </button>
       <button type="button" className="telegram-chat-launcher__identity" onClick={() => onOpenChat?.()}>
