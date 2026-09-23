@@ -121,9 +121,88 @@ async function readCalendarQuestionContext(userId, { text, referenceDate }) {
 
 function isCalendarQuestion(text) {
   const value = String(text || "").toLowerCase();
-  const calendarTopic = /calendar|ตาราง|ปฏิทิน|ว่าง|free|available|busy|ยุ่ง|มีอะไร|นัด|ชน|ทับ|กำหนดการ|schedule|ประชุม|event|กิจกรรม/.test(value);
-  const questionIntent = /[?？]|ไหม|อะไร|กี่|หา|สรุป|ดู|บอก|เช็ค|ตรวจ|ค้น|tell|what|when|where|how|show|find|list|check/.test(value);
+  const calendarTopic = /calendar|ตาราง|ปฏิทิน|ว่าง|free|available|busy|ยุ่ง|มีอะไร|นัด|ชน|ทับ|กำหนดการ|schedule|ประชุม|event|กิจกรรม|ย้ายงาน|เวลาพัก|วางแผน/.test(value);
+  const questionIntent = /[?？]|ไหม|อะไร|กี่|หา|สรุป|ดู|บอก|เช็ค|ตรวจ|ค้น|ช่วย|ควร|tell|what|when|where|how|show|find|list|check/.test(value);
   return calendarTopic && questionIntent;
 }
 
-module.exports = { calendarRangeForQuestion, readCalendarQuestionContext, isCalendarQuestion };
+// These questions do not need interpretation.  Keeping them deterministic
+// means the app can answer from the same bounded Calendar data without
+// spending a Gemini request or sending event titles to an AI model.
+function isDeterministicCalendarQuestion(text) {
+  const value = String(text || "").toLowerCase();
+  return /วันนี้มีอะไร|วันนี้มีนัด|พรุ่งนี้มีอะไร|พรุ่งนี้มีนัด|สัปดาห์นี้มีนัด|ว่างช่วงไหน|ตารางชนกัน|นัด.*ชน|เวลาชน/.test(value);
+}
+
+function formatEventTime(event, timeZone = "Asia/Bangkok") {
+  if (event.allDay) return "ทั้งวัน";
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "ไม่ระบุเวลา";
+  const format = new Intl.DateTimeFormat("th-TH", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${format.format(start)}–${format.format(end)}`;
+}
+
+function eventInterval(event) {
+  if (event.allDay) return null;
+  const start = new Date(event.start).getTime();
+  const end = new Date(event.end).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? { start, end } : null;
+}
+
+function formatEvents(events, timeZone) {
+  if (!events.length) return "ไม่มีรายการ";
+  return events.slice(0, 12).map((event) => `• ${formatEventTime(event, timeZone)} ${event.title}`).join("\n")
+    + (events.length > 12 ? `\nและอีก ${events.length - 12} รายการ` : "");
+}
+
+function findConflicts(events) {
+  const intervals = events.map((event) => ({ event, interval: eventInterval(event) })).filter((item) => item.interval);
+  const conflicts = [];
+  for (let left = 0; left < intervals.length; left += 1) {
+    for (let right = left + 1; right < intervals.length; right += 1) {
+      if (intervals[left].interval.start < intervals[right].interval.end && intervals[right].interval.start < intervals[left].interval.end) {
+        conflicts.push([intervals[left].event, intervals[right].event]);
+      }
+    }
+  }
+  return conflicts;
+}
+
+function buildFreeTimeReply(context, timeZone) {
+  // A simple, explainable 08:00–22:00 working-window calculation.  It avoids
+  // pretending to know the user's sleep or work preferences.
+  const day = context.range.start;
+  const dayStart = new Date(`${day}T08:00:00+07:00`).getTime();
+  const dayEnd = new Date(`${day}T22:00:00+07:00`).getTime();
+  const busy = context.events.map(eventInterval).filter(Boolean)
+    .map((interval) => ({ start: Math.max(interval.start, dayStart), end: Math.min(interval.end, dayEnd) }))
+    .filter((interval) => interval.end > interval.start).sort((a, b) => a.start - b.start);
+  const gaps = [];
+  let cursor = dayStart;
+  for (const interval of busy) {
+    if (interval.start > cursor) gaps.push({ start: cursor, end: interval.start });
+    cursor = Math.max(cursor, interval.end);
+  }
+  if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+  const format = new Intl.DateTimeFormat("th-TH", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false });
+  const visible = gaps.filter((gap) => gap.end - gap.start >= 30 * 60 * 1000).slice(0, 6);
+  return visible.length
+    ? `ช่วงว่างของ ${day} (ประเมินในช่วง 08:00–22:00):\n${visible.map((gap) => `• ${format.format(gap.start)}–${format.format(gap.end)}`).join("\n")}`
+    : `ไม่พบช่วงว่างอย่างน้อย 30 นาทีในช่วง 08:00–22:00 ของ ${day}`;
+}
+
+function answerDeterministicCalendarQuestion(text, context, timeZone = "Asia/Bangkok") {
+  if (!isDeterministicCalendarQuestion(text)) return null;
+  const value = String(text || "").toLowerCase();
+  if (/ว่างช่วงไหน/.test(value)) return buildFreeTimeReply(context, timeZone);
+  if (/ชนกัน|เวลาชน|นัด.*ชน/.test(value)) {
+    const conflicts = findConflicts(context.events);
+    return conflicts.length
+      ? `พบเวลาชนกัน ${conflicts.length} คู่ในช่วง ${context.range.label}:\n${conflicts.slice(0, 8).map(([left, right]) => `• ${left.title} ↔ ${right.title}`).join("\n")}`
+      : `ไม่พบกิจกรรมที่เวลาชนกันในช่วง ${context.range.label}`;
+  }
+  return `ตาราง ${context.range.label}:\n${formatEvents(context.events, timeZone)}`;
+}
+
+module.exports = { calendarRangeForQuestion, readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion };

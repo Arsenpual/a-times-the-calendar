@@ -126,14 +126,21 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
 // the answer that introduced them.
 export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"];
 
-// These go through the read-only Calendar branch and consume one normal AI
-// chat turn. They are kept separate from product FAQ questions, which are
-// deterministic and intentionally free of AI quota.
-export const CALENDAR_QUESTION_SUGGESTIONS = [
+// These have a fixed, verifiable calculation over a bounded Calendar range.
+// They are intentionally kept out of Gemini so an answer never costs AI quota.
+export const CALENDAR_FACT_SUGGESTIONS = [
   "วันนี้มีอะไรบ้าง?",
   "พรุ่งนี้ว่างช่วงไหน?",
   "สัปดาห์นี้มีนัดอะไรบ้าง?",
   "เดือนนี้มีตารางชนกันไหม?"
+];
+
+// These need judgement or planning. They are the only Calendar shortcuts
+// deliberately sent to Gemini, with read-only event context from the backend.
+export const CALENDAR_AI_QUESTION_SUGGESTIONS = [
+  "ช่วยจัดตารางวันนี้ให้สมดุลหน่อย",
+  "ควรย้ายงานไหนเพื่อให้มีเวลาพัก?",
+  "ช่วยวางแผนสัปดาห์หน้าจากตารางของฉัน"
 ];
 
 const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {

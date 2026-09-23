@@ -1,12 +1,27 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { calendarRangeForQuestion, isCalendarQuestion } = require("../calendar-question.js");
+const { answerDeterministicCalendarQuestion, calendarRangeForQuestion, isCalendarQuestion, isDeterministicCalendarQuestion } = require("../calendar-question.js");
 
 test("calendar questions detect common Thai planning intents", () => {
   assert.equal(isCalendarQuestion("พรุ่งนี้ว่างช่วงไหน?"), true);
   assert.equal(isCalendarQuestion("สรุปตารางสัปดาห์นี้"), true);
   assert.equal(isCalendarQuestion("เดือนนี้มีนัดอะไรบ้าง?"), true);
   assert.equal(isCalendarQuestion("ทำการบ้านพรุ่งนี้ 20:00 2 ชม."), false);
+  assert.equal(isCalendarQuestion("ช่วยจัดตารางวันนี้ให้สมดุลหน่อย"), true);
+});
+
+test("factual Calendar questions are answered without an AI interpretation", () => {
+  const context = {
+    range: { start: "2026-09-22", end: "2026-09-22", label: "2026-09-22" },
+    events: [
+      { title: "ประชุมทีม", start: "2026-09-22T02:00:00.000Z", end: "2026-09-22T03:00:00.000Z", allDay: false },
+      { title: "อ่านหนังสือ", start: "2026-09-22T04:00:00.000Z", end: "2026-09-22T05:00:00.000Z", allDay: false }
+    ]
+  };
+  assert.equal(isDeterministicCalendarQuestion("วันนี้มีอะไรบ้าง?"), true);
+  assert.match(answerDeterministicCalendarQuestion("วันนี้มีอะไรบ้าง?", context), /ประชุมทีม/);
+  assert.match(answerDeterministicCalendarQuestion("พรุ่งนี้ว่างช่วงไหน?", context), /ช่วงว่าง/);
+  assert.equal(isDeterministicCalendarQuestion("ช่วยจัดตารางวันนี้ให้สมดุลหน่อย"), false);
 });
 
 test("calendar question date ranges stay bounded and support past/current/next periods", () => {

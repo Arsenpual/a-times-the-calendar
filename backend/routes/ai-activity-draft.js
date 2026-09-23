@@ -1,6 +1,6 @@
 const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
-const { readCalendarQuestionContext, isCalendarQuestion } = require("../calendar-question.js");
+const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../calendar-question.js");
 
 const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule } = require("../skills/activity-creation");
@@ -13,6 +13,7 @@ function createActivityAssistantRouter({
   releaseDraftUsage = (...args) => require("../gemini-chat.js").releaseGeminiDraftUsage(...args),
   getChatStatus = (...args) => require("../gemini-chat.js").getGeminiChatStatus(...args),
   readCalendarQuestion = readCalendarQuestionContext,
+  answerDeterministicCalendar = answerDeterministicCalendarQuestion,
   generateActivity,
   generateCalendarAnswer,
   answerKnowledge = answerTimesQuestion
@@ -220,10 +221,18 @@ router.post("/activity-conversation", async (req, res, next) => {
     if (deterministicDraft) {
       return res.json({ ...deterministicDraft, schedule: assessDraftSchedule(deterministicDraft.draft, context.scheduleContext), source: "deterministic" });
     }
-    // Calendar questions are an explicit, read-only branch. Claim the normal
-    // chat quota first, then fetch only the event fields and date range needed
-    // for this one question; neither OAuth tokens nor full Calendar objects
-    // are ever sent to the browser or Gemini.
+    // Factual Calendar questions are answered directly from a small bounded
+    // event set.  This reads no more data than the AI branch, but never calls
+    // Gemini and therefore does not consume the user's AI quota.
+    if (isDeterministicCalendarQuestion(context.text)) {
+      const calendarContext = await readCalendarQuestion(req.userId, context);
+      const reply = answerDeterministicCalendar(context.text, calendarContext, context.timeZone);
+      if (reply) return res.json({ reply, ready: false, draft: null, source: "deterministic", calendarRange: calendarContext.range });
+    }
+    // Interpretive Calendar questions are an explicit, read-only AI branch.
+    // Claim the normal chat quota first, then fetch only the event fields and
+    // date range needed for this one question; neither OAuth tokens nor full
+    // Calendar objects are ever sent to the browser or Gemini.
     if (isCalendarQuestion(context.text)) {
       claim = await claimChatUsage(req.userId);
       if (claim.status !== "claimed") {
