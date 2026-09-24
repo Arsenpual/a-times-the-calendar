@@ -314,6 +314,13 @@ export default function ActivityModal({
     });
   };
   const updateDateTime = (kind, value) => {
+    // Native datetime-local controls emit interim values while a person is
+    // typing the year (for example "202-09-27T11:21").  Writing those back
+    // into React state turns them into the controlled `value` prop, which
+    // Chrome rejects and makes years such as 2027 impossible to enter.
+    // Keep the browser's temporary edit in its input; commit only a complete
+    // ISO local date-time (or an intentional empty value).
+    if (value && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return;
     const [nextDate = "", nextTime = ""] = value.split("T");
     const shouldAutoSetEnd = !isEditing || missingFields.length > 0 || editingTimesCleared;
     if (kind === "start") {
