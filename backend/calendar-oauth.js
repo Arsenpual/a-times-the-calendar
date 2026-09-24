@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { calendarAuthDoc } = require("./firestore-db.js");
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 // Event access keeps the existing Activity Mode create/edit capability. The
 // calendar-list scope lets the read-only AI branch discover the calendars the
 // person has chosen to show, without requesting the broader `calendar` scope.
@@ -140,4 +141,37 @@ async function connectionStatus(userId) {
   return { connected: data?.status === "connected", needsReauth: data?.status === "needs_reauth" };
 }
 
-module.exports = { createAuthorizationUrl, verifyState, exchangeCode, storeRefreshToken, getFreshAccessToken, connectionStatus, CalendarReauthRequiredError };
+/**
+ * Removes the server-held credential for this user's Calendar connection.
+ *
+ * Google revocation is attempted first, but local deletion deliberately does
+ * not depend on that network call succeeding: once the person disconnects,
+ * this service must not retain a credential that can access their Calendar.
+ */
+async function disconnectCalendar(userId) {
+  const ref = calendarAuthDoc(userId);
+  const record = (await ref.get()).data();
+
+  if (record?.refreshToken) {
+    try {
+      const refreshToken = decrypt(record.refreshToken);
+      const response = await fetch(GOOGLE_REVOKE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: refreshToken })
+      });
+      if (!response.ok) {
+        console.warn(`[calendar-oauth] Google token revocation returned ${response.status}; deleting the local credential anyway`);
+      }
+    } catch (error) {
+      // A damaged/expired record cannot be revoked remotely, but it still
+      // must be deleted locally. Never include token material in logs.
+      console.warn("[calendar-oauth] Google token revocation could not be completed; deleting the local credential anyway:", error.message);
+    }
+  }
+
+  await ref.delete();
+  return { disconnected: true };
+}
+
+module.exports = { createAuthorizationUrl, verifyState, exchangeCode, storeRefreshToken, getFreshAccessToken, connectionStatus, disconnectCalendar, CalendarReauthRequiredError };

@@ -75,7 +75,9 @@ export default function SettingsDrawer({
   assistantPreferencesLoading = false,
   onSaveAssistantPreference,
   onDeleteAssistantPreference,
-  onDismissAssistantPreferenceCandidate
+  onDismissAssistantPreferenceCandidate,
+  calendarConnected = false,
+  onDisconnectCalendar
 }) {
   const { language, setLanguage, t } = useLanguage();
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
@@ -208,6 +210,27 @@ export default function SettingsDrawer({
               </div>;
             })}
             {assistantPreferencesLoading ? <p className="settings-section-note">กำลังโหลดค่าเริ่มต้น…</p> : ASSISTANT_PREFERENCE_FIELDS.map((field) => <AssistantPreferenceRow key={field.key} field={field} item={assistantPreferences[field.key]} onSave={onSaveAssistantPreference} onDelete={onDeleteAssistantPreference} />)}
+          </section>
+
+          <section className="settings-section settings-connection-section">
+            <h3 className="settings-section-title">การเชื่อมต่อ Google Calendar</h3>
+            <p className="settings-section-note">
+              {calendarConnected
+                ? "เชื่อมต่ออยู่ — แอปเก็บ refresh token แบบเข้ารหัสเพื่อเชื่อมต่อปฏิทินให้ต่อเนื่อง"
+                : "ยังไม่ได้เชื่อมต่อ Google Calendar"}
+            </p>
+            {calendarConnected && (
+              <button
+                type="button"
+                className="settings-calendar-disconnect"
+                onClick={async () => {
+                  if (!window.confirm("ต้องการยกเลิกการเชื่อมต่อ Google Calendar หรือไม่? แอปจะลบ refresh token ที่เก็บไว้ และคุณเชื่อมต่อใหม่ได้ทุกเมื่อ")) return;
+                  await onDisconnectCalendar?.();
+                }}
+              >
+                ยกเลิกการเชื่อมต่อ
+              </button>
+            )}
           </section>
         </div>
       </div>

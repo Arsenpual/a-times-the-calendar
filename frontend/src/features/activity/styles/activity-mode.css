@@ -1615,6 +1615,22 @@
   line-height: 1.45;
 }
 
+.settings-calendar-disconnect {
+  margin-top: 4px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--border));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-calendar-disconnect:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 .settings-assistant-preference {
   padding: 10px 0;
   border-top: 1px solid var(--divider);

@@ -4,7 +4,8 @@ const {
   verifyState,
   exchangeCode,
   storeRefreshToken,
-  connectionStatus
+  connectionStatus,
+  disconnectCalendar
 } = require("../calendar-oauth.js");
 
 const router = express.Router();
@@ -17,6 +18,12 @@ router.get("/status", async (req, res, next) => {
 // redirect เอง จึงไม่ต้องยอมรับ bearer token ใน Google callback URL.
 router.post("/authorization-url", (req, res, next) => {
   try { res.json({ authorizationUrl: createAuthorizationUrl(req.userId) }); } catch (error) { next(error); }
+});
+
+// Lets a person stop this service from retaining their Calendar refresh
+// token without having to visit a separate Google Account page.
+router.delete("/connection", async (req, res, next) => {
+  try { res.json(await disconnectCalendar(req.userId)); } catch (error) { next(error); }
 });
 
 module.exports = router;

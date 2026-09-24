@@ -5,9 +5,6 @@ import { useActivityCollections } from "../features/activity/hooks/use-activity-
 import { useAppNavigation } from "./hooks/use-app-navigation.js";
 import { useDisplayPreferences } from "../features/settings/hooks/use-display-preferences.js";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import loginGuideStep1 from "../../public/login-guide-step1.jpg";
-import loginGuideStep2 from "../../public/login-guide-step2.jpg";
-import loginGuideStep3 from "../../public/login-guide-step3.jpg";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
@@ -51,18 +48,7 @@ const ACTIVITY_MODE_MOCKUPS = Object.entries(import.meta.glob("../dev/mockups/ac
 // no remote announcement has ever been set or the backend is temporarily down.
 const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
 const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
-
-// 3 ขั้นตอนสำหรับผ่านหน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ของ Google ระหว่าง
-// OAuth consent (ดูคอมเมนต์ที่ showLoginGuide overlay ด้านล่าง) — ใช้ import
-// แทน string path ตรงๆ ("/login-guide-step1.jpg") เพราะ GitHub Pages เสิร์ฟ
-// ที่ subpath /a-times-the-calendar/ ไม่ใช่ root — path ที่ขึ้นต้นด้วย "/"
-// ตรงๆ จะไม่ผ่าน Vite's base config เลยหาไฟล์ไม่เจอ (404) ตอน deploy จริง
-// ถึงแม้ localhost จะใช้ได้ปกติเพราะ dev server เสิร์ฟจาก root เสมอ
-const LOGIN_GUIDE_STEPS = [
-  { number: 1, image: loginGuideStep1, text: 'เมื่อเจอหน้าเตือนสีแดง ให้กดปุ่ม "ขั้นสูง" ที่มุมซ้ายล่าง' },
-  { number: 2, image: loginGuideStep2, text: 'เลื่อนลงล่างสุด แล้วคลิก "ไปที่ times-the-calendar.firebaseapp.com (ไม่ปลอดภัย)"' },
-  { number: 3, image: loginGuideStep3, text: 'กดปุ่ม "ดำเนินต่อ" ที่มุมขวาล่างเพื่ออนุญาตสิทธิ์ปฏิทิน' },
-];
+const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 
 export default function App() {
   return new URLSearchParams(window.location.search).has("activity-mode-mockup")
@@ -128,6 +114,7 @@ function AccountApp({ auth }) {
     handleLogin,
     handleLogout: authHandleLogout,
     handleReauthCalendar,
+    handleDisconnectCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
   const assistantPreferences = useAssistantPreferences(firebaseUser?.uid);
@@ -154,7 +141,7 @@ function AccountApp({ auth }) {
     };
   }, [error, setError, setAuthError]);
 
-  const { mode, setMode, settingsOpen, setSettingsOpen, showLoginGuide, setShowLoginGuide } = useAppNavigation();
+  const { mode, setMode, settingsOpen, setSettingsOpen } = useAppNavigation();
   const {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled,
@@ -746,8 +733,13 @@ function AccountApp({ auth }) {
                   <img className="login-logo" src={brandWordmarkSrc} alt="T.i.M.E.S." />
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
-                    เข้าสู่ระบบด้วย Google เพื่อ sync ปฏิทินของคุณโดยตรง — ปลอดภัย ไม่มีการเก็บสำเนาข้อมูลกิจกรรมไว้ที่อื่น
+                    T.i.M.E.S. ช่วยวางแผนกิจกรรม ดูภาพรวมเวลา และจัดการ Reminder ของคุณ โดยเชื่อม Google Calendar เมื่อคุณเลือกเชื่อมต่อ
                   </p>
+                  <ul className="login-feature-list">
+                    <li>ดู สร้าง แก้ไข และลบกิจกรรมใน Google Calendar</li>
+                    <li>สรุปเวลาและหมวดหมู่กิจกรรมรายสัปดาห์</li>
+                    <li>ตั้ง Reminder และการแจ้งเตือนส่วนตัว</li>
+                  </ul>
                   <button className="google-signin-btn" onClick={handleLogin}>
                     <svg className="google-signin-icon" viewBox="0 0 18 18" aria-hidden="true">
                       <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
@@ -757,68 +749,11 @@ function AccountApp({ auth }) {
                     </svg>
                     เข้าสู่ระบบด้วย Google
                   </button>
+                  <p className="login-privacy-note">
+                    การเข้าสู่ระบบใช้สำหรับระบุตัวตนเท่านั้น คุณจะเลือกเชื่อม Google Calendar ในขั้นตอนถัดไป
+                    <a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer">อ่านนโยบายความเป็นส่วนตัว</a>
+                  </p>
                 </div>
-
-                {/* App ยังไม่ผ่าน Google App Verification — Google จะโชว์
-                    หน้าจอเตือน "แอปยังไม่ได้ยืนยัน" ระหว่าง OAuth consent
-                    ซึ่งอาจทำให้ผู้ใช้ที่ไม่คุ้นเคยกดยกเลิกไปเฉยๆ การ์ด 3
-                    ขั้นตอนนี้แสดงขั้นตอนที่ต้องกด ("ขั้นสูง" > "ไปที่ ...
-                    (ไม่ปลอดภัย)" > "ดำเนินต่อ") เพื่อผ่านหน้าจอนั้นไปให้
-                    signInWithGoogle() ทำงานต่อได้ รูปประกอบยังเป็น
-                    placeholder รอใส่ภาพสกรีนช็อตจริงทีหลัง (STEP_GUIDE_IMAGES)
-                    ปิดแล้วหายไปแค่ในเซสชันนี้ (ไม่บันทึกไว้) — รีเฟรชหน้าจะ
-                    เห็นอีกครั้งเสมอ ตั้งใจไว้แบบนี้เพราะสถานะ verification
-                    อาจเปลี่ยนไปเมื่อไหร่ก็ได้ ไม่อยากให้คนที่เคยปิดไปแล้ว
-                    พลาดเห็นตอนที่ยังจำเป็นต้องรู้ */}
-                {showLoginGuide && (
-                  <div className="login-guide-overlay" role="dialog" aria-label="วิธีเข้าสู่ระบบ Google">
-                    <div className="login-guide-panel">
-                      <button
-                        type="button"
-                        className="login-guide-close"
-                        onClick={() => setShowLoginGuide(false)}
-                        aria-label="ปิด"
-                      >
-                        ✕
-                      </button>
-                      <div className="login-guide-header">
-                        <h2 className="login-guide-title">
-                          📌 วิธีเข้าใช้งานครั้งแรก (3 ขั้นตอนง่ายๆ)
-                        </h2>
-                        <p className="login-guide-note">
-                          เนื่องจากระบบกำลังอยู่ในช่วงยื่นขอการยืนยันสิทธิ์จาก Google
-                          ท่านสามารถกดข้ามตามขั้นตอนด้านล่างเพื่อเข้าใช้งานได้อย่างปลอดภัย
-                        </p>
-                      </div>
-
-                      <div className="login-guide-steps">
-                        {LOGIN_GUIDE_STEPS.map((step) => (
-                          <div className="login-guide-step" key={step.number}>
-                            {step.image ? (
-                              <img
-                                src={step.image}
-                                alt={`ขั้นตอนที่ ${step.number}`}
-                                className="login-guide-step-image"
-                              />
-                            ) : (
-                              <div className="login-guide-step-placeholder">
-                                รูปประกอบ Step {step.number}
-                              </div>
-                            )}
-                            <p>
-                              <strong>Step {step.number}:</strong> {step.text}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="login-guide-footnote">
-                        <strong>📌 หมายเหตุ:</strong> ทำขั้นตอนเหล่านี้แค่ครั้งแรกที่เข้าสู่ระบบเท่านั้น
-                        เมื่อเข้าสู่ระบบสำเร็จแล้ว ครั้งถัดไปจะเข้าหน้าแอปได้ทันทีโดยไม่ขึ้นหน้าเตือนนี้อีก
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1065,6 +1000,11 @@ function AccountApp({ auth }) {
         onSaveAssistantPreference={assistantPreferences.save}
         onDeleteAssistantPreference={assistantPreferences.remove}
         onDismissAssistantPreferenceCandidate={assistantPreferences.dismissCandidate}
+        calendarConnected={calendarConnectionState === "connected"}
+        onDisconnectCalendar={async () => {
+          const disconnected = await handleDisconnectCalendar();
+          if (disconnected) window.location.reload();
+        }}
       />
 
     </div>

@@ -38,6 +38,11 @@ export async function beginCalendarAuthorization() {
   window.location.assign(authorizationUrl);
 }
 
+/** Stop the server from retaining this user's Google Calendar credential. */
+export async function disconnectCalendarConnection() {
+  return backendCalendarRequest("/api/calendar-auth/connection", { method: "DELETE" });
+}
+
 /** Shared fetch wrapper for Calendar API calls that return/expect JSON. */
 async function calendarRequest(accessToken, url, options = {}) {
   const res = await fetch(url, {

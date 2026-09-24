@@ -4,6 +4,5 @@ import { useState } from "react";
 export function useAppNavigation() {
   const [mode, setMode] = useState("activity");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [showLoginGuide, setShowLoginGuide] = useState(true);
-  return { mode, setMode, settingsOpen, setSettingsOpen, showLoginGuide, setShowLoginGuide };
+  return { mode, setMode, settingsOpen, setSettingsOpen };
 }

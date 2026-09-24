@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { auth } from "../../../shared/config/firebase-auth.js";
 import { signInWithGoogle, subscribeToAuthState, signOut } from "../api/google-auth.js";
-import { beginCalendarAuthorization, getCalendarConnectionStatus } from "../../calendar-connection/api/google-calendar.js";
+import { beginCalendarAuthorization, disconnectCalendarConnection, getCalendarConnectionStatus } from "../../calendar-connection/api/google-calendar.js";
 
 const CALENDAR_TOKEN_STORAGE_KEY = "calendarAccessToken";
 const CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY = "calendarAccessTokenExpiresAt";
@@ -15,12 +15,9 @@ const CALENDAR_TOKEN_WARNING_WINDOW_MS = 5 * 60 * 1000; // show the renew banner
  *     (IndexedDB, handled by the Firebase SDK); api.js pulls a fresh ID
  *     token from auth.currentUser on every backend call, this hook never
  *     touches the ID token directly.
- *   - calendarAccessToken: Google's own OAuth token, used only for direct
- *     Google Calendar API calls. Unlike the Firebase session, this is NOT
- *     auto-refreshed — see google-calendar.js's module comment — so it's
- *     plain state here, persisted to localStorage (see setCalendarAccessToken)
- *     and re-minted at sign-in / via reauthenticateWithGooglePopup()
- *     whenever a Calendar API call comes back 401.
+ *   - calendarAccessToken: a compatibility state marker. In the production
+ *     flow it is `server-managed`, meaning the backend owns the encrypted
+ *     refresh token and obtains short-lived access tokens only when needed.
  *
  * This hook does NOT know about activities/categories/summary — those
  * live in useCalendarData and clear themselves independently on logout
@@ -34,7 +31,7 @@ export function useAuth() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [authReady, setAuthReady] = useState(false); // true once Firebase's initial auth check resolves — avoids a login-button flash before we know if a session already exists
 
-  // Guards signInWithGoogle()/reauthenticateWithGooglePopup() against being
+  // Guards popup-based authentication actions against being
   // called twice concurrently — a ref (not state) because it must be
   // readable/settable synchronously without waiting for a re-render.
   // Needed specifically because React StrictMode double-invokes handlers
@@ -246,6 +243,20 @@ export function useAuth() {
     }
   }, [setCalendarAccessToken]);
 
+  /** Removes the refresh token held by this service, then clears local state. */
+  const handleDisconnectCalendar = useCallback(async () => {
+    try {
+      setError(null);
+      await disconnectCalendarConnection();
+      setCalendarAccessToken(null);
+      setCalendarConnectionState("disconnected");
+      return true;
+    } catch (error) {
+      setError(error.message || "ยกเลิกการเชื่อมต่อ Google Calendar ไม่สำเร็จ");
+      return false;
+    }
+  }, [setCalendarAccessToken]);
+
   return {
     firebaseUser,
     authReady,
@@ -261,6 +272,7 @@ export function useAuth() {
     handleLogin,
     handleLogout,
     handleReauthCalendar,
+    handleDisconnectCalendar,
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY // exposed for the same dev-only button, which writes this key directly
   };
 }

@@ -45,6 +45,31 @@
   color: var(--text-secondary);
 }
 
+.login-feature-list {
+  width: 100%;
+  margin: 2px 0 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: left;
+}
+
+.login-privacy-note {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.login-privacy-note a {
+  display: block;
+  width: fit-content;
+  margin: 5px auto 0;
+  color: var(--accent, #d85a30);
+  font-weight: 600;
+}
+
 /* Styled to match Google's own sign-in button guidelines (white
    background, gray border, official four-color "G" mark) so it reads as
    trustworthy/familiar rather than a generic branded button — people
