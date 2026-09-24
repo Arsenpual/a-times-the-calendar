@@ -643,13 +643,13 @@ export default function ActivityModal({
               <span className="field-label">{isAllDay ? "วันเริ่ม" : "วันและเวลาเริ่ม"}</span>
               {isAllDay
                 ? <input type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!endDate || endDate <= e.target.value) setEndDate(datePlusDays(e.target.value, 1)); }} required />
-                : <input type="datetime-local" value={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />}
+                : <input key={`start-${dateTimeValue(date, startTime)}`} type="datetime-local" defaultValue={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />}
             </label>
             <label className={`modal-field${endMissing ? " is-required-missing" : ""}${assistantHighlightField === "durationMinutes" ? " is-assistant-highlight" : ""}`}>
               <span className="field-label">{isAllDay ? "วันสิ้นสุด" : "วันและเวลาสิ้นสุด"}</span>
               {isAllDay
                 ? <input type="date" value={endDate} min={datePlusDays(date, 1)} onChange={(e) => setEndDate(e.target.value)} required />
-                : <input type="datetime-local" value={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />}
+                : <input key={`end-${dateTimeValue(endDate, endTime)}`} type="datetime-local" defaultValue={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />}
             </label>
           </div>
           {isAllDay ? <p className="modal-hint">กิจกรรมทั้งวันใช้วันสิ้นสุดแบบไม่รวมวันนั้น เช่น 10 ก.ย. วันเดียว ระบบจะกำหนดสิ้นสุดเป็น 11 ก.ย.</p> : endDate === date && endTime <= startTime && (
