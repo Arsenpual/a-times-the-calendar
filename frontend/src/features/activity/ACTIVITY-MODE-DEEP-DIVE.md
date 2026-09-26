@@ -1,7 +1,7 @@
 # Activity Mode — เจาะลึก
 
 **สถานะเอกสาร:** อ้างอิงจากโค้ดปัจจุบัน ณ 10 กันยายน 2026
-**Composition root:** `frontend/src/app/app.jsx`
+**Composition root:** `frontend/src/app/account-app.jsx` (`app.jsx` เป็น entry/Auth boundary)
 **UI หลัก:** `frontend/src/features/activity/components/activity-mode-week-spine.jsx`
 **แหล่งข้อมูลกิจกรรม:** Google Calendar ผ่าน backend ของโปรเจกต์
 
@@ -31,7 +31,7 @@ Activity Mode คือพื้นที่วางแผน **กิจกร
 ## 2. โครงสร้าง frontend
 
 ```text
-src/app/app.jsx
+src/app/account-app.jsx
 ├─ use-week-navigation
 ├─ use-calendar-data
 ├─ use-activity-modal
@@ -52,10 +52,10 @@ features/activity/
 ├─ components/   UI และ interaction
 ├─ hooks/        data loading, state และ mutation
 ├─ lib/          color, recurrence, overlap, export ภาพ
-└─ styles/       activity-mode.css
+└─ styles/       activity-mode.css manifest + stylesheet แยกตาม surface
 ```
 
-`app.jsx` เป็น composition root: ประกอบ hook และส่ง props ลง component แทนการเก็บ business logic ทุกอย่างไว้ในหน้าจอเดียว
+`account-app.jsx` เป็น account-scoped composition root: ประกอบ hook และส่ง props ลง component ส่วน `app.jsx` ดูแล dev route และ Auth boundary เท่านั้น
 
 ---
 
@@ -301,9 +301,10 @@ MR.Zettascale เป็นผู้ช่วยเฉพาะการสร้
 Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 
 - เพิ่มไฟล์ `activity-mode-<name>-mockup.jsx` พร้อม `export default`
-- `import.meta.glob` ใน `src/app/app.jsx` ค้นหาไฟล์ให้อัตโนมัติ
-- เปิดด้วย `Ctrl + Alt + W`
+- lazy `import.meta.glob` ใน `src/dev/mockups/dev-mockups-entry.jsx` ค้นหาไฟล์ให้อัตโนมัติ
+- เปิดด้วย `Ctrl + Alt + W` ขณะใช้ dev server เท่านั้น
 - ปุ่ม `Mockup` ลากไปที่ใดก็ได้ในหน้าจอ และอยู่เหนือ layout mockup ทุกตัวด้วย z-index สูงสุด
+- production ใช้ `src/app/dev-mockups.production.jsx` และ build guard ปฏิเสธทุก module จาก `src/dev/mockups/`
 
 ---
 
@@ -318,7 +319,7 @@ Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 7. recurrence ต้องแยก instance จาก `recurringEventId` ให้ถูกบริบท
 8. Notification/Telegram ต้องป้องกัน duplicate delivery หากเปิดหลายอุปกรณ์
 9. warning ใหม่ควรเป็น floating overlay เพื่อไม่ให้ layout กระโดด
-10. CSS เฉพาะ feature อยู่ใน `styles/activity-mode.css`; shared UI อยู่ `src/shared/`
+10. CSS เฉพาะ feature แยกตาม surface ใน `styles/` โดย `activity-mode.css` เป็น manifest; shared UI อยู่ `src/shared/`
 
 ---
 
@@ -326,7 +327,8 @@ Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `src/app/app.jsx` | ประกอบ state/hook และเลือก Week/Cycle/Summary view |
+| `src/app/account-app.jsx` | ประกอบ state/hook ระดับบัญชีและเลือก Week/Cycle/Summary view |
+| `src/app/app.jsx` | entry, dev mockup route และ Auth boundary |
 | `components/activity-mode-week-spine.jsx` | Week Spine, Cycle, drag, fullscreen และ archive |
 | `components/activity-day-gantt.jsx` | Gantt รายวันใต้ Week Spine, track overlap และเปิด ActivityModal |
 | `components/activity-modal.jsx` | ฟอร์ม create/edit และ validation |
@@ -341,4 +343,4 @@ Mockup แยกจาก runtime อยู่ที่ `src/dev/mockups/`:
 | `lib/rrule-utils.js` | recurrence และ limit 28 occurrences |
 | `lib/export-day-image.js` | export กำหนดการรายวันเป็น PNG |
 | `api/archive.js` | Firestore-backed archive API |
-| `styles/activity-mode.css` | CSS ของ Activity Mode |
+| `styles/activity-mode.css` | CSS manifest ของ Activity Mode; import ไฟล์ workspace, summary, timeline, popup, modal, assistant และ week spine ตามลำดับ cascade |

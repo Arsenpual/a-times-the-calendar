@@ -1,0 +1,254 @@
+/* Timeline editor mode: a draggable hour grid for adjusting one day's event
+   times, plus a small list below for category/edit access. Entered via the
+   ⚙ button in the mini timeline header, exited with "ยกเลิก" or "บันทึก". */
+
+.timeline-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Fullscreen mode: the editor lifts out of the agenda row and covers the
+   viewport as a fixed overlay, so long days (many overlapping activities)
+   get much more vertical room to drag/resize in without the row's normal
+   inline height constraints. Everything else (drag logic, context menu,
+   save/cancel) is unchanged — only the container's own layout changes. */
+.timeline-editor.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+  /* pointer-events is inherited through the DOM tree independent of
+     layout flow — without this, the editor would silently inherit
+     pointer-events:none from its parent .agenda-row (which is
+     deliberately disabled while a fullscreen descendant exists, see
+     .agenda-row:has(...) above) and stop responding to any input at all. */
+  pointer-events: auto;
+}
+
+.timeline-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-editor-fullscreen-toggle {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.timeline-editor.is-fullscreen .day-timeline-scroll-edit {
+  flex: 1;
+  max-height: none;
+}
+
+.timeline-editor.is-fullscreen .timeline-editor-actions {
+  flex-shrink: 0;
+}
+
+.timeline-editor-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.timeline-editor-error {
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--red) 10%, var(--bg-muted));
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.timeline-editor-status {
+  /* ความสูงเท่ากับ alert หนึ่งบรรทัดโดยประมาณ เพื่อให้ grid ไม่ขยับเมื่อ
+     สถานะ overlap เปลี่ยนผ่านจุดที่เวลาชนกันแบบพอดี */
+  min-height: 48px;
+}
+
+.day-timeline-scroll-edit {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  touch-action: none;
+}
+
+.day-timeline-grid {
+  position: relative;
+  padding-left: 52px;
+}
+
+.day-timeline-hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.day-timeline-hour-label {
+  position: absolute;
+  left: 0;
+  top: -6px;
+  width: 44px;
+  text-align: right;
+  padding-right: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.day-timeline-hour-line {
+  position: absolute;
+  left: 52px;
+  right: 0;
+  top: 0;
+  border-top: 1px solid var(--border);
+}
+
+.day-timeline-events-layer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 52px;
+  right: 6px;
+}
+
+/* Direct drag: ขณะ pointer ถูกกดค้าง บล็อกที่โฟกัสทับผ่านบล็อกอื่นโดยตรง
+   และไม่ให้ browser transition ค่า layout ใด ๆ. การจัดคอลัมน์ใหม่เกิดหลัง
+   pointerup เท่านั้น (logic ใน TimelineEditor) จึงไม่เกิดภาพ overlap เด้ง. */
+.day-timeline-events-layer.is-direct-dragging .day-timeline-editable-event {
+  transition: none !important;
+}
+
+.day-timeline-editable-event {
+  position: absolute;
+  border-left: 3px solid;
+  border-radius: 0 6px 6px 0;
+  padding: 4px 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.day-timeline-editable-event.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 2px 8px rgba(32, 33, 36, 0.25);
+  z-index: 3;
+  /* ยกเฉพาะบล็อกที่กำลังลากขึ้นเป็น compositor layer ลด repaint ของ
+     กริด/กิจกรรมอื่นระหว่างเปลี่ยน top, height, left และ width ต่อเนื่อง */
+  will-change: top, height, left, width;
+  transform: translateZ(0);
+}
+
+.day-timeline-editable-event.is-changed {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.day-timeline-editable-event.is-locked {
+  cursor: default;
+  opacity: 0.75;
+  filter: grayscale(0.15);
+}
+
+/* Dimmed block at the top of the grid representing an activity that
+   started the day before and bleeds into this day (e.g. 20:00-02:00) —
+   click-to-open only, not draggable/resizable, and deliberately not part
+   of the day's own activity count/color breakdown (see agenda-view.jsx's
+   activitiesByDay, which still keys off the activity's real start date). */
+.day-timeline-spillover {
+  cursor: pointer;
+  opacity: 0.45;
+  z-index: 0;
+  border-style: dashed;
+  border-left-width: 3px;
+}
+
+.day-timeline-spillover:hover {
+  opacity: 0.65;
+}
+
+/* Dimmed tail appended below an activity block that runs past midnight —
+   drawn inside the same element, immediately after its normal (opaque)
+   portion, so the two read as one continuous bar rather than a separate
+   shape. Purely visual; the activity's real end time is unaffected and
+   dragging/resizing this block still only ever affects the parent
+   activity's own times, never the tail specifically. */
+.day-timeline-spillover-tail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(100%);
+  background: inherit;
+  opacity: 0.45;
+  border-left: 3px solid;
+  border-color: inherit;
+  border-radius: 0 0 6px 6px;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 8px;
+}
+
+.day-timeline-spillover-tail-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.day-timeline-lock-icon {
+  margin-right: 3px;
+}
+
+.day-timeline-event-title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.day-timeline-event-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.day-timeline-event-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-timeline-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.day-timeline-resize-handle-top {
+  top: 0;
+}
+
+.day-timeline-resize-handle-bottom {
+  bottom: 0;
+}

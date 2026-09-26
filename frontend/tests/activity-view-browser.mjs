@@ -1,13 +1,12 @@
 import { createServer } from "../node_modules/vite/dist/node/index.js";
 import react from "../node_modules/@vitejs/plugin-react/dist/index.js";
-import { pathToFileURL, fileURLToPath } from "node:url";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { chromium } from "playwright";
 
-const { chromium } = await import(pathToFileURL(join(tmpdir(), "times-reminder-sync-tests/node_modules/playwright/index.mjs")).href);
 const root = fileURLToPath(new URL("../", import.meta.url));
-const server = await createServer({ root, configFile: false, plugins: [react()], server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
+const devMockupsAlias = fileURLToPath(new URL("../src/app/dev-mockups.production.jsx", import.meta.url));
+const server = await createServer({ root, configFile: false, resolve: { alias: { "@dev-mockups": devMockupsAlias } }, plugins: [react()], server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
 await server.listen();
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });

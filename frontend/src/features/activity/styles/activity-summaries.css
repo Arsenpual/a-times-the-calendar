@@ -1,0 +1,245 @@
+/* Weekly summary panel */
+
+.summary-panel {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Daily summary uses the same layered presentation as ActivityPopup +
+   MR.Zettascale.  The dashboard is visually pushed back, while the existing
+   Summary card and the assistant share the foremost layer. */
+.activity-dashboard.is-assistant-daily-summary::before {
+  content: "";
+  position: fixed;
+  z-index: 8999;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--text-primary) 16%, transparent);
+}
+
+.summary-column.is-assistant-daily-summary { position: relative; z-index: 9000; }
+
+.summary-panel--glass {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--bg-muted) 64%, transparent);
+  border-color: color-mix(in srgb, var(--text-primary) 24%, transparent);
+  box-shadow: 0 16px 36px rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 28%);
+  backdrop-filter: blur(8px) saturate(1.12);
+  -webkit-backdrop-filter: blur(8px) saturate(1.12);
+}
+
+/* The lower layer is a real read-only copy of Weekly Summary. It behaves
+   like a blurred desktop wallpaper; the foreground card stays interactive. */
+.summary-panel-glass-stack {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.summary-panel--glass-wallpaper {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  margin: 0;
+  filter: blur(1px) saturate(.82);
+  opacity: .58;
+  transform: scale(1.06) translateY(10px);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* The background copy deliberately uses the opposite theme from the live
+   card. It makes the two layers visibly distinct while the foreground still
+   follows the user's chosen app theme. */
+.summary-panel--glass-wallpaper.is-light {
+  --bg: #f7f6f2;
+  --bg-muted: #ffffff;
+  --text-primary: #1c1c1a;
+  --text-secondary: #8a8a85;
+  --border: #e4e2dc;
+  --hover: #f0eee8;
+  color: #1c1c1a;
+}
+
+.summary-panel--glass-wallpaper.is-dark {
+  --bg: #20201f;
+  --bg-muted: #292927;
+  --text-primary: #f2f1ed;
+  --text-secondary: #9c9c97;
+  --border: #3a3a38;
+  --hover: #343432;
+  color: #f2f1ed;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.summary-total {
+  font-size: 24px;
+  font-weight: 500;
+  margin: -8px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-loading,
+.summary-error {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.summary-error {
+  color: #c5221f;
+}
+
+.summary-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-breakdown-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.summary-pie-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.summary-pie {
+  flex-shrink: 0;
+}
+
+.summary-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.summary-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.summary-insight {
+  background: #d2e3fc;
+  color: var(--blue);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.summary-busiest-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.summary-busiest-btn:hover {
+  background: #d2e3fc;
+}
+
+.summary-busiest-arrow {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Day timeline panel (hour grid) */
+
+.timeline-card {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.day-timeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.day-timeline-nav {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.day-timeline-nav:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--blue);
+}
+
+.day-timeline-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.day-timeline-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.day-timeline-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.day-timeline-empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 8px 2px;
+}

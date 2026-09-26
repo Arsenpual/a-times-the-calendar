@@ -1,0 +1,353 @@
+/* Event create/edit modal (two-way sync) */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 33, 36, 0.4);
+  z-index: 10000;
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-muted);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: settings-drawer-slide-in 0.2s ease-out;
+}
+
+@keyframes settings-drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer {
+    animation: none;
+  }
+}
+
+.settings-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-drawer-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-drawer-close {
+  appearance: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.settings-drawer-close:hover {
+  background: var(--hover);
+}
+
+.settings-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.settings-section {
+  padding: 12px 20px;
+}
+
+.settings-section-title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-row-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+
+
+.settings-color-list {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-section-note {
+  margin: -2px 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-calendar-disconnect {
+  margin-top: 4px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--border));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-calendar-disconnect:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.settings-assistant-preference {
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.settings-assistant-preference:first-of-type { border-top: 0; }
+
+.settings-assistant-candidate {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--divider));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.settings-assistant-candidate strong { color: var(--text); }
+.settings-assistant-candidate > div { display: flex; gap: 6px; }
+
+.settings-assistant-preference-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.settings-assistant-preference-controls input {
+  width: 92px;
+  min-height: 30px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  padding: 3px 7px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-assistant-unit { color: var(--text-secondary); font-size: 12px; margin-right: auto; }
+.settings-assistant-action, .settings-assistant-delete {
+  min-height: 29px;
+  border-radius: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--divider);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-assistant-action:hover { border-color: var(--accent); color: var(--accent); }
+.settings-assistant-delete { color: var(--text-secondary); }
+.settings-assistant-error { margin: 6px 0 0; color: var(--danger, #c7432f); font-size: 12px; }
+
+.settings-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.settings-color-input {
+  width: 42px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  cursor: pointer;
+}
+
+/* Activity Mode ใช้ scrollbar แบบเดียวกับ Reminder Mode เพื่อให้คอลัมน์
+   Agenda, mini timeline, editor และ modal ไม่เห็นแถบขาวหนาเกินจำเป็น. */
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 42%, transparent) transparent;
+}
+
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-track { background: transparent; }
+
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-secondary) 46%, transparent);
+  background-clip: padding-box;
+}
+
+:is(.dashboard, .agenda-view, .day-timeline-scroll, .day-timeline-scroll-edit, .tag-search-results, .modal-box, .activity-ai-messages)::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-secondary) 66%, transparent);
+  background-clip: padding-box;
+}
+
+/* Toggle switch — built from scratch (no <input type="checkbox"> styled
+   with appearance:none) since a plain <button role="switch"> gives full
+   control over the knob animation without fighting browser-default
+   checkbox styling, which varies enough across browsers that overriding
+   it consistently is more code than this. */
+.settings-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--border);
+  cursor: pointer;
+  padding: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.settings-toggle.is-on {
+  background: var(--blue);
+}
+
+.settings-toggle-knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.settings-toggle.is-on .settings-toggle-knob {
+  transform: translateX(20px);
+}
+
+.settings-open-btn {
+  font-size: 16px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 33, 36, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+
+.modal-box {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-muted);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.google-calendar-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.google-calendar-sync-btn:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(60, 64, 67, 0.08));
+}
+
+.google-calendar-sync-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.google-calendar-sync-btn img {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}

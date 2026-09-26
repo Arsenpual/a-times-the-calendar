@@ -1,0 +1,401 @@
+        .dashboard-body {
+          display: grid;
+          grid-template-columns: 260px 1fr 320px;
+          flex: 1;
+          min-height: 0;
+          overflow: hidden;
+          padding: 16px;
+          gap: 16px;
+        }
+
+        /* สถานะโหลดปฏิทินเป็น floating status ไม่ดัน dashboard ให้เลื่อนลง */
+        .reminder-calendar-loading-float {
+          position: fixed;
+          top: 72px;
+          left: 50%;
+          z-index: 9200;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          max-width: min(360px, calc(100vw - 32px));
+          min-height: 32px;
+          padding: 8px 12px;
+          border: 1px solid var(--g-outline-variant);
+          border-radius: 10px;
+          background: color-mix(in srgb, var(--g-surface) 94%, transparent);
+          box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+          color: var(--g-on-surface);
+          font-size: 12px;
+          line-height: 1.35;
+          transform: translateX(-50%);
+          pointer-events: none;
+        }
+
+        .reminder-calendar-loading-spinner {
+          width: 12px;
+          height: 12px;
+          flex: 0 0 auto;
+          border: 2px solid color-mix(in srgb, var(--g-blue) 24%, transparent);
+          border-top-color: var(--g-blue);
+          border-radius: 50%;
+          animation: reminder-calendar-loading-spin .8s linear infinite;
+        }
+
+        @keyframes reminder-calendar-loading-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+          .reminder-calendar-loading-float { top: 64px; }
+        }
+
+        .timeline-panel {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          position: relative;
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+        }
+
+        .timeline-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+          background: var(--g-surface);
+          z-index: 20;
+        }
+
+        .timeline-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin: 0;
+        }
+
+        .timeline-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .reminder-date-picker { position: relative; cursor: pointer; }
+        .reminder-date-picker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .reminder-date-picker:focus-within { outline: 2px solid var(--g-primary, #d85a30); outline-offset: 2px; }
+        .timeline-header { flex-wrap: wrap; gap: 8px; }
+
+        .timeline-export-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          min-height: 30px;
+          padding: 0 10px;
+          border: 1px solid var(--g-outline);
+          border-radius: 16px;
+          background: var(--g-surface);
+          color: var(--g-on-surface-variant);
+          font: 600 11px/1 var(--font-sans, "Noto Sans Thai", sans-serif);
+          cursor: pointer;
+        }
+
+        .timeline-export-btn:hover {
+          border-color: var(--g-primary, #d85a30);
+          color: var(--g-primary, #d85a30);
+          background: var(--g-background);
+        }
+
+        .zoom-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: var(--g-background);
+          border-radius: 20px;
+          padding: 2px 8px;
+          border: 1px solid var(--g-outline);
+        }
+
+        .zoom-btn {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .zoom-btn:disabled {
+          opacity: 0.3;
+          cursor: default;
+        }
+
+        .zoom-btn:not(:disabled):hover {
+          background: var(--g-outline-variant);
+        }
+
+        .zoom-display {
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--g-on-surface);
+          min-width: 65px;
+          text-align: center;
+        }
+
+        .timeline-viewport {
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .now-indicator {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 2px;
+          background: var(--timeline-now-color);
+          z-index: 15;
+          pointer-events: none;
+        }
+
+        .now-indicator::before {
+          content: "";
+          position: absolute;
+          left: 54px;
+          top: -4px;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--timeline-now-color);
+        }
+
+        .now-indicator-clock {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          padding: 3px 6px;
+          border-radius: 4px;
+          background: var(--g-surface);
+          border: 1px solid color-mix(in srgb, var(--timeline-now-color) 48%, var(--g-outline-variant));
+          color: var(--timeline-now-color);
+          font-family: 'Roboto Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          letter-spacing: .02em;
+          font-variant-numeric: tabular-nums;
+          box-shadow: 0 1px 3px rgba(60, 64, 67, .18);
+          white-space: nowrap;
+        }
+
+        .timeline-activity-status {
+          position: absolute;
+          left: 50%;
+          top: 12px;
+          transform: translateX(-50%);
+          z-index: 20;
+          display: inline-flex;
+          align-items: baseline;
+          gap: 6px;
+          max-width: calc(100% - 32px);
+          padding: 7px 12px;
+          border-radius: 999px;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline-variant);
+          border-left: 4px solid var(--timeline-status-color);
+          box-shadow: 0 3px 10px rgba(60, 64, 67, 0.22);
+          color: var(--timeline-status-color);
+          font-size: 12px;
+          line-height: 1.2;
+          pointer-events: none;
+        }
+
+        .timeline-activity-status-title {
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 700;
+        }
+
+        .timeline-activity-status strong {
+          flex-shrink: 0;
+          color: var(--timeline-status-color);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .tape-scroll-container {
+          height: 100%;
+          overflow: auto;
+          position: relative;
+          scroll-behavior: auto;
+          -webkit-overflow-scrolling: touch;
+          will-change: scroll-position;
+          transform: translateZ(0);
+          overscroll-behavior: contain;
+        }
+
+        .tape-track-wrapper {
+          position: relative;
+          min-width: 100%;
+        }
+
+        .color-picker-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding-top: 4px;
+        }
+
+        .color-swatch-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          padding: 0;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+          transition: transform 0.1s ease, border-color 0.1s ease;
+        }
+
+        .color-swatch-btn:hover {
+          transform: scale(1.1);
+        }
+
+        .color-swatch-btn.selected {
+          border-color: var(--g-on-surface, #202124);
+          box-shadow: 0 0 0 2px var(--g-surface, #fff), 0 0 0 4px currentColor;
+        }
+
+        .color-swatch-custom {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px dashed var(--g-outline, #dadce0);
+          background-image: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+          overflow: hidden;
+        }
+
+        .color-swatch-custom input[type="color"] {
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+          border: none;
+          padding: 0;
+        }
+
+        .tape-spacer {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .time-row {
+          position: relative;
+          /* Every scheduled reminder row sits above the Activity Mode
+             background layer. Pointer events are restored only on its
+             reminder chips, so empty row space still reaches the activity
+             button underneath. */
+          z-index: 20;
+          pointer-events: none;
+          border-bottom: 1px solid var(--g-outline-variant);
+          padding-left: 12px;
+          display: flex;
+          align-items: center;
+          user-select: none;
+          content-visibility: auto;
+          contain-intrinsic-size: 0 var(--row-height, 32px);
+        }
+
+        .time-row.major-hour {
+          border-bottom-color: var(--g-outline);
+          background-color: var(--g-major-hour-tint);
+        }
+
+        .time-label {
+          flex: 0 0 60px;
+          font-family: 'Roboto Mono', monospace;
+          font-size: 11px;
+          color: var(--g-on-surface-variant);
+          text-align: right;
+          margin-right: 12px;
+        }
+
+        .time-row.major-hour .time-label {
+          font-weight: 700;
+          color: var(--g-blue);
+        }
+
+        .event-chip-group {
+          position: absolute;
+          left: 84px;
+          right: 8px;
+          top: 3px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          overflow: visible;
+          pointer-events: auto;
+        }
+
+        .event-chip {
+          border: 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+          padding: 3px 10px;
+          border-radius: 6px;
+          white-space: nowrap;
+          flex-shrink: 0;
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 500;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+        }
+
+        .event-chip:hover,
+        .event-chip:focus-visible {
+          filter: brightness(0.95);
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
+        }
+
+        .event-chip.disabled {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
+        }
+
+        .chip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--g-blue);
+          flex-shrink: 0;
+        }
+
+        .event-chip.disabled .chip-dot {
+          background: var(--g-on-surface-variant);
+        }

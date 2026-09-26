@@ -336,7 +336,7 @@
   background: var(--border);
 }
 
-/* 🧪 DEV TEST BUTTON — ลบ block นี้ทิ้งพร้อมกับปุ่มใน app.jsx ก่อน deploy
+/* 🧪 DEV TEST BUTTON — อยู่คู่กับปุ่ม dev-only ใน app-header.jsx
    จริง พื้นหลังส้ม/เหลืองเตือนตาให้ต่างจากปุ่ม header อื่นๆ อย่างชัดเจน
    ทันทีที่มองเห็น เพื่อไม่ให้ปนกับปุ่มถาวรของแอปโดยไม่ตั้งใจ */
 .dev-test-btn {

@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/run-tests.mjs",
+    "test:browser": "node scripts/run-tests.mjs --browser",
+    "test:all": "node scripts/run-tests.mjs --all",
+    "verify": "npm test && npm run build",
+    "verify:full": "npm run test:all && npm run build"
   },
   "dependencies": {
     "animejs": "^4.5.0",
@@ -16,6 +21,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "playwright": "^1.63.0",
+    "react-test-renderer": "^18.3.1",
     "vite": "^5.4.0"
   }
 }

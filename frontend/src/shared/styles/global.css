@@ -21,7 +21,7 @@
   font-family: "Google Sans", "Roboto", Arial, sans-serif;
 }
 
-/* Dark mode — toggled via the Settings drawer (see app.jsx's `theme`
+/* Dark mode — toggled via the Settings drawer (see account-app.jsx's `theme`
    state), applied as a data-theme attribute on <html> rather than a class
    on some inner wrapper, so it can't accidentally miss anything rendered
    outside the main .app tree (e.g. a future portal/toast). Overrides only

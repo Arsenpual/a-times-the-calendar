@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-const runtime = join(tmpdir(), "times-reminder-sync-tests/node_modules");
-const reactUrl = pathToFileURL(join(runtime, "react/index.js")).href;
+const reactUrl = import.meta.resolve("react");
 const {default:React} = await import(reactUrl);
-const {default:Renderer} = await import(pathToFileURL(join(runtime,"react-test-renderer/index.js")).href);
+const {default:Renderer} = await import("react-test-renderer");
 const {act} = Renderer;
 const load = async (path, replacements = {}) => {
   let source = readFileSync(new URL(path,import.meta.url),"utf8").replace('from "react"', 'from "'+reactUrl+'"');
@@ -72,4 +68,3 @@ try {
   await act(async()=>renderer.unmount());
   delete globalThis.requests; delete globalThis.testFetch;
 }
-

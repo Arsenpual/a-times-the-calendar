@@ -1,0 +1,599 @@
+/* ───── Tag chip input (ActivityModal) ───── */
+.tag-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  border-radius: 50%;
+}
+
+.tag-chip-remove:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+.tag-input {
+  flex: 1;
+  min-width: 100px;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  padding: 4px 2px;
+  background: transparent;
+}
+
+.tag-input:disabled {
+  cursor: not-allowed;
+}
+
+/* ───── Tag chips shown in the right-click context popup only (kept out of
+   the timeline grid and mini-timeline panel — too cluttered there) ───── */
+.activity-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin-top: 3px;
+}
+
+.activity-tag-chip {
+  display: inline-block;
+  padding: 0px 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Chrome/Firefox ไม่ยอมให้ font-size เล็กกว่า ~6px จริง (มี minimum font
+     size บังคับไว้เสมอ ไม่ว่า CSS จะสั่งเท่าไหร่) — ใช้ transform: scale()
+     แทนเพื่อย่อขนาดตัวอักษรลงจริงๆ ต่ำกว่าขีดจำกัดนั้น scale จากมุมซ้าย
+     (transform-origin: left) แทนจากกึ่งกลาง กันไม่ให้ chip ที่อยู่ติดกันมา
+     ทับซ้อนกันเวลาย่อ */
+  transform: scale(0.6);
+  transform-origin: left center;
+}
+
+.modal-error {
+  background: #fce8e6;
+  color: #c5221f;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-actions-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---- activity-modal: recurring-event edit notice ---- */
+.allday-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
+/* ---- activity-modal: custom color picker ---- */
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.color-dot:hover {
+  transform: scale(1.1);
+}
+.color-dot.is-selected {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px currentColor;
+}
+.color-dot.is-selected::after {
+  content: "✓";
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.color-dot.is-category-locked {
+  filter: grayscale(0.35);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.color-source-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+.color-source-note.is-override {
+  color: var(--blue);
+}
+
+/* ---- activity-modal: category select with swatch ---- */
+.category-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.category-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Custom dropdown trigger (แทน native <select> เพราะต้องใส่ปุ่มลบ ✕
+   ต่อท้ายแต่ละแถวในรายการ — <option> ใส่ปุ่มไม่ได้) หน้าตาเลียนแบบ
+   .modal-field select เดิมให้ดูเป็นชิ้นเดียวกัน */
+.category-dropdown-trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.category-dropdown-trigger:hover {
+  background: var(--hover);
+}
+.category-dropdown-arrow {
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.category-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.category-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.category-dropdown-item:hover {
+  background: var(--hover);
+}
+.category-dropdown-item.is-active {
+  background: var(--hover);
+  font-weight: 500;
+}
+.category-dropdown-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-dropdown-create {
+  color: var(--blue);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+/* ปุ่มลบหมวดหมู่ ท้ายแถวใน dropdown — ซ่อนเงียบๆ จนกว่าจะ hover แถวนั้น
+   เพื่อไม่ให้รกตาตอนแค่กำลังเลือกหมวดหมู่ปกติ แต่ยังกดได้ทุกเมื่อ (ไม่ต้อง
+   hover ก่อนบนอุปกรณ์ที่ไม่มี hover เช่นมือถือ จึง opacity แทน display:none) */
+.category-delete-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.1s, background 0.1s, color 0.1s;
+}
+.category-dropdown-item:hover .category-delete-btn {
+  opacity: 1;
+}
+.category-delete-btn:hover {
+  background: var(--red-tint);
+  color: var(--red);
+  opacity: 1;
+}
+.category-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ---- activity-modal: inline "create new category" form ---- */
+.new-category-form {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--hover);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.new-category-name-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.category-color-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* เฉดสีสำหรับสร้างหมวดหมู่ใหม่ใช้ .color-dot ร่วมกับ quick-color picker ของ
+   สีกิจกรรม (ด้านบน) เพื่อให้หน้าตาสม่ำเสมอกัน ต่างกันแค่จำนวนตัวเลือก */
+
+.category-custom-color {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.category-custom-color::before {
+  /* เล็กๆ ไอคอนพิเศษบอกว่ากดแล้วเปิด color picker ของระบบ ไม่ใช่สีสำเร็จรูป */
+  content: "+";
+  font-size: 14px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.category-custom-color input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.new-category-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ---- activity-modal: repeat/recurrence ---- */
+.repeat-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.repeat-summary select {
+  flex: 1;
+}
+
+.repeat-custom {
+  margin-top: 10px;
+  padding: 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.repeat-freq-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.repeat-freq-row input[type="number"] {
+  width: 56px;
+  padding: 7px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.repeat-freq-row select {
+  width: auto;
+  flex: none;
+  min-width: 90px;
+}
+
+.weekday-picker {
+  display: flex;
+  gap: 6px;
+}
+.weekday-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+.weekday-chip.is-active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 500;
+}
+
+.repeat-end-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.repeat-end-row label.radio-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.repeat-end-row input[type="number"] {
+  width: 64px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.repeat-end-row input[type="date"] {
+  width: auto;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.repeat-preview {
+  font-size: 12.5px;
+  color: var(--blue);
+  background: var(--blue-tint);
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ---- activity-modal: collapsible notes ---- */
+.collapsible-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.collapsible-trigger:hover {
+  color: var(--text-primary);
+}
+.collapsible-trigger .chevron {
+  transition: transform 0.15s;
+  font-size: 10px;
+}
+.collapsible-trigger.is-open .chevron {
+  transform: rotate(90deg);
+}
+
+.modal-field textarea {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.5;
+  margin-top: 6px;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .modal-box {
+    max-width: 100%;
+    max-height: 92vh;
+  }
+  .modal-field-row {
+    flex-direction: column;
+  }
+}
+
+/* ── Recurring event chip ── */
+.popup-recurring-chip {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ── Category swatch dot ใน popup ── */
+.popup-category-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+.popup-field-row {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Recurring action choice dialog ── */
+.popup-recurring-choice {
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.popup-recurring-choice-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.popup-recurring-choice-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.popup-recurring-choice-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.popup-recurring-choice-btns .popup-btn {
+  flex: 1;
+}
+.popup-btn-text {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: center;
+  text-decoration: underline;
+}
+.popup-btn-text:hover {
+  color: var(--text-primary);
+}
+
+/* ── Primary variant for popup-btn ── */
+.popup-btn.primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+.popup-btn.primary:hover {
+  background: #1246a0;
+}
+.popup-btn.danger {
+  color: #b71c1c;
+  border-color: #b71c1c;
+}
+.popup-btn.danger:hover {
+  background: #fdecea;
+}

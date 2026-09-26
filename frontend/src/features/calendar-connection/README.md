@@ -4,7 +4,7 @@
 
 คง endpoint, error code, function signature และ request body เดิม รวมถึง legacy request helper ที่ยังไม่ได้ลบในรอบจัดโครงสร้าง
 
-Activity hooks และ Auth hook เรียกโมดูลนี้ หน้าต่างขอสิทธิ์และ loading ยังอยู่ใน `app.jsx` ส่วน backend และ environment ไม่เปลี่ยน
+Activity hooks และ Auth hook เรียกโมดูลนี้ ส่วนสถานะ checking/reauth อยู่ใน `src/app/components/calendar-connection-overlays.jsx`; backend และ environment ไม่เปลี่ยน
 
 `styles/calendar-connection.css` เก็บ UI สำหรับ token expiry prompt โดยไม่เปลี่ยน OAuth flow
 

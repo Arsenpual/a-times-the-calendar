@@ -22,7 +22,7 @@ notifications/
 
 ย้ายไฟล์และแยกฟังก์ชัน API โดยไม่เปลี่ยน endpoint, payload, notificationKey หรือ function body ของ API ระบบ service worker ยังคงที่ `frontend/public/firebase-messaging-sw.js`
 
-ปุ่ม Telegram, flow เชื่อมต่อ และวงรอบ Reminder ยังอยู่ใน `features/reminder/components/reminder-mode.jsx` วงรอบ Activity ยังคงอยู่ใน `app.jsx` การแยก UI และ runtime เป็นงานถัดไป เพื่อทดสอบพฤติกรรมแยกจากการย้ายครั้งนี้
+ปุ่ม Telegram, flow เชื่อมต่อ และวงรอบ Reminder อยู่ใน `features/reminder/components/reminder-mode.jsx` วงรอบ Activity ประกอบที่ `src/app/account-app.jsx`
 
 ## ตรวจสอบ
 

@@ -1,14 +1,10 @@
-// Uses the same temporary React 18 renderer runtime as reminder-sync.test.mjs.
+// Uses the frontend's local React 18 renderer runtime.
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 import { createTimeChangeState, timeChangeReducer } from '../src/features/activity/lib/week-spine-time-changes.js';
-const runtime = join(tmpdir(), 'times-reminder-sync-tests/node_modules');
-const reactUrl = pathToFileURL(join(runtime, 'react/index.js')).href;
+const reactUrl = import.meta.resolve('react');
 const { default: React } = await import(reactUrl);
-const { default: Renderer } = await import(pathToFileURL(join(runtime, 'react-test-renderer/index.js')).href);
+const { default: Renderer } = await import('react-test-renderer');
 const { act } = Renderer;
 const url = source => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
 const source = name => readFileSync(new URL('../src/features/activity/hooks/' + name + '.js', import.meta.url), 'utf8');

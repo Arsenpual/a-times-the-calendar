@@ -1,16 +1,13 @@
-// Run with a temporary React 18 test renderer installation (no production API).
+// Run with the frontend's local React 18 test renderer.
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
-const runtime = join(tmpdir(), 'times-reminder-sync-tests/node_modules');
-const reactUrl = pathToFileURL(join(runtime, 'react/index.js')).href;
+const reactUrl = import.meta.resolve('react');
 const { default: React } = await import(reactUrl);
-const { default: Renderer } = await import(pathToFileURL(join(runtime, 'react-test-renderer/index.js')).href);
+const { default: Renderer } = await import('react-test-renderer');
 const { act } = Renderer;
 const cache = new Map();
 globalThis.localStorage = { getItem: k => cache.get(k) ?? null, setItem: (k,v) => cache.set(k,v) };
+globalThis.window = { localStorage: globalThis.localStorage, setInterval, clearInterval };
 let cloud = {}, calls = [], release;
 globalThis.syncTestApi = {
   fetchReminders: async () => structuredClone(cloud),

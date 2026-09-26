@@ -1,7 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 import { createInFlightReads } from '../src/shared/api/in-flight-reads.js';
 
@@ -48,10 +45,9 @@ globalThis.fetch = originalFetch;
 console.log('PASS concurrent GETs: 2 callers → 1 request; fresh reads, mutation invalidation, account isolation and retry');
 
 // Same temporary React runtime used by reminder-sync.test.mjs.
-const runtime = join(tmpdir(), 'times-reminder-sync-tests/node_modules');
-const reactUrl = pathToFileURL(join(runtime, 'react/index.js')).href;
+const reactUrl = import.meta.resolve('react');
 const { default: React } = await import(reactUrl);
-const { default: Renderer } = await import(pathToFileURL(join(runtime,'react-test-renderer/index.js')).href);
+const { default: Renderer } = await import('react-test-renderer');
 const { act } = Renderer;
 const calendarRequests = [];
 let metadataLoads = 0, summaryCalls = 0, hook;

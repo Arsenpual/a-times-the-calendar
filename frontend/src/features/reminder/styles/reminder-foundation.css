@@ -1,0 +1,201 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&family=Roboto+Mono:wght@500&display=swap');
+
+        * { box-sizing: border-box; }
+
+        html, body {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          overflow: hidden;
+        }
+
+        .reminder-app-container {
+          --g-blue: #D85A30;
+          --g-blue-hover: #B74623;
+          --g-blue-light: #F9E8E1;
+          --g-red: #ea4335;
+          --g-yellow: #fbbc04;
+          --g-green: #34a853;
+          /* เพิ่มเข้ามาคู่กับ TYPE_ACCENT_COLOR (migration plan v2 เฟส 1.4)
+             — hex เดียวกับ "ม่วง"/"ฟ้าอมเขียว" ใน LINE_COLOR_OPTIONS ไม่ได้
+             คิดโทนใหม่ ตามหลักเดียวกับ --g-yellow/--g-red/--g-green ข้างบน
+             ที่ไม่ปรับตาม dark mode (อ่านออกบนพื้นมืดได้อยู่แล้ว) */
+          --g-purple: #a142f4;
+          --g-teal: #00bcd4;
+          --g-surface: #ffffff;
+          --g-background: #F7F6F2;
+          --g-on-surface: #1C1C1A;
+          --g-on-surface-variant: #8A8A85;
+          --g-outline: #E4E2DC;
+          --g-outline-variant: #EDEBE5;
+          /* ฟิลด์เพิ่มเติมสำหรับสี hover/active ที่เดิม hardcode เป็น hex
+             ตรงๆ ในหลายจุดด้านล่าง (ไม่เคยผ่าน --g-* เลย) — ดึงมาเป็นตัวแปร
+             ตรงนี้เพื่อให้ dark-mode override block ด้านล่างจัดการได้ที่
+             จุดเดียว แทนที่จะต้องไล่แก้ hex ทีละจุดในกฎที่กระจายอยู่ทั่วไฟล์ */
+          --g-blue-light-hover: #F3D5C9;
+          --g-red-light: #fce8e6;
+          --g-red-light-border: #f5c6cb;
+          --g-red-dark: #c5221f;
+          --g-red-light-hover: #fad2cf;
+          --g-active-bg: #fef7e0;
+          --g-active-border: #fde293;
+          --g-toggle-off: #bdc1c6;
+          --g-major-hour-tint: rgba(248, 249, 250, 0.6);
+
+          font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          height: 100vh;
+          max-height: 100vh;
+          background-color: var(--g-background);
+          color: var(--g-on-surface);
+          overflow: hidden;
+        }
+
+        /* Dark mode — reminder mode มี custom property namespace ของตัวเอง
+           (--g-*) แยกจาก --bg/--text-primary/ฯลฯ ที่เหลือทั้งแอปใช้ (ดู
+           index.css's html[data-theme="dark"] block) เพราะ style block นี้
+           ถูกเขียนแบบ self-contained ตั้งแต่ตอนยังเป็น mockup แยกเดี่ยว —
+           แทนที่จะไล่เปลี่ยนทุก var(--g-...) ในไฟล์นี้ (700+ บรรทัด) ให้ไป
+           อ้าง --bg/--text-primary/ฯลฯ ตรงๆ ซึ่งเสี่ยง regression สูงและ
+           breaking การ preview เป็น standalone component ในอนาคต แค่ override
+           ค่าของ --g-* เองที่นี่ตาม data-theme ก็พอ — ทุกกฎที่เหลือด้านล่าง
+           ที่อ้างอิงผ่าน var(--g-...) อยู่แล้วจะเปลี่ยนตามอัตโนมัติ พาเลท
+           อ้างอิงจาก index.css's dark block (--bg: #202124, --bg-muted:
+           #2d2e30, --text-primary: #e8eaed, --text-secondary: #9aa0a6,
+           --border: #4a4d51) เพื่อให้โทนสีเข้ากับส่วนอื่นของแอป ไม่ใช่คิด
+           พาเลทใหม่แยกต่างหาก
+           สีใน semantic accent (--g-yellow, --g-red, --g-green หลัก) คงค่า
+           เดิมไว้เกือบทั้งหมด ตามหลักเดียวกับที่ index.css บอกไว้ (ยังอ่าน
+           ออกบนพื้นมืดได้อยู่แล้ว การปรับจะต้องเช็ค contrast ใหม่ทุกจุดที่
+           ใช้ ซึ่งเกินขอบเขตของรอบนี้) */
+        html[data-theme="dark"] .reminder-app-container {
+          --g-blue: #E8703F;
+          --g-blue-hover: #F08A60;
+          --g-surface: #292927;
+          --g-background: #20201E;
+          --g-on-surface: #F2F1ED;
+          --g-on-surface-variant: #9C9C97;
+          --g-outline: #3A3A38;
+          --g-outline-variant: #30302E;
+          --g-blue-light: #4A2920;
+          --g-blue-light-hover: #5A3226;
+          --g-red-light: #3c1c1c;
+          --g-red-light-border: #5c2b2b;
+          --g-red-dark: #f28b82;
+          --g-red-light-hover: #4a2424;
+          --g-active-bg: #3a341a;
+          --g-active-border: #5c4f22;
+          --g-toggle-off: #5f6368;
+          --g-major-hour-tint: rgba(255, 255, 255, 0.04);
+        }
+
+        .due-alert-banner {
+          background: var(--g-red-light);
+          border-bottom: 1px solid var(--g-red-light-border);
+          padding: 12px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: var(--g-red-dark);
+          font-size: 14px;
+          font-weight: 500;
+          flex-shrink: 0;
+        }
+
+        .due-alert-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .btn-snooze {
+          background: var(--g-surface);
+          border: 1px solid var(--g-red-light-border);
+          color: var(--g-red-dark);
+          padding: 6px 14px;
+          border-radius: 18px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+
+        .btn-snooze:hover {
+          background: var(--g-red-light);
+        }
+
+        .due-alert-item-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        /* Backdrop โปร่งใสเต็มจอ ปิดเมนูเมื่อคลิกข้างนอก (เฟส 1.3/1.4) */
+        .dropdown-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 40;
+        }
+
+        .snooze-dropdown-wrap {
+          position: relative;
+        }
+
+        .snooze-menu {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          z-index: 50;
+          background: var(--g-surface);
+          border: 1px solid var(--g-outline);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 140px;
+        }
+
+        .snooze-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--g-on-surface);
+          cursor: pointer;
+        }
+
+        .snooze-menu button:hover {
+          background: var(--g-background);
+        }
+
+        .btn-mark-done {
+          background: #1e8e3e;
+          border: 1px solid #188038;
+          color: #fff;
+          padding: 7px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 2px 5px rgba(24, 128, 56, 0.30);
+          transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        .btn-mark-done:hover {
+          background: #188038;
+          box-shadow: 0 3px 8px rgba(24, 128, 56, 0.38);
+          transform: translateY(-1px);
+        }
+
+        .btn-mark-done:focus-visible {
+          outline: 3px solid color-mix(in srgb, #1e8e3e 38%, transparent);
+          outline-offset: 2px;
+        }
+
+        .btn-mark-done:active {
+          transform: translateY(0);
+          box-shadow: 0 1px 3px rgba(24, 128, 56, 0.30);
+        }

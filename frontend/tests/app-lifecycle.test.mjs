@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-const runtime = join(tmpdir(), "times-reminder-sync-tests/node_modules");
-const reactUrl = pathToFileURL(join(runtime, "react/index.js")).href;
+const reactUrl = import.meta.resolve("react");
 const {default: React} = await import(reactUrl);
-const {default: Renderer} = await import(pathToFileURL(join(runtime, "react-test-renderer/index.js")).href);
+const {default: Renderer} = await import("react-test-renderer");
 const {act} = Renderer;
 async function load(path, replacements = {}) {
   let source = readFileSync(new URL(path, import.meta.url), "utf8").replace('from "react"', `from "${reactUrl}"`);
@@ -83,7 +79,7 @@ globalThis.window = {localStorage: {getItem:()=>null, removeItem:noop, setItem:n
 const {useAuth} = await load("../src/features/auth/hooks/use-auth.js", {
   'import { auth } from "../../../shared/config/firebase-auth.js";': 'const auth = globalThis.lifecycleAuth;',
   'import { signInWithGoogle, subscribeToAuthState, signOut } from "../api/google-auth.js";': 'const subscribeToAuthState = globalThis.lifecycleSubscribe; const signInWithGoogle = () => {}; const signOut = () => {};',
-  'import { beginCalendarAuthorization, getCalendarConnectionStatus } from "../../calendar-connection/api/google-calendar.js";': 'const getCalendarConnectionStatus = globalThis.lifecycleStatus; const beginCalendarAuthorization = () => {};'
+  'import { beginCalendarAuthorization, disconnectCalendarConnection, getCalendarConnectionStatus } from "../../calendar-connection/api/google-calendar.js";': 'const getCalendarConnectionStatus = globalThis.lifecycleStatus; const beginCalendarAuthorization = () => {}; const disconnectCalendarConnection = () => {};'
 });
 let authState;
 function AuthFixture() {authState = useAuth(); return null;}

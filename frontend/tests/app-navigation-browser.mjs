@@ -1,13 +1,12 @@
 import { createServer } from "../node_modules/vite/dist/node/index.js";
 import react from "../node_modules/@vitejs/plugin-react/dist/index.js";
-import { pathToFileURL, fileURLToPath } from "node:url";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { chromium } from "playwright";
 
-const { chromium } = await import(pathToFileURL(join(tmpdir(), "times-reminder-sync-tests/node_modules/playwright/index.mjs")).href);
 const root = fileURLToPath(new URL("../", import.meta.url));
-const server = await createServer({ root, configFile: false, plugins: [react()], server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
+const devMockupsAlias = fileURLToPath(new URL("../src/app/dev-mockups.production.jsx", import.meta.url));
+const server = await createServer({ root, configFile: false, resolve: { alias: { "@dev-mockups": devMockupsAlias } }, plugins: [react()], server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
 await server.listen();
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
@@ -30,7 +29,7 @@ try {
     const run = fn => window.fixture.flushSync(fn);
     const f = () => window.fixture;
     const arrow = () => document.dispatchEvent(new KeyboardEvent("keydown", {key:"ArrowRight", bubbles:true}));
-    check(f().app.mode === "activity" && !f().app.settingsOpen && f().app.showLoginGuide, "defaults");
+    check(f().app.mode === "activity" && !f().app.settingsOpen, "defaults");
     check(f().preferences.summaryPanelGlassEnabled === true, "legacy glass preference");
     check(f().preferences.weekSpineHoursPerCell === 2, "invalid grid defaults to two hours");
     run(() => {
@@ -43,7 +42,7 @@ try {
     const start = f().nav.cursorDate.getTime();
     run(arrow);
     check(f().nav.cursorDate.getDate() === 13, "activity arrow navigation");
-    run(() => { f().app.setMode("reminder"); f().app.setSettingsOpen(true); f().app.setShowLoginGuide(false); });
+    run(() => { f().app.setMode("reminder"); f().app.setSettingsOpen(true); });
     const parked = f().nav.cursorDate.getTime();
     run(arrow);
     check(f().nav.cursorDate.getTime() === parked, "no shortcuts in reminder");
@@ -58,7 +57,7 @@ try {
     check(document.documentElement.dataset.theme === "dark", "theme applied");
     check(localStorage.getItem("theme") === "dark", "theme persisted");
     check(JSON.parse(localStorage.getItem("reminder-timeline-colors")).nowIndicator === "#123456", "color persisted");
-    check(f().app.settingsOpen && !f().app.showLoginGuide, "overlay state survives mode change");
+    check(f().app.settingsOpen, "overlay state survives mode change");
     window.unmountFixture();
     arrow();
   });
@@ -69,10 +68,9 @@ try {
     color: window.fixture.preferences.reminderTimelineColors.nowIndicator,
     mode: window.fixture.app.mode,
     settings: window.fixture.app.settingsOpen,
-    guide: window.fixture.app.showLoginGuide,
     glass: window.fixture.preferences.summaryPanelGlassEnabled,
     grid: window.fixture.preferences.weekSpineHoursPerCell
-  })), {theme:"dark",color:"#123456",mode:"activity",settings:false,guide:true,glass:false,grid:4});
+  })), {theme:"dark",color:"#123456",mode:"activity",settings:false,glass:false,grid:4});
   await page.evaluate(() => {
     window.fixture.flushSync(() => window.fixture.preferences.setWeekSpineHoursPerCell(1));
   });

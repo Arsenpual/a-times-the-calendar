@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { Suspense, useRef, useState } from "react";
 
 /** Generic, hidden canvas for any Activity Mode mockup component. */
 export default function ActivityModeMockupPreview({ mockups }) {
@@ -83,10 +83,12 @@ export default function ActivityModeMockupPreview({ mockups }) {
           <select value={selected?.id || ""} onChange={changeMockup}>
             {mockups.map((mockup) => <option key={mockup.id} value={mockup.id}>{mockup.label}</option>)}
           </select>
-        </label>
+      </label>
       )}
       <section className="mockup-preview-canvas">
-        {Mockup ? <Mockup /> : <p>ไม่พบ mockup</p>}
+        <Suspense fallback={<p>กำลังโหลด mockup…</p>}>
+          {Mockup ? <Mockup /> : <p>ไม่พบ mockup</p>}
+        </Suspense>
       </section>
     </main>
   );

@@ -1,0 +1,419 @@
+/* Dashboard layout */
+
+/* Shared visual rhythm for the activity workspace. */
+.activity-dashboard {
+  scrollbar-gutter: stable;
+  scroll-padding-block: 16px;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  /* No align-items here (it used to be "start" for both columns, each
+     only as tall as its own content) — .agenda-view now needs to stretch
+     to the full row height to have a real scroll region of its own (see
+     its rule below, which sets height: 100%). .summary-column instead
+     gets align-self: start explicitly, so it keeps the old behavior —
+     sitting at its own natural height — instead of stretching to match
+     .agenda-view's new full-height sizing. */
+  height: 100%;
+  min-height: 0; /* grid items don't shrink below content size by default; without this the grid row itself grows to fit .agenda-view's full content height instead of clipping it, defeating the scroll below */
+}
+
+/* Week Spine has a second, full-width reading area below the two top
+   columns.  The component's wrapper uses display:contents so its timeline
+   and detail section become grid items here without duplicating state. */
+.activity-dashboard {
+  grid-template-rows: auto auto;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.summary-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Temporarily fill the complete dashboard row so the real height of the
+     redesigned daily panel can be judged without an inner scroll region. */
+  align-self: stretch;
+  min-width: 0;
+}
+
+/* Agenda view */
+
+.agenda-view {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 16px;
+  /* Own scroll region, independent from .summary-column beside it — this
+     is what actually fixes "scrolling through the day list drags the
+     summary/mini-timeline panel along with it": before this, .app-main
+     was the only scrolling ancestor, so any scroll gesture over either
+     column scrolled both together as one page. Height comes from
+     .dashboard's height:100% + this flex row's remaining space. */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.agenda-view:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.agenda-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  background: var(--bg-muted);
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agenda-row:hover {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+/* Focus changes the row's own background (a soft tint, not a solid fill —
+   deliberately gentle) plus a lifted/embossed look (shadow + a hair of
+   scale) so the whole row reads as "this one" without the activity color
+   pills or the ⚙/+ buttons inside it losing their own distinct colors —
+   nothing in here overrides child element colors, it only changes the
+   row's own background/shadow/position. The bounce-ish cubic-bezier
+   easing (overshoots slightly before settling) is what gives the "pop"
+   feel on focus change rather than a flat instant snap. */
+.agenda-row:focus-visible {
+  outline: none;
+  background: var(--blue-tint); /* fallback for browsers without color-mix() support */
+  background: color-mix(in srgb, var(--blue-tint) 55%, var(--bg-muted));
+  box-shadow: 0 6px 18px rgba(21, 87, 176, 0.24), 0 1px 3px rgba(21, 87, 176, 0.15);
+  transform: translateY(-2px) scale(1.015);
+}
+
+/* Selection is state, not just DOM focus: keyboard day navigation updates
+   .is-expanded directly, so the entire row keeps the same blue highlight
+   as its expanded day bar even when focus sits elsewhere. */
+.agenda-row.is-expanded {
+  background: var(--blue-tint);
+  background: color-mix(in srgb, var(--blue-tint) 72%, var(--bg-muted));
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px rgba(21, 87, 176, 0.18), 0 1px 3px rgba(21, 87, 176, 0.12);
+}
+
+.agenda-row.is-expanded:hover {
+  background: color-mix(in srgb, var(--blue-tint) 84%, var(--bg-muted));
+}
+
+/* Critical: a CSS `transform` on ANY ancestor (even translateY(-1px)) makes
+   that ancestor the containing block for descendant `position: fixed`
+   elements per spec — TimelineEditor's fullscreen mode uses
+   position:fixed to cover the viewport (see .timeline-editor.is-fullscreen
+   below), and .agenda-row is TimelineEditor's ancestor. Without this
+   override, opening the editor (which focuses/hovers the row to get
+   there) silently broke fullscreen: it anchored to the row's own box
+   instead of the viewport, and the row's still-transitioning transform
+   fought with TimelineEditor's own rapid re-renders during drag,
+   producing the shake/jitter. Editing rows never need the hover/focus
+   lift effect anyway — they already have their own distinct
+   .is-row-editing treatment (border below) — so simply zeroing transform
+   here removes the containing-block trap entirely.
+   IMPORTANT: keep this override — do not tune the lift effect on
+   .is-row-editing rows expecting a plain :hover/:focus-visible transform
+   to also apply; it will re-break fullscreen. */
+.agenda-row.is-row-editing:hover,
+.agenda-row.is-row-editing:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-row {
+    transition: none;
+  }
+  .agenda-row:hover,
+  .agenda-row:focus-visible {
+    transform: none;
+  }
+}
+
+/* "วันนี้" ใช้แค่กรอบบางๆ สีน้ำเงิน ไม่ใช่พื้นหลังฟ้าทึบ — พื้นหลังฟ้าอ่อน
+   ถาวรของ "วันนี้" กับ background ตอน focus (กด ↑↓) จะแย่งความสนใจกัน ทำให้
+   ดูเหมือนมีจุดถูกไฮไลต์อยู่ 2 จุดพร้อมกัน ทั้งที่เป็นคนละความหมายกัน (วันนี้
+   vs วันที่กำลังโฟกัส) — กรอบบางๆ ยังบอกได้ว่า "นี่คือวันนี้" แต่ไม่แย่ง
+   ความสนใจจาก focus ซึ่งควรเป็นจุดเด่นเดียวบนหน้าจอ ตัวบอกหลักจริงๆ ของ
+   "วันนี้" คือ badge วงกลมสีน้ำเงินทึบ + ✨ ที่ agenda-day-badge แทน */
+/* วันนี้ดูเหมือนถูกกดบุ๋มลงไปในพื้นผิว (pressed/inset look) แทนกรอบสีฟ้า
+   ธรรมดา — ใช้ inset box-shadow สองชั้น (เงามืดด้านบน-ซ้าย + ไฮไลต์จางๆ
+   ด้านล่าง-ขวา) จำลองแสงตกกระทบขอบบุ๋ม บวกกับพื้นหลังมืดลงเล็กน้อยจาก
+   --bg-muted ปกติ (ผสม black 6% ทับ) ให้ดูเหมือนพื้นผิวถูกกดจมลงไปจริงๆ
+   ไม่ใช่แค่ขอบเปลี่ยนสีเฉยๆ ไม่ใช้ transform เลื่อนตำแหน่ง เพราะจะไปชนกับ
+   transform: translateY(-1px) ตอน hover ของ .agenda-row ทำให้ระยะขยับไม่
+   สม่ำเสมอ ตั้งใจไม่มี transition ใดๆ กับเอฟเฟกต์นี้ (ไม่อยู่ใน property
+   list ของ .agenda-row's transition ด้านบนเลย) เพราะอยากให้ขึ้น/หายทันที
+   เหมือนเป็นสถานะของวัน ไม่ใช่ปฏิกิริยาต่อการกระทำของผู้ใช้ */
+.agenda-row.is-today {
+  border-color: transparent;
+  border-bottom-color: var(--border);
+  background: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)), var(--bg-muted);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
+  /* .agenda-row's own transition list above includes background-color and
+     box-shadow (for the hover effect on ordinary rows) — override it to
+     "none" here so today's pressed-in look snaps in/out immediately as a
+     state, instead of inheriting that easing and visibly animating in. */
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.15s ease;
+}
+
+.agenda-row.is-today:hover {
+  background: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)), var(--hover);
+  /* คงเอฟเฟกต์บุ๋มไว้ตอน hover ด้วย — ไม่ให้ hover's translateY(-1px) ของ
+     .agenda-row ทำให้ดูเหมือน "ลอยขึ้น" ขัดกับความรู้สึกบุ๋มลง */
+  transform: none;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Today + focused at the same time — focus-visible's own background tint
+   and outline still read clearly as the dominant highlight; this just
+   keeps the inset "pressed" shadow from today's own style underneath it,
+   so focusing today's row doesn't flatten the pressed look back out. */
+.agenda-row.is-today:focus-visible {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.agenda-row.is-today.is-expanded,
+.agenda-row.is-today.is-expanded:hover {
+  background: color-mix(in srgb, var(--blue-tint) 72%, var(--bg-muted));
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px rgba(21, 87, 176, 0.18), 0 1px 3px rgba(21, 87, 176, 0.12);
+}
+
+/* When a row's ⚙ timeline-editor is open, it expands full width in place
+   (other rows just shift down normally — no overlay). */
+.agenda-row.is-row-editing {
+  background: var(--bg-muted);
+  border: 1px solid var(--blue);
+  border-radius: 18px;
+  padding: 14px;
+  align-items: flex-start;
+}
+
+/* Fullscreen mode: TimelineEditor switches to position:fixed and covers
+   the whole viewport (see .timeline-editor.is-fullscreen), but it's still
+   rendered inside this row in the DOM — it isn't portaled out to the
+   document root. A position:fixed descendant is removed from normal flow,
+   so it doesn't visually push this row around, but the row itself is
+   still sitting there in its own normal spot underneath, fully
+   interactive. Moving the mouse over the screen area now covered by the
+   fullscreen editor was landing on BOTH elements depending on the exact
+   pixel/frame (the fixed editor on top, this row still receiving the
+   hover event from underneath), which flickered :hover on/off rapidly as
+   the mouse moved — the reported "กระพริบ". Disabling pointer events and
+   collapsing this row out of the layout entirely while a fullscreen
+   descendant exists removes the overlap: nothing underneath can receive
+   hover/click anymore, so there's nothing left to flicker with. */
+.agenda-row:has(.timeline-editor.is-fullscreen) {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Prominent circular day badge — replaces the old plain stacked weekday/
+   date text label. Today gets a solid blue fill + a small floating
+   sparkle emoji instead of just colored text, so "today" reads instantly
+   at a glance rather than needing to read the number's color. */
+.agenda-day-badge {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agenda-row:hover .agenda-day-badge {
+  transform: scale(1.06) rotate(-2deg);
+}
+
+.agenda-row.is-today .agenda-day-badge {
+  background: var(--blue);
+}
+
+.agenda-weekday {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.agenda-row.is-today .agenda-weekday {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.agenda-date {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.agenda-row.is-today .agenda-date {
+  color: #fff;
+}
+
+.agenda-today-spark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 15px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-day-badge {
+    transition: none;
+  }
+  .agenda-row:hover .agenda-day-badge {
+    transform: none;
+  }
+}
+
+.agenda-day-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  justify-content: center;
+}
+
+/* Per-day category proportion, shown as rounded pill segments (replaces
+   the old flat continuous bar) — click it to open the mini timeline for
+   that day (see agenda-view.jsx). */
+
+.agenda-day-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agenda-day-bar-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  /* Uses the same duration and easing as .agenda-row, since both are
+     driven by the same is-expanded state. This keeps the blue selection
+     moving as one effect for mouse clicks and keyboard day navigation. */
+  transition: background-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agenda-day-bar-btn:hover {
+  background: var(--hover);
+}
+
+.agenda-day-bar-btn.is-expanded {
+  background: var(--blue-tint);
+  border-color: var(--blue);
+}
+
+.agenda-day-pills {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 12px;
+}
+
+.agenda-day-pills-empty {
+  gap: 0;
+}
+
+.agenda-day-pill,
+.agenda-day-pill-placeholder {
+  height: 100%;
+  min-width: 6px;
+  border-radius: 999px;
+  transition: transform 0.15s ease;
+}
+
+.agenda-day-bar-btn:hover .agenda-day-pill {
+  transform: scaleY(1.15);
+}
+
+.agenda-day-pill-placeholder {
+  flex-grow: 1;
+  background: var(--text-secondary); /* fallback for browsers without color-mix() support */
+  background: color-mix(in srgb, var(--border) 70%, var(--text-secondary));
+  opacity: 0.4;
+}
+
+.agenda-day-bar-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.agenda-day-bar-btn.is-expanded .agenda-day-bar-count {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.agenda-edit-toggle {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.agenda-edit-toggle:hover {
+  background: var(--hover);
+  color: var(--blue);
+  transform: rotate(45deg);
+}
+
+.agenda-edit-toggle.is-active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-edit-toggle:hover {
+    transform: none;
+  }
+}

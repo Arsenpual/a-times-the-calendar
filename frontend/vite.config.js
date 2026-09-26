@@ -1,7 +1,24 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 
-export default defineConfig({
+function rejectDevMockupsInProduction() {
+  return {
+    name: "reject-dev-mockups-in-production",
+    generateBundle(_options, bundle) {
+      const leakedModules = Object.values(bundle)
+        .filter((output) => output.type === "chunk")
+        .flatMap((chunk) => Object.keys(chunk.modules))
+        .filter((moduleId) => moduleId.replaceAll("\\", "/").includes("/src/dev/mockups/"));
+
+      if (leakedModules.length > 0) {
+        this.error(`Production bundle contains development mockups:\n${leakedModules.join("\n")}`);
+      }
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
   // GitHub Pages เสิร์ฟ repo ที่ไม่ใช่ <username>.github.io จาก subpath
   // /<repo-name>/ เสมอ (ไม่ใช่ root domain) — ถ้าไม่ตั้ง base ให้ตรง ไฟล์ JS/CSS
   // ที่ build ออกมาจะอ้าง path แบบ "/assets/..." (root) ผิดที่ทำให้หน้าเว็บ
@@ -12,7 +29,15 @@ export default defineConfig({
   // (npm run dev/build ปกติ) ไม่ต้องรู้จักชื่อ repo เลย — ตั้งค่าจริงแค่ตอน
   // GitHub Actions build เท่านั้น (ดู .github/workflows/deploy-frontend.yml)
   base: process.env.VITE_BASE_PATH || "/",
-  plugins: [react()],
+  plugins: [react(), ...(command === "build" ? [rejectDevMockupsInProduction()] : [])],
+  resolve: {
+    alias: {
+      "@dev-mockups": fileURLToPath(new URL(
+        command === "serve" ? "./src/dev/mockups/dev-mockups-entry.jsx" : "./src/app/dev-mockups.production.jsx",
+        import.meta.url,
+      )),
+    },
+  },
   server: {
     port: 5173,
     // Phase 2 (Firebase Auth): Chrome's default Cross-Origin-Opener-Policy
@@ -33,4 +58,4 @@ export default defineConfig({
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups"
     }
   }
-});
+}));

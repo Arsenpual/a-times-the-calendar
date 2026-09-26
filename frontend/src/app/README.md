@@ -1,12 +1,16 @@
 # App composition
 
-`app.jsx` เป็นจุดประกอบฟีเจอร์ของแอพ โดย `src/main.jsx` ยังคงเป็น entry point ที่ mount React และ LanguageProvider
+`src/main.jsx` mount React และ LanguageProvider ส่วน `app.jsx` เป็น entry/router ขนาดเล็กสำหรับ dev mockup และ Auth boundary เท่านั้น การประกอบ feature ตามบัญชีอยู่ใน `account-app.jsx`
 
 อัปเดต 12 กันยายน 2026: จบการแยก state และตรวจ lifecycle ตามขอบเขต Phase 3 ไม่ใช่การแยก JSX ทั้งหมดหรือเปลี่ยน backend
 
 ## เจ้าของ state
 
-- `MainApp` เป็นเจ้าของ `useAuth`; `AccountApp` ใช้ Firebase uid เป็น key เพื่อ reset feature state เมื่อเปลี่ยนบัญชี
+- `AuthenticatedApp` ใน `app.jsx` เป็นเจ้าของ `useAuth`; `AccountApp` ใช้ Firebase uid เป็น key เพื่อ reset feature state เมื่อเปลี่ยนบัญชี
+- `account-app.jsx`: composition และ state wiring ระดับบัญชี โดยคง Reminder runtime ให้ mounted ขณะสลับโหมด
+- `components/app-header.jsx`: header, navigation, tag search และ account menu แบบ presentational
+- `components/calendar-connection-overlays.jsx`: สถานะ Calendar checking/reauth
+- `components/activity-auth-state.jsx`: loading/sign-in UI ก่อนมี Firebase user
 - `hooks/use-app-navigation.js`: mode, Settings และคู่มือล็อกอิน
 - `hooks/use-app-shell-ui.js`: account menu, reading mode, scroll และ cleanup DOM listeners/animation frame
 - `features/settings/hooks/use-display-preferences.js`: ค่าการแสดงผลและ localStorage key เดิม
@@ -30,10 +34,10 @@
 
 ## ทดสอบ
 
-รัน `node frontend/tests/app-lifecycle.test.mjs` และ `node frontend/tests/app-mode-boundaries.test.mjs` จาก root พร้อม regression ของ Activity Phase 1, Reminder Phase 2/sync, Cycle, collections, loading performance และ Timeline/export
+รัน `npm test --prefix frontend` สำหรับ unit/integration และ `npm run test:browser --prefix frontend` สำหรับ browser regression
 
-Browser suites: `app-navigation-browser.mjs`, `activity-view-browser.mjs`, `activity-phase1-browser.mjs`, `reminder-phase2-browser.mjs`, `reminder-shell-browser.mjs` ใน `frontend/tests/` และ build ด้วย `npm run build --prefix frontend`
+Browser suites อยู่ใน `frontend/tests/` และ build ด้วย `npm run build --prefix frontend`
 
 ทดสอบ hooks/browser ด้วย API จำลองและ Chrome headless ไม่ใช่การทดสอบ OAuth/Firestore/Telegram จริงบน public ต้อง smoke test บัญชีจริงหลัง deploy อีกครั้ง รอบนี้ไม่มี push/deploy
 
-test harness บางชุดใช้ React renderer/Playwright จาก `%TEMP%/times-reminder-sync-tests/node_modules` ตามระบบทดสอบเดิม ต้องเตรียม runtime เมื่อรันบนเครื่องใหม่
+React renderer และ Playwright อยู่ใน `frontend/devDependencies` ไม่พึ่ง runtime ใน `%TEMP%`

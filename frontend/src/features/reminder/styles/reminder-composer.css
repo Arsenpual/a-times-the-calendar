@@ -1,0 +1,196 @@
+        .composer-card {
+          border: 1px solid var(--g-outline);
+          border-radius: 12px;
+          padding: 14px;
+          background: var(--g-background);
+          flex-shrink: 0;
+          /* Entrance is driven by Anime.js in reminder-mode.jsx (500ms). */
+        }
+
+        @keyframes composer-expand {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-field {
+          margin-bottom: 10px;
+        }
+
+        .form-field label {
+          display: block;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          margin-bottom: 6px;
+        }
+
+        .form-input, .form-select {
+          width: 100%;
+          font-family: inherit;
+          font-size: 14px;
+          padding: 8px 12px;
+          border: 1px solid var(--g-outline);
+          border-radius: 8px;
+          background: var(--g-surface);
+          color: var(--g-on-surface);
+          outline: none;
+          transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus {
+          border-color: var(--g-blue);
+          box-shadow: 0 0 0 1px var(--g-blue);
+        }
+
+        .composer-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .interval-window-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 34px;
+          padding: 6px 10px;
+          border: 1px solid var(--g-outline);
+          border-radius: 9px;
+          background: var(--g-surface);
+          color: var(--g-on-surface);
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .interval-window-toggle:hover { border-color: var(--g-blue); }
+        .interval-window-toggle.is-active { border-color: var(--g-blue); background: color-mix(in srgb, var(--g-blue) 12%, var(--g-surface)); color: var(--g-blue); }
+        .interval-window-toggle-track { position: relative; width: 30px; height: 17px; border-radius: 99px; background: var(--g-toggle-off); }
+        .interval-window-toggle-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform .16s ease; }
+        .interval-window-toggle.is-active .interval-window-toggle-track { background: var(--g-blue); }
+        .interval-window-toggle.is-active .interval-window-toggle-track::after { transform: translateX(13px); }
+
+        .freq-inline-group {
+          display: flex;
+          gap: 8px;
+        }
+
+        .freq-inline-group input {
+          width: 80px;
+        }
+
+        .notification-buffer-fields { gap: 8px; }
+        .notification-buffer-fields .form-hint { margin: -2px 0 2px; }
+        .notification-buffer-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .notification-buffer-inputs { align-items: center; gap: 5px; }
+        /* Event session fits each phase into one compact row: control,
+           duration, then its optional temporary reminder name. */
+        .event-anchor-phase-toggle { min-height: 30px; padding: 5px 7px; gap: 6px; font-size: 10px; white-space: nowrap; }
+        .event-anchor-phase-toggle .interval-window-toggle-track { transform: scale(.82); transform-origin: left center; margin-right: -4px; }
+        .event-anchor-phase-toggle + .notification-buffer-inputs input { width: 48px; min-width: 48px; font-size: 11px; padding-inline: 7px; }
+        .event-anchor-phase-toggle + .notification-buffer-inputs .form-select { width: 76px; min-width: 76px; font-size: 11px; padding-inline: 6px; }
+        .event-anchor-title-input { flex: 1 1 132px; min-width: 0; font-size: 11px; padding: 7px 8px; }
+        .reminder-active-event-session {
+          margin: 3px 0 0;
+          color: var(--g-blue);
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .reminder-composer-preview {
+          display: grid;
+          gap: 8px;
+          margin: 14px 0 12px;
+          padding: 12px;
+          border: 1px solid color-mix(in srgb, var(--g-blue) 26%, var(--g-outline));
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--g-blue) 6%, var(--g-surface));
+        }
+        .reminder-composer-preview-label { margin: 0; color: var(--g-blue-hover); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+        .reminder-composer-preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--g-on-surface); }
+        .reminder-composer-preview-heading strong { font-size: 15px; overflow-wrap: anywhere; }
+        .reminder-composer-preview-heading span { color: var(--g-on-surface-variant); font-size: 11px; white-space: nowrap; }
+        .reminder-composer-preview-fields { display: grid; gap: 5px; }
+        .reminder-composer-preview-fields > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+        .reminder-composer-preview-fields span { color: var(--g-on-surface-variant); }
+        .reminder-composer-preview-fields strong { color: var(--g-on-surface); overflow-wrap: anywhere; }
+        .reminder-composer-preview-note { margin: 0; color: var(--g-on-surface-variant); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+        .reminder-composer-quota { display: grid; gap: 4px; margin-top: 2px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--g-blue) 22%, var(--g-outline)); border-radius: 9px; background: color-mix(in srgb, var(--g-surface) 88%, var(--g-blue)); }
+        .reminder-composer-quota-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+        .reminder-composer-quota-heading span { color: var(--g-on-surface-variant); }
+        .reminder-composer-quota-heading strong { color: var(--g-on-surface); font-variant-numeric: tabular-nums; }
+        .reminder-composer-quota p { margin: 0; color: var(--g-on-surface-variant); font-size: 11px; line-height: 1.4; }
+        .reminder-composer-quota.is-at-limit { border-color: color-mix(in srgb, var(--g-red-dark) 62%, var(--g-outline)); background: color-mix(in srgb, var(--g-red-light) 52%, var(--g-surface)); }
+        .reminder-composer-quota.is-at-limit .reminder-composer-quota-heading strong,
+        .reminder-composer-quota-warning { color: var(--g-red-dark); }
+        .reminder-composer-quota-warning { font-weight: 650; }
+
+        .composer-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-top: 14px;
+        }
+
+        .btn-text {
+          background: transparent;
+          border: none;
+          color: var(--g-blue);
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          padding: 8px 16px;
+          border-radius: 20px;
+          cursor: pointer;
+        }
+
+        .btn-text:hover {
+          background: var(--g-blue-light);
+        }
+
+        .btn-text.btn-delete-reminder,
+        .btn-text.btn-delete-reminder:hover {
+          color: var(--g-red-dark);
+        }
+
+        .btn-text.btn-delete-reminder:hover {
+          background: var(--g-red-light);
+        }
+
+        .btn-contained {
+          background: var(--g-blue);
+          border: none;
+          color: white;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          padding: 8px 20px;
+          border-radius: 20px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .btn-contained:hover {
+          background: var(--g-blue-hover);
+        }
+
+        @media (max-width: 900px) {
+          .dashboard-body {
+            grid-template-columns: 1fr;
+            overflow-y: auto;
+          }
+          .nav-sidebar {
+            height: auto;
+            max-height: 240px;
+          }
+          .timeline-panel {
+            min-height: 360px;
+          }
+          .topbar-omnibar-wrap {
+            display: none;
+          }
+        }

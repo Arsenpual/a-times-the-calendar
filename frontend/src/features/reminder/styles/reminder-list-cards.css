@@ -1,0 +1,658 @@
+        .main-panel {
+          background: var(--g-surface);
+          border-radius: 16px;
+          border: 1px solid var(--g-outline);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+          height: 100%;
+          min-height: 0;
+        }
+
+        .main-panel-toolbar {
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+        }
+
+        .main-panel-toolbar h2 {
+          font-size: 20px;
+          font-weight: 500;
+          margin: 0 0 4px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        /* Chip แสดงตัวกรองประเภทที่กำลังใช้อยู่ (migration plan v2 เฟส 2) */
+        .active-filter-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          font-size: 12px;
+          font-weight: 500;
+          padding: 3px 6px 3px 10px;
+          border-radius: 14px;
+        }
+
+        .active-filter-chip button {
+          background: none;
+          border: none;
+          color: inherit;
+          cursor: pointer;
+          font-size: 12px;
+          padding: 2px 4px;
+          line-height: 1;
+        }
+
+        .toolbar-subtitle {
+          font-size: 13px;
+          color: var(--g-on-surface-variant);
+          margin: 0;
+        }
+
+        .add-reminder-btn {
+          background: var(--g-blue-light);
+          color: var(--g-blue);
+          border: none;
+          padding: 10px 20px;
+          border-radius: 24px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+        }
+
+        .add-reminder-btn:hover {
+          background: var(--g-blue-light-hover);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+
+        .add-reminder-btn.is-open {
+          background: var(--g-outline-variant);
+          color: var(--g-on-surface-variant);
+        }
+
+        .add-reminder-btn-icon {
+          display: inline-block;
+          transition: transform 0.15s;
+        }
+
+        .add-reminder-btn.is-open .add-reminder-btn-icon {
+          transform: rotate(45deg);
+        }
+
+        /* Tab bar — เพิ่มเข้ามาแทน section-header คั่นหัวข้อเดิม (migration
+           plan v2 เฟส 1.2) .section-header เดิมด้านล่างยังเก็บไว้เผื่อจุด
+           อื่นในอนาคตอ้างถึง แต่ไม่ได้ใช้ในรายการหลักแล้วตอนนี้ */
+        .tab-bar {
+          display: flex;
+          gap: 4px;
+          padding: 0 10px;
+          border-bottom: 1px solid var(--g-outline-variant);
+          flex-shrink: 0;
+        }
+
+        .reminder-status-tab {
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          padding: 4px 3px;
+          margin-bottom: -1px;
+          font-family: inherit;
+          font-size: 10px;
+          font-weight: 500;
+          color: var(--g-on-surface-variant);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+        }
+
+        .reminder-status-tab:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        .reminder-status-tab.is-active {
+          color: var(--g-blue);
+          border-bottom-color: var(--g-blue);
+        }
+
+        .reminder-status-tab-count {
+          font-size: 8px;
+          color: var(--g-on-surface-variant);
+          background: var(--g-background);
+          border-radius: 10px;
+          padding: 1px 4px;
+        }
+
+        .reminder-status-tab.is-active .reminder-status-tab-count {
+          color: var(--g-blue);
+        }
+
+        .tab-bar-sort {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          margin-left: auto;
+          padding: 3px 0;
+        }
+
+        .tab-bar-sort-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          min-height: 22px;
+          border: 1px solid transparent;
+          border-radius: 6px;
+          background: transparent;
+          color: var(--g-on-surface-variant);
+          font: 600 9px/1 inherit;
+          letter-spacing: .01em;
+          padding: 2px 5px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background .14s ease, border-color .14s ease, color .14s ease, transform .14s ease;
+        }
+
+        .tab-bar-sort-button:hover { background: var(--g-background); transform: translateY(-1px); }
+        .tab-bar-sort-button:active { transform: translateY(0); }
+        .tab-bar-sort-button.is-active { color: var(--g-blue); border-color: color-mix(in srgb, var(--g-blue) 35%, var(--g-outline)); background: color-mix(in srgb, var(--g-blue) 8%, var(--g-surface)); box-shadow: 0 1px 3px rgb(0 0 0 / 8%); }
+        .tab-bar-filter-select {
+          max-width: 122px;
+          min-height: 22px;
+          border: 1px solid var(--g-outline);
+          border-radius: 7px;
+          background: var(--g-surface);
+          color: var(--g-on-surface-variant);
+          font: 600 9px/1 inherit;
+          padding: 0 5px;
+          cursor: pointer;
+        }
+
+        .reminders-scroll-area {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 8px 16px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .section-header {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          color: var(--g-on-surface-variant);
+          text-transform: uppercase;
+          margin: 4px 0 0 4px;
+          position: sticky;
+          top: 0;
+          background: var(--g-surface);
+          padding: 4px 0;
+          z-index: 1;
+        }
+
+        .empty-state {
+          font-size: 13px;
+          color: var(--g-on-surface-variant);
+          text-align: center;
+          padding: 32px 16px;
+          margin: 0;
+        }
+
+        .reminder-card {
+          display: grid;
+          grid-template-columns: 28px minmax(0, 1fr) auto auto;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: 1px solid var(--g-outline-variant);
+          border-left-width: 4px;
+          background: var(--g-surface);
+          transition: all 0.2s ease;
+        }
+
+        .reminder-card:hover {
+          border-color: var(--g-outline);
+          box-shadow: 0 2px 6px rgba(60,64,67,0.08);
+        }
+
+        .reminder-card.active {
+          background: var(--g-active-bg);
+          border-color: var(--g-active-border);
+        }
+
+        .reminder-card.has-event-buffer {
+          position: relative;
+          --reminder-buffer-slot-width: 42px;
+          --reminder-buffer-slot-gap: 18px;
+        }
+
+        /* dropdown-backdrop เป็น fixed layer (z-index: 40) สำหรับปิดเมนู
+           เมื่อคลิกด้านนอก. การ์ดที่เปิดเมนูต้องยกทั้ง stacking context
+           ขึ้นเหนือมัน มิฉะนั้น backdrop จะดักคลิกปุ่ม แก้ไข/ลบ ทั้งหมด. */
+        .reminder-card.menu-open {
+          position: relative;
+          z-index: 45;
+        }
+
+        /* icon กล่องสี่เหลี่ยมมุมโค้ง (เดิมเป็นวงกลม) พื้นหลังคือสีประจำ
+           ประเภท (TYPE_ACCENT_COLOR, ตั้งค่าผ่าน inline style ต่อการ์ด) —
+           ไม่ผูกกับ enabled/disabled อีกต่อไป (เดิมมีกฎ .active
+           .reminder-type-icon แยกสำหรับ enabled state — เอาออกเพราะตอนนี้
+           สีสื่อ "ประเภท" เสมอ ส่วนสถานะ enabled/disabled สื่อผ่านความจาง
+           ของทั้ง icon แทน ดูกฎถัดไป) */
+        .reminder-type-icon {
+          width: 26px;
+          height: 26px;
+          padding: 0;
+          border: 0;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 11px;
+          flex-shrink: 0;
+          cursor: pointer;
+        }
+
+        .reminder-type-icon:focus-visible,
+        .reminder-info:focus-visible {
+          outline: 2px solid var(--g-blue);
+          outline-offset: 2px;
+        }
+
+        .reminder-card:not(.active) .reminder-type-icon {
+          opacity: 0.55;
+        }
+
+        .reminder-info {
+          min-width: 0;
+          cursor: pointer;
+          display: grid;
+          gap: 4px;
+        }
+
+        .reminder-active-buffer-status {
+          position: absolute;
+          z-index: 1;
+          top: 50%;
+          left: 50%;
+          display: grid;
+          grid-template-columns: var(--reminder-buffer-slot-width) var(--reminder-buffer-slot-width);
+          column-gap: var(--reminder-buffer-slot-gap);
+          justify-items: center;
+          align-items: center;
+          width: calc(var(--reminder-buffer-slot-width) * 2 + var(--reminder-buffer-slot-gap));
+          color: var(--g-blue);
+          line-height: 1;
+          pointer-events: none;
+          isolation: isolate;
+          contain: layout paint;
+          /* ย้ายทั้งสอง slot ไปทางขวาเล็กน้อย แต่คงตำแหน่งสัมพันธ์กันไว้ */
+          transform: translate(calc(-21px + 15%), -50%);
+        }
+
+        .reminder-active-buffer-slot {
+          display: grid;
+          grid-template-rows: 29px minmax(11px, auto);
+          align-items: center;
+          justify-content: center;
+          justify-items: center;
+          gap: 2px;
+          width: var(--reminder-buffer-slot-width);
+          min-width: var(--reminder-buffer-slot-width);
+        }
+
+        .reminder-active-buffer-slot--countdown { grid-column: 1; }
+        .reminder-active-buffer-slot--stopwatch { grid-column: 2; }
+
+        .reminder-active-buffer-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 25px;
+          line-height: 1;
+          filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--g-blue) 30%, transparent));
+          transform-origin: center;
+        }
+
+        .reminder-active-buffer-icon--countdown.is-running { animation: reminder-buffer-countdown-pulse 1.3s ease-in-out infinite; }
+        .reminder-active-buffer-icon--stopwatch.is-running { animation: reminder-buffer-stopwatch-tick .9s steps(2, end) infinite; }
+        .reminder-active-buffer-icon.is-completed {
+          filter: grayscale(1) brightness(.48);
+          opacity: .6;
+        }
+
+        .reminder-active-buffer-description {
+          display: block;
+          width: 58px;
+          min-width: 0;
+          max-width: 58px;
+          overflow: hidden;
+          color: var(--g-on-surface-variant);
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1.2;
+          text-align: center;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        @keyframes reminder-buffer-countdown-pulse {
+          0%, 100% { transform: scale(1); opacity: .82; }
+          50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        @keyframes reminder-buffer-stopwatch-tick {
+          0%, 100% { transform: rotate(-7deg) scale(1); }
+          50% { transform: rotate(7deg) scale(1.12); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .reminder-active-buffer-icon { animation: none; }
+        }
+
+        .reminder-card-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .reminder-info .title {
+          flex: 1 1 auto;
+          min-width: 0;
+          font-size: 14px;
+          font-weight: 700;
+          margin: 0;
+          color: var(--g-on-surface);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .reminder-priority {
+          flex: 0 0 auto;
+          padding: 3px 7px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+
+        .reminder-priority--next,
+        .reminder-priority--active {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .reminder-card.active .reminder-priority--active {
+          background: color-mix(in srgb, var(--g-green) 14%, var(--g-surface));
+          color: var(--g-green);
+        }
+
+        .reminder-priority--due {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .reminder-priority--paused,
+        .reminder-priority--waiting {
+          background: var(--g-background);
+          color: var(--g-on-surface-variant);
+        }
+
+        .reminder-priority--completed {
+          background: color-mix(in srgb, var(--g-green) 14%, var(--g-surface));
+          color: var(--g-green);
+        }
+
+        .reminder-schedule-detail {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .reminder-weekly-days-detail {
+          display: flex;
+          gap: 4px;
+          margin: -1px 0 0;
+          color: var(--g-on-surface-variant);
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
+        .reminder-weekly-days-detail span {
+          color: var(--g-on-surface);
+          font-weight: 700;
+        }
+
+        .reminder-card-metadata {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .reminder-interval-summary {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 5px;
+          width: fit-content;
+          margin: 1px 0 0;
+          padding: 3px 7px;
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--g-blue) 10%, transparent);
+          color: var(--g-on-surface-variant);
+          font-size: 11px;
+          line-height: 1.25;
+        }
+
+        .reminder-interval-summary strong {
+          color: var(--g-blue-hover);
+          font-weight: 700;
+        }
+
+        .reminder-type-chip {
+          display: inline-flex;
+          align-items: center;
+          min-height: 20px;
+          padding: 2px 7px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--g-on-surface) 7%, transparent);
+          color: var(--g-on-surface-variant);
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .btn-action-small {
+          margin-top: 4px;
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+          border: none;
+          padding: 3px 8px;
+          border-radius: 10px;
+          font-size: 11px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .day-selector { display: flex; gap: 6px; margin-top: 6px; }
+        .day-btn {
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          border: 1px solid var(--g-outline);
+          background: transparent;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .day-btn.selected { background: var(--g-blue); color: white; border-color: var(--g-blue); }
+
+        .toggle-switch {
+          width: 36px;
+          height: 20px;
+          border-radius: 10px;
+          background: var(--g-toggle-off);
+          border: none;
+          position: relative;
+          cursor: pointer;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+
+        .toggle-switch.on {
+          background: var(--g-blue);
+        }
+
+        .toggle-switch::after {
+          content: "";
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #ffffff;
+          transition: transform 0.2s;
+        }
+
+        .toggle-switch.on::after {
+          transform: translateX(16px);
+        }
+
+        .stopwatch-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .btn-stopwatch {
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 6px 12px;
+          border-radius: 14px;
+          border: none;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .btn-stopwatch.start {
+          background: var(--g-blue-light);
+          color: var(--g-blue-hover);
+        }
+
+        .btn-stopwatch.start:hover {
+          background: var(--g-blue-light-hover);
+        }
+
+        .btn-stopwatch.stop {
+          background: var(--g-red-light);
+          color: var(--g-red-dark);
+        }
+
+        .btn-stopwatch.stop:hover {
+          background: var(--g-red-light-hover);
+        }
+
+        .form-hint {
+          font-size: 12px;
+          color: var(--g-on-surface-variant);
+          margin: 0 0 12px 0;
+          line-height: 1.5;
+        }
+
+        .reminder-card-actions {
+          position: relative;
+          display: flex;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+
+        .reminder-card:hover .reminder-card-actions,
+        .reminder-card:focus-within .reminder-card-actions,
+        .reminder-card-actions.menu-open {
+          opacity: 1;
+        }
+
+        .card-dropdown-menu {
+          position: fixed;
+          top: var(--card-menu-y);
+          left: var(--card-menu-x);
+          z-index: 1000;
+          background: var(--bg-muted);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(60,64,67,0.18);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          min-width: 110px;
+          max-width: calc(100vw - 16px);
+          max-height: calc(100vh - 16px);
+          overflow: auto;
+        }
+
+        .card-dropdown-menu button {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 7px 10px;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--text-primary);
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .card-dropdown-menu button:hover {
+          background: var(--hover);
+        }
+
+        .card-dropdown-menu button.is-danger {
+          color: var(--red);
+        }
+
+        .icon-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+          flex-shrink: 0;
+        }
+
+        .icon-btn:hover {
+          background: var(--g-outline-variant);
+        }

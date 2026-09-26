@@ -15,6 +15,8 @@ Phase 2 แยก state, actions และ JSX จาก reminder-mode.jsx ค�
 - lib/reminder-defaults.js: draft ใหม่คำนวณวันเวลาเมื่อเรียกใช้
 - lib/reminder-formatters.js: ข้อความและเวลาร่วมกันระหว่าง card และ timeline
 - lib/reminder-sync-fields.js: เลือกฟิลด์สำหรับ sync และแปลง nextDueAt ที่ไม่ finite เป็น null
+- styles/reminder-mode.css: CSS manifest ซึ่ง import foundation, topbar/Telegram, sidebar, timeline, list/cards และ composer/responsive ตามลำดับเดิม
+- styles/reminder-material.css: Material foundation ที่ component import ก่อน reminder-mode.css ตามเดิม
 
 ## Event-anchored session
 
@@ -34,12 +36,9 @@ Components ส่ง action กลับไปยัง hooks โดยไม่
 Timeline rows ตรวจทั้งข้อมูลแถวและ callback เพื่อไม่เรียก handler เก่าหลัง render ใหม่
 
 ## ตรวจสอบจากรากโปรเจกต์
-- npm run build --prefix frontend
-- node frontend/tests/reminder-sync.test.mjs
-- node frontend/tests/reminder-phase2.test.mjs
-- node frontend/tests/event-anchor-session.test.mjs
-- node frontend/tests/reminder-phase2-browser.mjs
-- node frontend/tests/reminder-shell-browser.mjs
-- node frontend/src/features/reminder/hooks/reminder-timeline-export.test.mjs
 
-Browser tests ใช้ Chrome และ Playwright ที่ติดตั้งใน temporary test runtime: times-reminder-sync-tests/node_modules (เช่นเดียวกับชุดทดสอบเดิม)
+- `npm test --prefix frontend`
+- `npm run test:browser --prefix frontend`
+- `npm run build --prefix frontend`
+
+Browser tests ใช้ Chrome ในเครื่อง และ Playwright จาก `frontend/devDependencies` โดยไม่พึ่ง temporary runtime

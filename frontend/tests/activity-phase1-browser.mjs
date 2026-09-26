@@ -1,13 +1,13 @@
-// npm install --prefix <temp>/times-reminder-sync-tests playwright
 import { createServer } from '../node_modules/vite/dist/node/index.js';
 import react from '../node_modules/@vitejs/plugin-react/dist/index.js';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
-const { chromium } = await import(pathToFileURL(join(tmpdir(), 'times-reminder-sync-tests/node_modules/playwright/index.mjs')).href);
+import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const server = await createServer({ root, configFile: false, plugins: [{ name: 'isolated-phase1-apis', enforce: 'pre', load(id) {
+const devMockupsAlias = fileURLToPath(new URL('../src/app/dev-mockups.production.jsx', import.meta.url));
+const server = await createServer({ root, configFile: false, resolve: { alias: { '@dev-mockups': devMockupsAlias } }, plugins: [{ name: 'isolated-phase1-apis', enforce: 'pre', load(id) {
   if (id.replaceAll('\\', '/').endsWith('/features/activity/api/archive.js')) return `export const fetchActivityArchive = async () => window.phase1.archive; export const saveActivityArchiveItem = async item => { window.phase1.archive = [...window.phase1.archive.filter(i => i.archiveId !== item.archiveId), item]; }; export const deleteActivityArchiveItem = async id => { window.phase1.archive = window.phase1.archive.filter(i => i.archiveId !== id); };`;
   if (id.replaceAll('\\', '/').endsWith('/features/calendar-connection/api/google-calendar.js')) return `export const fetchActivities = async () => window.phase1.cycleActivities;`;
 } }, react()], server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
