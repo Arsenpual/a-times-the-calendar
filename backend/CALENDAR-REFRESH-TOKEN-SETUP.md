@@ -12,6 +12,10 @@ refresh token กลับ browser ไม่ว่ากรณีใด.
 
    `https://times-the-calendar-backend.onrender.com/oauth/google/calendar/callback`
 
+   สำหรับ local development ให้เพิ่มแยกต่างหาก:
+
+   `http://localhost:4000/oauth/google/calendar/callback`
+
 3. เปิด Google Calendar API ในโปรเจกต์ OAuth เดียวกัน
 
 ## ตั้งค่า Render Environment
@@ -35,3 +39,8 @@ access token เฉพาะบน server; browser จะไม่มี refresh
 เมื่อ refresh token ใช้ไม่ได้ backend เปลี่ยนสถานะเป็น `needs_reauth` และ
 ตอบ HTTP 428 พร้อม code `CALENDAR_REAUTH_REQUIRED`; frontend จะพาผู้ใช้ไป
 เริ่ม OAuth ใหม่. สถานะของผู้ใช้อื่นไม่กระทบ.
+
+ผู้ใช้ยังสามารถเปิด Settings → “การเชื่อมต่อ Google Calendar” →
+“ยกเลิกการเชื่อมต่อ” ได้เอง: backend จะพยายาม revoke token กับ Google แล้ว
+ลบ refresh token ที่เข้ารหัสจาก `users/{uid}/private/calendarAuth` เสมอ แม้
+Google จะตอบกลับไม่ได้ชั่วคราว.

@@ -21,8 +21,8 @@ URL ที่ใช้ในปัจจุบันตามการใช้�
 
 ## Phase 1 — ทำให้ผลิตภัณฑ์และเอกสารตรงกัน (ควรทำก่อน)
 
-- [ ] ตรวจ flow ตั้งแต่ `เข้าสู่ระบบด้วย Google` → `เชื่อม Google Calendar` → อ่าน/แก้ไขกิจกรรม → ถามข้อมูล Calendar ว่าใช้ OAuth client และ scope ใดจริงบ้าง รวมถึงทาง Firebase reauthentication ที่ยังคงอยู่
-- [ ] ทำรายการ OAuth client ทั้งหมดใน Google Cloud Console: client ID (เปิดเผยได้), ประเภท, redirect URI, JavaScript origin, scope ที่ขอ และฟีเจอร์ที่เรียกใช้ โดย **ไม่ใส่ client secret หรือ token ในเอกสาร**
+- [x] ตรวจ flow ตั้งแต่ `เข้าสู่ระบบด้วย Google` → `เชื่อม Google Calendar` → อ่าน/แก้ไขกิจกรรม → ถามข้อมูล Calendar ว่าใช้ OAuth client และ scope ใดจริงบ้าง รวมถึงทาง Firebase reauthentication ที่ยังคงอยู่
+- [x] ทำรายการ OAuth client ทั้งหมดใน Google Cloud Console: client ID (เปิดเผยได้), ประเภท, redirect URI, JavaScript origin, scope ที่ขอ และฟีเจอร์ที่เรียกใช้ โดย **ไม่ใส่ client secret หรือ token ในเอกสาร**
 - [x] แก้ Privacy Policy ให้ตรงกับการใช้งานจริง: Calendar scopes ปัจจุบัน, การอ่านปฏิทินที่มองเห็นได้, การสร้าง/แก้ไข/ลบ event, การเก็บ refresh token แบบเข้ารหัส, กรณีส่งบริบท Calendar ไป Vertex AI, ระยะเวลาเก็บและวิธีลบ/ถอนสิทธิ์ ตรวจคำกล่าวอ้างอื่นในนโยบายด้วย
 - [x] ทำหน้า landing/home ที่เปิดได้โดยไม่ล็อกอิน อธิบายว่า T.i.M.E.S. ทำอะไร ใครใช้ และเหตุใดต้องเชื่อม Calendar; วางลิงก์ Privacy Policy ที่เห็นชัดบนหน้าแรกและหน้าล็อกอิน
 - [x] ตรวจว่ามีทาง “ยกเลิกการเชื่อมต่อ Google Calendar” ที่ถอนสิทธิ์และลบ refresh token ของผู้ใช้จริงหรือไม่ หากยังไม่มี ให้เพิ่มและทดสอบก่อนยื่น
@@ -30,7 +30,9 @@ URL ที่ใช้ในปัจจุบันตามการใช้�
 
 **เกณฑ์ผ่าน:** คนที่ไม่เคยใช้แอปเปิดหน้าแรกและ Privacy Policy ได้โดยไม่ล็อกอิน; ทุกคำอธิบายเรื่อง scope/การไหลของข้อมูลตรงกับโค้ดและพฤติกรรมจริง
 
-### สิ่งที่ทำในโค้ดแล้ว (ยังไม่ได้ deploy)
+**สถานะ:** Phase 1 เสร็จตามการตรวจวันที่ 26 กันยายน 2026 (รวมการตรวจ OAuth clients, redirect URLs, Data Access scopes, Branding และ Audience ใน Google Cloud Console)
+
+### สิ่งที่ทำในโค้ดและ deploy แล้ว (commit `bc73278`)
 
 - หน้าเข้าสู่ระบบอธิบาย T.i.M.E.S. และมีลิงก์ไป `privacy.html`; เอาคู่มือที่สอนกดผ่านหน้า “unsafe/unverified” ออกแล้ว
 - Firebase sign-in ไม่ร้องขอ Calendar scope อีกต่อไป; การขอสิทธิ์ Calendar เกิดจาก backend OAuth flow ที่ผู้ใช้เลือกเชื่อมต่อเท่านั้น
@@ -39,6 +41,19 @@ URL ที่ใช้ในปัจจุบันตามการใช้�
 
 ## Phase 2 — ตรวจโดเมน, หน้าขอสิทธิ์ และขอบเขตข้อมูล
 
+### URL inventory ที่ตรวจจากโค้ดและ production (26 กันยายน 2026)
+
+| การใช้งาน | Production | Local development | ตำแหน่งที่ต้องตรวจใน Console |
+| --- | --- | --- | --- |
+| Homepage | `https://arsenpual.github.io/a-times-the-calendar/` | `http://localhost:5173/` | Branding → App home page |
+| Privacy Policy | `https://arsenpual.github.io/a-times-the-calendar/privacy.html` | `http://localhost:5173/privacy.html` | Branding → Privacy policy |
+| Backend Calendar callback | `https://times-the-calendar-backend.onrender.com/oauth/google/calendar/callback` | `http://localhost:4000/oauth/google/calendar/callback` | Clients → Web client → Authorized redirect URIs |
+| Browser origin | `https://arsenpual.github.io` | `http://localhost:5173` | Clients → Web client → Authorized JavaScript origins; Firebase Authentication → Authorized domains |
+
+ตรวจ HTTP จาก production แล้วทั้ง Homepage, Privacy Policy และ backend `/api/health` ตอบ `200` ณ วันที่ 26 กันยายน 2026. ตารางนี้เป็นค่าที่ code/documentation ใช้เป็น source of truth; ค่า environment จริงบน Render และ GitHub Actions ต้องตรวจใน dashboard อีกครั้ง เพราะไม่เก็บ secrets ไว้ใน repo.
+
+- [x] แก้ตัวอย่าง local callback ใน `backend/.env.example` จาก port `3001` เป็น `4000` ให้ตรงกับ backend ที่รันจริง
+- [x] ตรวจ production URLs ตอบ HTTP ได้ และปรับคู่มือ refresh-token ให้มี local callback กับ self-service disconnect
 - [ ] ใน Google Cloud Console ตรวจ OAuth consent screen/Google Auth Platform ว่าอยู่สถานะ Production, เป็น External หากเปิดให้บุคคลทั่วไปใช้, และข้อมูล app name, logo, support email, developer contact ครบและตรงกับหน้าเว็บ
 - [ ] ตรวจ `Authorized domains` รวมทั้งโดเมนของ homepage, Privacy Policy และ redirect URI ทั้งหมด; ยืนยันความเป็นเจ้าของผ่าน Google Search Console ตามที่ Google กำหนด หากโดเมนที่ใช้อยู่ยืนยันความเป็นเจ้าของไม่ได้ ให้ประเมินใช้ **custom domain ที่ควบคุมได้** ก่อนยื่น ไม่เปลี่ยน URL จริงจนกว่าจะวางแผน migration/test ครบ
 - [ ] ตรวจ URL ที่ยื่นให้ตรงกันทุกจุด: homepage, Privacy Policy, Terms (ถ้ามี), Firebase authorized domains, OAuth origins/redirects และค่า environment ของ frontend/backend; แยก local development URLs ออกจาก production ให้ชัด
