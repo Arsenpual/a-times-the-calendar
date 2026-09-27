@@ -79,6 +79,35 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
+// Once Firestore reports a depleted daily quota, sending every open browser
+// tab back into Firestore cannot succeed and only floods Render logs. Keep a
+// short in-memory circuit open, serve the same structured 503 directly, then
+// probe Firestore again at most once every five minutes. The frontend still
+// receives the actual daily reset estimate and pauses its reminder poll until
+// that time.
+const FIRESTORE_QUOTA_PROBE_INTERVAL_MS = 5 * 60 * 1000;
+let firestoreQuotaCircuit = null;
+
+function sendFirestoreQuotaUnavailable(res, quota) {
+  const retryAfterSeconds = Math.max(60, Math.ceil((new Date(quota.resetsAt).getTime() - Date.now()) / 1000));
+  res.set("Retry-After", String(retryAfterSeconds));
+  return res.status(503).json({
+    code: "FIRESTORE_QUOTA_EXHAUSTED",
+    error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่",
+    retryAfterSeconds,
+    quota
+  });
+}
+
+app.use((req, res, next) => {
+  if (!firestoreQuotaCircuit) return next();
+  if (Date.now() >= firestoreQuotaCircuit.probeAfter) {
+    firestoreQuotaCircuit = null;
+    return next();
+  }
+  return sendFirestoreQuotaUnavailable(res, firestoreQuotaCircuit.quota);
+});
+
 // Phase 2: ทุก route ที่แตะข้อมูล user (categories/activities/summary) ต้อง
 // ผ่าน requireAuth ก่อนเสมอ — ตรวจ Firebase ID token แล้วแนบ req.userId ให้
 // route handler ทุกตัวใช้ scope query ของตัวเอง ถ้า token ไม่ถูกต้อง/ไม่มี
@@ -146,16 +175,15 @@ app.use((err, req, res, next) => {
   const firestoreQuotaExceeded =
     err.code === 8 || err.code === "8" || err.code === "RESOURCE_EXHAUSTED" || /RESOURCE_EXHAUSTED|Quota exceeded/i.test(err.message || "");
   if (firestoreQuotaExceeded) {
-    console.warn("[times-the-calendar backend] Firestore quota exhausted");
     const quota = firestoreQuotaExhaustedPayload();
-    const retryAfterSeconds = Math.max(60, Math.ceil((new Date(quota.resetsAt).getTime() - Date.now()) / 1000));
-    res.set("Retry-After", String(retryAfterSeconds));
-    return res.status(503).json({
-      code: "FIRESTORE_QUOTA_EXHAUSTED",
-      error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่",
-      retryAfterSeconds,
-      quota
-    });
+    if (!firestoreQuotaCircuit) {
+      console.warn(`[times-the-calendar backend] Firestore quota exhausted; pause Firestore requests until probe at ${new Date(Date.now() + FIRESTORE_QUOTA_PROBE_INTERVAL_MS).toISOString()}`);
+    }
+    firestoreQuotaCircuit = {
+      quota,
+      probeAfter: Date.now() + FIRESTORE_QUOTA_PROBE_INTERVAL_MS
+    };
+    return sendFirestoreQuotaUnavailable(res, quota);
   }
   console.error("[times-the-calendar backend] unhandled error:", err);
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
