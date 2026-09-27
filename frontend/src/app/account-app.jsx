@@ -445,6 +445,9 @@ export default function AccountApp({ auth }) {
         calendarTokenExpiresAtStorageKey={CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY}
         onTestFirestoreQuota={handleTestFirestoreQuota}
         firestoreQuotaTestActive={Boolean(firestoreQuota?.simulated)}
+        telegramConnected={telegramIntegration.telegramConnection.isConnected}
+        telegramUnreadCount={telegramChat.unreadCount}
+        onOpenMrZettascaleChat={openMrZettascaleChat}
         accountMenuRef={accountMenuRef}
         accountMenuOpen={accountMenuOpen}
         setAccountMenuOpen={setAccountMenuOpen}
@@ -487,7 +490,6 @@ export default function AccountApp({ auth }) {
               timelineColors={reminderTimelineColors}
               telegramIntegration={telegramIntegration}
               telegramChat={telegramChat}
-              onOpenMrZettascaleChat={openMrZettascaleChat}
             />
           </div>
         )}

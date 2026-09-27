@@ -32,9 +32,7 @@ import { formatDurationClock } from "../lib/reminder-formatters.js";
 import ReminderTimelineRows from "./reminder-timeline-rows.jsx";
 import ReminderTopbar from "./reminder-topbar.jsx";
 import TelegramConnectionToast from "./telegram-connection-toast.jsx";
-import TelegramChatLauncher from "../../notifications/telegram/components/telegram-chat-launcher.jsx";
 import ReminderAlerts from "./reminder-alerts.jsx";
-import { createPortal } from "react-dom";
 
 export default function ReminderDashboard({
   firebaseUser,
@@ -50,8 +48,7 @@ export default function ReminderDashboard({
   onToggleActivityLock,
   timelineColors,
   telegramIntegration,
-  telegramChat,
-  onOpenMrZettascaleChat
+  telegramChat
 }) {
   const { t } = useLanguage();
   // Runtime reminder state belongs to a person, not to this browser. The
@@ -229,10 +226,6 @@ export default function ReminderDashboard({
       />
 
       <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
-      {createPortal(<div className="telegram-chat-portal">
-        <TelegramChatLauncher connected={telegramConnection.isConnected} unreadCount={telegramChat.unreadCount} onOpenChat={onOpenMrZettascaleChat} />
-      </div>, document.body)}
-
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />
 
       {/* Backdrop ปิดเมนู "⋮" การ์ด / snooze dropdown เมื่อคลิกนอกเมนู —

@@ -1,4 +1,5 @@
 import React from "react";
+import TelegramChatLauncher from "../../features/notifications/telegram/components/telegram-chat-launcher.jsx";
 
 export default function AppHeader({
   firebaseUser,
@@ -22,6 +23,9 @@ export default function AppHeader({
   calendarTokenExpiresAtStorageKey,
   onTestFirestoreQuota,
   firestoreQuotaTestActive,
+  telegramConnected,
+  telegramUnreadCount,
+  onOpenMrZettascaleChat,
   accountMenuRef,
   accountMenuOpen,
   setAccountMenuOpen,
@@ -200,6 +204,12 @@ export default function AppHeader({
                 )}
               </>
             ) : null}
+            <TelegramChatLauncher
+              placement="header"
+              connected={telegramConnected}
+              unreadCount={telegramUnreadCount}
+              onOpenChat={onOpenMrZettascaleChat}
+            />
             <div className="account-menu-wrap" ref={accountMenuRef}>
               <button
                 type="button"

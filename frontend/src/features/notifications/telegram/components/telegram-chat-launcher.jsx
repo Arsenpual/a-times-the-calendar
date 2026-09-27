@@ -13,7 +13,7 @@ function loadPosition() {
  * A movable shortcut only. It opens the single MR.Zettascale AI dialog,
  * where Telegram history and messaging now live alongside the AI chat.
  */
-export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpenChat }) {
+export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpenChat, placement = "floating" }) {
   const [position, setPosition] = useState(loadPosition);
   const [expanded, setExpanded] = useState(false);
   const drag = useRef(null);
@@ -40,14 +40,15 @@ export default function TelegramChatLauncher({ connected, unreadCount = 0, onOpe
   const finishDrag = (event) => {
     if (drag.current?.pointerId === event.pointerId) drag.current = null;
   };
-  const style = position ? { left: `${position.x}px`, top: `${position.y}px`, right: "auto", bottom: "auto" } : undefined;
+  const isHeader = placement === "header";
+  const style = !isHeader && position ? { left: `${position.x}px`, top: `${position.y}px`, right: "auto", bottom: "auto" } : undefined;
   // GitHub Pages serves this app below /a-times-the-calendar/, while local
   // Vite serves it at /.  BASE_URL keeps the public mascot asset valid in both.
   const avatarSrc = `${import.meta.env.BASE_URL}mr_zettascale_avatar_profile.png`;
-  return <div ref={launcherRef} className={`telegram-chat-launcher${expanded ? " is-expanded" : ""}`} style={style}>
+  return <div ref={launcherRef} className={`telegram-chat-launcher${isHeader ? " is-in-header" : ""}${expanded ? " is-expanded" : ""}`} style={style}>
     {expanded && <div className="telegram-chat-launcher__commands" role="menu" aria-label="คำสั่ง MR.Zettascale">
       <button type="button" role="menuitem" onClick={() => { onOpenChat?.(); setExpanded(false); }}>เปิดแชท</button>
-      <button type="button" role="menuitem" className="telegram-chat-launcher__drag" aria-label="ลากปุ่ม MR.Zettascale" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>⠿ ลากย้าย</button>
+      {!isHeader && <button type="button" role="menuitem" className="telegram-chat-launcher__drag" aria-label="ลากปุ่ม MR.Zettascale" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>⠿ ลากย้าย</button>}
     </div>}
     <nav className="telegram-chat-launcher__bar" aria-label="ทางลัด MR.Zettascale">
       <button type="button" className="telegram-chat-launcher__avatar" onClick={() => onOpenChat?.()} aria-label="เปิดแชท MR.Zettascale" title="เปิดแชท MR.Zettascale">

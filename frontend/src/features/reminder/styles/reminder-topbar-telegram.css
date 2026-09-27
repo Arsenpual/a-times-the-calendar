@@ -189,6 +189,11 @@
         .telegram-chat-launcher__commands button { min-height:30px; padding:5px 8px; border-radius:7px; color:var(--g-on-surface); text-align:left; font-size:12px; }
         .telegram-chat-launcher__commands button:hover { background:color-mix(in srgb, var(--g-blue) 9%, var(--g-surface)); }
         .telegram-chat-launcher__drag { touch-action:none; color:var(--g-on-surface-variant) !important; }
+        .telegram-chat-launcher.is-in-header { --g-blue:var(--accent); --g-surface:var(--bg); --g-on-surface:var(--text-primary); --g-on-surface-variant:var(--text-secondary); --g-outline:var(--border); position:relative; right:auto; bottom:auto; z-index:auto; flex:0 0 auto; }
+        .telegram-chat-launcher.is-in-header .telegram-chat-launcher__bar { width:164px; min-height:38px; border-color:var(--border); border-radius:10px; background:var(--bg); box-shadow:none; backdrop-filter:none; }
+        .telegram-chat-launcher.is-in-header .telegram-chat-launcher__avatar { width:30px; height:30px; }
+        .telegram-chat-launcher.is-in-header .telegram-chat-launcher__commands { top:calc(100% + 8px); bottom:auto; }
+        @media (max-width:1100px) { .telegram-chat-launcher.is-in-header .telegram-chat-launcher__bar { width:auto; }.telegram-chat-launcher.is-in-header .telegram-chat-launcher__identity { display:none; } }
 
         .reminder-stats-backdrop {
           position: fixed;
