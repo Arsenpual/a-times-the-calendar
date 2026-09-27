@@ -1,9 +1,17 @@
 # แผนขอ Google OAuth App Verification — T.i.M.E.S.
 
-อัปเดต: 27 กันยายน 2026
+อัปเดต: 28 กันยายน 2026
 เป้าหมาย: ให้ผู้ใช้ทั่วไปเชื่อม Google Calendar กับ T.i.M.E.S. ได้ผ่านหน้าขอสิทธิ์ที่ Google ตรวจรับรอง โดยไม่ต้องผ่านคำเตือน “แอปนี้ยังไม่ได้รับการยืนยัน”
 
-> **สถานะปัจจุบัน (27 กันยายน 2026): กลับมาดำเนิน Phase 2 แล้ว** — จดทะเบียน root domain `timesapp.online` ผ่าน GoDaddy แล้ว และกำลังเตรียมย้าย frontend ไป `https://timesapp.online` กับ backend ไป `https://api.timesapp.online` ก่อน Verify Branding/Data Access อีกครั้ง
+> **สถานะปัจจุบัน (28 กันยายน 2026): เตรียมหลักฐานก่อนยื่น** — HTTPS และ CORS ของโดเมนใหม่ตรวจผ่านแล้ว ผู้ใช้ยืนยันว่าอัปเดต OAuth callback และทดสอบ Calendar/AI/Telegram ผ่านแล้ว แก้ Privacy Policy ให้ครอบคลุมคลังกิจกรรม ข้อมูลแจ้งเตือนและ Telegram พร้อมเตรียม [บทอัด demo video](GOOGLE-OAUTH-DEMO-VIDEO.md) แล้ว; ยังไม่ได้อัด/อัปโหลดวิดีโอหรือส่งคำขอตรวจแทนผู้ใช้
+
+### บันทึกตรวจล่าสุด — ใช้แทนสถานะเก่าในรายการด้านล่าง
+
+- ตรวจจริง: frontend `https://timesapp.online/`, Privacy Policy และ backend health ตอบ 200; HTTP/www redirect ถูกต้อง; ใบรับรอง approved และ Enforce HTTPS เปิดแล้ว; CORS ผ่าน
+- ผู้ใช้ยืนยัน: Branding/โดเมน/Firebase/สิทธิ์เจ้าของตรวจครบ และข้อ OAuth callback กับการทดสอบการใช้งานเสร็จแล้ว การยืนยันนี้ไม่ได้หมายความว่า Google อนุมัติแอปแล้ว
+- Privacy Policy ฉบับ 28 กันยายน 2569: ระบุคลังกิจกรรม ข้อมูลแจ้งเตือน ประวัติแชท Telegram และการลบข้อมูลแต่ละบริการแยกกัน
+- ยังเหลือ: อัดและอัปโหลด demo video, ตรวจ Published Branding และกรอก/ส่ง Data Access verification พร้อมหลักฐาน
+- ตารางและ checklist วันที่ 26–27 กันยายนด้านล่างเป็นบันทึกช่วง migration; URL production ปัจจุบันคือ `https://timesapp.online/` และ `https://api.timesapp.online/`
 
 > เอกสารนี้เป็นแผน ไม่ใช่การยืนยันว่า Google จะอนุมัติแน่นอน สถานะ OAuth, scope classification และรายการโดเมนจริงต้องตรวจใน Google Cloud Console ก่อนยื่น
 
