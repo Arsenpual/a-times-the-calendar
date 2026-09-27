@@ -348,6 +348,12 @@
   background: #fde68a;
 }
 
+.dev-test-btn.is-active {
+  background: #d97706;
+  border-style: solid;
+  color: #fff;
+}
+
 /* Main area */
 
 .app-main {

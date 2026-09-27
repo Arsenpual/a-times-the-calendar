@@ -20,6 +20,8 @@ export default function AppHeader({
   calendarAccessToken,
   setCalendarTokenExpiresAtState,
   calendarTokenExpiresAtStorageKey,
+  onTestFirestoreQuota,
+  firestoreQuotaTestActive,
   accountMenuRef,
   accountMenuOpen,
   setAccountMenuOpen,
@@ -182,6 +184,18 @@ export default function AppHeader({
                     title="[DEV] จำลอง token ใกล้หมดอายุ (เหลือ 4 นาที) — ปุ่มนี้แสดงเฉพาะ dev build เท่านั้น"
                   >
                     ⏰
+                  </button>
+                )}
+                {import.meta.env.DEV && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname) && (
+                  <button
+                    type="button"
+                    className={`btn-icon dev-test-btn${firestoreQuotaTestActive ? " is-active" : ""}`}
+                    onClick={onTestFirestoreQuota}
+                    aria-pressed={firestoreQuotaTestActive}
+                    aria-label="[ทดสอบ] สลับตัวอย่างแจ้งเตือนโควต้า Firestore"
+                    title="[LOCAL DEV] เปิด/ปิดตัวอย่างแจ้งเตือนโควต้า Firestore"
+                  >
+                    🗄️
                   </button>
                 )}
               </>

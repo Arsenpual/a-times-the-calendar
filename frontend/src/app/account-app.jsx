@@ -37,7 +37,7 @@ import AppHeader from "./components/app-header.jsx";
 import CalendarConnectionOverlays from "./components/calendar-connection-overlays.jsx";
 import ActivityAuthState from "./components/activity-auth-state.jsx";
 import FirestoreQuotaBanner from "./components/firestore-quota-banner.jsx";
-import { useFirestoreQuotaStatus } from "../shared/api/firestore-quota-status.js";
+import { setFirestoreQuotaStatus, useFirestoreQuotaStatus } from "../shared/api/firestore-quota-status.js";
 
 // Fallback only: after sign-in the app replaces this with the announcement
 // configured through the authorised Telegram command. It remains useful when
@@ -73,6 +73,20 @@ const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 // changes. Mode switches keep this boundary mounted so reminder timers continue.
 export default function AccountApp({ auth }) {
   const firestoreQuota = useFirestoreQuotaStatus();
+  const handleTestFirestoreQuota = useCallback(() => {
+    if (firestoreQuota) {
+      setFirestoreQuotaStatus(null);
+      return;
+    }
+    setFirestoreQuotaStatus({
+      metric: "documentReads",
+      remaining: 0,
+      dailyLimit: 50_000,
+      resetsAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      resetTimeZone: "America/Los_Angeles",
+      simulated: true
+    });
+  }, [firestoreQuota]);
   const {
     firebaseUser,
     authReady,
@@ -429,6 +443,8 @@ export default function AccountApp({ auth }) {
         calendarAccessToken={calendarAccessToken}
         setCalendarTokenExpiresAtState={setCalendarTokenExpiresAtState}
         calendarTokenExpiresAtStorageKey={CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY}
+        onTestFirestoreQuota={handleTestFirestoreQuota}
+        firestoreQuotaTestActive={Boolean(firestoreQuota?.simulated)}
         accountMenuRef={accountMenuRef}
         accountMenuOpen={accountMenuOpen}
         setAccountMenuOpen={setAccountMenuOpen}
