@@ -14,13 +14,32 @@ export default function FirestoreQuotaBanner({ quota }) {
 
   return (
     <aside className="firestore-quota-banner" role="alert" aria-live="assertive">
-      <strong>โควต้า Cloud Firestore หมดชั่วคราว</strong>
-      <span>
-        คงเหลือ <b>{numberFormatter.format(quota.remaining ?? 0)}</b>
-        {" / "}{numberFormatter.format(quota.dailyLimit ?? 50_000)} reads
-      </span>
-      <span>รีเซ็ตประมาณ {resetLabel}</span>
-      <small>ข้อมูลบนหน้าอาจยังไม่ซิงก์จนกว่าจะรีเซ็ตหรือเปิด Billing</small>
+      <header className="firestore-quota-banner__header">
+        <span className="firestore-quota-banner__icon" aria-hidden="true">!</span>
+        <span>
+          <strong>โควต้า Cloud Firestore หมดชั่วคราว</strong>
+          <small>ระบบพักการซิงก์ข้อมูลเพื่อไม่ให้ส่งคำขอซ้ำ</small>
+        </span>
+      </header>
+
+      <div className="firestore-quota-banner__status-grid">
+        <section className="firestore-quota-banner__status-item">
+          <span className="firestore-quota-banner__label">โควต้าคงเหลือ</span>
+          <strong className="firestore-quota-banner__value">
+            {numberFormatter.format(quota.remaining ?? 0)}
+            <small> / {numberFormatter.format(quota.dailyLimit ?? 50_000)} reads</small>
+          </strong>
+        </section>
+        <section className="firestore-quota-banner__status-item">
+          <span className="firestore-quota-banner__label">คาดว่าจะรีเซ็ต</span>
+          <time className="firestore-quota-banner__value" dateTime={quota.resetsAt || undefined}>{resetLabel}</time>
+        </section>
+      </div>
+
+      <div className="firestore-quota-banner__meter" aria-label="โควต้า Firestore คงเหลือ 0 เปอร์เซ็นต์">
+        <span style={{ width: `${Math.max(0, Math.min(100, ((quota.remaining ?? 0) / (quota.dailyLimit || 50_000)) * 100))}%` }} />
+      </div>
+      <p>ข้อมูลบนหน้าอาจยังไม่ซิงก์จนกว่าโควต้าจะรีเซ็ตหรือเปิด Billing</p>
     </aside>
   );
 }

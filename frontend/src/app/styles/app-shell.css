@@ -436,40 +436,120 @@
 .firestore-quota-banner {
   position: fixed;
   z-index: 8900;
-  top: 72px;
+  top: 76px;
   left: 50%;
   display: grid;
-  grid-template-columns: auto auto;
-  gap: 4px 18px;
-  width: min(560px, calc(100vw - 32px));
-  padding: 13px 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 94%, var(--accent) 6%);
+  gap: 12px;
+  width: min(600px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 96%, var(--accent) 4%);
   color: var(--text-primary);
-  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 28%);
   transform: translateX(-50%);
 }
 
-.firestore-quota-banner strong {
-  grid-column: 1 / -1;
-  color: var(--accent);
-  font-size: 14px;
+.firestore-quota-banner__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.firestore-quota-banner span { font-size: 13px; }
-.firestore-quota-banner span:nth-of-type(2) { text-align: right; }
-.firestore-quota-banner small {
-  grid-column: 1 / -1;
+.firestore-quota-banner__header > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.firestore-quota-banner__header strong {
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.firestore-quota-banner__header small {
   color: var(--text-secondary);
   font-size: 11px;
 }
 
+.firestore-quota-banner__icon {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.firestore-quota-banner__status-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  gap: 8px;
+}
+
+.firestore-quota-banner__status-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-muted) 86%, transparent);
+}
+
+.firestore-quota-banner__label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.firestore-quota-banner__value {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.firestore-quota-banner__value small {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.firestore-quota-banner__meter {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.firestore-quota-banner__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 300ms ease;
+}
+
+.firestore-quota-banner > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 @media (max-width: 560px) {
-  .firestore-quota-banner { grid-template-columns: 1fr; top: 62px; }
-  .firestore-quota-banner strong,
-  .firestore-quota-banner small { grid-column: 1; }
-  .firestore-quota-banner span:nth-of-type(2) { text-align: left; }
+  .firestore-quota-banner { top: 64px; gap: 10px; padding: 14px; }
+  .firestore-quota-banner__status-grid { grid-template-columns: 1fr; }
 }
 
 
