@@ -1,9 +1,14 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ACTIVITY_SERIES_WARN_LIMIT,
   formatActivityDuration,
   formatActivityTimeLabel
 } from "../lib/activity-popup-logic.js";
+import {
+  ACTIVITY_POPUP_ACTION_GROUPS,
+  createActivityPopupActions,
+  groupActivityPopupActions
+} from "../lib/activity-popup-actions.js";
 
 export function ActivityPopupHeader({ activity, start, end, displayColor, locked, isRecurring, tags, onClose }) {
   return (
@@ -162,7 +167,7 @@ export function ActivityPopupMenu({
   onClose,
   onEditActivity,
   onSelectSeriesDrag,
-  onArchive,
+  handleArchive,
   handleDuplicate,
   handleMoveToNextDay,
   handleOpenInGoogle,
@@ -170,68 +175,98 @@ export function ActivityPopupMenu({
   initiateRecurringAction,
   setMode
 }) {
-  const canReschedule = !locked;
+  const [showMoreActions, setShowMoreActions] = useState(false);
+  const actions = useMemo(() => createActivityPopupActions({
+    activity,
+    locked,
+    isRecurring,
+    restrictedToLock,
+    busyAction,
+    lockFeedback,
+    handlers: {
+      edit: () => {
+        if (isRecurring) initiateRecurringAction("edit");
+        else { onClose?.(); onEditActivity?.(); }
+      },
+      moveDay: () => setMode("move-day"),
+      duplicate: handleDuplicate,
+      selectSeries: () => { onSelectSeriesDrag?.(); onClose?.(); },
+      moveNextDay: handleMoveToNextDay,
+      openGoogle: handleOpenInGoogle,
+      toggleLock: handleToggleLock,
+      archive: handleArchive,
+      delete: () => isRecurring ? initiateRecurringAction("delete") : setMode("confirm-delete")
+    }
+  }), [activity, locked, isRecurring, restrictedToLock, busyAction, lockFeedback, initiateRecurringAction, onClose, onEditActivity, onSelectSeriesDrag, setMode, handleDuplicate, handleMoveToNextDay, handleOpenInGoogle, handleToggleLock, handleArchive]);
+  const groupedActions = useMemo(() => groupActivityPopupActions(actions), [actions]);
+  const secondaryCount = groupedActions.manage.length + groupedActions.danger.length;
+
+  useEffect(() => {
+    if (restrictedToLock || locked) setShowMoreActions(false);
+  }, [restrictedToLock, locked]);
+
+  const renderAction = (action) => (
+    <button
+      key={action.id}
+      type="button"
+      className={`quick-btn${action.group === "danger" ? " danger" : ""}`}
+      onClick={action.execute}
+      disabled={action.disabled}
+      title={action.title}
+      data-action-id={action.id}
+    >
+      <span className={`quick-btn-icon${action.id.includes("lock") && lockFeedback ? " is-lock-feedback" : ""}`}>{action.icon}</span>
+      <span className="quick-btn-label">{action.label}</span>
+    </button>
+  );
+
   return (
     <>
-      <div className="popup-quick-actions">
-        <button type="button" className="quick-btn" onClick={handleDuplicate} disabled={restrictedToLock || busyAction !== null} title="ทำสำเนากิจกรรมนี้ในวันเดียวกัน">
-          <span className="quick-btn-icon">⧉</span>
-          <span className="quick-btn-label">{busyAction === "duplicate" ? "กำลังทำ..." : "ทำสำเนา"}</span>
-        </button>
-        {isRecurring && (
-          <button type="button" className="quick-btn" onClick={() => { onSelectSeriesDrag?.(); onClose?.(); }} disabled={restrictedToLock || busyAction !== null} title="เปิดโหมดเลือกหลายรายการสำหรับลบ">
-            <span className="quick-btn-icon">✓</span><span className="quick-btn-label">เลือกรายการ</span>
-          </button>
-        )}
-        <button type="button" className="quick-btn" onClick={() => setMode("move-day")} disabled={restrictedToLock || !canReschedule || busyAction !== null} title={canReschedule ? "ย้ายกิจกรรมไปวันอื่น" : "ปลดล็อกก่อนย้ายวัน"}>
-          <span className="quick-btn-icon">📅</span><span className="quick-btn-label">ย้ายวัน</span>
-        </button>
-        <button type="button" className="quick-btn" onClick={handleMoveToNextDay} disabled={restrictedToLock || !canReschedule || busyAction !== null} title={canReschedule ? "ย้ายกิจกรรมไปวันถัดไป" : "ปลดล็อกก่อนย้ายวัน"}>
-          <span className="quick-btn-icon">⏭</span><span className="quick-btn-label">{busyAction === "move-next-day" ? "กำลังย้าย..." : "วันถัดไป"}</span>
-        </button>
-        <button type="button" className="quick-btn" onClick={handleOpenInGoogle} disabled={restrictedToLock || !activity.htmlLink} title="เปิดกิจกรรมนี้ใน Google Calendar">
-          <span className="quick-btn-icon">↗</span><span className="quick-btn-label">เปิดใน GCal</span>
-        </button>
-        <button type="button" className="quick-btn" onClick={handleToggleLock} title={locked ? "ปลดล็อกกิจกรรม" : "ล็อกกิจกรรม"}>
-          <span className={`quick-btn-icon${lockFeedback ? " is-lock-feedback" : ""}`}>{lockFeedback || (locked ? "🔓" : "🔒")}</span>
-          <span className="quick-btn-label">{locked ? "ปลดล็อก" : "ล็อก"}</span>
-        </button>
-        <button type="button" className="quick-btn" onClick={() => { onArchive?.(); onClose?.(); }} disabled={restrictedToLock || busyAction !== null} title="เก็บสำเนากิจกรรมนี้ไว้ในคลัง">
-          <span className="quick-btn-icon">▣</span><span className="quick-btn-label">เก็บเข้าคลัง</span>
-        </button>
-        <button type="button" className="quick-btn danger" onClick={() => isRecurring ? initiateRecurringAction("delete") : setMode("confirm-delete")} disabled={restrictedToLock || !canReschedule || busyAction !== null} title={canReschedule ? "ลบกิจกรรม" : "ปลดล็อกก่อนลบ"}>
-          <span className="quick-btn-icon">🗑</span><span className="quick-btn-label">ลบ</span>
-        </button>
+      <div className="popup-action-group" aria-label={ACTIVITY_POPUP_ACTION_GROUPS.frequent.label}>
+        <span className="popup-action-group-label">{locked ? "คำสั่งที่ใช้ได้" : ACTIVITY_POPUP_ACTION_GROUPS.frequent.label}</span>
+        <div className="popup-quick-actions">{groupedActions.frequent.map(renderAction)}</div>
       </div>
 
+      {busyAction && <p className="popup-action-progress" role="status">กำลังดำเนินการ กรุณารอสักครู่…</p>}
       {actionError && <p className="popup-action-error popup-action-error-menu">{actionError}</p>}
-      <div className="popup-body">
-        <label className="popup-field">
-          <span className="popup-field-label">หมวดหมู่</span>
-          <div className="popup-field-row">
-            {selectedCategory && <span className="popup-category-swatch" style={{ background: selectedCategory.color }} title={selectedCategory.name} />}
-            <select className="popup-select" value={categoryId || ""} onChange={(event) => onAssignCategory?.(event.target.value || null)} disabled={locked || restrictedToLock}>
-              <option value="">ไม่ระบุ</option>
-              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
-          </div>
-        </label>
-        {locked && <p className="popup-locked-note">🔒 กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนเพื่อแก้ไข/ลบ</p>}
-      </div>
-      <div className="popup-footer">
+      {locked && <p className="popup-locked-note">🔒 กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนเพื่อใช้คำสั่งอื่น</p>}
+
+      {!restrictedToLock && secondaryCount > 0 && (
         <button
           type="button"
-          className="popup-btn primary"
-          onClick={() => {
-            if (isRecurring) initiateRecurringAction("edit");
-            else { onClose?.(); onEditActivity?.(); }
-          }}
-          disabled={locked || restrictedToLock}
-          title={locked ? "ปลดล็อกก่อนแก้ไข" : undefined}
+          className="popup-more-actions-toggle"
+          onClick={() => setShowMoreActions((current) => !current)}
+          aria-expanded={showMoreActions}
         >
-          {isRecurring ? "✏ แก้ไข (ชื่อ/เวลา)..." : "แก้ไขทั้งหมด (ชื่อ/เวลา)"}
+          <span>เพิ่มเติม</span><small>{secondaryCount} คำสั่ง</small><b aria-hidden="true">{showMoreActions ? "⌃" : "⌄"}</b>
         </button>
-      </div>
+
+      )}
+
+      {showMoreActions && (
+        <div className="popup-secondary-actions">
+          {groupedActions.manage.length > 0 && <section className="popup-action-group" aria-label={ACTIVITY_POPUP_ACTION_GROUPS.manage.label}>
+            <span className="popup-action-group-label">{ACTIVITY_POPUP_ACTION_GROUPS.manage.label}</span>
+            <div className="popup-quick-actions">{groupedActions.manage.map(renderAction)}</div>
+          </section>}
+          <div className="popup-body">
+            <label className="popup-field">
+              <span className="popup-field-label">หมวดหมู่</span>
+              <div className="popup-field-row">
+                {selectedCategory && <span className="popup-category-swatch" style={{ background: selectedCategory.color }} title={selectedCategory.name} />}
+                <select className="popup-select" value={categoryId || ""} onChange={(event) => onAssignCategory?.(event.target.value || null)} disabled={locked || busyAction !== null}>
+                  <option value="">ไม่ระบุ</option>
+                  {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </div>
+            </label>
+          </div>
+          {groupedActions.danger.length > 0 && <section className="popup-action-group popup-action-group--danger" aria-label={ACTIVITY_POPUP_ACTION_GROUPS.danger.label}>
+            <span className="popup-action-group-label">{ACTIVITY_POPUP_ACTION_GROUPS.danger.label}</span>
+            <div className="popup-quick-actions">{groupedActions.danger.map(renderAction)}</div>
+          </section>}
+        </div>
+      )}
     </>
   );
 }

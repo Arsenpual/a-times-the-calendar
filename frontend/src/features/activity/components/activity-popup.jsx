@@ -40,6 +40,8 @@ export default function ActivityPopup({
   restrictedToLock = false
 }) {
   const popupRef = useRef(null);
+  const previouslyFocusedElement = useRef(typeof document === "undefined" ? null : document.activeElement);
+  const busyActionRef = useRef(null);
   const [resolvedPosition, setResolvedPosition] = useState(position);
   const [mode, setMode] = useState("menu");
   const [busyAction, setBusyAction] = useState(null);
@@ -52,6 +54,15 @@ export default function ActivityPopup({
 
   const isRecurring = Boolean(activity.recurringEventId);
   const selectedCategory = categories.find((category) => category.id === categoryId);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => popupRef.current?.focus({ preventScroll: true }));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      const previous = previouslyFocusedElement.current;
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const resolvePosition = () => {
@@ -88,22 +99,58 @@ export default function ActivityPopup({
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key !== "Escape") return;
-      if (mode === "menu") onClose?.();
-      else setMode(previousActivityPopupMode(mode, isRecurring));
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (mode === "menu") onClose?.();
+        else setMode(previousActivityPopupMode(mode, isRecurring));
+        return;
+      }
+
+      if (!popupRef.current?.contains(event.target)) return;
+      if (event.target instanceof Element && event.target.matches("input, select, textarea")) return;
+      const controls = [...popupRef.current.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled)")];
+      if (controls.length === 0) return;
+      const currentIndex = controls.indexOf(document.activeElement);
+
+      if (["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        let nextIndex = 0;
+        if (event.key === "End") nextIndex = controls.length - 1;
+        else if (["ArrowUp", "ArrowLeft"].includes(event.key)) nextIndex = currentIndex <= 0 ? controls.length - 1 : currentIndex - 1;
+        else if (event.key !== "Home") nextIndex = currentIndex < 0 || currentIndex === controls.length - 1 ? 0 : currentIndex + 1;
+        controls[nextIndex]?.focus();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [mode, onClose, isRecurring]);
 
   const runQuickAction = async (key, action) => {
+    if (busyActionRef.current) return false;
+    busyActionRef.current = key;
     setBusyAction(key);
     setActionError(null);
     try {
       await action();
+      return true;
     } catch (error) {
-      setActionError(error.message);
+      setActionError(error?.message || "ดำเนินการไม่สำเร็จ กรุณาลองใหม่");
+      return false;
     } finally {
+      busyActionRef.current = null;
       setBusyAction(null);
     }
   };
@@ -113,29 +160,41 @@ export default function ActivityPopup({
     onClose?.();
   });
 
+  const handleArchive = () => runQuickAction("archive", async () => {
+    await onArchive?.();
+    onClose?.();
+  });
+
+  const handleAssignCategory = (nextCategoryId) => runQuickAction("category", async () => {
+    await onAssignCategory?.(nextCategoryId);
+  });
+
   const handleOpenInGoogle = () => {
     if (activity.htmlLink) window.open(activity.htmlLink, "_blank", "noopener,noreferrer");
   };
 
-  const handleToggleLock = async () => {
+  const handleToggleLock = () => runQuickAction("lock", async () => {
     setLockFeedback(locked ? "🔓" : "🔒");
     try {
       await onToggleLock?.(!locked);
     } finally {
       window.setTimeout(() => setLockFeedback(null), 700);
     }
-  };
+  });
 
   const handleConfirmMove = () => runQuickAction("move", async () => {
+    if (!moveDate) throw new Error("กรุณาเลือกวันที่ต้องการย้าย");
     const moved = await onMoveToDay?.(moveDate);
-    if (moved !== false) onClose?.();
+    if (moved === false) throw new Error("ย้ายกิจกรรมไม่สำเร็จ กรุณาลองใหม่");
+    onClose?.();
   });
 
   const handleMoveToNextDay = () => runQuickAction("move-next-day", async () => {
     const nextDay = new Date(start);
     nextDay.setDate(nextDay.getDate() + 1);
     const moved = await onMoveToDay?.(toDateInputValue(nextDay));
-    if (moved !== false) onClose?.();
+    if (moved === false) throw new Error("ย้ายกิจกรรมไปวันถัดไปไม่สำเร็จ กรุณาลองใหม่");
+    onClose?.();
   });
 
   const handleConfirmDelete = () => runQuickAction("delete", async () => {
@@ -195,6 +254,11 @@ export default function ActivityPopup({
       ref={popupRef}
       className={`activity-popup${restrictedToLock ? " activity-popup--lock-only" : ""}`}
       style={{ top: resolvedPosition?.y ?? position?.y ?? 8, left: resolvedPosition?.x ?? position?.x ?? 8 }}
+      role="dialog"
+      aria-modal="false"
+      aria-label={`ตัวเลือกกิจกรรม ${activity.summary || "ไม่มีชื่อ"}`}
+      aria-busy={busyAction !== null}
+      tabIndex={-1}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
@@ -242,11 +306,11 @@ export default function ActivityPopup({
           categories={categories}
           categoryId={categoryId}
           selectedCategory={selectedCategory}
-          onAssignCategory={onAssignCategory}
+          onAssignCategory={handleAssignCategory}
           onClose={onClose}
           onEditActivity={onEditActivity}
           onSelectSeriesDrag={onSelectSeriesDrag}
-          onArchive={onArchive}
+          handleArchive={handleArchive}
           handleDuplicate={handleDuplicate}
           handleMoveToNextDay={handleMoveToNextDay}
           handleOpenInGoogle={handleOpenInGoogle}
