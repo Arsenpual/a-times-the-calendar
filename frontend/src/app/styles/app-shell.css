@@ -433,6 +433,45 @@
   transform: translateX(-50%);
 }
 
+.firestore-quota-banner {
+  position: fixed;
+  z-index: 8900;
+  top: 72px;
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 18px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 94%, var(--accent) 6%);
+  color: var(--text-primary);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+  transform: translateX(-50%);
+}
+
+.firestore-quota-banner strong {
+  grid-column: 1 / -1;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.firestore-quota-banner span { font-size: 13px; }
+.firestore-quota-banner span:nth-of-type(2) { text-align: right; }
+.firestore-quota-banner small {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+@media (max-width: 560px) {
+  .firestore-quota-banner { grid-template-columns: 1fr; top: 62px; }
+  .firestore-quota-banner strong,
+  .firestore-quota-banner small { grid-column: 1; }
+  .firestore-quota-banner span:nth-of-type(2) { text-align: left; }
+}
+
 
 .loading-banner {
   position: fixed;

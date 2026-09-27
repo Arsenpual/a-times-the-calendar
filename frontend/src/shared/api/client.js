@@ -12,6 +12,7 @@
 // NOT auto-refreshed by Firebase and needs its own reauth flow).
 import { auth } from "../config/firebase-auth.js";
 import { createInFlightReads } from "./in-flight-reads.js";
+import { setFirestoreQuotaStatus } from "./firestore-quota-status.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 const reads = createInFlightReads();
@@ -55,6 +56,7 @@ export async function apiRequest(path, options = {}) {
   const headers = [...new Headers(options.headers).entries()];
   const key = JSON.stringify([path, { ...options, headers }]);
   const response = await reads.get(key, send);
+  if (response.ok || response.status === 304) setFirestoreQuotaStatus(null);
   if (auth.currentUser !== user) throw new Error("บัญชีผู้ใช้เปลี่ยนแล้ว กรุณาลองใหม่");
   return response.clone(); // Response bodies cannot be consumed twice.
 }
@@ -73,6 +75,9 @@ export async function handleResponse(res, label) {
     }
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+    if (body?.code === "FIRESTORE_QUOTA_EXHAUSTED") {
+      setFirestoreQuotaStatus(body.quota || { remaining: 0, dailyLimit: 50_000, resetsAt: null });
+    }
     if (res.status === 429 || res.status === 503) {
       const seconds = Number(body?.retryAfterSeconds || res.headers.get("retry-after"));
       if (Number.isFinite(seconds) && seconds > 0) {

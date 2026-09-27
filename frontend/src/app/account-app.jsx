@@ -36,6 +36,8 @@ import { useTelegramWebChat } from "../features/notifications/telegram/hooks/use
 import AppHeader from "./components/app-header.jsx";
 import CalendarConnectionOverlays from "./components/calendar-connection-overlays.jsx";
 import ActivityAuthState from "./components/activity-auth-state.jsx";
+import FirestoreQuotaBanner from "./components/firestore-quota-banner.jsx";
+import { useFirestoreQuotaStatus } from "../shared/api/firestore-quota-status.js";
 
 // Fallback only: after sign-in the app replaces this with the announcement
 // configured through the authorised Telegram command. It remains useful when
@@ -70,6 +72,7 @@ const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 // Reset all feature state and effect subscriptions when the Firebase identity
 // changes. Mode switches keep this boundary mounted so reminder timers continue.
 export default function AccountApp({ auth }) {
+  const firestoreQuota = useFirestoreQuotaStatus();
   const {
     firebaseUser,
     authReady,
@@ -441,6 +444,7 @@ export default function AccountApp({ auth }) {
         tokenNearingExpiry={tokenNearingExpiry}
         handleReauthCalendar={handleReauthCalendar}
       />
+      <FirestoreQuotaBanner quota={firestoreQuota} />
 
       {error && <div className="error-banner" role="alert">{error}</div>}
       <main className="app-main">

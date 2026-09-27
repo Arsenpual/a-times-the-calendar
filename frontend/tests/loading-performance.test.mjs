@@ -8,9 +8,11 @@ const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const drain = async () => { for (let i=0;i<8;i++) await Promise.resolve(); };
 globalThis.perfAuth = { currentUser: { uid: 'a', getIdToken: async () => 'a' } };
 globalThis.perfReads = createInFlightReads;
+globalThis.perfQuotaStatus = () => {};
 const clientSource = source('../src/shared/api/client.js')
   .replace('import { auth } from "../config/firebase-auth.js";', 'const auth = globalThis.perfAuth;')
   .replace('import { createInFlightReads } from "./in-flight-reads.js";', 'const createInFlightReads = globalThis.perfReads;')
+  .replace('import { setFirestoreQuotaStatus } from "./firestore-quota-status.js";', 'const setFirestoreQuotaStatus = globalThis.perfQuotaStatus;')
   .replace('import.meta.env.VITE_API_BASE_URL', '"http://test"');
 const { apiRequest } = await import(dataUrl(clientSource));
 let requests = [];

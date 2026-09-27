@@ -18,6 +18,7 @@ const telegramRouter = require("./routes/telegram.js");
 const announcementRouter = require("./routes/announcement.js");
 const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
 const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
+const { firestoreQuotaExhaustedPayload } = require("./lib/firestore-quota.js");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -146,10 +147,14 @@ app.use((err, req, res, next) => {
     err.code === 8 || err.code === "8" || err.code === "RESOURCE_EXHAUSTED" || /RESOURCE_EXHAUSTED|Quota exceeded/i.test(err.message || "");
   if (firestoreQuotaExceeded) {
     console.warn("[times-the-calendar backend] Firestore quota exhausted");
-    res.set("Retry-After", "60");
+    const quota = firestoreQuotaExhaustedPayload();
+    const retryAfterSeconds = Math.max(60, Math.ceil((new Date(quota.resetsAt).getTime() - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
     return res.status(503).json({
       code: "FIRESTORE_QUOTA_EXHAUSTED",
-      error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่"
+      error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่",
+      retryAfterSeconds,
+      quota
     });
   }
   console.error("[times-the-calendar backend] unhandled error:", err);
