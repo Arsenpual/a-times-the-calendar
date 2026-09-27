@@ -13,6 +13,12 @@ const unitTests = [
   "tests/loading-performance.test.mjs",
   "tests/reminder-phase2.test.mjs",
   "tests/reminder-sync.test.mjs",
+  "src/features/activity/lib/activity-modal-logic.test.mjs",
+  "src/features/activity/lib/activity-mutation-logic.test.mjs",
+  "src/features/activity/lib/activity-popup-logic.test.mjs",
+  "src/features/activity/services/activity-metadata-actions.test.mjs",
+  "src/features/activity/services/activity-calendar-actions.test.mjs",
+  "src/shared/i18n/i18n-catalog.test.mjs",
   "src/features/activity/assistant/tests/activity-popup-handoff.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
 ];
@@ -22,6 +28,7 @@ const browserTests = [
   "tests/activity-view-browser.mjs",
   "tests/app-navigation-browser.mjs",
   "tests/dev-mockups-browser.mjs",
+  "tests/i18n-provider-browser.mjs",
   "tests/reminder-phase2-browser.mjs",
   "tests/reminder-shell-browser.mjs",
 ];

@@ -51,6 +51,40 @@ Vite ยังเตือนว่า main JavaScript chunk ใหญ่กว�
 - แยก shell UI เป็น `components/app-header.jsx`, `calendar-connection-overlays.jsx` และ `activity-auth-state.jsx`
 - `account-app.jsx` ลดเหลือประมาณ 734 บรรทัด โดยไม่ย้าย business state ไปอยู่ใน presentational components
 
+## Phase 4 — Activity modal boundary (เสร็จแล้ว)
+
+- แยก JSX ตามหน้าที่ออกจาก `activity-modal.jsx` ไปไว้ใน `activity-modal-sections.jsx`
+- ส่วนที่แยกแล้ว: header, วันเวลา/all-day, หมวดหมู่, tag, recurrence, notes และ actions
+- แยก date/all-day/overnight payload helpers ไป `lib/activity-modal-logic.js` พร้อม unit regression ของปี 2027, all-day และข้ามเที่ยงคืน
+- `activity-modal.jsx` ลดจาก 995 เหลือ 652 บรรทัด โดยยังเป็นเจ้าของ state, validation และ save/delete lifecycle เดิม
+- รอบแรกไม่เปลี่ยน class name, ข้อความ, business rule หรือรูปแบบข้อมูลที่ส่ง Google Calendar
+- unit/integration 12/12, production build และ browser regression 6/6 ชุดผ่านหลังแยก boundary
+
+## Phase 5 — Activity mutation boundary (เสร็จแล้ว)
+
+- แยก pure mutation logic ไป `lib/activity-mutation-logic.js`: overlap candidates, ชื่อสำเนา, duplicate payload และ move-day payload
+- เพิ่ม regression สำหรับ timed/all-day move และป้องกัน time override เปลี่ยน all-day เป็น timed โดยไม่ตั้งใจ
+- แยก workflow ของ lock และ category ไป `services/activity-metadata-actions.js` เพื่อไม่ให้ React hook เป็นเจ้าของทุก mutation
+- แยก Calendar workflow ไป `services/activity-calendar-actions.js`: save, batch time, delete occurrence/series, duplicate และ move-day
+- `use-activity-mutations.js` ลดจาก 670 เหลือ 166 บรรทัด และทำหน้าที่ประกอบ lifecycle guards/shared dependencies เท่านั้น
+- เพิ่ม service regression ยืนยัน save ordering และการลบ recurring occurrence ไม่ล้าง metadata ของทั้ง series
+- unit/integration เพิ่มเป็น 15 ชุด โดย public handlers และ lifecycle behavior ยังเหมือนเดิม
+
+## Phase 6 — Activity popup boundary (เสร็จแล้ว)
+
+- `activity-popup.jsx` ลดจาก 582 เหลือ 260 บรรทัด และเป็นเจ้าของเฉพาะ position, mode transitions และ async action state
+- แยก header, recurring confirmations, move-day และ main menu ไป `activity-popup-sections.jsx`
+- แยก duration formatting, Escape/back navigation และ series warning threshold ไป `lib/activity-popup-logic.js`
+- เพิ่ม unit regression ของ navigation และขีดเตือน recurring series; browser suite เดิมยังตรวจเปิด popup, duplicate และ series selection
+
+## Phase 7 — i18n catalog/provider boundary (เสร็จแล้ว)
+
+- `shared/i18n/i18n.jsx` ลดจาก 529 เหลือ 56 บรรทัด และเหลือเฉพาะ React Context, persistence และ `<html lang>`
+- ย้าย dictionary กับ locale data ไป `i18n-catalog.js` ซึ่งเป็น pure JavaScript และไม่มี React dependency
+- `date-utils.js` อ่าน locale data จาก catalog โดยตรง จึงไม่ดึง React/JSX เข้าสู่ pure date utilities
+- export API เดิมจาก `i18n.jsx` ยังอยู่ครบเพื่อไม่ให้ consumer เดิมเสีย
+- เพิ่ม unit regression ตรวจ key parity ไทย/อังกฤษ, interpolation, fallback และ browser regression ตรวจ localStorage/reload/invalid language
+
 ## ไฟล์ใหญ่ที่ต้องลดความรับผิดชอบ
 
 | ไฟล์ | จำนวนบรรทัด ณ baseline |

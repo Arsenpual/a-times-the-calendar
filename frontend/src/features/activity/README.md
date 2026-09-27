@@ -5,8 +5,17 @@
 ## โครงสร้าง
 
 - `components/`: Week Spine, Activity modal/popup, Mini Timeline, Weekly Summary และผลค้นหา tag รวมถึง Activity Mode และ Timeline Editor รุ่นเดิมที่ยังเก็บไว้
+  - `activity-modal.jsx` เป็นเจ้าของ state, validation และ save/delete orchestration
+  - `activity-modal-sections.jsx` เป็น presentational sections ของฟอร์ม ได้แก่ header, วันเวลา, หมวดหมู่, tag, recurrence, notes และ actions
+  - `activity-popup.jsx` เป็นเจ้าของ popup position และ action transitions; `activity-popup-sections.jsx` แสดง UI แต่ละโหมด
 - `hooks/`: ข้อมูลปฏิทิน, mutation, modal, onboarding, นำทางสัปดาห์ และค้นหา tag
 - `lib/`: ข้อมูล Week Spine, overlap layout, สีหมวดหมู่, recurrence และ export ภาพ
+  - `activity-modal-logic.js` สร้าง Calendar payload และจัดการ date/all-day/overnight แบบ pure เพื่อให้ทดสอบแยกจาก React ได้
+  - `activity-mutation-logic.js` คำนวณ overlap, duplicate และ move-day payload โดยไม่ผูกกับ React/API
+  - `activity-popup-logic.js` ดูแลข้อความเวลา, back navigation และ recurring-series warning threshold
+- `services/`: workflow mutation ที่เรียก API และอัปเดต state หลายก้อน
+  - `activity-metadata-actions.js` ดูแล lock และ category actions; hook หลักส่ง guarded dependencies เข้ามา
+  - `activity-calendar-actions.js` ดูแล save/batch time/delete/duplicate/move พร้อม notification mirror และ metadata cleanup
 
 ## จุดเชื่อม
 

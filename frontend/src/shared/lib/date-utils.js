@@ -1,11 +1,11 @@
 // ทุกฟังก์ชันที่ format วันที่เป็นข้อความรับ `lang` ("th"|"en") เป็นพารามิเตอร์
 // สุดท้ายเสมอ ค่า default เป็น "th" เพื่อคง backward-compat กับจุดเรียกเก่าที่
 // ยังไม่ได้ส่ง lang มา (เผื่อมีจุดที่ตกหล่นตอน migrate) — ชื่อเดือน/วันและปี
-// พ.ศ.-ค.ศ. ดึงมาจาก i18n.jsx จุดเดียว ไม่มี Thai-specific array อยู่ในไฟล์นี้
+// พ.ศ.-ค.ศ. ดึงมาจาก i18n-catalog.js จุดเดียว ไม่มี Thai-specific array อยู่ในไฟล์นี้
 // เองอีกต่อไป ฟังก์ชันที่ไม่เกี่ยวกับการแสดงผล (isSameDay, getWeekRange,
 // activityDate, toDateInputValue ฯลฯ) ไม่ต้องรับ lang เพราะทำงานกับ Date
 // object/ISO string ล้วนๆ ไม่มีข้อความให้แปล
-import { MONTHS, MONTHS_SHORT, WEEKDAYS_SHORT, displayYear, DEFAULT_LANGUAGE } from "../i18n/i18n.jsx";
+import { MONTHS, MONTHS_SHORT, WEEKDAYS_SHORT, displayYear, DEFAULT_LANGUAGE } from "../i18n/i18n-catalog.js";
 
 export function formatMonthYear(date, lang = DEFAULT_LANGUAGE) {
   return `${MONTHS[lang][date.getMonth()]} ${displayYear(date.getFullYear(), lang)}`;

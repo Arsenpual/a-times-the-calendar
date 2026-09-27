@@ -9,16 +9,27 @@ import {
 import {
   defaultRepeatState,
   parseRRule,
-  buildRRule,
-  describeRepeat,
   isRuleEditable,
-  RRULE_WEEKDAYS,
   MAX_REPEAT_OCCURRENCES,
   maxRepeatUntil
 } from "../lib/rrule-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-
-const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+import {
+  activityDatePlusDays,
+  activityDateTimeValue,
+  buildActivityCalendarBody,
+  computeActivityStartEnd,
+  normalizeActivityRepeatState
+} from "../lib/activity-modal-logic.js";
+import {
+  ActivityCategoryField,
+  ActivityDateTimeFields,
+  ActivityModalActions,
+  ActivityModalHeader,
+  ActivityNotesField,
+  ActivityRepeatFields,
+  ActivityTagField
+} from "./activity-modal-sections.jsx";
 
 // ปิดฟังก์ชัน "ทำซ้ำไม่มีวันสิ้นสุด" ไว้ก่อน + จำกัดจำนวนครั้งสูงสุดที่ทำซ้ำ
 // ได้ (ดู normalizeRepeatState ด้านล่าง และ defaultRepeatState/parseRRule ใน
@@ -35,16 +46,6 @@ const MAX_REPEAT_COUNT = MAX_REPEAT_OCCURRENCES;
  * ทำที่นี่อีกชั้นเพื่อความปลอดภัย แม้ rrule-utils.js จะปรับ default ให้แล้ว
  * ก็ตาม เผื่อกรณี recurrence ของกิจกรรมจริงมี COUNT สูงกว่าที่ UI นี้อนุญาต
  */
-function normalizeRepeatState(state) {
-  if (state.end === "never") {
-    return { ...state, end: "count", count: Math.min(state.count || 12, MAX_REPEAT_COUNT) };
-  }
-  if (state.end === "count" && state.count > MAX_REPEAT_COUNT) {
-    return { ...state, count: MAX_REPEAT_COUNT };
-  }
-  return state;
-}
-
 // เฉดสีให้เลือกตอนสร้างหมวดหมู่ชีวิตใหม่ เพราะสีของกิจกรรมทั้งหมดต้องมา
 // จากหมวดหมู่เท่านั้น ทุกค่าเป็น hex 6 หลักตรงตามที่ backend ตรวจสอบ
 // (ดู HEX_COLOR_RE ใน routes/categories.js)
@@ -218,7 +219,7 @@ export default function ActivityModal({
   // ว่าถ้ากด "แก้ไข" (แม้แค่เปลี่ยนชื่อ) recurrence ของกิจกรรมจริงจะถูก
   // เปลี่ยนจาก "ไม่มีวันสิ้นสุด" เป็น "จบใน 12 ครั้ง" ไปด้วย ไม่ใช่แค่ UI
   const wasUnlimitedRepeat = isEditing && rawInitialRepeat.end === "never";
-  const [repeat, setRepeat] = useState(() => normalizeRepeatState(rawInitialRepeat));
+  const [repeat, setRepeat] = useState(() => normalizeActivityRepeatState(rawInitialRepeat, MAX_REPEAT_COUNT));
   const repeatMaximumUntil = useMemo(
     () => maxRepeatUntil(repeat, combineDateAndTime(date, startTime || "00:00")),
     [repeat, date, startTime]
@@ -235,14 +236,6 @@ export default function ActivityModal({
   // This only becomes true after that editor has deliberately cleared both
   // date/time values, which turns it into a fresh time assignment.
   const [editingTimesCleared, setEditingTimesCleared] = useState(false);
-
-  const dateTimeValue = (dateValue, timeValue) => dateValue && timeValue ? `${dateValue}T${timeValue}` : "";
-  const datePlusDays = (dateValue, amount) => {
-    if (!dateValue) return "";
-    const next = new Date(`${dateValue}T12:00:00`);
-    next.setDate(next.getDate() + amount);
-    return toDateInputValue(next);
-  };
 
   // The guided chat and this full form stay open together. A reply selected
   // in MR.Zettascale updates only the matching form values, then briefly
@@ -286,17 +279,10 @@ export default function ActivityModal({
     const clearHighlight = window.setTimeout(() => setAssistantHighlightField(""), 1_100);
     return () => window.clearTimeout(clearHighlight);
   }, [assistantUpdate?.revision, isEditing, open]);
-  const canonicalAllDayDate = (dateValue) => {
-    const match = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return "";
-    const [, year, month, day] = match;
-    const parsed = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
-    return Number.isNaN(parsed.getTime()) || toDateInputValue(parsed) !== dateValue ? "" : dateValue;
-  };
   const toggleAllDay = () => {
     setIsAllDay((current) => {
       const next = !current;
-      if (next && date && (!endDate || endDate <= date)) setEndDate(datePlusDays(date, 1));
+      if (next && date && (!endDate || endDate <= date)) setEndDate(activityDatePlusDays(date, 1));
       if (!next) {
         // Converting an all-day event back to a timed event is treated like
         // a fresh time assignment. All-day events normally carry 00:00 to
@@ -442,56 +428,23 @@ export default function ActivityModal({
    * เที่ยงคืนด้านล่างที่ละเอียดอ่อน)
    */
   const computeStartEnd = () => {
-    const start = combineDateAndTime(date, startTime);
-    let end = combineDateAndTime(endDate, endTime);
-    // กิจกรรมที่ข้ามเที่ยงคืน (เช่น เริ่ม 23:00 จบ 00:30) จะได้ endTime ที่
-    // "น้อยกว่า" startTime เมื่อเทียบเป็นเวลาในวันเดียวกัน — เลื่อน end ไป
-    // วันถัดไปแทนที่จะปล่อยให้ end <= start กลายเป็นช่วงเวลาติดลบ/ผิดพลาด
-    // ที่ Google Calendar อาจปฏิเสธหรือตีความผิดไปเงียบๆ (ดู validate() ที่
-    // อนุญาต endTime <= startTime ไว้แล้วเพื่อรองรับกรณีนี้โดยเฉพาะ)
-    if (end <= start && endDate === date) {
-      end = new Date(end.getTime() + 24 * 60 * 60000);
-    }
-    return { start, end };
+    return computeActivityStartEnd({ date, startTime, endDate, endTime });
   };
 
   const buildActivityBody = () => {
-    const body = {
-      summary: title.trim() || "(ไม่มีชื่อ)",
-      // null (not undefined) so an update PATCH actively clears the field on
-      // Google's side when the user empties it — omitting the key entirely
-      // would leave the old value untouched instead.
-      description: notes.trim() || null
-    };
-
-    if (isAllDay) {
-      const startDate = canonicalAllDayDate(date);
-      const endDateExclusive = canonicalAllDayDate(endDate);
-      body.start = { date: startDate };
-      body.end = { date: endDateExclusive };
-      if (recurrenceEditable) {
-        const rrule = buildRRule(repeat, combineDateAndTime(startDate, "00:00"));
-        if (rrule) body.recurrence = [rrule];
-        else if (isEditing && initialActivity?.recurrence?.length) body.recurrence = [];
-      }
-      return body;
-    }
-    const { start, end } = computeStartEnd();
-    // Google Calendar requires an explicit IANA timeZone alongside dateTime —
-    // it does NOT infer it from the offset embedded in an ISO string, even
-    // one ending in "Z". Using the browser's local zone keeps the event
-    // anchored to the wall-clock time the user actually picked in the form.
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    body.start = { dateTime: start.toISOString(), timeZone };
-    body.end = { dateTime: end.toISOString(), timeZone };
-
-    if (recurrenceEditable) {
-      const rrule = buildRRule(repeat, start);
-      if (rrule) body.recurrence = [rrule];
-      else if (isEditing && initialActivity?.recurrence?.length) body.recurrence = [];
-    }
-
-    return body;
+    return buildActivityCalendarBody({
+      title,
+      notes,
+      isAllDay,
+      date,
+      endDate,
+      startTime,
+      endTime,
+      recurrenceEditable,
+      repeat,
+      isEditing,
+      initialRecurrence: initialActivity?.recurrence
+    });
   };
 
   const validate = () => {
@@ -595,30 +548,13 @@ export default function ActivityModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div ref={modalBoxRef} className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">{isEditing ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</h2>
-          <div className="modal-header-actions">
-            {!isEditing && onSyncGoogleCalendar && (
-              <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
-                <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
-                <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
-              </button>
-            )}
-            {!isEditing && onOpenAssistant && (
-              <button
-                type="button"
-                className="activity-modal-assistant-launch"
-                onClick={onOpenAssistant}
-                title="ให้ MR.Zettascale ช่วยเสนอรายละเอียดกิจกรรม"
-              >
-                <span aria-hidden="true">✦</span> ให้ MR.Zettascale ช่วย
-              </button>
-            )}
-            <button type="button" className="modal-close" onClick={onClose} aria-label="ปิด">
-              ✕
-            </button>
-          </div>
-        </div>
+        <ActivityModalHeader
+          isEditing={isEditing}
+          onSyncGoogleCalendar={onSyncGoogleCalendar}
+          googleCalendarSyncing={googleCalendarSyncing}
+          onOpenAssistant={onOpenAssistant}
+          onClose={onClose}
+        />
         {initialWarning && <div className="modal-initial-warning" role="alert"><strong>ต้องกรอกข้อมูลเพิ่มเติม</strong><span>{initialWarning}</span></div>}
 
         <form onSubmit={handleSubmit} className="modal-form">
@@ -633,361 +569,82 @@ export default function ActivityModal({
             />
           </label>
 
-          <button type="button" className={`all-day-activity-toggle${isAllDay ? " is-active" : ""}`} onClick={toggleAllDay} aria-pressed={isAllDay}>
-            <span aria-hidden="true">◷</span>
-            <span>กิจกรรมทั้งวัน</span>
-          </button>
+          <ActivityDateTimeFields
+            isAllDay={isAllDay}
+            toggleAllDay={toggleAllDay}
+            date={date}
+            endDate={endDate}
+            startTime={startTime}
+            endTime={endTime}
+            setDate={setDate}
+            setEndDate={setEndDate}
+            startMissing={startMissing}
+            endMissing={endMissing}
+            assistantHighlightField={assistantHighlightField}
+            datePlusDays={activityDatePlusDays}
+            dateTimeValue={activityDateTimeValue}
+            updateDateTime={updateDateTime}
+          />
 
-          <div className="modal-field-row">
-            <label className={`modal-field${startMissing ? " is-required-missing" : ""}${["date", "time"].includes(assistantHighlightField) ? " is-assistant-highlight" : ""}`}>
-              <span className="field-label">{isAllDay ? "วันเริ่ม" : "วันและเวลาเริ่ม"}</span>
-              {isAllDay
-                ? <input type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!endDate || endDate <= e.target.value) setEndDate(datePlusDays(e.target.value, 1)); }} required />
-                : <input key={`start-${dateTimeValue(date, startTime)}`} type="datetime-local" defaultValue={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("start", e.target.value)} required />}
-            </label>
-            <label className={`modal-field${endMissing ? " is-required-missing" : ""}${assistantHighlightField === "durationMinutes" ? " is-assistant-highlight" : ""}`}>
-              <span className="field-label">{isAllDay ? "วันสิ้นสุด" : "วันและเวลาสิ้นสุด"}</span>
-              {isAllDay
-                ? <input type="date" value={endDate} min={datePlusDays(date, 1)} onChange={(e) => setEndDate(e.target.value)} required />
-                : <input key={`end-${dateTimeValue(endDate, endTime)}`} type="datetime-local" defaultValue={dateTimeValue(endDate, endTime)} min={dateTimeValue(date, startTime)} onChange={(e) => updateDateTime("end", e.target.value)} required />}
-            </label>
-          </div>
-          {isAllDay ? <p className="modal-hint">กิจกรรมทั้งวันใช้วันสิ้นสุดแบบไม่รวมวันนั้น เช่น 10 ก.ย. วันเดียว ระบบจะกำหนดสิ้นสุดเป็น 11 ก.ย.</p> : endDate === date && endTime <= startTime && (
-            <p className="modal-hint">
-              ⏰ เวลาสิ้นสุดอยู่ก่อนเวลาเริ่ม — ระบบจะถือว่ากิจกรรมนี้จบในวันถัดไป (ข้ามเที่ยงคืน)
-            </p>
-          )}
+          <ActivityCategoryField
+            categoryFieldRef={categoryFieldRef}
+            selectedCategory={selectedCategory}
+            categoryDropdownOpen={categoryDropdownOpen}
+            setCategoryDropdownOpen={setCategoryDropdownOpen}
+            categoryId={categoryId}
+            setCategoryId={setCategoryId}
+            categories={categories}
+            onCreateCategory={onCreateCategory}
+            onDeleteCategory={onDeleteCategory}
+            deletingCategoryId={deletingCategoryId}
+            handleDeleteCategory={handleDeleteCategory}
+            creatingCategory={creatingCategory}
+            setCreatingCategory={setCreatingCategory}
+            newCategoryName={newCategoryName}
+            setNewCategoryName={setNewCategoryName}
+            categoryColorSwatches={CATEGORY_COLOR_SWATCHES}
+            newCategoryColor={newCategoryColor}
+            setNewCategoryColor={setNewCategoryColor}
+            categoryError={categoryError}
+            setCategoryError={setCategoryError}
+            categorySaving={categorySaving}
+            handleCreateCategory={handleCreateCategory}
+          />
 
-          <div className="modal-field" ref={categoryFieldRef} style={{ position: "relative" }}>
-            <span className="field-label">หมวดหมู่</span>
-            <div className="category-select-wrap">
-              {selectedCategory && (
-                <span className="category-swatch" style={{ background: selectedCategory.color }} />
-              )}
-              <button
-                type="button"
-                className="category-dropdown-trigger"
-                onClick={() => setCategoryDropdownOpen((v) => !v)}
-                aria-haspopup="listbox"
-                aria-expanded={categoryDropdownOpen}
-              >
-                <span>{selectedCategory ? selectedCategory.name : "ไม่ระบุ"}</span>
-                <span className="category-dropdown-arrow">{categoryDropdownOpen ? "▲" : "▼"}</span>
-              </button>
-            </div>
+          <ActivityTagField
+            tags={tags}
+            tagDraft={tagDraft}
+            setTagDraft={setTagDraft}
+            maxCount={TAGS_MAX_COUNT}
+            addTagFromDraft={addTagFromDraft}
+            removeTag={removeTag}
+            handleTagInputKeyDown={handleTagInputKeyDown}
+          />
 
-            {categoryDropdownOpen && (
-              <ul className="category-dropdown-list" role="listbox">
-                <li
-                  className={`category-dropdown-item${categoryId === "" ? " is-active" : ""}`}
-                  role="option"
-                  aria-selected={categoryId === ""}
-                  onClick={() => {
-                    setCategoryId("");
-                    setCategoryDropdownOpen(false);
-                  }}
-                >
-                  <span className="category-dropdown-item-label">ไม่ระบุ</span>
-                </li>
-                {categories.map((cat) => (
-                  <li
-                    key={cat.id}
-                    className={`category-dropdown-item${categoryId === cat.id ? " is-active" : ""}`}
-                    role="option"
-                    aria-selected={categoryId === cat.id}
-                    onClick={() => {
-                      setCategoryId(cat.id);
-                      setCategoryDropdownOpen(false);
-                    }}
-                  >
-                    <span className="category-dropdown-item-label">
-                      <span className="category-swatch" style={{ background: cat.color }} />
-                      {cat.name}
-                    </span>
-                    {onDeleteCategory && (
-                      <button
-                        type="button"
-                        className="category-delete-btn"
-                        onClick={(e) => handleDeleteCategory(e, cat)}
-                        disabled={deletingCategoryId === cat.id}
-                        title={`ลบหมวดหมู่ "${cat.name}"`}
-                        aria-label={`ลบหมวดหมู่ ${cat.name}`}
-                      >
-                        {deletingCategoryId === cat.id ? "…" : "✕"}
-                      </button>
-                    )}
-                  </li>
-                ))}
-                {onCreateCategory && (
-                  <li
-                    className="category-dropdown-item category-dropdown-create"
-                    role="option"
-                    onClick={() => {
-                      setCreatingCategory(true);
-                      setCategoryError(null);
-                      setCategoryDropdownOpen(false);
-                    }}
-                  >
-                    <span className="category-dropdown-item-label">+ สร้างหมวดหมู่ใหม่</span>
-                  </li>
-                )}
-              </ul>
-            )}
+          <ActivityRepeatFields
+            recurrenceEditable={recurrenceEditable}
+            isEditing={isEditing}
+            wasUnlimitedRepeat={wasUnlimitedRepeat}
+            repeat={repeat}
+            setRepeat={setRepeat}
+            toggleWeekday={toggleWeekday}
+            maxRepeatCount={MAX_REPEAT_COUNT}
+            repeatMaximumUntil={repeatMaximumUntil}
+            date={date}
+            startTime={startTime}
+          />
 
-            {creatingCategory && (
-              <div className="new-category-form">
-                <input
-                  type="text"
-                  className="new-category-name-input"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="ชื่อหมวดหมู่ เช่น งานอดิเรก"
-                  autoFocus
-                />
-                <div className="category-color-swatch-row">
-                  {CATEGORY_COLOR_SWATCHES.map((hex) => (
-                    <button
-                      key={hex}
-                      type="button"
-                      className={`color-dot${newCategoryColor === hex ? " is-selected" : ""}`}
-                      style={{ background: hex, color: hex }}
-                      onClick={() => setNewCategoryColor(hex)}
-                      title={hex}
-                      aria-label={`เลือกสี ${hex}`}
-                    />
-                  ))}
-                  <label className="category-custom-color" title="เลือกสีเอง (color picker)">
-                    <input
-                      type="color"
-                      value={newCategoryColor}
-                      onChange={(e) => setNewCategoryColor(e.target.value)}
-                    />
-                  </label>
-                </div>
-                {categoryError && <p className="modal-error">{categoryError}</p>}
-                <div className="new-category-actions">
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-small"
-                    onClick={() => {
-                      setCreatingCategory(false);
-                      setCategoryError(null);
-                    }}
-                    disabled={categorySaving}
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-small"
-                    onClick={handleCreateCategory}
-                    disabled={categorySaving}
-                  >
-                    {categorySaving ? "กำลังสร้าง..." : "สร้างหมวดหมู่"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!creatingCategory && categoryError && (
-              <p className="modal-error">{categoryError}</p>
-            )}
-          </div>
-
-          <div className="modal-field">
-            <span className="field-label">Tag</span>
-            <div className="tag-input-wrap">
-              {tags.map((tag) => (
-                <span key={tag} className="tag-chip">
-                  {tag}
-                  <button
-                    type="button"
-                    className="tag-chip-remove"
-                    onClick={() => removeTag(tag)}
-                    aria-label={`ลบ tag ${tag}`}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                className="tag-input"
-                value={tagDraft}
-                onChange={(e) => setTagDraft(e.target.value)}
-                onKeyDown={handleTagInputKeyDown}
-                onBlur={addTagFromDraft}
-                placeholder={tags.length >= TAGS_MAX_COUNT ? "ครบจำนวน tag สูงสุดแล้ว" : "พิมพ์แล้วกด Enter..."}
-                disabled={tags.length >= TAGS_MAX_COUNT}
-              />
-            </div>
-          </div>
-
-          {recurrenceEditable ? (
-            <div className="modal-field">
-              <span className="field-label">ทำซ้ำ</span>
-              {wasUnlimitedRepeat && (
-                <p className="modal-error" style={{ marginBottom: "6px" }}>
-                  ⚠ กิจกรรมนี้เดิมตั้งไว้แบบ "ไม่มีวันสิ้นสุด" — ฟังก์ชันนี้ปิดไว้ก่อน
-                  ถ้ากด "แก้ไข" ตอนนี้ การทำซ้ำจะถูกจำกัดเหลือ {repeat.count} ครั้งแทน
-                </p>
-              )}
-              <div className="repeat-summary">
-                <select
-                  value={repeat.mode === "none" ? "none" : "custom"}
-                  onChange={(e) =>
-                    setRepeat((prev) => ({ ...prev, mode: e.target.value === "none" ? "none" : "custom" }))
-                  }
-                >
-                  <option value="none">ไม่ซ้ำ</option>
-                  <option value="custom">กำหนดเอง</option>
-                </select>
-              </div>
-
-              {repeat.mode === "custom" && (
-                <div className="repeat-custom">
-                  <div className="repeat-freq-row">
-                    <span>ทำซ้ำทุก</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={repeat.interval}
-                      onChange={(e) =>
-                        setRepeat((prev) => ({ ...prev, interval: Math.max(1, parseInt(e.target.value, 10) || 1) }))
-                      }
-                    />
-                    <select
-                      value={repeat.freq}
-                      onChange={(e) => setRepeat((prev) => ({ ...prev, freq: e.target.value }))}
-                    >
-                      <option value="DAILY">วัน</option>
-                      <option value="WEEKLY">สัปดาห์</option>
-                      <option value="MONTHLY">เดือน</option>
-                    </select>
-                  </div>
-
-                  {repeat.freq === "WEEKLY" && (
-                    <div className="modal-field" style={{ gap: "8px" }}>
-                      <span className="field-label">ในวัน</span>
-                      <div className="weekday-picker">
-                        {RRULE_WEEKDAYS.map((code, i) => (
-                          <button
-                            key={code}
-                            type="button"
-                            className={`weekday-chip${repeat.byDay.includes(code) ? " is-active" : ""}`}
-                            onClick={() => toggleWeekday(code)}
-                          >
-                            {WEEKDAY_SHORT[i]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="modal-field" style={{ gap: "8px" }}>
-                    <span className="field-label">สิ้นสุด</span>
-                    <div className="repeat-end-row">
-                      {/* ปิดฟังก์ชัน "ไม่มีวันสิ้นสุด" ไว้ก่อน — ต้องเลือก
-                          "หลังจาก N ครั้ง" หรือ "ในวันที่" เท่านั้น (ดู
-                          defaultRepeatState/parseRRule ใน rrule-utils.js ที่
-                          fallback เป็น "count" แทน "never" แล้วเช่นกัน) */}
-                      <label className="radio-inline">
-                        <input
-                          type="radio"
-                          name="repeat-end"
-                          checked={repeat.end === "count"}
-                          onChange={() => setRepeat((prev) => ({ ...prev, end: "count" }))}
-                        />
-                        หลังจาก
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max={MAX_REPEAT_COUNT}
-                        value={repeat.count}
-                        disabled={repeat.end !== "count"}
-                        onChange={(e) =>
-                          setRepeat((prev) => ({
-                            ...prev,
-                            count: Math.min(MAX_REPEAT_COUNT, Math.max(1, parseInt(e.target.value, 10) || 1))
-                          }))
-                        }
-                      />
-                      <span>ครั้ง (สูงสุด {MAX_REPEAT_COUNT} ครั้ง)</span>
-                      <label className="radio-inline">
-                        <input
-                          type="radio"
-                          name="repeat-end"
-                          checked={repeat.end === "until"}
-                          onChange={() => setRepeat((prev) => ({ ...prev, end: "until" }))}
-                        />
-                        ในวันที่
-                      </label>
-                      <input
-                        type="date"
-                        disabled={repeat.end !== "until"}
-                        value={repeat.until}
-                        max={repeatMaximumUntil}
-                        onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value > repeatMaximumUntil ? repeatMaximumUntil : e.target.value }))}
-                      />
-                    </div>
-                    <p className="repeat-limit-note">จำกัดกิจกรรมทำซ้ำสูงสุด {MAX_REPEAT_COUNT} ครั้งต่อชุด{repeat.end === "until" ? ` · เลือกได้ไม่เกิน ${repeatMaximumUntil}` : ""}</p>
-                  </div>
-
-                  <p className="repeat-preview">
-                    {describeRepeat(repeat, combineDateAndTime(date, startTime || "00:00"))}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            isEditing && (
-              <p className="allday-hint">
-                กิจกรรมนี้เป็นส่วนหนึ่งของชุดกิจกรรมที่ทำซ้ำอยู่แล้ว — การแก้ไขรูปแบบการทำซ้ำยังไม่รองรับในแอปนี้
-                (แก้ไขได้โดยตรงใน Google Calendar)
-              </p>
-            )
-          )}
-
-          <div className="modal-field">
-            <button
-              type="button"
-              className={`collapsible-trigger${notesOpen ? " is-open" : ""}`}
-              onClick={() => setNotesOpen((v) => !v)}
-            >
-              <span className="chevron">▸</span> เพิ่มรายละเอียด / โน้ต
-            </button>
-            {notesOpen && (
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="รายละเอียดเพิ่มเติม เช่น ลิงก์ประชุม, สิ่งที่ต้องเตรียม..."
-              />
-            )}
-          </div>
+          <ActivityNotesField notesOpen={notesOpen} setNotesOpen={setNotesOpen} notes={notes} setNotes={setNotes} />
 
           {formError && <p className="modal-error">{formError}</p>}
 
-          <div className="modal-actions">
-            {isEditing && (
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleDelete}
-                disabled={saving}
-              >
-                {initialActivity.recurringEventId ? "ลบครั้งนี้" : "ลบ"}
-              </button>
-            )}
-            <div className="modal-actions-right">
-              <button type="button" className="btn btn-outline" onClick={onClose} disabled={saving}>
-                ยกเลิก
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving ? "กำลังบันทึก..." : "บันทึก"}
-              </button>
-            </div>
-          </div>
+          <ActivityModalActions
+            isEditing={isEditing}
+            isRecurringOccurrence={Boolean(initialActivity?.recurringEventId)}
+            saving={saving}
+            onDelete={handleDelete}
+            onClose={onClose}
+          />
         </form>
       </div>
     </div>

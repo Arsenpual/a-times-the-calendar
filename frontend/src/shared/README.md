@@ -8,7 +8,9 @@ shared/
 ├── config/
 │   ├── firebase-config.js
 │   └── firebase-auth.js
-├── i18n/i18n.jsx
+├── i18n/
+│   ├── i18n.jsx          # React provider/context
+│   └── i18n-catalog.js   # dictionary และ locale data แบบ pure JS
 ├── lib/
 │   ├── date-utils.js
 │   └── id-utils.js
@@ -21,3 +23,5 @@ shared/
 `styles/global.css` เก็บ design token, theme และ reset ที่ใช้ร่วมกัน ส่วน `src/index.css` ทำหน้าที่เป็น CSS manifest เพื่อ import style ของแต่ละ feature ตามลำดับ cascade. Endpoint เดิมใน `src/api.js` แยกไปยัง API ของ Activity, Reminder และ Announcements ครบแล้ว ทุกส่วนใช้ `shared/api/client.js` ร่วมกัน
 
 หลัง build ผ่าน ให้ลองเปลี่ยนภาษา/ธีม, แสดงวันเวลา, ชื่อกิจกรรมยาว และ login/โหลดข้อมูลด้วยบัญชีจริง
+
+`i18n.jsx` re-export API ของ catalog เพื่อรักษา import เดิมของ components ส่วน pure utilities ควร import `i18n-catalog.js` โดยตรงเพื่อไม่เพิ่ม React dependency โดยไม่จำเป็น
