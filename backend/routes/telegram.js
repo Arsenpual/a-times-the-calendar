@@ -609,7 +609,7 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   console.log("[telegram] ตั้ง Bot Command Menu สำเร็จ");
 };
 
-module.exports.webhook = async function telegramWebhook(req, res) {
+module.exports.webhook = async function telegramWebhook(req, res, next) {
   if (req.get("X-Telegram-Bot-Api-Secret-Token") !== process.env.TELEGRAM_WEBHOOK_SECRET) return res.sendStatus(401);
   try {
     const callbackQuery = req.body?.callback_query;
@@ -709,7 +709,9 @@ module.exports.webhook = async function telegramWebhook(req, res) {
     await sendChatReply(link.userId, chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
     res.sendStatus(200);
   } catch (error) {
-    console.error("[telegram] webhook ล้มเหลว:", error.message);
-    res.sendStatus(500);
+    // Let the shared error handler classify Firestore RESOURCE_EXHAUSTED,
+    // open the quota circuit breaker, and suppress repeated Render logs from
+    // Telegram retries. Non-quota failures are still logged centrally.
+    next(error);
   }
 };
