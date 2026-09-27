@@ -1,4 +1,5 @@
 import React from "react";
+import { PopupLayerItem } from "../../shared/ui/popup-layer.jsx";
 
 export default function CalendarConnectionOverlays({
   firebaseUser,
@@ -12,11 +13,11 @@ export default function CalendarConnectionOverlays({
           ระหว่าง retry ให้สื่อสารว่าแอปกำลังทำงาน แทนปล่อยให้ดูเหมือน
           ค้างหรือพาไปยืนยัน Google ซ้ำทั้งที่สิทธิ์เดิมอาจยังใช้ได้. */}
       {firebaseUser && calendarConnectionState === "checking" && (
-        <div className="token-expiry-backdrop calendar-connection-backdrop">
+        <PopupLayerItem id="calendar-connection-checking" region="top-center" priority={70}>
           <div className="token-expiry-banner" role="status" aria-live="polite">
             <span>กำลังเชื่อมต่อและโหลดข้อมูลจาก Google Calendar…</span>
           </div>
-        </div>
+        </PopupLayerItem>
       )}
 
       {/* Blocking heads-up for the Google Calendar token — covers two
@@ -45,10 +46,10 @@ export default function CalendarConnectionOverlays({
           a button the person presses themselves is the only reliable way
           to renew either way. */}
       {firebaseUser && (tokenNearingExpiry || calendarConnectionState === "needs-reauth") && (
-        <div className="token-expiry-backdrop">
+        <PopupLayerItem id="calendar-token-renewal" region="top-center" priority={100}>
           <div
             className="token-expiry-banner"
-            role="alertdialog"
+            role="alert"
             aria-label={
               tokenNearingExpiry
                 ? "แจ้งเตือนสิทธิ์เข้าถึง Google Calendar ใกล้หมดอายุ"
@@ -64,7 +65,7 @@ export default function CalendarConnectionOverlays({
               {tokenNearingExpiry ? "ต่ออายุตอนนี้" : "ยืนยันตัวตน"}
             </button>
           </div>
-        </div>
+        </PopupLayerItem>
       )}
     </>
   );

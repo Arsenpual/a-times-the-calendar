@@ -1,4 +1,5 @@
 import React from "react";
+import { PopupLayerItem } from "../../shared/ui/popup-layer.jsx";
 
 const numberFormatter = new Intl.NumberFormat("th-TH");
 
@@ -13,7 +14,8 @@ export default function FirestoreQuotaBanner({ quota }) {
       }).format(resetDate);
 
   return (
-    <aside className="firestore-quota-banner" role="alert" aria-live="assertive">
+    <PopupLayerItem id="firestore-quota" region="top-right" priority={95}>
+      <aside className="firestore-quota-banner" role="alert" aria-live="assertive">
       <header className="firestore-quota-banner__header">
         <span className="firestore-quota-banner__icon" aria-hidden="true">!</span>
         <span>
@@ -40,6 +42,7 @@ export default function FirestoreQuotaBanner({ quota }) {
         <span style={{ width: `${Math.max(0, Math.min(100, ((quota.remaining ?? 0) / (quota.dailyLimit || 50_000)) * 100))}%` }} />
       </div>
       <p>ข้อมูลบนหน้าอาจยังไม่ซิงก์จนกว่าโควต้าจะรีเซ็ตหรือเปิด Billing</p>
-    </aside>
+      </aside>
+    </PopupLayerItem>
   );
 }

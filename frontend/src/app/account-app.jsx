@@ -37,6 +37,7 @@ import AppHeader from "./components/app-header.jsx";
 import CalendarConnectionOverlays from "./components/calendar-connection-overlays.jsx";
 import ActivityAuthState from "./components/activity-auth-state.jsx";
 import FirestoreQuotaBanner from "./components/firestore-quota-banner.jsx";
+import { PopupLayerItem } from "../shared/ui/popup-layer.jsx";
 import { setFirestoreQuotaStatus, useFirestoreQuotaStatus } from "../shared/api/firestore-quota-status.js";
 
 // Fallback only: after sign-in the app replaces this with the announcement
@@ -465,7 +466,7 @@ export default function AccountApp({ auth }) {
       />
       <FirestoreQuotaBanner quota={firestoreQuota} />
 
-      {error && <div className="error-banner" role="alert">{error}</div>}
+      {error && <PopupLayerItem id="app-error" region="top-right" priority={90}><div className="error-banner" role="alert">{error}</div></PopupLayerItem>}
       <main className="app-main">
         {firebaseUser && (
           // Keep the reminder runtime mounted while Activity Mode is open.
@@ -515,16 +516,16 @@ export default function AccountApp({ auth }) {
             )}
 
             {firebaseUser && calendarConnectionState === "unavailable" && (
-              <div className="error-banner" role="status">
+              <PopupLayerItem id="calendar-backend-unavailable" region="top-right" priority={80}><div className="error-banner" role="status">
                 <span>ยังติดต่อ Calendar backend ไม่ได้ชั่วคราว — อาจกำลังเริ่มทำงาน</span>
                 <button type="button" className="btn btn-outline" onClick={refreshCalendarConnection}>ลองเชื่อมต่อใหม่</button>
-              </div>
+              </div></PopupLayerItem>
             )}
 
             {firebaseUser && loading && (
-              <div className="loading-banner" role="status" aria-live="polite">
+              <PopupLayerItem id="activity-loading" region="bottom-right" priority={10}><div className="loading-banner" role="status" aria-live="polite">
                 กำลังโหลด...
-              </div>
+              </div></PopupLayerItem>
             )}
             {firebaseUser && isSearchingTags && !tagSearchLoading && (
               <div className="tag-search-status">

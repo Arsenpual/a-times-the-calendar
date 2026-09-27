@@ -248,7 +248,7 @@
   background: var(--md-ref-state-hover);
 }
 
-.reminder-app-container .telegram-connection-toast {
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast {
   position: fixed;
   z-index: 10010;
   top: max(16px, env(safe-area-inset-top));
@@ -265,11 +265,11 @@
   box-shadow: var(--md-ref-elevation-3);
 }
 
-.reminder-app-container .telegram-connection-toast.is-connected {
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast.is-connected {
   border-color: color-mix(in srgb, #34a853 55%, var(--md-sys-color-outline-variant));
 }
 
-.reminder-app-container .telegram-connection-toast-icon {
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast-icon {
   display: grid;
   flex: 0 0 28px;
   width: 28px;
@@ -281,11 +281,11 @@
   font-weight: 700;
 }
 
-.reminder-app-container .telegram-connection-toast.is-connected .telegram-connection-toast-icon { background: #34a853; }
-.reminder-app-container .telegram-connection-toast strong { font-size: 0.88rem; }
-.reminder-app-container .telegram-connection-toast p { margin: 2px 0 0; font-size: 0.82rem; line-height: 1.35; }
-.reminder-app-container .telegram-connection-toast small { display: block; margin-top: 5px; color: var(--md-sys-color-on-surface-variant); font-size: 0.72rem; }
-.reminder-app-container .telegram-connection-toast-close {
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast.is-connected .telegram-connection-toast-icon { background: #34a853; }
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast strong { font-size: 0.88rem; }
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast p { margin: 2px 0 0; font-size: 0.82rem; line-height: 1.35; }
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast small { display: block; margin-top: 5px; color: var(--md-sys-color-on-surface-variant); font-size: 0.72rem; }
+:is(.reminder-app-container, .reminder-popup-surface) .telegram-connection-toast-close {
   margin-left: auto;
   border: 0;
   padding: 0 3px;
@@ -302,7 +302,7 @@
   border-radius: var(--md-ref-radius-pill);
 }
 
-.reminder-app-container .due-alert-banner {
+:is(.reminder-app-container, .reminder-popup-surface) .due-alert-banner {
   padding: 10px var(--md-ref-spacing-5);
   box-shadow: var(--md-ref-elevation-1);
 }

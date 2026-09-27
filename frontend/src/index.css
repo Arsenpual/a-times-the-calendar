@@ -1,5 +1,6 @@
 /* CSS entry point: global primitives plus feature-owned styles in cascade order. */
 @import "./shared/styles/global.css";
+@import "./shared/styles/popup-layer.css";
 @import "./app/styles/app-shell.css";
 @import "./features/announcements/styles/announcement-ticker.css";
 @import "./features/auth/styles/auth.css";

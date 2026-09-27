@@ -20,6 +20,7 @@ import ReminderTimelinePanel from "./reminder-timeline-panel.jsx";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
 import ActivityPopup from "../../activity/components/activity-popup.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
+import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { useReminderExport } from "../hooks/use-reminder-export.js";
 import { useReminderTimeline, ZOOM_LEVELS_MINUTES } from "../hooks/use-reminder-timeline.js";
@@ -241,13 +242,13 @@ export default function ReminderDashboard({
       {/* Main Body Grid — 3 คอลัมน์: nav ซ้าย / list กลาง / timeline ขวา
           (เดิม 2 คอลัมน์: timeline ซ้าย / list ขวา — ย้าย timeline ไปขวาสุด
           ตาม reminder-dashboard-mockup.jsx, migration plan v2 เฟส 1.1) */}
-      {syncError && <p className="error-banner" role="alert">{syncError}</p>}
-      {reminderCalendar.error && <p className="error-banner" role="alert">{reminderCalendar.error}</p>}
+      {syncError && <PopupLayerItem id="reminder-sync-error" region="top-right" priority={75}><p className="error-banner" role="alert">{syncError}</p></PopupLayerItem>}
+      {reminderCalendar.error && <PopupLayerItem id="reminder-calendar-error" region="top-right" priority={74}><p className="error-banner" role="alert">{reminderCalendar.error}</p></PopupLayerItem>}
       {reminderCalendar.loading && (
-        <div className="reminder-calendar-loading-float" role="status" aria-live="polite">
+        <PopupLayerItem id="reminder-calendar-loading" region="bottom-right" priority={15}><div className="reminder-calendar-loading-float" role="status" aria-live="polite">
           <span className="reminder-calendar-loading-spinner" aria-hidden="true" />
           <span>กำลังโหลดกิจกรรมในปฏิทิน…</span>
-        </div>
+        </div></PopupLayerItem>
       )}
       <div className="dashboard-body">
         {/* Left Nav — มุมมองทั้งหมด/วันนี้/วันที่เลือก, ตัวกรองประเภท และ

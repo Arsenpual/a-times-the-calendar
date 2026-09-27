@@ -1,4 +1,5 @@
 import { SNOOZE_OPTIONS_MINUTES } from "../lib/reminder-config.js";
+import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
 export default function ReminderAlerts({ t, cardMenu, snoozeMenuForId, closeAllMenus, dueReminders, toggleSnoozeMenu, scheduleNext, closeSnoozeMenu, markCompleted }) {
 return (<>
       {(cardMenu || snoozeMenuForId) && (
@@ -7,7 +8,7 @@ return (<>
 
       {/* Alert Banner */}
       {dueReminders.length > 0 && (
-        <div className="due-alert-banner" role="alert">
+        <PopupLayerItem id="due-reminders" region="top-left" priority={85} className="reminder-popup-surface"><div className="due-alert-banner" role="alert">
           <span>🔔 {t("reminder.due", { titles: dueReminders.map((r) => r.title).join(", ") })}</span>
           <div className="due-alert-actions">
             {dueReminders.map((r) => (
@@ -43,7 +44,7 @@ return (<>
               </span>
             ))}
           </div>
-        </div>
+        </div></PopupLayerItem>
       )}
 
 
