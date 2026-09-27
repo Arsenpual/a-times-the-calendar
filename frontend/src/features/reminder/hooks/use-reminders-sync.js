@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchReminders, saveReminder, deleteReminderRemote } from "../api/reminders.js";
+import { fetchReminders, fetchReminderSync, saveReminder, deleteReminderRemote } from "../api/reminders.js";
 
-// A full reminder collection read is deliberately not a high-frequency clock.
-// The due clock uses the already-loaded local schedule every second; this
-// background sync only imports edits made by another device.
-const REMINDER_SYNC_INTERVAL_MS = 60_000;
+// The due clock uses the already-loaded schedule every second. Cross-device
+// sync polls one revision document; a full collection read happens only when
+// that revision changes.
+const REMINDER_SYNC_INTERVAL_MS = 15_000;
 
 // Explicit mutations only. Serialize each ID so an earlier PUT cannot finish
 // after DELETE and recreate a document. A failed request is exposed to the UI.
@@ -18,16 +18,28 @@ export function useRemindersSync({ firebaseUser }) {
   useEffect(() => {
     let cancelled = false;
     let lastPayload = null;
+    let revision = "";
+    let inFlight = false;
+    let retryAfterUntil = 0;
     setLoaded({ uid, data: null });
     setLoadError(null);
     if (!uid) return () => { cancelled = true; };
 
-    // The API remains the only data boundary. Polling lets a dedicated
-    // notification screen (for example the Raspberry Pi) see mutations made
-    // from another browser without giving every browser a Firestore client.
+    // The API remains the only data boundary. Revision polling lets a
+    // dedicated notification screen (for example the Raspberry Pi) see edits
+    // quickly without repeatedly reading every reminder document.
     const refresh = async () => {
+      if (inFlight || Date.now() < retryAfterUntil) return;
       try {
-        const data = await fetchReminders();
+        inFlight = true;
+        const result = await fetchReminderSync(revision);
+        if (result.notModified) {
+          if (!cancelled) setLoadError(null);
+          return;
+        }
+        revision = result.revision;
+        retryAfterUntil = 0;
+        const data = result.reminders;
         const payload = JSON.stringify(data);
         if (!cancelled && payload !== lastPayload) {
           lastPayload = payload;
@@ -35,7 +47,10 @@ export function useRemindersSync({ firebaseUser }) {
         }
         if (!cancelled) setLoadError(null);
       } catch (error) {
+        if (error.retryAfterSeconds) retryAfterUntil = Date.now() + error.retryAfterSeconds * 1000;
         if (!cancelled) setLoadError(error.message);
+      } finally {
+        inFlight = false;
       }
     };
     refresh();

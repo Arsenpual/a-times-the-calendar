@@ -8,21 +8,25 @@ const { act } = Renderer;
 const cache = new Map();
 globalThis.localStorage = { getItem: k => cache.get(k) ?? null, setItem: (k,v) => cache.set(k,v) };
 globalThis.window = { localStorage: globalThis.localStorage, setInterval, clearInterval };
-let cloud = {}, calls = [], release;
+let cloud = {}, calls = [], release, cloudRevision = 0;
 globalThis.syncTestApi = {
   fetchReminders: async () => structuredClone(cloud),
+  fetchReminderSync: async revision => revision === String(cloudRevision)
+    ? { notModified: true, revision, reminders: null }
+    : { notModified: false, revision: String(cloudRevision), reminders: structuredClone(cloud) },
   saveReminder: async (id, fields) => {
     calls.push(['PUT', id, fields]);
     if (release) await new Promise(resolve => { release = resolve; });
     cloud[id] = fields;
+    cloudRevision += 1;
     return { id, ...fields, updatedAt: 123 };
   },
-  deleteReminderRemote: async id => { calls.push(['DELETE', id]); delete cloud[id]; }
+  deleteReminderRemote: async id => { calls.push(['DELETE', id]); delete cloud[id]; cloudRevision += 1; }
 };
 const dataUrl = source => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
 const syncSource = readFileSync(new URL('../src/features/reminder/hooks/use-reminders-sync.js', import.meta.url), 'utf8')
   .replace('from "react"', `from "${reactUrl}"`)
-  .replace('import { fetchReminders, saveReminder, deleteReminderRemote } from "../api/reminders.js";', 'const { fetchReminders, saveReminder, deleteReminderRemote } = globalThis.syncTestApi;');
+  .replace('import { fetchReminders, fetchReminderSync, saveReminder, deleteReminderRemote } from "../api/reminders.js";', 'const { fetchReminders, fetchReminderSync, saveReminder, deleteReminderRemote } = globalThis.syncTestApi;');
 const storeSource = readFileSync(new URL('../src/features/reminder/hooks/use-reminder-store.js', import.meta.url), 'utf8')
   .replace('from "react"', `from "${reactUrl}"`)
   .replace('from "./use-reminders-sync.js"', `from "${dataUrl(syncSource)}"`);

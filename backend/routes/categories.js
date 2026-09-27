@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { db, categoriesCol, activityCategoriesCol } = require("../firestore-db.js");
+const { db, categoriesCol, activityCategoriesCol, ensureDefaultCategoriesForUser } = require("../firestore-db.js");
 
 const router = express.Router();
 
@@ -29,6 +29,10 @@ function isValidName(name) {
 // (requireAuth แนบ req.userId ไว้ให้แล้วก่อนถึง route นี้เสมอ)
 router.get("/", async (req, res, next) => {
   try {
+    // Seed/migrate เฉพาะเมื่อหน้าจอต้องใช้หมวดหมู่จริง ห้ามทำใน requireAuth
+    // เพราะ middleware นั้นครอบทุก API และทำให้การเปิดแอปหนึ่งครั้งเรียกงาน
+    // Firestore ชุดเดียวกันซ้ำจากหลาย request พร้อมกัน
+    await ensureDefaultCategoriesForUser(req.userId);
     const snapshot = await categoriesCol(req.userId).get();
     const categories = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     res.json(categories);

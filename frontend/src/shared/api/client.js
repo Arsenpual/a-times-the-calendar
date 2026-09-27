@@ -73,13 +73,13 @@ export async function handleResponse(res, label) {
     }
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = null; }
-    if (res.status === 429) {
+    if (res.status === 429 || res.status === 503) {
       const seconds = Number(body?.retryAfterSeconds || res.headers.get("retry-after"));
       if (Number.isFinite(seconds) && seconds > 0) {
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
         const wait = minutes > 0 ? `${minutes} นาที${remainingSeconds ? ` ${remainingSeconds} วินาที` : ""}` : `${remainingSeconds} วินาที`;
-        const error = new Error(`${body?.error || "เรียก AI ถี่เกินไป"} — ลองใหม่ได้ใน ${wait}`);
+        const error = new Error(`${body?.error || (res.status === 429 ? "เรียก API ถี่เกินไป" : "บริการยังไม่พร้อมใช้งาน")} — ลองใหม่ได้ใน ${wait}`);
         error.retryAfterSeconds = seconds;
         throw error;
       }

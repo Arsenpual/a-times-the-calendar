@@ -136,10 +136,23 @@ app.use((req, res) => {
 // next(err) จากทุก route แทน ไม่งั้น unhandled rejection จะทำให้ request
 // ค้างไม่ตอบอะไรกลับไปเลยแทนที่จะได้ 500 พร้อมเหตุผล
 app.use((err, req, res, next) => {
-  console.error("[times-the-calendar backend] unhandled error:", err);
   if (err.code === "CALENDAR_REAUTH_REQUIRED") {
     return res.status(428).json({ code: err.code, error: err.message });
   }
+  // Firestore gRPC code 8 = RESOURCE_EXHAUSTED. การตอบ 500 ทำให้ frontend
+  // มองเป็น server crash และ retry รัว ทั้งที่ต้องรอ quota reset/เปิด billing
+  // จึงตอบ 503 พร้อม Retry-After ให้ client ชะลออย่างชัดเจน
+  const firestoreQuotaExceeded =
+    err.code === 8 || err.code === "8" || err.code === "RESOURCE_EXHAUSTED" || /RESOURCE_EXHAUSTED|Quota exceeded/i.test(err.message || "");
+  if (firestoreQuotaExceeded) {
+    console.warn("[times-the-calendar backend] Firestore quota exhausted");
+    res.set("Retry-After", "60");
+    return res.status(503).json({
+      code: "FIRESTORE_QUOTA_EXHAUSTED",
+      error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่"
+    });
+  }
+  console.error("[times-the-calendar backend] unhandled error:", err);
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
   res.status(status).json({ error: err.message || "เกิดข้อผิดพลาดฝั่ง backend — ดู log เซิร์ฟเวอร์" });
 });
@@ -148,9 +161,8 @@ app.use((err, req, res, next) => {
 // 0-1) seed หมวดเริ่มต้นให้ collection กลางระดับ root ครั้งเดียวตอน server
 // เริ่มทำงาน แต่ตอนนี้แต่ละ user มี categories subcollection เป็นของตัวเอง
 // ใต้ users/{userId}/... จึงไม่มี "collection กลาง" ให้ seed ล่วงหน้าได้อีก
-// ต่อไป — seed เกิดขึ้นต่อ user แทน ผ่าน ensureDefaultCategoriesForUser()
-// ที่ requireAuth middleware เรียกให้อัตโนมัติทุกครั้งที่ user คนนั้น login
-// (ดู middleware/require-auth.js)
+// ต่อไป — seed เกิดขึ้นต่อ user แบบ lazy เมื่อเรียก GET /api/categories
+// เท่านั้น เพื่อไม่เพิ่ม Firestore read ให้ทุก authenticated endpoint
 app.listen(PORT, () => {
   console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
   const webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com";

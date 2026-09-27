@@ -1,5 +1,6 @@
 const express = require("express");
-const { remindersCol, reminderGroupsCol } = require("../firestore-db.js");
+const { randomUUID } = require("crypto");
+const { db, reminderModeDoc, remindersCol, reminderGroupsCol } = require("../firestore-db.js");
 
 const router = express.Router();
 
@@ -218,6 +219,27 @@ router.get("/", async (req, res, next) => {
   }
 });
 
+// Lightweight cross-device sync. Each poll reads only the reminder-mode
+// metadata document. The full collection is read only after a mutation has
+// changed syncRevision, which keeps an always-on Raspberry Pi from consuming
+// one read per reminder every minute.
+router.get("/sync", async (req, res, next) => {
+  try {
+    const modeSnapshot = await reminderModeDoc(req.userId).get();
+    const revision = modeSnapshot.data()?.syncRevision || "initial";
+    if (req.query.revision === revision) return res.status(304).end();
+
+    const snapshot = await remindersCol(req.userId).get();
+    const reminders = {};
+    snapshot.docs.forEach((doc) => {
+      reminders[doc.id] = doc.data();
+    });
+    res.json({ revision, reminders });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT /api/reminders/:reminderId — สร้างหรืออัปเดต schedule fields ของ
 // reminder หนึ่งตัว (upsert เดียว ไม่แยก POST/PUT เพราะ reminder id เป็น
 // client-generated อยู่แล้ว เหมือน activity id ของ Google Calendar — ไม่มี
@@ -244,7 +266,10 @@ router.put("/:reminderId", async (req, res, next) => {
 
     const { reminderId } = req.params;
     const saved = { ...cleaned, updatedAt: Date.now() };
-    await remindersCol(req.userId).doc(reminderId).set(saved);
+    const batch = db.batch();
+    batch.set(remindersCol(req.userId).doc(reminderId), saved);
+    batch.set(reminderModeDoc(req.userId), { syncRevision: randomUUID() }, { merge: true });
+    await batch.commit();
     res.json({ id: reminderId, ...saved });
   } catch (err) {
     next(err);
@@ -254,7 +279,10 @@ router.put("/:reminderId", async (req, res, next) => {
 // DELETE /api/reminders/:reminderId
 router.delete("/:reminderId", async (req, res, next) => {
   try {
-    await remindersCol(req.userId).doc(req.params.reminderId).delete();
+    const batch = db.batch();
+    batch.delete(remindersCol(req.userId).doc(req.params.reminderId));
+    batch.set(reminderModeDoc(req.userId), { syncRevision: randomUUID() }, { merge: true });
+    await batch.commit();
     res.status(204).send();
   } catch (err) {
     next(err);

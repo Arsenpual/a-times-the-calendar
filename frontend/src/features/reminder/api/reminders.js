@@ -12,6 +12,22 @@ export async function fetchReminders() {
 }
 
 /**
+ * Poll a one-document revision marker. The backend returns 304 while nothing
+ * changed and includes the full collection only after another device writes.
+ */
+export async function fetchReminderSync(revision = "") {
+  const query = revision ? `?revision=${encodeURIComponent(revision)}` : "";
+  const res = await apiRequest(`/api/reminders/sync${query}`, { cache: "no-store" });
+  if (res.status === 304) return { notModified: true, revision, reminders: null };
+  const payload = await handleResponse(res, "GET /api/reminders/sync");
+  return {
+    notModified: false,
+    revision: payload.revision || "initial",
+    reminders: payload.reminders || {}
+  };
+}
+
+/**
  * PUT /api/reminders/:reminderId — สร้างหรืออัปเดต schedule fields ของ
  * reminder หนึ่งตัว (upsert เดียว — reminder id เป็น client-generated
  * อยู่แล้วเหมือน activity id ของ Google Calendar)

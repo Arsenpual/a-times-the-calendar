@@ -345,9 +345,8 @@ const DEFAULT_CATEGORIES = [
 ];
 
 /**
- * เรียกจาก requireAuth middleware (ดู middleware/require-auth.js) ทุกครั้งที่
- * มี request เข้ามาจาก userId ที่ยังไม่เคยเห็นมาก่อน (เช็คว่า categories
- * subcollection ของ user นั้นว่างเปล่าหรือไม่) — ถ้าว่าง แปลว่าเป็น user
+ * เรียกแบบ lazy จาก GET /api/categories เมื่อผู้ใช้ต้องใช้หมวดหมู่จริง
+ * (เช็คว่า categories subcollection ของ user นั้นว่างเปล่าหรือไม่) — ถ้าว่าง แปลว่าเป็น user
  * ใหม่ที่เพิ่ง login ครั้งแรก ใส่ 4 หมวดเริ่มต้นให้อัตโนมัติ เหมือน
  * พฤติกรรมเดิมของ ensureDefaultCategories() ใน Phase 0-1 (ตอนนั้น seed
  * ระดับ collection กลางครั้งเดียวตอน server start) แต่ตอนนี้ต้อง seed
@@ -377,7 +376,7 @@ const DEFAULT_CATEGORIES = [
  * เท่านั้น ไม่รองรับ query ภายใน transaction
  *
  * *** เพิ่มเติม (ลดภาษี read ต่อ request) ***
- * เดิม requireAuth เรียกฟังก์ชันนี้ (และรัน transaction ข้างต้นเต็มรูปแบบ)
+ * ก่อนหน้านี้ requireAuth เรียกฟังก์ชันนี้ (และรัน transactionข้างต้นเต็มรูปแบบ)
  * ทุกครั้งที่ token ผ่าน ไม่ใช่แค่ตอน user ใหม่ — กลายเป็นภาษี Firestore
  * read ถาวรที่ขยายตาม traffic ทั้งที่ marker เป็น true มานานแล้วก็ตาม ตอนนี้
  * เพิ่ม in-memory cache ระดับ process (seededUserIds) คร่อมไว้อีกชั้น:
@@ -405,33 +404,55 @@ const DEFAULT_CATEGORIES = [
  * เพราะ set เข้าคีย์นี้เฉพาะหลัง transaction สำเร็จเท่านั้น
  */
 const seededUserIds = new Set();
+const categorySeedPromises = new Map();
+const categorySeedFailures = new Map();
+const CATEGORY_SEED_RETRY_DELAY_MS = 60_000;
 
 async function ensureDefaultCategoriesForUser(userId) {
   if (seededUserIds.has(userId)) return;
+  if (categorySeedPromises.has(userId)) return categorySeedPromises.get(userId);
 
-  await migrateUserFeatureStorage(userId);
-  await repairLegacyActivityCategoryMappings(userId);
+  const previousFailure = categorySeedFailures.get(userId);
+  if (previousFailure && Date.now() - previousFailure.failedAt < CATEGORY_SEED_RETRY_DELAY_MS) {
+    throw previousFailure.error;
+  }
 
-  const userRef = userDoc(userId);
-  const col = categoriesCol(userId);
+  const seed = (async () => {
+    await migrateUserFeatureStorage(userId);
+    await repairLegacyActivityCategoryMappings(userId);
 
-  const seeded = await db.runTransaction(async (tx) => {
-    const userSnap = await tx.get(userRef);
-    if (userSnap.exists && userSnap.data().defaultCategoriesSeeded) {
-      return false; // เคย seed แล้ว (หรือกำลังถูก request อื่นชนะไปก่อน) — ไม่ต้องทำอะไร
+    const userRef = userDoc(userId);
+    const col = categoriesCol(userId);
+
+    const seeded = await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (userSnap.exists && userSnap.data().defaultCategoriesSeeded) {
+        return false;
+      }
+      tx.set(userRef, { defaultCategoriesSeeded: true }, { merge: true });
+      for (const cat of DEFAULT_CATEGORIES) {
+        const { id, ...rest } = cat;
+        tx.set(col.doc(id), rest);
+      }
+      return true;
+    });
+
+    seededUserIds.add(userId);
+    categorySeedFailures.delete(userId);
+
+    if (seeded) {
+      console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
     }
-    tx.set(userRef, { defaultCategoriesSeeded: true }, { merge: true });
-    for (const cat of DEFAULT_CATEGORIES) {
-      const { id, ...rest } = cat;
-      tx.set(col.doc(id), rest);
-    }
-    return true;
-  });
+  })();
 
-  seededUserIds.add(userId);
-
-  if (seeded) {
-    console.log(`[firestore-db] user ${userId}: categories ว่างเปล่า — ใส่ 4 หมวดเริ่มต้นให้แล้ว`);
+  categorySeedPromises.set(userId, seed);
+  try {
+    await seed;
+  } catch (error) {
+    categorySeedFailures.set(userId, { error, failedAt: Date.now() });
+    throw error;
+  } finally {
+    categorySeedPromises.delete(userId);
   }
 }
 
