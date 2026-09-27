@@ -30,8 +30,9 @@ app.set("trust proxy", 1);
 // จำกัด CORS ให้รับ request จากโดเมน frontend ที่ deploy จริงเท่านั้น
 // (เดิม cors() เปล่าๆ เปิดรับทุก origin — ใช้ได้ตอน dev แต่ไม่ควรเปิดกว้าง
 // ขนาดนั้นตอน deploy จริง แม้จะมี Firebase Auth คุ้มกันชั้นในอยู่แล้วก็ตาม)
-// FRONTEND_URL ตั้งเป็น env var แยกจาก origin dev (localhost:5173) เพื่อให้
-// รันคู่กันได้ทั้งสองฝั่งระหว่าง deploy จริงกับพัฒนาต่อในเครื่อง
+// FRONTEND_URL คือ canonical frontend ที่ OAuth redirect กลับไป ส่วน
+// FRONTEND_CORS_ORIGINS รองรับ origin เก่าระหว่างย้าย custom domain โดย
+// คั่นหลายค่าด้วย comma และถอดออกได้หลัง cutover เสร็จ
 // `Origin` header ไม่มี path (เช่น https://arsenpual.github.io) แต่
 // FRONTEND_URL ต้องเก็บ path ของ GitHub Pages ไว้ด้วยเพื่อใช้ redirect กลับ
 // หลัง OAuth (เช่น .../a-times-the-calendar/) จึงต้องแปลงเป็น origin ก่อน
@@ -44,10 +45,18 @@ function toOrigin(url) {
   }
 }
 
-const allowedOrigins = [
+function parseOrigins(value) {
+  return String(value || "")
+    .split(",")
+    .map((url) => toOrigin(url.trim()))
+    .filter(Boolean);
+}
+
+const allowedOrigins = [...new Set([
   "http://localhost:5173",
-  toOrigin(process.env.FRONTEND_URL)
-].filter(Boolean);
+  ...parseOrigins(process.env.FRONTEND_URL),
+  ...parseOrigins(process.env.FRONTEND_CORS_ORIGINS)
+].filter(Boolean))];
 
 app.use(
   cors({

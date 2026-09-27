@@ -287,12 +287,12 @@ const step1 = "/login-guide-step1.jpg";
 import step1 from "../public/login-guide-step1.jpg";
 ```
 
-`vite.config.js` จัดการเรื่องนี้อีกชั้นผ่าน `base: process.env.VITE_BASE_PATH || "/"` — ตั้งค่าจริง (`/a-times-the-calendar/`) เฉพาะตอน build ใน GitHub Actions เท่านั้น (`npm run dev`/`build` ในเครื่องไม่ต้องตั้ง env นี้เลย ใช้ `"/"` เป็น fallback ปกติ)
+`vite.config.js` จัดการเรื่องนี้อีกชั้นผ่าน `base: process.env.VITE_BASE_PATH || "/"`. Workflow อ่านค่า repository variable `VITE_BASE_PATH`: ใช้ `/a-times-the-calendar/` ระหว่างอยู่บน URL เดิมของ GitHub Pages และเปลี่ยนเป็น `/` เมื่อ custom domain `timesapp.online` พร้อม ส่วน `npm run dev`/`build` ในเครื่องใช้ `"/"` เป็น fallback ปกติ
 
 ### 9.2 Frontend: GitHub Pages ผ่าน GitHub Actions
 
 - Build ด้วย Vite (`npm run build` → output ที่ `frontend/dist/`) แล้ว publish ไปที่ branch `gh-pages` (หรือ GitHub Pages source ที่ตั้งไว้ใน repo settings) ผ่าน workflow ที่ `.github/workflows/deploy-frontend.yml`
-- **ต้องมี** `VITE_BASE_PATH=/<repo-name>/` เป็น env var ตอน build step ใน workflow — ไม่ตั้งค่านี้ = หน้าเว็บขึ้นขาว 404 ทุกไฟล์ทันทีที่เปิดจริง (ดูหัวข้อ 9.1)
+- `VITE_BASE_PATH` ต้องตรงกับที่อยู่จริง: `/<repo-name>/` สำหรับ `*.github.io/<repo-name>/` หรือ `/` สำหรับ custom domain ที่ root
 - Trigger: push เข้า branch หลัก (เช่น `main`) ที่แตะไฟล์ใน `frontend/` — ควรจำกัด path filter ของ workflow ไว้ที่ `frontend/**` เพื่อไม่ build ใหม่ทุกครั้งที่แก้แค่ backend/เอกสาร
 - Custom headers (เช่น `Cross-Origin-Opener-Policy: same-origin-allow-popups` ที่จำเป็นสำหรับ Firebase Auth popup — ดูหัวข้อ 6) **GitHub Pages ไม่รองรับการตั้งค่า custom response header ผ่านไฟล์ config แบบ Vercel/Netlify ได้เลย** เพราะเป็น static host ล้วนๆ ไม่มี edge function/middleware — คง COOP warning เดิมไว้ (ไม่กระทบการ sign-in จริง ดูหัวข้อ 6) แทนที่จะพยายามแก้ที่ layer นี้
 - **`frontend/vercel.json` และ `frontend/netilfy.toml` ถูกลบออกจากโปรเจกต์แล้ว** (เดิมมีไว้ตั้ง COOP header ตอนยังพิจารณา deploy ผ่าน Vercel/Netlify) — ไม่มีผลกับ GitHub Pages เลยและไม่ได้ใช้งานจริงแล้ว เก็บไว้จะสร้างความสับสนว่าโปรเจกต์ deploy ผ่านแพลตฟอร์มไหนกันแน่ ถ้าในอนาคตพิจารณาย้าย deploy target กลับไปใช้แพลตฟอร์มใดแพลตฟอร์มหนึ่งอีกครั้ง ค่อยสร้างไฟล์เหล่านี้ใหม่ตอนนั้น (เนื้อหาเดิม: ตั้ง header `Cross-Origin-Opener-Policy: same-origin-allow-popups` ให้ทุก path)
@@ -308,6 +308,6 @@ import step1 from "../public/login-guide-step1.jpg";
 
 1. ไฟล์ static ใหม่ที่เพิ่มใน `public/` และถูกอ้างอิงจากโค้ด JS/JSX — ใช้ `import` เสมอ ไม่ hardcode path (ดูหัวข้อ 9.1)
 2. ทดสอบ `npm run build && npm run preview` ในเครื่องก่อน push อย่างน้อยหนึ่งครั้ง (ไม่ใช่แค่ `npm run dev`) — `preview` ยัง serve จาก root เหมือน `dev` แต่อย่างน้อยจับ syntax/import error ที่ build-only ได้เร็วกว่ารอ GitHub Actions
-3. เช็คว่า `VITE_BASE_PATH` ใน workflow ตรงกับชื่อ repo จริง (ตรงตัวพิมพ์เล็ก-ใหญ่ด้วย)
+3. เช็ค repository variable `VITE_BASE_PATH`: URL เดิมใช้ `/a-times-the-calendar/`; custom domain `timesapp.online` ใช้ `/`
 4. เช็คว่า `.env`/`.env.production` ฝั่ง frontend มี `VITE_API_BASE_URL` ชี้ไปที่ Render service ที่ถูกต้อง ไม่ใช่ `localhost`
 5. ถ้าแก้ auth flow (`google-calendar.js`, `firebase-config.js`) — ทดสอบ sign-in บน URL จริงของ GitHub Pages หลัง deploy เสมอ อย่าเชื่อผลจาก localhost อย่างเดียว เพราะ Firebase Auth domain allowlist ต้องรวม GitHub Pages domain ไว้ด้วย (ตั้งค่าที่ Firebase Console > Authentication > Settings > Authorized domains)

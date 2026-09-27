@@ -1,7 +1,9 @@
 # แผนขอ Google OAuth App Verification — T.i.M.E.S.
 
-อัปเดต: 24 กันยายน 2026  
+อัปเดต: 27 กันยายน 2026
 เป้าหมาย: ให้ผู้ใช้ทั่วไปเชื่อม Google Calendar กับ T.i.M.E.S. ได้ผ่านหน้าขอสิทธิ์ที่ Google ตรวจรับรอง โดยไม่ต้องผ่านคำเตือน “แอปนี้ยังไม่ได้รับการยืนยัน”
+
+> **สถานะปัจจุบัน (27 กันยายน 2026): กลับมาดำเนิน Phase 2 แล้ว** — จดทะเบียน root domain `timesapp.online` ผ่าน GoDaddy แล้ว และกำลังเตรียมย้าย frontend ไป `https://timesapp.online` กับ backend ไป `https://api.timesapp.online` ก่อน Verify Branding/Data Access อีกครั้ง
 
 > เอกสารนี้เป็นแผน ไม่ใช่การยืนยันว่า Google จะอนุมัติแน่นอน สถานะ OAuth, scope classification และรายการโดเมนจริงต้องตรวจใน Google Cloud Console ก่อนยื่น
 
@@ -40,6 +42,45 @@ URL ที่ใช้ในปัจจุบันตามการใช้�
 - Privacy Policy ระบุ scopes จริง, การอ่านปฏิทินหลายชุดสำหรับคำถาม Calendar, refresh token ที่เข้ารหัส และการส่งบริบทไป Vertex AI เมื่อผู้ใช้เลือกใช้ AI
 
 ## Phase 2 — ตรวจโดเมน, หน้าขอสิทธิ์ และขอบเขตข้อมูล
+
+### จุดเริ่มเมื่อนำแผนกลับมาทำต่อ
+
+1. จดทะเบียนหรือเลือกโดเมนที่ผู้พัฒนาเป็นเจ้าของ และยืนยัน root domain ผ่าน DNS ใน Google Search Console
+2. ผูก root domain กับ GitHub Pages และ `api.<domain>` กับ Render
+3. เปลี่ยน Homepage, Privacy Policy, OAuth JavaScript origin, OAuth callback, Firebase authorized domains และ environment variables ให้ใช้โดเมนใหม่
+4. แยก localhost ออกจาก production OAuth client แล้วทดสอบ production OAuth ใหม่
+5. กลับมาที่ Verification Center เพื่อ Verify Branding ก่อนยื่น Data Access verification พร้อม demo video
+
+### Custom-domain target และสถานะ migration
+
+| การใช้งาน | URL เป้าหมาย | สถานะ |
+| --- | --- | --- |
+| Homepage / frontend | `https://timesapp.online/` | GitHub Pages รับ custom domain แล้ว; รอ DNS cache/HTTPS พร้อมทุกจุด |
+| Privacy Policy | `https://timesapp.online/privacy.html` | โค้ด canonical/sitemap เตรียมแล้ว; รอ deploy หลัง DNS |
+| Backend API | `https://api.timesapp.online/` | Render custom domain และ DNS พร้อม; `/api/health` ตอบ 200 |
+| Calendar OAuth callback | `https://api.timesapp.online/oauth/google/calendar/callback` | รอเพิ่มใน OAuth production client และ Render env |
+| Telegram webhook | `https://api.timesapp.online/api/telegram/webhook` | รอเปลี่ยน `TELEGRAM_WEBHOOK_BASE_URL` หลัง backend domain พร้อม |
+
+การ cutover ต้องทำตามลำดับเพื่อไม่ให้ production เดิมหยุดทำงาน:
+
+1. GitHub Pages → Custom domain: `timesapp.online`; Render → Custom Domains: `api.timesapp.online`
+2. GoDaddy DNS: เพิ่ม A record ของ `@` ไป GitHub Pages (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`), `www` CNAME ไป `arsenpual.github.io`, และ `api` CNAME ตามค่าที่ Render แสดง
+3. Google Search Console: เพิ่ม **Domain property** `timesapp.online` แล้วใส่ TXT record ที่ GoDaddy ด้วยบัญชี Google ซึ่งเป็น Owner/Editor ของ Cloud project
+4. เมื่อ DNS/HTTPS พร้อม ตั้ง GitHub repository variables: `VITE_BASE_PATH=/` และ `VITE_API_BASE_URL=https://api.timesapp.online`
+5. ตั้ง Render env: `FRONTEND_URL=https://timesapp.online/`, `FRONTEND_CORS_ORIGINS=https://arsenpual.github.io`, `GOOGLE_OAUTH_REDIRECT_URI=https://api.timesapp.online/oauth/google/calendar/callback`, `TELEGRAM_WEBHOOK_BASE_URL=https://api.timesapp.online`
+6. อัปเดต Firebase Authorized domains และ Google OAuth/Branding URLs แล้วทดสอบ production ก่อนถอด origin เก่าออก
+
+- [x] จดทะเบียน `timesapp.online` และกำหนด canonical frontend/backend target
+- [x] เตรียม workflow ให้สลับ base path/API URL ผ่าน GitHub repository variables โดยยัง fallback ไป production เดิมได้
+- [x] เตรียม backend ให้รับ `FRONTEND_CORS_ORIGINS` หลาย origin ระหว่าง migration
+- [x] เตรียม canonical URL, sitemap, robots และ environment examples สำหรับ custom domain
+- [x] เพิ่ม Custom Domain ใน GitHub Pages และ Render
+- [x] เพิ่ม DNS records ที่ GoDaddy (`@`, `www`, `api`)
+- [ ] รอ DNS cache ทุก resolver และ GitHub Pages HTTPS certificate พร้อม
+- [x] Verify Domain property `timesapp.online` ใน Google Search Console
+- [x] ตั้ง GitHub variables `VITE_BASE_PATH=/` และ `VITE_API_BASE_URL=https://api.timesapp.online`
+- [ ] เปลี่ยน Render environment และ deploy cutover
+- [ ] อัปเดต Firebase/Google Auth Platform แล้วทดสอบ login + Calendar OAuth ด้วย production domain
 
 ### URL inventory ที่ตรวจจากโค้ดและ production (26 กันยายน 2026)
 

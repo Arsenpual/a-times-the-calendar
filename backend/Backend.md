@@ -208,6 +208,7 @@ backend/
 | `GOOGLE_APPLICATION_CREDENTIALS_JSON` | อย่างใดอย่างหนึ่งกับตัวก่อนหน้า | เนื้อหาไฟล์ service account JSON ทั้งก้อนเป็น string เดียว — ใช้ตอน deploy จริงบน hosting ที่ไม่มี persistent disk (เช่น Render.com) ตรวจก่อน `GOOGLE_APPLICATION_CREDENTIALS` เสมอ (priority สูงกว่า เพราะเป็น production path) |
 | `PORT` | ไม่บังคับ | พอร์ตที่ Express ฟัง — default `4000` |
 | `FRONTEND_URL` | ไม่บังคับแต่ควรตั้งตอน deploy | โดเมน frontend ที่ deploy จริง สำหรับ whitelist ใน CORS (เพิ่มเข้าไปนอกเหนือจาก `http://localhost:5173` ที่ allow ไว้เป็นค่าคงที่เสมอสำหรับ dev) |
+| `FRONTEND_CORS_ORIGINS` | ไม่บังคับ | origin เพิ่มเติมคั่นด้วย comma สำหรับช่วงย้ายโดเมน โดย OAuth callback ยัง redirect ไป `FRONTEND_URL` เพียงค่าเดียว |
 
 **ไม่มี env var ทั้งสองตัวเลย** (`GOOGLE_APPLICATION_CREDENTIALS` และ `_JSON`) → throw error ทันที ระบุชัดว่าต้องตั้งตัวใดตัวหนึ่ง
 

@@ -25,7 +25,8 @@
 3. หลังสร้างเสร็จ ไปที่ service → **Environment** แล้วเติมค่าที่ `render.yaml` จงใจเว้นว่างไว้ (`sync: false`):
    - `FIREBASE_PROJECT_ID` — ชื่อ project เดียวกับที่ backend ใช้ตอน dev
    - `GOOGLE_APPLICATION_CREDENTIALS_JSON` — เปิดไฟล์ `backend/secrets/*.json` ในเครื่อง **คัดลอกเนื้อหาทั้งไฟล์** มาวางเป็นค่าเดียว (ไม่ต้องแก้ format ใดๆ — วางทั้งก้อน `{...}`)
-   - `FRONTEND_URL` — ใส่ URL ของ GitHub Pages ที่จะได้ในขั้นตอนที่ 3 (รูปแบบ `https://<username>.github.io/<repo-name>`) — ถ้ายังไม่รู้ตอนนี้ ใส่ไปก่อนแบบเดาได้ แล้วย้อนมาแก้ทีหลังได้เสมอ
+   - `FRONTEND_URL` — production ปัจจุบันใช้ `https://timesapp.online/`
+   - `FRONTEND_CORS_ORIGINS` — ระหว่างย้ายโดเมนใช้ `https://arsenpual.github.io` แล้วลบหลัง cutover เสถียร
 4. กด **Manual Deploy** เพื่อ deploy ครั้งแรก รอจนสถานะเป็น "Live"
 5. จด URL ของ backend ไว้ (รูปแบบ `https://times-the-calendar-backend.onrender.com`) — ต้องใช้ในขั้นตอนถัดไป
 
@@ -37,7 +38,7 @@
 
 1. ไปที่ repo → **Settings → Pages** → ตั้ง Source เป็น **GitHub Actions** (ไม่ใช่ "Deploy from a branch")
 2. ไปที่ **Settings → Secrets and variables → Actions** เพิ่ม secrets ต่อไปนี้ (ค่ามาจาก `frontend/.env` เดิมที่ใช้ตอน dev):
-   - `VITE_API_BASE_URL` — ใส่ URL backend จาก Render (ขั้นตอนที่ 2 ข้อ 5) เช่น `https://times-the-calendar-backend.onrender.com`
+   - `VITE_API_BASE_URL` — custom-domain target คือ `https://api.timesapp.online`; URL `onrender.com` ใช้เป็น fallback ระหว่าง migration
    - `VITE_FIREBASE_API_KEY`
    - `VITE_FIREBASE_AUTH_DOMAIN`
    - `VITE_FIREBASE_PROJECT_ID`
@@ -45,7 +46,7 @@
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`
    - `VITE_FIREBASE_APP_ID`
 3. Push ขึ้น `main` (หรือกด **Run workflow** เองจากแท็บ Actions) — workflow จะ build แล้ว deploy อัตโนมัติ
-4. รอ 2-3 นาที เช็ค URL ที่ได้ใน **Settings → Pages** (รูปแบบ `https://<username>.github.io/<repo-name>/`)
+4. รอ 2-3 นาที เช็ค URL ที่ได้ใน **Settings → Pages**; production target คือ `https://timesapp.online/`
 
 ---
 

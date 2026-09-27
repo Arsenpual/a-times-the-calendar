@@ -10,7 +10,7 @@ refresh token กลับ browser ไม่ว่ากรณีใด.
 1. Google Cloud Console → APIs & Services → Credentials → Create credentials → OAuth client ID → **Web application**
 2. เพิ่ม Authorized redirect URI:
 
-   `https://times-the-calendar-backend.onrender.com/oauth/google/calendar/callback`
+   `https://api.timesapp.online/oauth/google/calendar/callback`
 
    สำหรับ local development ให้เพิ่มแยกต่างหาก:
 
@@ -22,10 +22,11 @@ refresh token กลับ browser ไม่ว่ากรณีใด.
 
 ตั้งค่าตาม `backend/.env.example`:
 
-- `FRONTEND_URL=https://arsenpual.github.io/a-times-the-calendar/`
+- `FRONTEND_URL=https://timesapp.online/`
+- `FRONTEND_CORS_ORIGINS=https://arsenpual.github.io` — ใช้ชั่วคราวระหว่างย้ายโดเมน แล้วถอดออกเมื่อ production ใหม่เสถียร
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://api.timesapp.online/oauth/google/calendar/callback`
 - `CALENDAR_TOKEN_ENCRYPTION_KEY` — base64 random 32 bytes
 - `GOOGLE_OAUTH_STATE_SECRET` — random secret สำหรับตรวจ OAuth callback state
 
