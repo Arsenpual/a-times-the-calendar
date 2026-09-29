@@ -1,8 +1,7 @@
 const express = require("express");
-const { GoogleAuth } = require("google-auth-library");
+const { generateContent } = require("../gemini-api.js");
 const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../calendar-question.js");
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule } = require("../skills/activity-creation");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
@@ -139,41 +138,13 @@ function textFromGemini(payload) {
   return text;
 }
 
-function createVertexAuth() {
-  const options = { scopes: ["https://www.googleapis.com/auth/cloud-platform"] };
-  // Render stores the service-account file as JSON in an environment variable;
-  // GoogleAuth normally only discovers a file path, so pass those credentials
-  // explicitly when the deployment uses the JSON variant.
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-    options.credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-  }
-  return new GoogleAuth(options);
-}
-
 async function generateActivityWithGemini(context) {
   const instruction = buildPrompt(context);
-  const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  if (!project) throw new Error("ยังไม่ได้ตั้งค่า GOOGLE_CLOUD_PROJECT หรือ FIREBASE_PROJECT_ID บน backend");
-  const authClient = await createVertexAuth().getClient();
-  const token = await authClient.getAccessToken();
-  if (!token?.token) throw new Error("ขอ access token สำหรับ Vertex AI ไม่สำเร็จ");
-  const response = await fetch(`https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.token}` },
-    signal: AbortSignal.timeout(45000),
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: instruction }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(context) }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.25 } })
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error?.message || `Vertex AI ตอบ ${response.status}`);
+  const payload = await generateContent({ systemInstruction: { parts: [{ text: instruction }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(context) }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.25 } });
   return jsonFromGemini(payload);
 }
 
 async function generateCalendarAnswerWithGemini({ text, calendarContext, timeZone }) {
-  const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  if (!project) throw new Error("ยังไม่ได้ตั้งค่า GOOGLE_CLOUD_PROJECT หรือ FIREBASE_PROJECT_ID บน backend");
   // A very full calendar can contain thousands of rows. The question already
   // has an explicit bounded date range; cap the model context as a second
   // guard so one request cannot consume an unbounded amount of AI quota.
@@ -186,21 +157,11 @@ async function generateCalendarAnswerWithGemini({ text, calendarContext, timeZon
     "คุณมีสิทธิ์อ่านอย่างเดียว ห้ามสร้าง แก้ไข ลบ หรือยืนยันการเปลี่ยน Calendar.",
     "ตอบภาษาเดียวกับคำถาม กระชับ ใช้เวลาใน timezone ที่ระบุ. ถ้าถามเวลาว่าง ให้หาเฉพาะช่องว่างภายในช่วงวันที่ที่ส่งมา และแจ้งว่านี่เป็นการประเมินจากกิจกรรมที่อ่านได้."
   ].join(" ");
-  const authClient = await createVertexAuth().getClient();
-  const token = await authClient.getAccessToken();
-  if (!token?.token) throw new Error("ขอ access token สำหรับ Vertex AI ไม่สำเร็จ");
-  const response = await fetch(`https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.token}` },
-    signal: AbortSignal.timeout(45_000),
-    body: JSON.stringify({
+  const payload = await generateContent({
       systemInstruction: { parts: [{ text: instruction }] },
       contents: [{ role: "user", parts: [{ text: JSON.stringify({ question: text, timeZone, calendar: compactContext }) }] }],
       generationConfig: { temperature: 0.15, maxOutputTokens: 700 }
-    })
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error?.message || `Vertex AI ตอบ ${response.status}`);
   return textFromGemini(payload);
 }
 

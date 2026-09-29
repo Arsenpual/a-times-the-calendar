@@ -41,9 +41,9 @@
 
 ### 4:20–5:10 — ข้อมูลที่จัดเก็บ (AI เฉพาะนักพัฒนา)
 
-สาธิตเก็บกิจกรรมทดสอบเข้าคลังเพื่อให้เห็นว่ามีข้อมูลที่แอปเก็บเอง ตอนนี้ Gemini เปิดเฉพาะ developer UID ที่อนุญาต ผู้ใช้ทั่วไปจะไม่เห็นคำถามสีม่วง หากต้องแสดง AI ในวิดีโอ ให้ใช้บัญชีนักพัฒนา ระบุว่าเป็น developer preview และอธิบายว่าบริบทที่เกี่ยวข้องถูกส่งไป Vertex AI ส่วนการสาธิตสำหรับผู้ใช้ทั่วไปใช้คำถาม Calendar ที่ระบบตอบเองตามขั้นตอนก่อนหน้า
+สาธิตเก็บกิจกรรมทดสอบเข้าคลังเพื่อให้เห็นว่ามีข้อมูลที่แอปเก็บเอง ตอนนี้ Gemini เปิดเฉพาะ developer UID ที่อนุญาต ผู้ใช้ทั่วไปจะไม่เห็นคำถามสีม่วง หากแสดง AI ให้ใช้บัญชีนักพัฒนากับกิจกรรมจำลอง ระบุว่าเป็น developer preview ผ่าน Gemini Developer API ซึ่ง Free Tier มีข้อกำหนดการใช้ข้อมูลเพื่อพัฒนาบริการ ส่วนผู้ใช้ทั่วไปให้สาธิตคำถาม Calendar ที่ระบบตอบเองตามขั้นตอนก่อนหน้า
 
-บทพูด: “When the user requests AI analysis, relevant schedule context is sent to Vertex AI. Archived activities are stored separately in the app.”
+บทพูด: “AI is a developer-only preview using the Gemini Developer API. This demonstration uses fictional schedule data. Archived activities are stored separately in the app.”
 
 หากสาธิต Telegram เพิ่ม ให้เชื่อมบัญชีทดสอบก่อนและแสดงข้อความตัวอย่างหนึ่งข้อความ ขั้นตอนนี้เสริมคำอธิบายการส่งข้อมูล ไม่ใช้แทนการสาธิต Calendar scopes
 
