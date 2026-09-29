@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export const INITIAL_ASSISTANT_MESSAGE = {
   role: "assistant",
-  text: "สวัสดีครับ ผม MR.Zettascale ✦ บอกสิ่งที่อยากทำคร่าว ๆ ได้เลย เช่น “พรุ่งนี้ประชุมทีมช่วงเช้า” หรือถาม Google Calendar เช่น “พรุ่งนี้ว่างช่วงไหน?” ได้ครับ",
+  text: "สวัสดีครับ ผม MR.Zettascale ✦ เลือกสร้างกิจกรรมจากตัวเลือกด้านล่าง หรือระบุให้ครบ เช่น “ทำงาน 08.30 พรุ่งนี้ 3 ชม.” และถามตาราง เช่น “วันนี้มีอะไรบ้าง?” ได้ครับ",
   source: "template"
 };
 

@@ -53,6 +53,29 @@ function postTemplate(baseUrl, body) {
   });
 }
 
+test("non-developers cannot invoke Gemini or load its Calendar context; templates still work", async () => {
+  const forbidden = async () => { throw new Error("must not call Gemini or read AI context"); };
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => ({ status: "not-allowed" }),
+    claimDraftUsage: async () => ({ status: "not-allowed" }),
+    generateActivity: forbidden,
+    generateCalendarAnswer: forbidden,
+    readCalendarQuestion: forbidden
+  }, async (baseUrl) => {
+    for (const text of ["ช่วยวิเคราะห์ตารางของฉัน", "ช่วยวางแผนทำการบ้าน"]) {
+      const response = await post(baseUrl, { text });
+      assert.equal(response.status, 403);
+      assert.equal((await response.json()).code, "AI_DEVELOPER_ONLY");
+    }
+    const template = await postTemplate(baseUrl, {});
+    assert.equal(template.status, 200);
+    const result = await template.json();
+    assert.equal(result.summarySource, "deterministic");
+    assert.equal(result.ready, true);
+  });
+});
+
 test("knowledge answer is deterministic and skips Gemini quota", async () => {
   let quotaCalls = 0;
   let geminiCalls = 0;

@@ -26,18 +26,11 @@ function waitDetails(status, now = Date.now()) {
 }
 
 function isAllowedUser(userId) {
-  const allowed = String(process.env.GEMINI_CHAT_ALLOWED_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
-  // Fail closed during the pilot. An omitted allowlist must never turn a
-  // public chat widget into unrestricted paid Gemini access. Local work is a
-  // deliberate exception only when the developer explicitly switches it on;
-  // production can never inherit that shortcut accidentally.
-  return allowed.includes(userId) || isLocalDevelopmentAccessEnabled();
+  // Developer-only on every host. Legacy pilot/local bypass flags no longer
+  // grant access to ordinary accounts.
+  return isDeveloperUser(userId);
 }
 
-function isLocalDevelopmentAccessEnabled() {
-  return process.env.NODE_ENV !== "production"
-    && String(process.env.GEMINI_CHAT_ALLOW_LOCAL_DEVELOPMENT || "").toLowerCase() === "true";
-}
 function isDeveloperUser(userId) {
   const developers = String(process.env.GEMINI_CHAT_DEVELOPER_UIDS || "").split(",").map((value) => value.trim()).filter(Boolean);
   return developers.includes(userId);
@@ -53,6 +46,10 @@ function enabledGlobally() {
 }
 
 async function getGeminiChatStatus(userId) {
+  if (!isAllowedUser(userId)) return {
+    enabled: false, allowed: false, isDeveloper: false,
+    globallyEnabled: enabledGlobally(), accessMode: "developer-only"
+  };
   const authRef = telegramAuthDoc(userId);
   const now = Date.now();
   const dayKey = bangkokDayKey();
@@ -65,7 +62,7 @@ async function getGeminiChatStatus(userId) {
   ]);
   const enabled = enabledGlobally() && isAllowedUser(userId);
   return {
-    enabled, allowed: isAllowedUser(userId), isDeveloper: isDeveloperUser(userId), globallyEnabled: enabledGlobally(),
+    enabled, allowed: isAllowedUser(userId), isDeveloper: isDeveloperUser(userId), globallyEnabled: enabledGlobally(), accessMode: "developer-only",
     userWindow: { used: Number(window.data()?.count || 0), limit: limits.window, resetAt: (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS },
     userDay: { used: Number(day.data()?.count || 0), limit: limits.day, resetAt: nextBangkokMidnight(new Date(now)) },
     globalDay: { used: Number(global.data()?.count || 0), limit: GLOBAL_DAILY_LIMIT }
@@ -73,6 +70,8 @@ async function getGeminiChatStatus(userId) {
 }
 
 async function claimGeminiChatUsage(userId) {
+  if (!enabledGlobally()) return { status: "globally-disabled" };
+  if (!isAllowedUser(userId)) return { status: "not-allowed" };
   const now = Date.now();
   const dayKey = bangkokDayKey();
   const windowKey = String(Math.floor(now / WINDOW_MS));
@@ -109,6 +108,8 @@ async function releaseGeminiChatUsage(claim) {
 }
 
 async function claimGeminiDraftUsage(userId) {
+  if (!enabledGlobally()) return { status: "globally-disabled" };
+  if (!isAllowedUser(userId)) return { status: "not-allowed" };
   const now = Date.now();
   const dayKey = bangkokDayKey();
   const globalRef = db.collection("app-usage").doc(`gemini-draft-${dayKey}`);

@@ -39,9 +39,9 @@
 
 บทพูด: “The calendar list scope lets the backend discover accessible calendars for schedule questions. The app does not modify the calendar list.”
 
-### 4:20–5:10 — วิเคราะห์ด้วย AI และข้อมูลที่จัดเก็บ
+### 4:20–5:10 — ข้อมูลที่จัดเก็บ (AI เฉพาะนักพัฒนา)
 
-กดคำถามสีม่วงให้ AI วิเคราะห์ตาราง รอให้ตอบจริง อธิบายว่าข้อมูลกิจกรรมที่เกี่ยวข้องถูกส่งไป Vertex AI ตามคำขอของผู้ใช้ ไม่ใช่ทุกคำถามต้องเรียก AI จากนั้นสาธิตเก็บกิจกรรมทดสอบเข้าคลังเพื่อให้เห็นว่ามีข้อมูลที่แอปเก็บเอง
+สาธิตเก็บกิจกรรมทดสอบเข้าคลังเพื่อให้เห็นว่ามีข้อมูลที่แอปเก็บเอง ตอนนี้ Gemini เปิดเฉพาะ developer UID ที่อนุญาต ผู้ใช้ทั่วไปจะไม่เห็นคำถามสีม่วง หากต้องแสดง AI ในวิดีโอ ให้ใช้บัญชีนักพัฒนา ระบุว่าเป็น developer preview และอธิบายว่าบริบทที่เกี่ยวข้องถูกส่งไป Vertex AI ส่วนการสาธิตสำหรับผู้ใช้ทั่วไปใช้คำถาม Calendar ที่ระบบตอบเองตามขั้นตอนก่อนหน้า
 
 บทพูด: “When the user requests AI analysis, relevant schedule context is sent to Vertex AI. Archived activities are stored separately in the app.”
 

@@ -238,12 +238,13 @@ router.post("/activity-conversation", async (req, res, next) => {
       if (claim.status !== "claimed") {
         const errors = {
           "globally-disabled": "AI ถูกปิดชั่วคราวโดยระบบ",
-          "not-allowed": "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ AI",
+          "not-allowed": "AI อยู่ระหว่างทดสอบสำหรับนักพัฒนา กรุณาใช้คำถามสำเร็จรูปหรือสร้างกิจกรรมจากตัวเลือก",
           "window-limited": "ใช้ AI ครบโควต้าช่วง 15 นาทีแล้ว",
           "day-limited": "ใช้ AI ครบโควต้าประจำวันแล้ว",
           "global-limited": "โควต้า AI ของระบบวันนี้เต็มแล้ว"
         };
-        return res.status(429).json({
+        return res.status(claim.status === "not-allowed" ? 403 : 429).json({
+          ...(claim.status === "not-allowed" ? { code: "AI_DEVELOPER_ONLY" } : {}),
           error: errors[claim.status] || "AI ใช้งานไม่ได้ในขณะนี้",
           ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds, retryAfterAt: new Date(claim.resetAt).toISOString() } : {})
         });
@@ -256,12 +257,13 @@ router.post("/activity-conversation", async (req, res, next) => {
     if (claim.status !== "claimed") {
       const errors = {
         "globally-disabled": "AI ถูกปิดชั่วคราวโดยระบบ",
-        "not-allowed": "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ AI",
+        "not-allowed": "AI อยู่ระหว่างทดสอบสำหรับนักพัฒนา กรุณาใช้คำถามสำเร็จรูปหรือสร้างกิจกรรมจากตัวเลือก",
         "window-limited": "ใช้ AI ครบโควต้าช่วง 15 นาทีแล้ว",
         "day-limited": "ใช้ AI ครบโควต้าประจำวันแล้ว",
         "global-limited": "โควต้า AI ของระบบวันนี้เต็มแล้ว"
       };
-      return res.status(429).json({
+      return res.status(claim.status === "not-allowed" ? 403 : 429).json({
+        ...(claim.status === "not-allowed" ? { code: "AI_DEVELOPER_ONLY" } : {}),
         error: errors[claim.status] || "AI ใช้งานไม่ได้ในขณะนี้",
         ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds, retryAfterAt: new Date(claim.resetAt).toISOString() } : {})
       });
