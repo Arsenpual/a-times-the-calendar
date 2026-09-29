@@ -1,4 +1,4 @@
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
 // Server-only Developer API transport. Never put the key in URLs or errors.
 async function generateContent(body, { fetchImpl = fetch, env = process.env } = {}) {

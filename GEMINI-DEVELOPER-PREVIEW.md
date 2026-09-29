@@ -6,12 +6,14 @@ Backend ใช้ `generativelanguage.googleapis.com` แทน Vertex AI แล
 
 ```env
 GEMINI_API_KEY=ใส่_key_เฉพาะใน_environment
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 GEMINI_CHAT_ENABLED=true
 GEMINI_CHAT_DEVELOPER_UIDS=Firebase_UID_นักพัฒนา
 ```
 
 Restart local backend และ deploy backend ใหม่หลังตั้งค่า อย่าส่ง key ในแชทหรือใส่ตัวแปร VITE_ คง credential Firebase เดิมไว้ เพราะ Firestore ยังใช้ การเลือก Free Tier/โควต้าจริงขึ้นกับ project ใน AI Studio; โค้ดไม่ได้รับประกันว่า key จาก project ที่เปิด Billing จะใช้งานฟรี
+
+หากมี GEMINI_MODEL เดิมใน Render หรือ backend/.env ต้องเปลี่ยนด้วย เพราะ environment มีลำดับความสำคัญเหนือค่าเริ่มต้นในโค้ด รุ่น 2.5 Flash-Lite อาจไม่เปิดรับผู้ใช้ใหม่แล้ว การแนะนำ Interactions API ใน error ไม่ได้บังคับให้ย้าย API เพื่อแก้ชื่อโมเดลนี้
 
 Free Tier มีข้อกำหนดการใช้ข้อมูลต่างจาก Vertex AI: Google อาจนำ input/output ไปพัฒนาบริการและให้ผู้ตรวจสอบอ่าน ใช้ข้อมูลกิจกรรมจำลองในการทดลอง อย่าส่งข้อมูลส่วนตัวหรือความลับ ดู https://ai.google.dev/gemini-api/terms
 

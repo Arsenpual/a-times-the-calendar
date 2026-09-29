@@ -5,7 +5,7 @@ const { generateContent } = require('../gemini-api.js');
 test('Developer API uses server header and preserves structured output settings', async () => {
   const body = { contents: [], generationConfig: { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } } };
   const result = await generateContent(body, { env: { GEMINI_API_KEY: 'test-key' }, fetchImpl: async (url, options) => {
-    assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent');
+    assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent');
     assert.equal(options.headers['x-goog-api-key'], 'test-key');
     assert.equal(options.headers.Authorization, undefined);
     assert.deepEqual(JSON.parse(options.body), body);
