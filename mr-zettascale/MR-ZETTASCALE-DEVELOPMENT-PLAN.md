@@ -10,6 +10,21 @@ The assistant must never silently create, change, or delete Calendar data.
 The person always reviews the draft, may edit its fields manually in chat,
 and explicitly presses **Confirm** before an Activity is created.
 
+## System roles
+
+MR.Zettascale uses each part of T.i.M.E.S. for a distinct responsibility:
+
+- React and JavaScript provide the user experience and Activity Mode
+  interactions.
+- Node.js is the production backend for APIs, authentication, business rules,
+  assistant request handling, and Calendar writes.
+- Python is an offline Data Lab for sanitized activity-data analysis, reports,
+  evaluation datasets, and future planning experiments.
+
+Python is not part of the first Activity creation request path. It must not
+write directly to Google Calendar or Firestore. This keeps the live assistant
+safe while giving its future reasoning a measurable data foundation.
+
 ## Primary experience
 
 The user should reach a usable Activity draft in one to three messages.
@@ -141,9 +156,118 @@ Phase 3 is complete.
   need explicit approval before they become a default. Explicit user input
   always overrides an enabled preference.
 
+## Phase 3.5 — Data Foundation
+
+Goal: introduce Python safely as MR.Zettascale's offline data-analysis lab
+before using it for live scheduling or priority features.
+
+- Define one normalized activity-analysis record that can represent Calendar
+  activities and assistant-generated drafts.
+- Start with a synthetic activity dataset; do not use real Calendar or
+  Firestore data in committed examples or tests.
+- Create an Activity Data Quality Report that detects incomplete, malformed,
+  ambiguous, and insufficient-context activity data.
+- Produce both a machine-readable JSON report and a Markdown development
+  report.
+- Add deterministic tests for invalid times, overnight activities, all-day
+  activities, incomplete records, and stable report output.
+- Keep the first Python tool offline and read-only. A controlled Node.js JSON
+  export may be added only after the analysis rules are trusted.
+
+Success criteria:
+
+- One command can analyze a synthetic JSON fixture and produce both reports.
+- A malformed activity creates a finding without terminating the full run.
+- No Python process changes Calendar, Firestore, preferences, or Activity
+  drafts.
+- Node.js and frontend behavior remain unchanged.
+
+Detailed implementation plan: `PYTHON-DATA-LAB-PLAN.md`.
+
+### Phase 3.5 implementation status — complete
+
+The first Python Data Lab delivery lives in `mr-zettascale/lab`. It uses only
+the Python standard library and runs offline against a synthetic activity
+fixture. The command-line tool normalizes Calendar-shaped activity data and
+assistant-draft-shaped data, applies deterministic quality rules, and writes
+local JSON and Markdown reports.
+
+- The initial checks cover missing titles, invalid start/end values, reversed
+  times, missing categories or tags, code-like titles, unusually long timed
+  activities, and insufficient priority context.
+- Tests cover all-day records, overnight records, malformed input isolation,
+  reversed times, ambiguous titles, priority-context detection, and stable
+  output for the same input.
+- Local exports and generated reports are ignored by Git. Python has no
+  Firestore, Google Calendar, HTTP, or AI-model integration.
+
 ## Phase 4 — Scheduling Skill
 
 Goal: plan more than one Activity without losing user control.
+
+### Phase 4A — Find a Time
+
+Start with one task and one explicit duration. Offer two or three suitable
+time options, let the person choose one, then create only one reviewable
+Activity draft. Recheck Calendar overlap rules immediately before confirmation.
+
+### Phase 4A implementation status — complete
+
+The Activity assistant now recognizes explicit find-time requests such as
+"ช่วยหาเวลาว่างออกกำลังกายหนึ่งชั่วโมงพรุ่งนี้" without calling an AI
+model. It uses the existing nine-day schedule context and bounded daytime
+free-window rules to return up to three 30-minute-aligned options. Every
+option contains only a reviewable Activity draft; selecting it rechecks the
+frontend overlap guard and opens ActivityPopup. Calendar writes still happen
+only when the person explicitly saves that popup.
+
+The first delivery supports an explicit duration in Arabic digits or common
+Thai hour wording, plus today, tomorrow, or an ISO date. It does not yet plan
+multiple tasks, reserve breaks, or infer hidden priorities.
+
+### Phase 4B — Plan a List
+
+Accept a small list of tasks and return a single reviewable plan containing
+multiple Activity drafts. The person can edit or remove each draft before one
+explicit confirmation step. If only part of a confirmed plan can be created,
+report exactly which Activities succeeded and which failed.
+
+### Phase 4B implementation status — complete
+
+The first delivery accepts a clear comma-, semicolon-, or newline-separated
+list of two to five tasks, each with an explicit duration. It schedules drafts
+sequentially into the same bounded free-window context and keeps tasks that do
+not fit visibly unscheduled rather than guessing a conflicting time.
+
+The chat preview lets the person include or exclude each draft and edit its
+title, start, or end before one explicit `สร้าง N กิจกรรม` confirmation. The
+frontend validates the combined overlap set before it begins Calendar writes,
+then creates activities sequentially. Its result reports every created title
+and every failed title; a submitted preview cannot be confirmed again, so a
+partial success cannot create duplicates on retry.
+
+The first delivery deliberately handles only explicit list syntax and does not
+yet split tasks, infer duration, add breaks, or optimize by personal energy.
+
+### Phase 4C — Split and Protect Time
+
+Split large tasks into drafts, add breaks, avoid overly dense schedules, and
+use approved preferences only as defaults. Keep every proposed Activity
+individually editable before confirmation.
+
+### Phase 4C implementation status — complete
+
+The initial focus policy is an explicit product default: 90 minutes of focus
+followed by a 15-minute break. A request such as "ช่วยแบ่งงานทำรายงาน 3
+ชั่วโมงพรุ่งนี้" produces reviewable focus and break drafts in the same plan
+preview. Focus blocks after a break use 15-minute scheduling increments so a
+new block begins immediately after its protected break when the Calendar is
+free.
+
+The policy applies only to explicit split-task requests with an explicit
+duration. It does not infer a person's energy pattern or save an inferred
+preference. Every focus or break draft remains selectable and editable before
+the single batch confirmation.
 
 - Find suitable free time.
 - Offer two or three reasonable time options.
@@ -187,6 +311,12 @@ Measure:
 - accidental conflict rate;
 - AI calls and cost per created Activity.
 
+Use the Python Data Lab to make these measurements repeatable. It should also
+report activity-data quality, the proportion of drafts with insufficient
+priority context, and the outcomes of scheduling or priority experiments.
+No offline conclusion becomes a user preference or a live assistant rule
+without explicit product review and user-control safeguards.
+
 ## Suggested code structure
 
 ```text
@@ -215,6 +345,14 @@ backend/
 │       └── examples.js
 └── routes/
     └── activity-assistant.js
+
+mr-zettascale/
+└── lab/
+    ├── data/
+    ├── src/
+    │   └── mr_zettascale_data/
+    ├── tests/
+    └── reports/
 ```
 
 ## Phase 1 completion — 16 September 2026
@@ -233,5 +371,6 @@ Phase 1 is complete.
   endpoint's knowledge, valid-draft, malformed-output, and quota-release
   paths without calling Vertex AI or Firestore.
 
-The next implementation work is Phase 2: supply narrow schedule context and
-apply overlap/conflict rules before making a time suggestion.
+The next implementation work is Phase 3.5: establish the offline Python Data
+Lab and Activity Data Quality Report before expanding MR.Zettascale into
+multi-Activity scheduling.

@@ -328,6 +328,7 @@ export default function AccountApp({ auth }) {
     handleCreateCategory,
     handleDeleteCategory,
     handleSaveActivity,
+    handleSaveActivityPlan,
     handleSaveTimes,
     handleFetchSeriesCount,
     handleDeleteActivity,
@@ -343,6 +344,28 @@ export default function AccountApp({ auth }) {
     if (corrections.length) assistantPreferences.recordCorrections(corrections).catch(() => {});
     return saved;
   }, [assistantPreferences, handleSaveActivity]);
+  const saveAssistantPlan = useCallback(async (drafts) => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const items = drafts.map((draft) => {
+      const start = new Date(draft.startLocal || "");
+      const end = new Date(draft.endLocal || "");
+      if (!draft.title?.trim() || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+        throw new Error("แผนมีชื่อหรือวันเวลาที่ไม่ถูกต้อง");
+      }
+      const categoryId = categories.find((category) => category.name === draft.categoryName)?.id || null;
+      return {
+        activityBody: {
+          summary: draft.title.trim(),
+          description: draft.notes?.trim() || null,
+          start: { dateTime: start.toISOString(), timeZone },
+          end: { dateTime: end.toISOString(), timeZone }
+        },
+        categoryId,
+        tags: Array.isArray(draft.tags) ? draft.tags : []
+      };
+    });
+    return handleSaveActivityPlan(items);
+  }, [categories, handleSaveActivityPlan]);
 
   const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
     mode,
@@ -695,6 +718,7 @@ export default function AccountApp({ auth }) {
           openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: { ...draft, assistantOrigin: "mr-zettascale" } });
         }}
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
+        onConfirmActivityPlan={saveAssistantPlan}
         onOpenDailySummary={openAssistantDailySummary}
       />
 

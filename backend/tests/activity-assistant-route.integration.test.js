@@ -146,6 +146,84 @@ test("a complete explicit activity request skips AI quota and opens a reviewable
   assert.equal(geminiCalls, 0);
 });
 
+test("a find-time request returns up to three reviewable drafts without using AI quota", async () => {
+  let quotaCalls = 0;
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => { quotaCalls += 1; return { status: "claimed" }; },
+    generateActivity: async () => { throw new Error("must not call Gemini"); }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, {
+      text: "ช่วยหาเวลาว่างออกกำลังกายหนึ่งชั่วโมงพรุ่งนี้",
+      scheduleContext: {
+        windowStartLocal: "2026-09-16T00:00",
+        windowEndLocal: "2026-09-18T00:00",
+        activities: [{ id: "busy", title: "ประชุม", startLocal: "2026-09-17T08:00", endLocal: "2026-09-17T10:00" }]
+      }
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, "scheduling");
+    assert.equal(result.ready, false);
+    assert.equal(result.scheduling.options.length, 3);
+    assert.equal(result.scheduling.options[0].draft.title, "ออกกำลังกาย");
+    assert.equal(result.scheduling.options[0].draft.startLocal, "2026-09-17T10:00");
+  });
+  assert.equal(quotaCalls, 0);
+});
+
+test("a plan-list request returns sequential drafts and keeps an unscheduled task visible", async () => {
+  let quotaCalls = 0;
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => { quotaCalls += 1; return { status: "claimed" }; },
+    generateActivity: async () => { throw new Error("must not call Gemini"); }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, {
+      text: "ช่วยวางแผนพรุ่งนี้: อ่านหนังสือ 1 ชั่วโมง, ออกกำลังกาย 30 นาที, งานยาว 8 ชั่วโมง",
+      scheduleContext: {
+        windowStartLocal: "2026-09-16T00:00",
+        windowEndLocal: "2026-09-18T00:00",
+        activities: [{ id: "busy", title: "ประชุม", startLocal: "2026-09-17T08:00", endLocal: "2026-09-17T20:00" }]
+      }
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, "planning");
+    assert.equal(result.planning.drafts.length, 2);
+    assert.equal(result.planning.drafts[0].title, "อ่านหนังสือ");
+    assert.equal(result.planning.drafts[0].startLocal, "2026-09-17T20:00");
+    assert.equal(result.planning.drafts[1].startLocal, "2026-09-17T21:00");
+    assert.deepEqual(result.planning.unscheduled, [{ title: "งานยาว", durationMinutes: 480 }]);
+  });
+  assert.equal(quotaCalls, 0);
+});
+
+test("a split-task request protects a 90-minute focus block with a 15-minute break", async () => {
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => { throw new Error("must not claim AI quota"); },
+    generateActivity: async () => { throw new Error("must not call Gemini"); }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, {
+      text: "ช่วยแบ่งงานทำรายงาน 3 ชั่วโมงพรุ่งนี้",
+      scheduleContext: {
+        windowStartLocal: "2026-09-16T00:00",
+        windowEndLocal: "2026-09-18T00:00",
+        activities: []
+      }
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, "planning");
+    assert.deepEqual(result.planning.drafts.map((draft) => [draft.title, draft.startLocal, draft.endLocal]), [
+      ["ทำรายงาน (1/2)", "2026-09-17T08:00", "2026-09-17T09:30"],
+      ["พัก 15 นาที", "2026-09-17T09:30", "2026-09-17T09:45"],
+      ["ทำรายงาน (2/2)", "2026-09-17T09:45", "2026-09-17T11:15"]
+    ]);
+  });
+});
+
 test("valid Gemini result becomes a reviewable draft and never calls a Calendar writer", async () => {
   let geminiCalls = 0;
   await withTestServer({

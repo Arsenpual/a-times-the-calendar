@@ -36,6 +36,39 @@ export function createActivityCalendarActions({
   loadActivities,
   refreshTagSearchIfActive
 }) {
+  const persistCreatedActivityMetadata = async (savedActivity, categoryId, tags) => {
+    if (!savedActivity?.id) return;
+    try {
+      await syncActivityNotification(savedActivity);
+    } catch (error) {
+      setError(`บันทึกกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${error.message}`);
+    }
+    const normalizedId = normalizeActivityId(savedActivity.id);
+    setActivityCategoryMap((previous) => {
+      const next = { ...previous };
+      if (categoryId) next[normalizedId] = categoryId;
+      else delete next[normalizedId];
+      return next;
+    });
+    try {
+      await assignActivityCategory(normalizedId, categoryId);
+    } catch (error) {
+      setError(`บันทึกหมวดหมู่ไม่สำเร็จ: ${error.message}`);
+    }
+    const cleanTags = Array.isArray(tags) ? tags : [];
+    setActivityTagMap((previous) => {
+      const next = { ...previous };
+      if (cleanTags.length > 0) next[normalizedId] = cleanTags;
+      else delete next[normalizedId];
+      return next;
+    });
+    try {
+      await setActivityTags(normalizedId, cleanTags);
+    } catch (error) {
+      setError(`บันทึก tag ไม่สำเร็จ: ${error.message}`);
+    }
+  };
+
   const handleSaveActivity = async ({ activityBody, categoryId, tags, existingId, knownUpdated }) => {
     if (!calendarAccessToken) return false;
 
@@ -64,38 +97,7 @@ export function createActivityCalendarActions({
       throw error;
     }
 
-    if (savedActivity?.id) {
-      try {
-        await syncActivityNotification(savedActivity);
-      } catch (error) {
-        setError(`บันทึกกิจกรรมสำเร็จ แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${error.message}`);
-      }
-      const normalizedId = normalizeActivityId(savedActivity.id);
-      setActivityCategoryMap((previous) => {
-        const next = { ...previous };
-        if (categoryId) next[normalizedId] = categoryId;
-        else delete next[normalizedId];
-        return next;
-      });
-      try {
-        await assignActivityCategory(normalizedId, categoryId);
-      } catch (error) {
-        setError(`บันทึกหมวดหมู่ไม่สำเร็จ: ${error.message}`);
-      }
-
-      const cleanTags = Array.isArray(tags) ? tags : [];
-      setActivityTagMap((previous) => {
-        const next = { ...previous };
-        if (cleanTags.length > 0) next[normalizedId] = cleanTags;
-        else delete next[normalizedId];
-        return next;
-      });
-      try {
-        await setActivityTags(normalizedId, cleanTags);
-      } catch (error) {
-        setError(`บันทึก tag ไม่สำเร็จ: ${error.message}`);
-      }
-    }
+    await persistCreatedActivityMetadata(savedActivity, categoryId, tags);
 
     if (conflictDetected) {
       setError(`กิจกรรม "${activityBody.summary}" ถูกแก้ไขที่อื่นหลังจากเปิดฟอร์มนี้ — บันทึกทับข้อมูลล่าสุดแล้ว`);
@@ -103,6 +105,40 @@ export function createActivityCalendarActions({
     await loadActivities();
     refreshTagSearchIfActive();
     return savedActivity;
+  };
+
+  const handleSaveActivityPlan = async (items) => {
+    if (!calendarAccessToken) throw new Error("กรุณาเชื่อม Google Calendar ก่อนสร้างแผน");
+    if (!Array.isArray(items) || items.length < 1 || items.length > 5) throw new Error("แผนต้องมีกิจกรรมระหว่าง 1 ถึง 5 รายการ");
+    const plannedEntries = items.map((item, index) => ({
+      id: `plan-${index}`,
+      start: new Date(item?.activityBody?.start?.dateTime || ""),
+      end: new Date(item?.activityBody?.end?.dateTime || "")
+    }));
+    if (plannedEntries.some((entry) => !Number.isFinite(entry.start.getTime()) || !Number.isFinite(entry.end.getTime()) || entry.end <= entry.start)) {
+      throw new Error("แผนมีวันเวลาที่ไม่ถูกต้อง");
+    }
+    if (exceedsOverlapLimit([...overlapEntriesFromActivities(activities), ...plannedEntries])) {
+      throw new Error("สร้างแผนไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
+    }
+
+    const created = [];
+    const failed = [];
+    for (const item of items) {
+      const title = item.activityBody?.summary || "(ไม่มีชื่อ)";
+      try {
+        const saved = await createActivity(calendarAccessToken, item.activityBody);
+        await persistCreatedActivityMetadata(saved, item.categoryId, item.tags);
+        created.push({ id: saved?.id || "", title });
+      } catch (error) {
+        failed.push({ title, error: error.message || "ไม่สามารถสร้างกิจกรรมได้" });
+        clearTokenIfExpired(error);
+        if (isCalendarAuthExpiredError(error)) break;
+      }
+    }
+    await loadActivities();
+    refreshTagSearchIfActive();
+    return { created, failed };
   };
 
   const handleSaveTimes = async (changes) => {
@@ -326,6 +362,7 @@ export function createActivityCalendarActions({
 
   return {
     handleSaveActivity,
+    handleSaveActivityPlan,
     handleSaveTimes,
     handleFetchSeriesCount,
     handleDeleteActivity,

@@ -2,7 +2,7 @@ const schema = require('./schema.js');
 const buildPrompt = require('./prompt.js');
 const { applyAssumptions } = require('./assumptions.js');
 const { validateDraft, localDateTime, bounded, fail } = require('./validator.js');
-const { normalizeScheduleContext, buildAvailableWindows, assessDraftSchedule } = require('./schedule-context.js');
+const { normalizeScheduleContext, buildAvailableWindows, findFreeTimeOptions, assessDraftSchedule } = require('./schedule-context.js');
 
 function hasCompleteExplicitTiming(draft) {
   if (!draft || typeof draft.title !== 'string' || !draft.title.trim()) return false;
@@ -111,4 +111,4 @@ function finishResult(raw, context) {
   }
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
-module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, normalizeAssistantPreferences };
+module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions, normalizeAssistantPreferences };

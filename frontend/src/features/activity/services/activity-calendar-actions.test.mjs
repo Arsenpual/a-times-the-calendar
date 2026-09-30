@@ -105,4 +105,31 @@ assert.equal(occurrenceState.activities.length, 0);
 assert.equal(occurrenceState.categoryMap.occurrence, "work", "occurrence delete must retain series metadata");
 assert.deepEqual(occurrenceState.tagMap.occurrence, ["deep"]);
 
+let planCreateAttempts = 0;
+const planCalls = [];
+const planActions = createActivityCalendarActions({
+  ...common,
+  activityCategoryMap: {},
+  activityTagMap: {},
+  createActivity: async (_token, body) => {
+    planCreateAttempts += 1;
+    if (planCreateAttempts === 2) throw new Error("Calendar temporarily unavailable");
+    return { id: `plan-${planCreateAttempts}`, ...body };
+  },
+  setActivityCategoryMap: () => {},
+  setActivityTagMap: () => {},
+  syncActivityNotification: async () => {},
+  assignActivityCategory: async () => {},
+  setActivityTags: async () => {},
+  loadActivities: async () => { planCalls.push("reload"); },
+  refreshTagSearchIfActive: () => { planCalls.push("refresh"); }
+});
+const planResult = await planActions.handleSaveActivityPlan([
+  { activityBody: { summary: "อ่านหนังสือ", start: { dateTime: "2027-09-02T09:00:00Z" }, end: { dateTime: "2027-09-02T10:00:00Z" } }, categoryId: null, tags: [] },
+  { activityBody: { summary: "ออกกำลังกาย", start: { dateTime: "2027-09-02T10:00:00Z" }, end: { dateTime: "2027-09-02T11:00:00Z" } }, categoryId: null, tags: [] }
+]);
+assert.deepEqual(planResult.created, [{ id: "plan-1", title: "อ่านหนังสือ" }]);
+assert.deepEqual(planResult.failed, [{ title: "ออกกำลังกาย", error: "Calendar temporarily unavailable" }]);
+assert.deepEqual(planCalls, ["reload", "refresh"]);
+
 console.log("PASS: Activity calendar save ordering and recurring occurrence metadata retention");

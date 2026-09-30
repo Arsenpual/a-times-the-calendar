@@ -1,9 +1,61 @@
 import { useActivityAssistantConversation } from "../hooks/use-activity-assistant-conversation.js";
+import { useState } from "react";
 import {
   CALENDAR_AI_QUESTION_SUGGESTIONS,
   CALENDAR_FACT_SUGGESTIONS,
 } from "../config/activity-assistant-conversation-tree.js";
-import { formatScheduleRange } from "../lib/schedule-format.js";
+import { formatScheduleOption, formatScheduleRange } from "../lib/schedule-format.js";
+
+function replaceLocalDateTime(value, part, next) {
+  if (typeof value !== "string" || !next) return value;
+  return part === "date" ? `${next}${value.slice(10)}` : `${value.slice(0, 11)}${next}`;
+}
+
+function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
+  const [drafts, setDrafts] = useState(initialDrafts);
+  const [selected, setSelected] = useState(() => new Set(initialDrafts.map((_, index) => index)));
+  const [editing, setEditing] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+  const updateDraft = (index, update) => setDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, ...update } : draft));
+  const selectedDrafts = drafts.filter((_, index) => selected.has(index));
+  const submitPlan = async () => {
+    if (submitted || selectedDrafts.length === 0) return;
+    setSubmitted(true);
+    const completed = await onConfirm(selectedDrafts);
+    if (!completed) setSubmitted(false);
+  };
+  return (
+    <section className="activity-ai-plan-preview" aria-label="ร่างแผนกิจกรรม">
+      {drafts.map((draft, index) => (
+        <div className="activity-ai-plan-item" key={`${draft.title}-${draft.startLocal}-${index}`}>
+          <label>
+            <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected((current) => {
+              const next = new Set(current);
+              if (next.has(index)) next.delete(index); else next.add(index);
+              return next;
+            })} disabled={pending || submitted} />
+            <span>{draft.title} · {formatScheduleOption(draft.startLocal, draft.endLocal)}</span>
+          </label>
+          <button type="button" onClick={() => setEditing(editing === index ? null : index)} disabled={pending || submitted}>
+            {editing === index ? "เสร็จ" : "แก้ไข"}
+          </button>
+          {editing === index && (
+            <div className="activity-ai-plan-edit">
+              <input aria-label="ชื่อกิจกรรม" value={draft.title} onChange={(event) => updateDraft(index, { title: event.target.value })} />
+              <input aria-label="วันเริ่ม" type="date" value={draft.startLocal.slice(0, 10)} onChange={(event) => updateDraft(index, { startLocal: replaceLocalDateTime(draft.startLocal, "date", event.target.value) })} />
+              <input aria-label="เวลาเริ่ม" type="time" value={draft.startLocal.slice(11, 16)} onChange={(event) => updateDraft(index, { startLocal: replaceLocalDateTime(draft.startLocal, "time", event.target.value) })} />
+              <input aria-label="วันสิ้นสุด" type="date" value={draft.endLocal.slice(0, 10)} onChange={(event) => updateDraft(index, { endLocal: replaceLocalDateTime(draft.endLocal, "date", event.target.value) })} />
+              <input aria-label="เวลาสิ้นสุด" type="time" value={draft.endLocal.slice(11, 16)} onChange={(event) => updateDraft(index, { endLocal: replaceLocalDateTime(draft.endLocal, "time", event.target.value) })} />
+            </div>
+          )}
+        </div>
+      ))}
+      <button type="button" className="btn btn-primary activity-ai-plan-confirm" onClick={submitPlan} disabled={pending || submitted || selectedDrafts.length === 0}>
+        {submitted ? "ส่งแผนแล้ว" : `สร้าง ${selectedDrafts.length} กิจกรรม`}
+      </button>
+    </section>
+  );
+}
 
 export default function ActivityAssistantDialog(props) {
   const {
@@ -38,6 +90,8 @@ export default function ActivityAssistantDialog(props) {
     selectQuickReply,
     runDailySummary,
     selectScheduleAlternative,
+    selectScheduleOption,
+    confirmActivityPlan,
     sendToTelegram,
   } = useActivityAssistantConversation(props);
   if (!open) return null;
@@ -166,6 +220,23 @@ export default function ActivityAssistantDialog(props) {
                     </button>
                   ))}
                 </div>
+              )}
+              {message.scheduleOptions?.length > 0 && (
+                <div className="activity-ai-schedule-options">
+                  {message.scheduleOptions.map((option) => (
+                    <button
+                      key={`${option.startLocal}-${option.endLocal}`}
+                      type="button"
+                      onClick={() => selectScheduleOption(option)}
+                      disabled={pending || !option.draft}
+                    >
+                      เลือก {formatScheduleOption(option.startLocal, option.endLocal)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {message.planDrafts?.length > 0 && (
+                <ActivityPlanPreview initialDrafts={message.planDrafts} pending={pending} onConfirm={confirmActivityPlan} />
               )}
             </div>
           ))}

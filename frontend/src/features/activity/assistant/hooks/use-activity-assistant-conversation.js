@@ -51,6 +51,7 @@ export function useActivityAssistantConversation({
   onClearTelegramMessages,
   onOpenActivityForm,
   onUpdateActivityForm,
+  onConfirmActivityPlan,
   onOpenDailySummary,
   activityFormOpen = false,
   startActivityCreationRequest = 0,
@@ -430,7 +431,7 @@ export function useActivityAssistantConversation({
       // A complete explicit request is parsed by the backend without Gemini.
       // Render it like other quota-free knowledge responses so this turn does
       // not inflate the local AI usage indicator either.
-      const responseSource = ["knowledge", "deterministic"].includes(
+      const responseSource = ["knowledge", "deterministic", "scheduling", "planning"].includes(
         result.source,
       )
         ? "knowledge"
@@ -483,6 +484,8 @@ export function useActivityAssistantConversation({
             role: "assistant",
             text: result.reply,
             source: responseSource,
+            scheduleOptions: result.scheduling?.options || [],
+            planDrafts: result.planning?.drafts || [],
             followUpQuestions:
               !result.ready && responseSource === "knowledge"
                 ? getActivityAssistantKnowledgeFollowUps(text)
@@ -617,6 +620,50 @@ export function useActivityAssistantConversation({
       });
     else onOpenActivityForm?.(formDraft);
   };
+  const selectScheduleOption = (option) => {
+    const formDraft = option?.draft;
+    if (!formDraft?.startLocal || !formDraft?.endLocal) return;
+    const schedule = assessAssistantDraftOverlap(formDraft, activities, lockedActivities);
+    if (schedule.status === "overlap-limit") {
+      setError("ตารางเปลี่ยนแล้ว ช่วงเวลานี้ชนเกิน 3 กิจกรรม กรุณาหาช่วงเวลาใหม่อีกครั้ง");
+      return;
+    }
+    addMessages(
+      { role: "user", text: `เลือกเวลา ${formatScheduleRange(formDraft.startLocal, formDraft.endLocal)}`, source: "template" },
+      { role: "assistant", text: "เปิดร่างกิจกรรมให้แล้ว ตรวจสอบรายละเอียดและกดบันทึกได้เลยครับ", source: "template" },
+    );
+    if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft }, changedField: "activityDraft" });
+    else onOpenActivityForm?.(formDraft);
+  };
+  const confirmActivityPlan = async (drafts) => {
+    if (!onConfirmActivityPlan || pending || !Array.isArray(drafts) || drafts.length === 0) return false;
+    setPending(true);
+    setPendingSource("template");
+    setError("");
+    try {
+      const result = await onConfirmActivityPlan(drafts);
+      const created = result?.created || [];
+      const failed = result?.failed || [];
+      setMessages((current) => [
+        ...current,
+        { role: "user", text: `ยืนยันสร้าง ${drafts.length} กิจกรรม`, source: "template" },
+        {
+          role: "assistant",
+          text: failed.length
+            ? `สร้างสำเร็จ ${created.length} รายการ และไม่สำเร็จ ${failed.length} รายการ: ${failed.map((item) => `“${item.title}”`).join(", ")}`
+            : `สร้างกิจกรรม ${created.length} รายการเรียบร้อยแล้วครับ`,
+          source: "template"
+        }
+      ]);
+      return true;
+    } catch (requestError) {
+      setError(requestError.message || "สร้างแผนกิจกรรมไม่สำเร็จ");
+      return false;
+    } finally {
+      setPending(false);
+      setPendingSource("");
+    }
+  };
   const openFullActivityForm = (activityValues = guidedActivity) => {
     const seed = (() => {
       const now = new Date();
@@ -663,6 +710,8 @@ export function useActivityAssistantConversation({
     selectQuickReply,
     runDailySummary,
     selectScheduleAlternative,
+    selectScheduleOption,
+    confirmActivityPlan,
     sendToTelegram,
   };
 }

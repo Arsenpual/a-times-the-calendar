@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { assessDraftSchedule, buildAvailableWindows } = require("../skills/activity-creation/schedule-context.js");
+const { assessDraftSchedule, buildAvailableWindows, findFreeTimeOptions } = require("../skills/activity-creation/schedule-context.js");
 
 const draft = { title: "ร่างกิจกรรม", startLocal: "2026-09-16T10:00", endLocal: "2026-09-16T11:00", allDay: false };
 const activity = (id, title, startLocal, endLocal, locked = false) => ({ id, title, startLocal, endLocal, locked });
@@ -76,4 +76,17 @@ test("today's available windows and alternatives do not point into the past", ()
   const schedule = assessDraftSchedule({ ...draft, startLocal: "2026-09-16T14:30", endLocal: "2026-09-16T15:30" }, context);
   assert.equal(schedule.status, "overlap-limit");
   assert.ok(schedule.alternatives.every((alternative) => alternative.startLocal >= "2026-09-16T14:30"));
+});
+
+test("find-time options fit the requested duration and date without overlaps", () => {
+  const options = findFreeTimeOptions({
+    windowStartLocal: "2026-09-16T00:00",
+    windowEndLocal: "2026-09-18T00:00",
+    activities: [activity("busy", "ประชุม", "2026-09-17T08:00", "2026-09-17T10:00")]
+  }, 60, "2026-09-17");
+  assert.deepEqual(options, [
+    { startLocal: "2026-09-17T10:00", endLocal: "2026-09-17T11:00" },
+    { startLocal: "2026-09-17T10:30", endLocal: "2026-09-17T11:30" },
+    { startLocal: "2026-09-17T11:00", endLocal: "2026-09-17T12:00" }
+  ]);
 });

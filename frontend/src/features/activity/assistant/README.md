@@ -36,6 +36,41 @@ is observed only after the person explicitly saves that activity. The same
 field must be corrected in two separate saves before Settings offers it as an
 approval candidate; the candidate is never enabled automatically.
 
+## Phase 4A — find a time
+
+An explicit request to find time for one activity with one duration is handled
+deterministically before the Calendar-question or Gemini branches. The backend
+uses only the browser's existing narrow nine-day schedule context and returns
+up to three free daytime slots. Selecting a slot opens one ActivityPopup draft;
+it does not write to Calendar or create multiple Activities.
+
+The browser repeats the overlap guard immediately before it opens the draft,
+so a schedule change while the chat was open cannot bypass the normal
+maximum-three-overlaps rule.
+
+## Phase 4B — plan a list
+
+A clear list of two to five tasks with explicit durations can be planned into
+one draft set. The assistant places tasks sequentially in the bounded schedule
+context and leaves a task visibly unscheduled when no suitable slot remains.
+
+Before one explicit batch confirmation, the chat preview supports excluding an
+item or editing its title and start/end values. The mutation layer checks the
+combined overlap set, creates items in sequence, reloads the Calendar once,
+and reports partial success item by item. A submitted preview is locked to
+prevent duplicate creation after a partial failure.
+
+## Phase 4C — split and protect time
+
+The initial focus policy is 90 minutes of focus followed by a 15-minute break.
+An explicit split-task request creates focus and break drafts in the same
+reviewable plan preview. The planner searches on 15-minute increments only
+for this flow so the next focus block can begin directly after its break.
+
+The policy is a visible product default, not stored personal memory. A person
+can still exclude or edit every generated focus or break Activity before the
+batch confirmation.
+
 ## Storage and verification
 
 Chat storage is scoped to the authenticated UID (v2). AccountApp remounts on

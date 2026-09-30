@@ -1,0 +1,8 @@
+[project]
+name = "mr-zettascale-data-lab"
+version = "0.1.0"
+description = "Offline activity-data quality analysis for MR.Zettascale"
+requires-python = ">=3.11"
+
+[tool.unittest]
+start-directory = "tests"

@@ -41,5 +41,16 @@ Desktop.ini
 # Existing backend-only local note
 /backend/REMINDER.md
 
+# Python Data Lab: local exports and generated analysis reports can contain
+# personal scheduling data. Committed synthetic fixtures live under tests/.
+/mr-zettascale/lab/data/*.json
+!/mr-zettascale/lab/data/sample-activities.json
+/mr-zettascale/lab/reports/*.json
+/mr-zettascale/lab/reports/*.md
+!/mr-zettascale/lab/reports/.gitkeep
+/mr-zettascale/lab/.venv/
+__pycache__/
+*.py[cod]
+
 # Commit package.json, lockfiles, source, tests and Firebase configuration.
 # Ignore rules do not remove files already tracked by Git.

@@ -2,7 +2,7 @@ const express = require("express");
 const { generateContent } = require("../gemini-api.js");
 const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../calendar-question.js");
 
-const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule } = require("../skills/activity-creation");
+const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions } = require("../skills/activity-creation");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
 function createActivityAssistantRouter({
@@ -89,6 +89,204 @@ function completeActivityRequest(context) {
     reply: `ร่างกิจกรรม “${title}” สำเร็จแล้วครับ ตรวจสอบรายละเอียดได้ใน Activity Popup`,
     draft: { title, date, startTime, startLocal: "", endLocal: "", durationMinutes, allDay: false, categoryName: "", tags: [], notes: "", assumptions: ["สร้างจากข้อมูลวัน เวลา และระยะเวลาที่ระบุครบถ้วน"] }
   }, context);
+}
+
+function isFindTimeRequest(text) {
+  return /หา\s*(?:ช่วง)?เวลา(?:ว่าง)?|หาช่วงว่าง|find\s+(?:a\s+)?free\s+time/i.test(String(text));
+}
+
+function titleFromFindTimeRequest(text) {
+  return String(text)
+    .replace(/ช่วย?\s*หา\s*(?:ช่วง)?เวลา(?:ว่าง)?|ช่วย?\s*หาช่วงว่าง|find\s+(?:a\s+)?free\s+time(?:\s+for)?/gi, " ")
+    .replace(/พรุ่งนี้|วันนี้|\btomorrow\b|\btoday\b|\b\d{4}-\d{2}-\d{2}\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?)|\b\d+\s*(?:minutes?|mins?)\b|\d+\s*นาที/gi, " ")
+    .replace(/(?:หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)\s*ชั่วโมง(?:ครึ่ง)?|ครึ่ง\s*ชั่วโมง/gi, " ")
+    .replace(/\s+/g, " ").replace(/^[\s:：-]+/, "").trim().slice(0, 200);
+}
+
+function thaiDurationMinutes(text) {
+  const compact = String(text).replace(/\s+/g, "");
+  if (/ครึ่งชั่วโมง/.test(compact)) return 30;
+  const names = { "หนึ่ง": 1, "สอง": 2, "สาม": 3, "สี่": 4, "ห้า": 5, "หก": 6, "เจ็ด": 7, "แปด": 8, "เก้า": 9, "สิบ": 10 };
+  const match = compact.match(/(หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)ชั่วโมง(ครึ่ง)?/);
+  return match ? names[match[1]] * 60 + (match[2] ? 30 : 0) : 0;
+}
+
+function findTimeRequest(context) {
+  if (!isFindTimeRequest(context.text)) return null;
+  const durationMinutes = durationMinutesFromText(context.text) || thaiDurationMinutes(context.text);
+  const title = titleFromFindTimeRequest(context.text);
+  if (!title || durationMinutes < 30 || durationMinutes > 720) return null;
+  const requestedDate = explicitDateFromText(context.text, context.referenceDate);
+  const options = findFreeTimeOptions(context.scheduleContext, durationMinutes, requestedDate).map((slot) => {
+    const draft = finishResult({
+      ready: true,
+      reply: "",
+      draft: {
+        title,
+        startLocal: slot.startLocal,
+        endLocal: slot.endLocal,
+        allDay: false,
+        categoryName: "",
+        tags: [],
+        notes: "",
+        assumptions: ["เลือกจากช่วงเวลาว่างในตารางที่ส่งมา"]
+      }
+    }, context).draft;
+    return { ...slot, draft };
+  });
+  return {
+    ready: false,
+    draft: null,
+    source: "scheduling",
+    reply: options.length
+      ? `พบช่วงเวลาว่างสำหรับ “${title}” ${options.length} ตัวเลือก เลือกช่วงที่สะดวก แล้วตรวจสอบรายละเอียดก่อนบันทึกได้เลยครับ`
+      : `ยังไม่พบช่วงเวลาว่างที่ยาว ${durationMinutes} นาทีในช่วงที่ตรวจสอบ ลองเลือกวันอื่นหรือปรับระยะเวลาได้ครับ`,
+    scheduling: { title, durationMinutes, requestedDate, options }
+  };
+}
+
+function isPlanListRequest(text) {
+  return /(?:ช่วย\s*)?วางแผน|\bplan\s+(?:my\s+)?(?:tasks?|day)\b/i.test(String(text));
+}
+
+function planTaskFromText(text) {
+  const durationMinutes = durationMinutesFromText(text) || thaiDurationMinutes(text);
+  const title = String(text)
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?)|\b\d+\s*(?:minutes?|mins?)\b|\d+\s*นาที/gi, " ")
+    .replace(/(?:หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)\s*ชั่วโมง(?:ครึ่ง)?|ครึ่ง\s*ชั่วโมง/gi, " ")
+    .replace(/\s+/g, " ").replace(/^[\s:：-]+/, "").trim().slice(0, 200);
+  return title && durationMinutes >= 30 && durationMinutes <= 720 ? { title, durationMinutes } : null;
+}
+
+function planListRequest(context) {
+  if (!isPlanListRequest(context.text)) return null;
+  const requestedDate = explicitDateFromText(context.text, context.referenceDate);
+  const listText = String(context.text)
+    .replace(/(?:ช่วย\s*)?วางแผน(?:ให้)?|\bplan\s+(?:my\s+)?(?:tasks?|day)\b/gi, " ")
+    .replace(/พรุ่งนี้|วันนี้|\btomorrow\b|\btoday\b|\b\d{4}-\d{2}-\d{2}\b/gi, " ");
+  const tasks = listText.split(/[;,\n]+/).map(planTaskFromText).filter(Boolean).slice(0, 5);
+  if (tasks.length < 2) return null;
+
+  const planningContext = { ...context.scheduleContext, activities: [...context.scheduleContext.activities] };
+  const drafts = [];
+  const unscheduled = [];
+  for (const task of tasks) {
+    const slot = findFreeTimeOptions(planningContext, task.durationMinutes, requestedDate)[0];
+    if (!slot) {
+      unscheduled.push({ title: task.title, durationMinutes: task.durationMinutes });
+      continue;
+    }
+    const draft = finishResult({
+      ready: true,
+      reply: "",
+      draft: {
+        title: task.title,
+        startLocal: slot.startLocal,
+        endLocal: slot.endLocal,
+        allDay: false,
+        categoryName: "",
+        tags: [],
+        notes: "",
+        assumptions: ["วางต่อจากช่วงเวลาว่างในตารางที่ส่งมา"]
+      }
+    }, context).draft;
+    drafts.push(draft);
+    planningContext.activities.push({ id: `plan-${drafts.length}`, title: draft.title, startLocal: draft.startLocal, endLocal: draft.endLocal, locked: false });
+  }
+  return {
+    ready: false,
+    draft: null,
+    source: "planning",
+    reply: drafts.length
+      ? `วางร่างกิจกรรมได้ ${drafts.length} รายการ ตรวจ แก้ไข หรือตัดออกทีละรายการก่อนกดสร้างทั้งชุดได้เลยครับ${unscheduled.length ? `\nยังหาเวลาให้ ${unscheduled.map((task) => `“${task.title}”`).join(", ")} ไม่ได้` : ""}`
+      : "ยังไม่พบช่วงเวลาว่างพอสำหรับรายการที่ส่งมา ลองเปลี่ยนวันหรือปรับระยะเวลาได้ครับ",
+    planning: { drafts, unscheduled, requestedDate }
+  };
+}
+
+const FOCUS_BLOCK_MINUTES = 90;
+const FOCUS_BREAK_MINUTES = 15;
+
+function isSplitTaskRequest(text) {
+  return /(?:ช่วย\s*)?แบ่งงาน|\bsplit\s+(?:this\s+)?task\b/i.test(String(text));
+}
+
+function splitTaskRequest(context) {
+  if (!isSplitTaskRequest(context.text)) return null;
+  const totalMinutes = durationMinutesFromText(context.text) || thaiDurationMinutes(context.text);
+  const title = String(context.text)
+    .replace(/(?:ช่วย\s*)?แบ่งงาน|\bsplit\s+(?:this\s+)?task\b/gi, " ")
+    .replace(/พรุ่งนี้|วันนี้|\btomorrow\b|\btoday\b|\b\d{4}-\d{2}-\d{2}\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\d+(?:\.\d+)?\s*(?:ชั่วโมง|ชม\.?)|\b\d+\s*(?:minutes?|mins?)\b|\d+\s*นาที/gi, " ")
+    .replace(/(?:หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)\s*ชั่วโมง(?:ครึ่ง)?|ครึ่ง\s*ชั่วโมง/gi, " ")
+    .replace(/\s+/g, " ").replace(/^[\s:：-]+/, "").trim().slice(0, 200);
+  if (!title || totalMinutes <= FOCUS_BLOCK_MINUTES || totalMinutes > 12 * 60) return null;
+
+  const requestedDate = explicitDateFromText(context.text, context.referenceDate);
+  const planningContext = { ...context.scheduleContext, activities: [...context.scheduleContext.activities] };
+  const drafts = [];
+  const unscheduled = [];
+  let remaining = totalMinutes;
+  let blockIndex = 0;
+  const blockCount = Math.ceil(totalMinutes / FOCUS_BLOCK_MINUTES);
+  while (remaining > 0) {
+    const focusMinutes = Math.min(FOCUS_BLOCK_MINUTES, remaining);
+    const needsBreak = remaining > focusMinutes;
+    const reservedMinutes = focusMinutes + (needsBreak ? FOCUS_BREAK_MINUTES : 0);
+    const slot = findFreeTimeOptions(planningContext, reservedMinutes, requestedDate, FOCUS_BREAK_MINUTES)[0];
+    if (!slot) {
+      unscheduled.push({ title: `${title} (${blockIndex + 1}/${blockCount})`, durationMinutes: focusMinutes });
+      break;
+    }
+    blockIndex += 1;
+    const focusEnd = new Date(`${slot.startLocal}:00Z`).getTime() + focusMinutes * 60_000;
+    const focusDraft = finishResult({
+      ready: true,
+      reply: "",
+      draft: {
+        title: `${title} (${blockIndex}/${blockCount})`,
+        startLocal: slot.startLocal,
+        endLocal: new Date(focusEnd).toISOString().slice(0, 16),
+        allDay: false,
+        categoryName: "",
+        tags: ["focus"],
+        notes: "",
+        assumptions: [`แบ่งงานเป็นช่วงโฟกัส ${focusMinutes} นาที`]
+      }
+    }, context).draft;
+    drafts.push(focusDraft);
+    planningContext.activities.push({ id: `focus-${blockIndex}`, title: focusDraft.title, startLocal: focusDraft.startLocal, endLocal: focusDraft.endLocal, locked: false });
+    if (needsBreak) {
+      const breakEnd = new Date(focusEnd + FOCUS_BREAK_MINUTES * 60_000).toISOString().slice(0, 16);
+      const breakDraft = finishResult({
+        ready: true,
+        reply: "",
+        draft: {
+          title: `พัก ${FOCUS_BREAK_MINUTES} นาที`,
+          startLocal: focusDraft.endLocal,
+          endLocal: breakEnd,
+          allDay: false,
+          categoryName: "",
+          tags: ["break"],
+          notes: "",
+          assumptions: ["คั่นระหว่างช่วงโฟกัส"]
+        }
+      }, context).draft;
+      drafts.push(breakDraft);
+      planningContext.activities.push({ id: `break-${blockIndex}`, title: breakDraft.title, startLocal: breakDraft.startLocal, endLocal: breakDraft.endLocal, locked: false });
+    }
+    remaining -= focusMinutes;
+  }
+  return {
+    ready: false,
+    draft: null,
+    source: "planning",
+    reply: drafts.length
+      ? `แบ่ง “${title}” เป็นช่วงโฟกัส ${FOCUS_BLOCK_MINUTES} นาที และพัก ${FOCUS_BREAK_MINUTES} นาทีแล้ว ตรวจ แก้ไข หรือตัดแต่ละรายการก่อนสร้างทั้งชุดได้เลยครับ${unscheduled.length ? "\nบางช่วงยังหาเวลาว่างให้ไม่ได้" : ""}`
+      : `ยังไม่พบช่วงว่างสำหรับแบ่ง “${title}” ลองเปลี่ยนวันหรือปรับระยะเวลาได้ครับ`,
+    planning: { drafts, unscheduled, requestedDate, focusMinutes: FOCUS_BLOCK_MINUTES, breakMinutes: FOCUS_BREAK_MINUTES }
+  };
 }
 
 // The guided flow collects mandatory facts without Gemini. At summary time it
@@ -182,6 +380,12 @@ router.post("/activity-conversation", async (req, res, next) => {
     if (deterministicDraft) {
       return res.json({ ...deterministicDraft, schedule: assessDraftSchedule(deterministicDraft.draft, context.scheduleContext), source: "deterministic" });
     }
+    const planningResult = planListRequest(context);
+    if (planningResult) return res.json(planningResult);
+    const splitResult = splitTaskRequest(context);
+    if (splitResult) return res.json(splitResult);
+    const schedulingResult = findTimeRequest(context);
+    if (schedulingResult) return res.json(schedulingResult);
     // Factual Calendar questions are answered directly from a small bounded
     // event set.  This reads no more data than the AI branch, but never calls
     // Gemini and therefore does not consume the user's AI quota.

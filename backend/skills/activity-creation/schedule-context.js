@@ -66,6 +66,34 @@ function buildAvailableWindows(raw) {
   return windows.slice(0, 12);
 }
 
+function roundUpToStep(timestamp, stepMinutes) {
+  const step = stepMinutes * 60_000;
+  return Math.ceil(timestamp / step) * step;
+}
+
+/**
+ * Returns up to three calendar slots for one explicit-duration task. These
+ * are deliberately based on fully free daytime windows, not the looser
+ * three-overlap limit used by the Activity editor. A person may still choose
+ * a different valid time manually after the draft opens.
+ */
+function findFreeTimeOptions(scheduleContext, durationMinutes, requestedDate = "", stepMinutes = 30) {
+  if (!Number.isInteger(durationMinutes) || durationMinutes < MIN_FREE_WINDOW_MINUTES || durationMinutes > 12 * 60) return [];
+  if (!Number.isInteger(stepMinutes) || stepMinutes < 15 || stepMinutes > 60) return [];
+  const duration = durationMinutes * 60_000;
+  const options = [];
+  for (const window of buildAvailableWindows(scheduleContext)) {
+    if (requestedDate && !window.startLocal.startsWith(`${requestedDate}T`)) continue;
+    const windowStart = localStamp(window.startLocal);
+    const windowEnd = localStamp(window.endLocal);
+    for (let start = roundUpToStep(windowStart, stepMinutes); start + duration <= windowEnd && options.length < 3; start += stepMinutes * 60_000) {
+      options.push({ startLocal: localDateTime(start), endLocal: localDateTime(start + duration) });
+    }
+    if (options.length === 3) break;
+  }
+  return options;
+}
+
 function concurrentCount(candidateStart, candidateEnd, activities) {
   const edges = [
     { time: candidateStart, delta: 1 },
@@ -122,4 +150,4 @@ function assessDraftSchedule(draft, scheduleContext) {
   };
 }
 
-module.exports = { MAX_OVERLAPPING_ACTIVITIES, normalizeScheduleContext, buildAvailableWindows, assessDraftSchedule };
+module.exports = { MAX_OVERLAPPING_ACTIVITIES, normalizeScheduleContext, buildAvailableWindows, findFreeTimeOptions, assessDraftSchedule };
