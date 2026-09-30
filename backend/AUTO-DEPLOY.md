@@ -29,4 +29,10 @@ These dashboard settings cannot be inferred from GitHub deployment history.
 Do not consider the issue resolved until a new push starts a Render deployment
 without pressing Manual Deploy, and its commit SHA matches the push.
 
+## Verification marker
+
+The next source-controlled change after enabling **On Commit** is used as the
+end-to-end check: Render must create a deployment whose SHA exactly matches
+that push, without a Manual Deploy action.
+
 Reference: https://render.com/docs/deploys
