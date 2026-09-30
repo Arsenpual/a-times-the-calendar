@@ -101,7 +101,7 @@ Store only deliberate, inspectable preferences, for example:
 - Let the user view, edit, enable, or delete every stored preference.
 - Use preferences as defaults only; never treat them as mandatory rules.
 
-### Phase 3 implementation status
+### Phase 3 implementation status — complete
 
 The first delivery stores only the four explicit preferences above in
 `users/{uid}/private/assistantPreferences`. They are editable in Settings and
@@ -110,6 +110,36 @@ duration. Candidate learning now observes only a timing/duration correction to
 an MR.Zettascale activity proposal after that proposal is saved. The same
 correction must occur twice before Settings offers it for approval; it never
 silently turns chat text into memory.
+
+## Phase 2 completion — 30 September 2026
+
+Phase 2 is complete.
+
+- The browser sends no full Calendar. It supplies only a nine-day local
+  planning window, current local clock, nearby activity start/end/title,
+  lock state, categories, and existing tags.
+- The backend derives bounded daytime free-window hints and rejects malformed
+  or over-broad context. Suggestions for the current day do not point to time
+  that has already passed.
+- The backend and frontend both apply the same maximum-three-overlaps rule.
+  A fourth overlap receives a clear conflict message (including locked items)
+  and up to three selectable nearby time alternatives.
+- Automated tests cover daytime windows, all-day collisions, locked conflict
+  context, the three-overlap limit, alternatives, and past-time exclusion.
+
+## Phase 3 completion — 30 September 2026
+
+Phase 3 is complete.
+
+- Preference storage remains a small inspectable document, never a chat
+  transcript. All four supported fields can be viewed, edited, enabled,
+  disabled, and deleted in Settings.
+- The only learning input is a timing/duration change to an MR.Zettascale
+  proposal after an explicit Activity save. A request cannot count the same
+  preference twice, so one save never creates a false learning candidate.
+- Candidates require the same correction across two separate saves and still
+  need explicit approval before they become a default. Explicit user input
+  always overrides an enabled preference.
 
 ## Phase 4 — Scheduling Skill
 

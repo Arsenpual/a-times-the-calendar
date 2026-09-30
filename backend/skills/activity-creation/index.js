@@ -63,7 +63,10 @@ function prepareContext(body) {
   const userTags = (Array.isArray(body.userTags) ? body.userTags : []).slice(0, 100).filter(tag => typeof tag === 'string').map(tag => tag.trim().slice(0, 40)).filter(Boolean);
   const scheduleContext = {
     activities: normalizeScheduleContext(body.scheduleContext),
-    availableWindows: buildAvailableWindows(body.scheduleContext)
+    availableWindows: buildAvailableWindows(body.scheduleContext),
+    // Keep this explicit in the narrow schedule payload so the model knows
+    // which part of today's planning window is still actionable.
+    currentLocal: typeof body.scheduleContext?.currentLocal === "string" ? body.scheduleContext.currentLocal.slice(0, 16) : ""
   };
   const assistantPreferences = normalizeAssistantPreferences(body.assistantPreferences);
   return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity, assistantPreferences };

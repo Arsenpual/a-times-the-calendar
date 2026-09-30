@@ -53,3 +53,22 @@ test("available windows are compact, daytime-only schedule hints", () => {
     { startLocal: "2026-09-16T11:00", endLocal: "2026-09-16T22:00" }
   ]);
 });
+
+test("today's available windows and alternatives do not point into the past", () => {
+  const context = {
+    windowStartLocal: "2026-09-16T00:00",
+    windowEndLocal: "2026-09-17T00:00",
+    currentLocal: "2026-09-16T14:30",
+    activities: [
+      activity("one", "งานหนึ่ง", "2026-09-16T14:30", "2026-09-16T16:00"),
+      activity("two", "งานสอง", "2026-09-16T14:30", "2026-09-16T16:00"),
+      activity("three", "งานสาม", "2026-09-16T14:30", "2026-09-16T16:00")
+    ]
+  };
+  assert.deepEqual(buildAvailableWindows(context).slice(0, 2), [
+    { startLocal: "2026-09-16T16:00", endLocal: "2026-09-16T22:00" }
+  ]);
+  const schedule = assessDraftSchedule({ ...draft, startLocal: "2026-09-16T14:30", endLocal: "2026-09-16T15:30" }, context);
+  assert.equal(schedule.status, "overlap-limit");
+  assert.ok(schedule.alternatives.every((alternative) => alternative.startLocal >= "2026-09-16T14:30"));
+});

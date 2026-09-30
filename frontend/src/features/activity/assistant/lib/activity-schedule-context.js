@@ -9,7 +9,7 @@ function localDateTime(date) {
 
 // Send only the short planning window around the current request, never the
 // person's entire Calendar. The backend repeats validation before using it.
-export function buildAssistantScheduleContext(activities, lockedActivities, referenceDate) {
+export function buildAssistantScheduleContext(activities, lockedActivities, referenceDate, currentDate = new Date()) {
   const start = new Date(`${referenceDate}T00:00:00`);
   start.setDate(start.getDate() - 1);
   const end = new Date(start);
@@ -17,6 +17,7 @@ export function buildAssistantScheduleContext(activities, lockedActivities, refe
   return {
     windowStartLocal: localDateTime(start),
     windowEndLocal: localDateTime(end),
+    currentLocal: currentDate instanceof Date && Number.isFinite(currentDate.getTime()) ? localDateTime(currentDate) : "",
     activities: activities.filter((activity) => {
       // The save handler counts all-day Calendar activities as their full
       // midnight-to-midnight range for the three-overlap limit. Preserve

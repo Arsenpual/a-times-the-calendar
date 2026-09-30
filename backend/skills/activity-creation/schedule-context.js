@@ -26,9 +26,18 @@ function normalizePlanningWindow(raw) {
   return { start, end };
 }
 
+function normalizeCurrentLocal(raw, window) {
+  const current = localStamp(raw?.currentLocal);
+  // This is only a planning hint.  Ignore a malformed or unrelated value
+  // rather than letting it change a proposed date outside the small window.
+  if (!Number.isFinite(current) || !window || current < window.start || current >= window.end) return null;
+  return current;
+}
+
 function buildAvailableWindows(raw) {
   const window = normalizePlanningWindow(raw);
   if (!window) return [];
+  const current = normalizeCurrentLocal(raw, window);
   const activities = normalizeScheduleContext(raw);
   const windows = [];
   for (let dayStart = window.start; dayStart < window.end && windows.length < 12; dayStart += 24 * 60 * 60_000) {
@@ -37,7 +46,10 @@ function buildAvailableWindows(raw) {
     // time manually in ActivityPopup.
     const workStart = dayStart + 8 * 60 * 60_000;
     const workEnd = dayStart + 22 * 60 * 60_000;
-    let cursor = workStart;
+    // Suggestions for today must never point back to a time that has already
+    // passed.  A person can still choose a historical time manually in the
+    // Activity Popup; this only keeps assistant suggestions practical.
+    let cursor = Math.max(workStart, current && current >= workStart && current < workEnd ? current : workStart);
     const dayActivities = activities
       .map((activity) => ({ start: localStamp(activity.startLocal), end: localStamp(activity.endLocal) }))
       .filter((activity) => activity.start < workEnd && activity.end > workStart)
@@ -72,7 +84,7 @@ function localDateTime(timestamp) {
   return new Date(timestamp).toISOString().slice(0, 16);
 }
 
-function findAlternatives(start, duration, activities) {
+function findAlternatives(start, duration, activities, earliestStart = null) {
   const candidates = [];
   // Search outward in 30-minute steps, not only inside a ±3-hour window.
   // This normally guarantees three actionable alternatives even on a dense
@@ -82,6 +94,7 @@ function findAlternatives(start, duration, activities) {
     for (const delta of [-distance, distance]) {
       const proposedStart = start + delta * 60_000;
       const proposedEnd = proposedStart + duration;
+      if (Number.isFinite(earliestStart) && proposedStart < earliestStart) continue;
       if (concurrentCount(proposedStart, proposedEnd, activities) <= MAX_OVERLAPPING_ACTIVITIES) {
         candidates.push({ startLocal: localDateTime(proposedStart), endLocal: localDateTime(proposedEnd) });
         if (candidates.length === 3) break;
@@ -96,13 +109,15 @@ function assessDraftSchedule(draft, scheduleContext) {
   const end = localStamp(draft?.endLocal);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || draft?.allDay) return { status: "not-applicable", conflicts: [], alternatives: [] };
   const activities = normalizeScheduleContext(scheduleContext);
+  const planningWindow = normalizePlanningWindow(scheduleContext);
+  const current = normalizeCurrentLocal(scheduleContext, planningWindow);
   const conflicts = activities.filter((activity) => localStamp(activity.startLocal) < end && localStamp(activity.endLocal) > start);
   const maximum = concurrentCount(start, end, activities);
   if (maximum <= MAX_OVERLAPPING_ACTIVITIES) return { status: "available", conflicts, alternatives: [] };
   return {
     status: "overlap-limit",
     conflicts: conflicts.map(({ id, title, startLocal, endLocal, locked }) => ({ id, title, startLocal, endLocal, locked })),
-    alternatives: findAlternatives(start, end - start, activities)
+    alternatives: findAlternatives(start, end - start, activities, current)
   };
 }
 
