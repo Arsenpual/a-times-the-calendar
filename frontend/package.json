@@ -10,7 +10,8 @@
     "test": "node scripts/run-tests.mjs",
     "test:browser": "node scripts/run-tests.mjs --browser",
     "test:all": "node scripts/run-tests.mjs --all",
-    "verify": "npm test && npm run build",
+    "lint": "eslint src/features/activity/assistant src/features/settings/components/assistant-preference-candidate.jsx",
+    "verify": "npm run lint && npm test && npm run build",
     "verify:full": "npm run test:all && npm run build"
   },
   "dependencies": {
@@ -21,6 +22,9 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "playwright": "^1.63.0",
     "react-test-renderer": "^18.3.1",
     "vite": "^5.4.0"

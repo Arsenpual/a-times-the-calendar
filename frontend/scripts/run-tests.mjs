@@ -20,10 +20,12 @@ const unitTests = [
   "src/features/activity/services/activity-calendar-actions.test.mjs",
   "src/shared/i18n/i18n-catalog.test.mjs",
   "src/features/activity/assistant/tests/activity-popup-handoff.test.js",
+  "src/features/activity/assistant/tests/assistant-boundaries.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
 ];
 
 const browserTests = [
+  "tests/assistant-cleanup-browser.mjs",
   "tests/activity-phase1-browser.mjs",
   "tests/activity-view-browser.mjs",
   "tests/app-navigation-browser.mjs",

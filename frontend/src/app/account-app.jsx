@@ -16,7 +16,7 @@ import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
-import { validateActivityAssistantDraft } from "../features/activity/assistant/api/activity-assistant-api.js";
+import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
 import { fetchActivities } from "../features/calendar-connection/api/google-calendar.js";
 import { fetchDailySummary } from "../features/activity/api/summary.js";
 import ActivityAiAssistant from "../features/activity/assistant/components/activity-assistant-dialog.jsx";
@@ -335,43 +335,9 @@ export default function AccountApp({ auth }) {
     handleDuplicateActivity,
     handleMoveActivityToDay
   } = mutations;
-  const handleConfirmAiActivityDraft = useCallback(async (inputDraft) => {
-    const { draft } = await validateActivityAssistantDraft(inputDraft, categories.map(item => item.name));
-    const categoryId = categories.find((category) => category.name === draft.categoryName)?.id || null;
-    const title = String(draft.title || "").trim();
-    if (!title || !draft.startLocal || !draft.endLocal) throw new Error("กรอกชื่อ วัน และเวลาเริ่ม–สิ้นสุดให้ครบก่อนยืนยัน");
-    if (draft.allDay) {
-      const startDate = draft.startLocal.slice(0, 10);
-      const endDate = draft.endLocal.slice(0, 10);
-      if (!startDate || !endDate || endDate <= startDate) throw new Error("กิจกรรมทั้งวันต้องมีวันสิ้นสุดหลังวันเริ่ม");
-      await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { date: startDate }, end: { date: endDate } }, categoryId, tags: draft.tags });
-      return;
-    }
-    const start = new Date(draft.startLocal);
-    const end = new Date(draft.endLocal);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error("เวลาเริ่มและสิ้นสุดของกิจกรรมไม่ถูกต้อง");
-    await handleSaveActivity({ activityBody: { summary: title, description: String(draft.notes || ""), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } }, categoryId, tags: draft.tags });
-  }, [categories, handleSaveActivity]);
   const saveActivityWithAssistantLearning = useCallback(async (payload) => {
     const saved = await handleSaveActivity(payload);
-    const proposal = payload.assistantProposal;
-    if (!proposal?.title || !proposal.startLocal || !proposal.endLocal || !payload.activityBody?.start?.dateTime || !payload.activityBody?.end?.dateTime) return saved;
-    const title = String(proposal.title).toLowerCase();
-    const isHomework = /ทำการบ้าน|\bhomework\b/i.test(title);
-    const isExercise = /ออกกำลังกาย|\bexercise\b|\bworkout\b/i.test(title);
-    if (!isHomework && !isExercise) return saved;
-    const toClock = (value) => {
-      const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? "" : `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-    };
-    const proposedStart = proposal.startLocal.slice(11, 16);
-    const actualStart = toClock(payload.activityBody.start.dateTime);
-    const proposedDuration = (new Date(proposal.endLocal) - new Date(proposal.startLocal)) / 60000;
-    const actualDuration = (new Date(payload.activityBody.end.dateTime) - new Date(payload.activityBody.start.dateTime)) / 60000;
-    const corrections = [];
-    if (isHomework && actualStart && actualStart !== proposedStart) corrections.push({ key: "homeworkDefaultStart", value: actualStart });
-    if (isHomework && Number.isInteger(actualDuration) && actualDuration > 0 && actualDuration !== proposedDuration) corrections.push({ key: "homeworkDefaultDurationMinutes", value: actualDuration });
-    if (isExercise && Number.isInteger(actualDuration) && actualDuration > 0 && actualDuration !== proposedDuration) corrections.push({ key: "exerciseDefaultDurationMinutes", value: actualDuration });
+    const corrections = collectPreferenceCorrections(payload);
     // Preference learning is never allowed to make a Calendar save look as if
     // it failed. It is an optional follow-up and has its own visible UI.
     if (corrections.length) assistantPreferences.recordCorrections(corrections).catch(() => {});
@@ -719,10 +685,9 @@ export default function AccountApp({ auth }) {
         telegramError={telegramChat.error}
         onOpenTelegramChat={telegramChat.openChat}
         onSendTelegramMessage={telegramChat.sendChatMessage}
-        onReadTelegramMessages={telegramChat.markTelegramChatRead}
         onClearTelegramMessages={telegramChat.clearChatMessages}
         lockedActivities={lockedActivities}
-        onConfirmDraft={handleConfirmAiActivityDraft}
+        userId={firebaseUser?.uid}
         onOpenActivityForm={(draft) => {
           setActivityAssistantFormUpdate(null);
           const start = new Date(draft.startLocal || new Date());

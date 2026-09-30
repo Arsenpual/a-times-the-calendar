@@ -55,7 +55,7 @@ function formatLocalDateTime(date) {
  * incomplete API schedule hint cannot let a fourth overlapping activity
  * reach the form and fail only after the person presses Save.
  */
-export function assessAssistantDraftOverlap(draft, activities = [], lockedActivities = {}) {
+export function assessAssistantDraftOverlap(draft, activities = [], lockedActivities = {}, currentDate = new Date()) {
   const start = new Date(draft?.startLocal || "");
   const end = new Date(draft?.endLocal || "");
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return { status: "not-applicable", conflicts: [], alternatives: [] };
@@ -65,7 +65,14 @@ export function assessAssistantDraftOverlap(draft, activities = [], lockedActivi
     end: activityDate(activity.end)
   })).filter((entry) => entry.start instanceof Date && entry.end instanceof Date && entry.end > entry.start);
   const candidate = { id: "assistant-draft", start, end };
-  if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), candidate])) {
+  const exceedsCandidateLimit = (candidateStart, candidateEnd) => exceedsOverlapLimit([
+    ...existing.filter((entry) => overlap(entry.start, entry.end, candidateStart, candidateEnd)).map((entry) => ({
+      start: new Date(Math.max(entry.start.getTime(), candidateStart.getTime())),
+      end: new Date(Math.min(entry.end.getTime(), candidateEnd.getTime()))
+    })),
+    { start: candidateStart, end: candidateEnd }
+  ]);
+  if (!exceedsCandidateLimit(candidate.start, candidate.end)) {
     return { status: "available", conflicts: [], alternatives: [] };
   }
   const conflicts = existing.filter(({ start: entryStart, end: entryEnd }) => overlap(entryStart, entryEnd, start, end)).map(({ activity }) => ({
@@ -82,7 +89,8 @@ export function assessAssistantDraftOverlap(draft, activities = [], lockedActivi
     for (const minutes of [-distance, distance]) {
       const proposedStart = new Date(start.getTime() + minutes * 60_000);
       const proposedEnd = new Date(proposedStart.getTime() + duration);
-      if (!exceedsOverlapLimit([...existing.map(({ activity, start: entryStart, end: entryEnd }) => ({ id: activity.id, start: entryStart, end: entryEnd })), { id: "assistant-draft", start: proposedStart, end: proposedEnd }])) {
+      if (proposedStart < currentDate) continue;
+      if (!exceedsCandidateLimit(proposedStart, proposedEnd)) {
         alternatives.push({ startLocal: formatLocalDateTime(proposedStart), endLocal: formatLocalDateTime(proposedEnd) });
         if (alternatives.length === 3) break;
       }

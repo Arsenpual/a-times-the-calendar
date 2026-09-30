@@ -1,3 +1,4 @@
+import AssistantPreferenceCandidate from "./assistant-preference-candidate.jsx";
 import React, { useEffect, useState } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
 import { ASSISTANT_PREFERENCE_FIELDS } from "../../activity/assistant/hooks/use-assistant-preferences.js";
@@ -203,11 +204,7 @@ export default function SettingsDrawer({
             {Object.entries(assistantPreferenceCandidates).map(([key, candidate]) => {
               const field = ASSISTANT_PREFERENCE_FIELDS.find((item) => item.key === key);
               if (!field) return null;
-              const label = field.type === "duration" ? `${candidate.value} นาที` : candidate.value;
-              return <div className="settings-assistant-candidate" key={key}>
-                <span>MR.Zettascale สังเกตว่าคุณแก้ “{field.label}” เป็น <strong>{label}</strong> ซ้ำ {candidate.count} ครั้ง</span>
-                <div><button type="button" className="settings-assistant-action" onClick={() => onSaveAssistantPreference?.(key, candidate.value, true)}>ใช้เป็นค่าเริ่มต้น</button><button type="button" className="settings-assistant-delete" onClick={() => onDismissAssistantPreferenceCandidate?.(key)}>ไม่ใช้</button></div>
-              </div>;
+              return <AssistantPreferenceCandidate key={key} field={field} candidate={candidate} onSave={onSaveAssistantPreference} onDismiss={onDismissAssistantPreferenceCandidate} />;
             })}
             {assistantPreferencesLoading ? <p className="settings-section-note">กำลังโหลดค่าเริ่มต้น…</p> : ASSISTANT_PREFERENCE_FIELDS.map((field) => <AssistantPreferenceRow key={field.key} field={field} item={assistantPreferences[field.key]} onSave={onSaveAssistantPreference} onDelete={onDeleteAssistantPreference} />)}
           </section>

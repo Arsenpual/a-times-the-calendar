@@ -285,7 +285,6 @@
   .week-spine-four-week-grid { grid-template-columns: 1fr; }
   .week-spine-overview-day { min-height: 100px; }
 }
-.activity-ai-review > .activity-ai-manual-editor { display: grid; justify-content: stretch; }
 
 /* Category time summary: one stacked bar for the selected week or cycle. */
 .activity-time-category-bars { padding: 9px; border-radius: 11px; }

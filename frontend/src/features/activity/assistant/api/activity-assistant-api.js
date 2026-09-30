@@ -18,7 +18,3 @@ export async function createActivityTemplateDraft(input) {
     "POST /api/ai/activity-template-draft"
   );
 }
-
-export async function validateActivityAssistantDraft(draft, categories) {
-  return handleResponse(await apiRequest("/api/ai/activity-validate", { method: "POST", body: JSON.stringify({ draft, categories }) }), "POST /api/ai/activity-validate");
-}

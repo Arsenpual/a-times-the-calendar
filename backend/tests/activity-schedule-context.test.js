@@ -5,6 +5,11 @@ const { assessDraftSchedule, buildAvailableWindows } = require("../skills/activi
 const draft = { title: "ร่างกิจกรรม", startLocal: "2026-09-16T10:00", endLocal: "2026-09-16T11:00", allDay: false };
 const activity = (id, title, startLocal, endLocal, locked = false) => ({ id, title, startLocal, endLocal, locked });
 
+test("unrelated calendar overcrowding does not invalidate a free draft", () => {
+  const activities = [1, 2, 3, 4].map(id => activity(String(id), "busy", "2026-09-16T08:00", "2026-09-16T09:00"));
+  assert.equal(assessDraftSchedule(draft, { activities }).status, "available");
+});
+
 test("a draft may share a time range with up to three activities", () => {
   const schedule = assessDraftSchedule(draft, { activities: [
     activity("one", "งานหนึ่ง", "2026-09-16T09:30", "2026-09-16T10:30"),

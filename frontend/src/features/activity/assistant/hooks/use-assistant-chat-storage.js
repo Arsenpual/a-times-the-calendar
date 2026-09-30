@@ -6,16 +6,19 @@ export const INITIAL_ASSISTANT_MESSAGE = {
   source: "template"
 };
 
-const CHAT_STORAGE_KEY = "times.activity-ai-assistant.chat.v1";
-
-function emptyChat() {
-  return { messages: [INITIAL_ASSISTANT_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", draft: null };
+export function assistantChatStorageKey(userId) {
+  return userId ? `times.activity-ai-assistant.chat.v2:${userId}` : null;
 }
 
-function loadSavedChat() {
-  if (typeof window === "undefined") return emptyChat();
+function emptyChat() {
+  return { messages: [INITIAL_ASSISTANT_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template" };
+}
+
+export function loadSavedChat(userId) {
+  const key = assistantChatStorageKey(userId);
+  if (!key || typeof window === "undefined") return emptyChat();
   try {
-    const saved = JSON.parse(window.localStorage.getItem(CHAT_STORAGE_KEY) || "null");
+    const saved = JSON.parse(window.localStorage.getItem(key) || "null");
     const messages = Array.isArray(saved?.messages)
       ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
       : [];
@@ -25,23 +28,24 @@ function loadSavedChat() {
       messages: messages.length ? messages : [INITIAL_ASSISTANT_MESSAGE],
       conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
       guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
-      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template",
-      draft: saved?.draft && typeof saved.draft === "object" ? saved.draft : null
+      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template"
     };
   } catch { return emptyChat(); }
 }
 
-export function useInitialAssistantChat() {
-  const [initialChat] = useState(loadSavedChat);
+export function useInitialAssistantChat(userId) {
+  const [initialChat] = useState(() => loadSavedChat(userId));
   return initialChat;
 }
 
-export function usePersistAssistantChat({ messages, conversationNodeId, guidedActivity, guidedConversationMode, draft }) {
+export function usePersistAssistantChat({ userId, messages, conversationNodeId, guidedActivity, guidedConversationMode }) {
   useEffect(() => {
+    const key = assistantChatStorageKey(userId);
+    if (!key) return;
     try {
-      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
-        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode, draft
+      window.localStorage.setItem(key, JSON.stringify({
+        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode
       }));
     } catch { /* Storage may be disabled or full; chat still works in memory. */ }
-  }, [messages, conversationNodeId, guidedActivity, guidedConversationMode, draft]);
+  }, [userId, messages, conversationNodeId, guidedActivity, guidedConversationMode]);
 }

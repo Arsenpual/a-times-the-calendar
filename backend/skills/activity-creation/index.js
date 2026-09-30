@@ -62,6 +62,8 @@ function prepareContext(body) {
   } : null;
   const userTags = (Array.isArray(body.userTags) ? body.userTags : []).slice(0, 100).filter(tag => typeof tag === 'string').map(tag => tag.trim().slice(0, 40)).filter(Boolean);
   const scheduleContext = {
+    windowStartLocal: body.scheduleContext?.windowStartLocal,
+    windowEndLocal: body.scheduleContext?.windowEndLocal,
     activities: normalizeScheduleContext(body.scheduleContext),
     availableWindows: buildAvailableWindows(body.scheduleContext),
     // Keep this explicit in the narrow schedule payload so the model knows

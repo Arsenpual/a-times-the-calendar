@@ -70,7 +70,8 @@ function concurrentCount(candidateStart, candidateEnd, activities) {
   const edges = [
     { time: candidateStart, delta: 1 },
     { time: candidateEnd, delta: -1 },
-    ...activities.flatMap((activity) => [{ time: localStamp(activity.startLocal), delta: 1 }, { time: localStamp(activity.endLocal), delta: -1 }])
+    ...activities.filter((activity) => localStamp(activity.startLocal) < candidateEnd && localStamp(activity.endLocal) > candidateStart)
+      .flatMap((activity) => [{ time: Math.max(candidateStart, localStamp(activity.startLocal)), delta: 1 }, { time: Math.min(candidateEnd, localStamp(activity.endLocal)), delta: -1 }])
   ];
   // Ending at the same instant is not an overlap, matching Week Spine.
   edges.sort((left, right) => left.time - right.time || left.delta - right.delta);
