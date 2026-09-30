@@ -9,6 +9,20 @@
     {"id": "bad-time-1", "summary": "งานที่เวลาไม่ถูกต้อง", "start": "not-a-date", "end": "2026-10-02T12:00", "category": "งาน", "tags": ["test"], "source": "calendar"},
     {"id": "reversed-1", "summary": "เวลาสลับ", "start": "2026-10-02T15:00", "end": "2026-10-02T14:00", "category": "งาน", "tags": ["test"], "source": "calendar"},
     {"id": "long-1", "summary": "ทำงานโครงการ", "start": "2026-10-03T08:00", "end": "2026-10-03T22:30", "category": "งาน", "tags": ["project"], "source": "calendar"},
-    {"id": "missing-title-1", "start": "2026-10-03T12:00", "end": "2026-10-03T13:00", "category": "ส่วนตัว", "tags": ["incomplete"], "source": "calendar"}
+    {"id": "missing-title-1", "start": "2026-10-03T12:00", "end": "2026-10-03T13:00", "category": "ส่วนตัว", "tags": ["incomplete"], "source": "calendar"},
+    {"id": "bad-end-1", "summary": "งานที่เวลาจบไม่ถูกต้อง", "start": "2026-10-03T14:00", "end": "not-a-date", "category": "งาน", "tags": ["test"], "source": "calendar"},
+    {"id": "missing-times-1", "summary": "กิจกรรมไม่มีเวลา", "category": "งาน", "tags": ["incomplete"], "source": "calendar"},
+    {"id": "code-like-1", "summary": "Q4_2026", "start": "2026-10-04T09:00", "end": "2026-10-04T10:00", "category": "งาน", "tags": ["planning"], "source": "calendar"},
+    {"id": "short-title-1", "summary": "OK", "start": "2026-10-04T10:30", "end": "2026-10-04T11:00", "category": "งาน", "tags": ["follow-up"], "source": "calendar"},
+    {"id": "notes-context-1", "summary": "เตรียมพรีเซนต์", "start": "2026-10-04T13:00", "end": "2026-10-04T14:00", "notes": "ต้องส่งให้ทีมตรวจวันจันทร์", "source": "assistant-draft"},
+    {"id": "study-1", "summary": "อ่านบทที่ 4", "start": "2026-10-04T14:00", "end": "2026-10-04T15:30", "category": "การเรียน", "tags": ["study", "focus"], "source": "calendar"},
+    {"id": "overlap-1", "summary": "ประชุมสั้น", "start": "2026-10-04T14:30", "end": "2026-10-04T15:00", "category": "งาน", "tags": ["meeting"], "source": "calendar"},
+    {"id": "all-day-2", "summary": "วันครอบครัว", "start": {"date": "2026-10-05"}, "end": {"date": "2026-10-06"}, "allDay": true, "category": "ครอบครัว", "tags": ["personal"], "source": "calendar"},
+    {"id": "assistant-no-tags-1", "title": "นัดพบอาจารย์", "startLocal": "2026-10-05T13:00", "endLocal": "2026-10-05T13:30", "categoryName": "การเรียน", "tags": [], "source": "assistant-draft"},
+    {"id": "uncategorized-2", "summary": "ซื้อของใช้", "start": "2026-10-05T17:00", "end": "2026-10-05T17:30", "tags": ["errand"], "source": "calendar"},
+    {"id": "very-long-2", "summary": "ทริปทำงาน", "start": "2026-10-06T07:00", "end": "2026-10-06T21:30", "category": "งาน", "tags": ["travel", "project"], "source": "calendar"},
+    {"id": "routine-1", "summary": "เดินเล่น", "start": "2026-10-06T18:00", "end": "2026-10-06T18:30", "category": "สุขภาพ", "tags": ["routine"], "source": "calendar"},
+    {"id": "calendar-object-1", "summary": "คุยกับทีม", "start": {"dateTime": "2026-10-06T19:00"}, "end": {"dateTime": "2026-10-06T19:30"}, "category": "งาน", "tags": ["meeting"], "source": "calendar"},
+    {"id": "empty-metadata-1", "summary": "เก็บโต๊ะ", "start": "2026-10-06T20:00", "end": "2026-10-06T20:15", "source": "calendar"}
   ]
 }

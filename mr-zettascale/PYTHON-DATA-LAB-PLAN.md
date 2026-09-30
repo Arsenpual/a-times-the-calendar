@@ -59,6 +59,25 @@ Python should normalize either source into one analysis record:
 
 This normalized record is the shared foundation for later reporting, assistant evaluation, priority experiments, and weekly insights.
 
+When Node.js later exports real data for a local analysis run, it must wrap
+records in an explicit, privacy-bounded envelope:
+
+```json
+{
+  "exportVersion": 1,
+  "generatedAt": "2026-10-01T12:00:00Z",
+  "timeZone": "Asia/Bangkok",
+  "windowStart": "2026-10-01T00:00",
+  "windowEnd": "2026-10-08T00:00",
+  "activities": []
+}
+```
+
+Node.js is responsible for joining only the metadata needed for analysis:
+Calendar event timing/title plus the matching category, tags, and lock state.
+The export must remain local, omit OAuth tokens and unrelated Calendar fields,
+and cover only an explicit bounded date window.
+
 ## Recommended Structure
 
 ```text
@@ -88,7 +107,9 @@ Use synthetic data for committed examples and tests. Local exports containing re
 
 ### Stage 1: Synthetic Dataset
 
-Create 20-30 sample activities that cover ordinary and difficult cases:
+Create a committed initial fixture of at least 10 sample activities that
+covers ordinary and difficult cases. Expand it toward 20-30 cases before
+adding more complex priority or scheduling analysis:
 
 - Complete activity data.
 - Missing category or tags.
@@ -144,9 +165,30 @@ Add automated tests for the rules that affect analysis correctness:
 - A malformed activity produces a finding without stopping the whole report.
 - The same fixture produces the same report on every run.
 
-### Stage 5: Controlled Node.js Handoff
+### Stages 1-4 Implementation Status: Complete
 
-Only after the lab is trusted, add a small Node.js export path that creates sanitized JSON for analysis. Python still runs as a manual command or scheduled internal job, not as an HTTP service.
+The first delivery is implemented in `mr-zettascale/lab`.
+
+- The committed fixture contains 24 synthetic activities covering complete,
+  incomplete, all-day, overnight, ambiguous, invalid, reversed-time, long,
+  and uncategorized cases.
+- The quality engine implements every initial finding code. The next fixture
+  expansion should add an explicit `invalid_end` case alongside the existing
+  invalid-start case.
+- The command-line tool writes local JSON and Markdown reports.
+- Twelve automated tests cover all-day and overnight records, malformed input
+  isolation, reversed times, ambiguous titles, priority context, and stable
+  report output.
+
+### Stage 5A: Sanitized Node.js Export
+
+Add a small, authenticated Node.js export path that creates the bounded
+analysis envelope above. It must join Calendar timing/title with the user's
+category, tags, and lock metadata without giving Python direct Firestore or
+Google Calendar access.
+
+The export is a deliberate developer or user action at first. Python still
+runs as a manual command or scheduled internal job, not as an HTTP service.
 
 Potential later flow:
 
@@ -156,6 +198,21 @@ Node.js exports a narrow, sanitized activity set
   -> Python writes a report
   -> a developer reviews the report
 ```
+
+### Stage 5B: Scheduling Evaluation
+
+Use synthetic fixtures first to evaluate the completed Phase 4 scheduling
+behaviour. Record whether a proposed plan:
+
+- starts in the future when planning for today;
+- stays within its intended date window;
+- respects the maximum-three-overlaps rule;
+- preserves a 15-minute break between 90-minute focus blocks;
+- reports tasks that could not be scheduled instead of silently dropping them;
+- keeps every proposed Activity editable and reviewable before a write.
+
+This is evaluation tooling only. It does not alter the JavaScript scheduler or
+make a live scheduling decision.
 
 ## What Is Deliberately Out of Scope
 
@@ -186,6 +243,9 @@ The first Python data milestone is complete when:
 5. Real local exports, generated reports, and credentials are ignored by Git.
 6. Node.js and frontend behavior remain unchanged.
 
-## Next Step After Completion
+## Next Step
 
-Use the quality report to decide which assistant capability has enough evidence to prototype next. The likely first candidates are an evaluation dataset for activity drafts, an offline priority-confidence experiment, or a weekly time-pattern insight.
+Start Stage 5A with a narrow sanitized Node.js export, then use Stage 5B to
+turn the Phase 4 cases into a repeatable scheduling-evaluation dataset. An
+offline priority-confidence experiment or weekly time-pattern insight comes
+after those two foundations are reliable.
