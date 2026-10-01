@@ -25,6 +25,15 @@ import {
 
 import { formatScheduleRange } from "../lib/schedule-format.js";
 
+function toAssistantInsightContext(insight) {
+  if (!insight || typeof insight.type !== "string") return null;
+  const metrics = (Array.isArray(insight.metrics) ? insight.metrics : [])
+    .slice(0, 4)
+    .filter((metric) => metric && typeof metric.key === "string" && Number.isInteger(metric.value))
+    .map(({ key, value }) => ({ key, value }));
+  return metrics.length ? { type: insight.type, metrics } : null;
+}
+
 function describeScheduleConflict(schedule) {
   const conflicts = Array.isArray(schedule?.conflicts)
     ? schedule.conflicts
@@ -46,6 +55,7 @@ export function useActivityAssistantConversation({
   activityTagMap = {},
   lockedActivities = {},
   assistantPreferences = {},
+  assistantInsight = null,
   onOpenTelegramChat,
   onSendTelegramMessage,
   onClearTelegramMessages,
@@ -236,6 +246,7 @@ export function useActivityAssistantConversation({
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         categories: categories.map((category) => category.name),
         assistantPreferences,
+        insightContext: toAssistantInsightContext(assistantInsight),
         scheduleContext: buildAssistantScheduleContext(
           activities,
           lockedActivities,
@@ -420,6 +431,7 @@ export function useActivityAssistantConversation({
         categories: categories.map((category) => category.name),
         userTags: collectUserTags(activityTagMap),
         assistantPreferences,
+        insightContext: toAssistantInsightContext(assistantInsight),
         scheduleContext: buildAssistantScheduleContext(
           activities,
           lockedActivities,

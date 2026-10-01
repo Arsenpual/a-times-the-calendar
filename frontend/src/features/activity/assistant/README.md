@@ -71,6 +71,15 @@ The policy is a visible product default, not stored personal memory. A person
 can still exclude or edit every generated focus or break Activity before the
 batch confirmation.
 
+## Session-approved Data Lab context
+
+When a person explicitly checks the current `Insight Review` summary in
+Settings, the browser may send only its report type and up to four allowlisted
+aggregate metric key/value pairs with an assistant request. The backend
+normalizes the same allowlist before any AI call. The raw report never leaves
+the browser, and this context is not stored as chat memory or a preference. It
+cannot decide urgency, importance, an Eisenhower quadrant, or a Calendar write.
+
 ## Storage and verification
 
 Chat storage is scoped to the authenticated UID (v2). AccountApp remounts on

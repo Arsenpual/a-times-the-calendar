@@ -255,6 +255,7 @@ export default function AccountApp({ auth }) {
     handleEditSeries
   } = activityModal;
   const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
+  const [assistantInsight, setAssistantInsight] = useState(null);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
   const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
   const [activityAssistantDailySummaryRequest, setActivityAssistantDailySummaryRequest] = useState(0);
@@ -720,6 +721,7 @@ export default function AccountApp({ auth }) {
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
         onConfirmActivityPlan={saveAssistantPlan}
         onOpenDailySummary={openAssistantDailySummary}
+        assistantInsight={assistantInsight}
       />
 
       <SettingsDrawer
@@ -742,6 +744,8 @@ export default function AccountApp({ auth }) {
           const disconnected = await handleDisconnectCalendar();
           if (disconnected) window.location.reload();
         }}
+        assistantInsight={assistantInsight}
+        onAssistantInsightChange={setAssistantInsight}
       />
 
     </div>

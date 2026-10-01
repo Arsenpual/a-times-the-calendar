@@ -1,7 +1,23 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { prepareContext, finishResult, validateDraft } = require('../skills/activity-creation');
+const { prepareContext, finishResult, validateDraft, normalizeInsightContext } = require('../skills/activity-creation');
 const context = (text = 'อ่านหนังสือ') => prepareContext({ text, referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', categories: ['งาน'], history: [] });
+
+test('insight context keeps only bounded metrics for its matching report type', () => {
+  assert.deepEqual(normalizeInsightContext({
+    type: 'weekly',
+    metrics: [
+      { key: 'totalScheduledMinutes', value: 420 },
+      { key: 'daysWithOverlap', value: 2 },
+      { key: 'totalActivities', value: 99 },
+      { key: 'invalidActivities', value: -1 }
+    ],
+    rawReport: { activities: ['never included'] }
+  }), {
+    type: 'weekly',
+    metrics: [{ key: 'totalScheduledMinutes', value: 420 }, { key: 'daysWithOverlap', value: 2 }]
+  });
+});
 const extraction = (patch = {}) => ({ title: 'อ่านหนังสือ', startLocal: '', endLocal: '', allDay: false, categoryName: '', notes: '', ...patch });
 const finish = (patch, text) => finishResult({ ready: true, reply: 'ร่างพร้อมแล้ว', draft: extraction(patch) }, context(text)).draft;
 const valid = () => finish({});

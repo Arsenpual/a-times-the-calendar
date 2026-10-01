@@ -39,6 +39,20 @@ function normalizeAssistantPreferences(raw) {
     preferredEveningStart: time("preferredEveningStart")
   };
 }
+const INSIGHT_METRIC_KEYS = {
+  quality: new Set(["totalActivities", "validActivities", "invalidActivities", "priorityContextReadyActivities"]),
+  priority: new Set(["readyForHumanReview", "highConfidence", "moderateConfidence", "lowConfidence"]),
+  weekly: new Set(["totalScheduledMinutes", "allDayActivities", "daysWithOverlap", "invalidActivities"]),
+  scheduling: new Set(["totalCases", "passedCases", "failedCases"])
+};
+
+function normalizeInsightContext(raw) {
+  if (!raw || typeof raw !== "object" || !INSIGHT_METRIC_KEYS[raw.type]) return null;
+  const metrics = (Array.isArray(raw.metrics) ? raw.metrics : []).slice(0, 4)
+    .filter((metric) => metric && typeof metric === "object" && INSIGHT_METRIC_KEYS[raw.type].has(metric.key) && Number.isInteger(metric.value) && metric.value >= 0 && metric.value <= 1_000_000)
+    .map(({ key, value }) => ({ key, value }));
+  return metrics.length ? { type: raw.type, metrics } : null;
+}
 function prepareContext(body) {
   const text = bounded(body.text, 1200, 'ข้อความ');
   if (!text) fail('กรุณาระบุข้อความ');
@@ -71,7 +85,8 @@ function prepareContext(body) {
     currentLocal: typeof body.scheduleContext?.currentLocal === "string" ? body.scheduleContext.currentLocal.slice(0, 16) : ""
   };
   const assistantPreferences = normalizeAssistantPreferences(body.assistantPreferences);
-  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity, assistantPreferences };
+  const insightContext = normalizeInsightContext(body.insightContext);
+  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity, assistantPreferences, insightContext };
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');
@@ -111,4 +126,4 @@ function finishResult(raw, context) {
   }
   return { reply, ready: true, draft: validateDraft(applyAssumptions(raw.draft, context), context.categories) };
 }
-module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions, normalizeAssistantPreferences };
+module.exports = { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions, normalizeAssistantPreferences, normalizeInsightContext };

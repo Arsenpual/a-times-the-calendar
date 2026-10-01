@@ -92,6 +92,35 @@ test("knowledge answer is deterministic and skips Gemini quota", async () => {
   assert.equal(geminiCalls, 0);
 });
 
+test("an explicitly approved bounded insight summary reaches AI context without report content", async () => {
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => ({ status: "claimed" }),
+    generateActivity: async (context) => {
+      assert.deepEqual(context.insightContext, {
+        type: "weekly",
+        metrics: [{ key: "totalScheduledMinutes", value: 420 }, { key: "daysWithOverlap", value: 2 }]
+      });
+      return validGeminiDraft();
+    }
+  }, async (baseUrl) => {
+    const response = await post(baseUrl, {
+      text: "พรุ่งนี้ประชุมทีมสิบโมง",
+      insightContext: {
+        type: "weekly",
+        metrics: [
+          { key: "totalScheduledMinutes", value: 420, label: "ignored" },
+          { key: "daysWithOverlap", value: 2 },
+          { key: "notAllowed", value: 999 },
+          { key: "totalActivities", value: "not-a-number" }
+        ],
+        rawReport: { activities: ["must not reach the prompt"] }
+      }
+    });
+    assert.equal(response.status, 200);
+  });
+});
+
 test("calendar question reads a bounded context and returns a Gemini answer without any Calendar write", async () => {
   let calendarReads = 0;
   let activityGenerations = 0;

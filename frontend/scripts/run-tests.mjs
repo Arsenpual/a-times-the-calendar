@@ -20,6 +20,7 @@ const unitTests = [
   "src/features/activity/services/activity-calendar-actions.test.mjs",
   "src/shared/i18n/i18n-catalog.test.mjs",
   "src/features/settings/lib/data-lab-export-window.test.mjs",
+  "src/features/settings/lib/data-lab-insight-report.test.mjs",
   "src/features/activity/assistant/tests/activity-popup-handoff.test.js",
   "src/features/activity/assistant/tests/assistant-boundaries.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",

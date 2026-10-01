@@ -1,5 +1,6 @@
 import AssistantPreferenceCandidate from "./assistant-preference-candidate.jsx";
 import DataLabExport from "./data-lab-export.jsx";
+import DataLabInsights from "./data-lab-insights.jsx";
 import React, { useEffect, useState } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
 import { ASSISTANT_PREFERENCE_FIELDS } from "../../activity/assistant/hooks/use-assistant-preferences.js";
@@ -79,7 +80,9 @@ export default function SettingsDrawer({
   onDeleteAssistantPreference,
   onDismissAssistantPreferenceCandidate,
   calendarConnected = false,
-  onDisconnectCalendar
+  onDisconnectCalendar,
+  assistantInsight,
+  onAssistantInsightChange
 }) {
   const { language, setLanguage, t } = useLanguage();
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
@@ -232,6 +235,7 @@ export default function SettingsDrawer({
           </section>
 
           <DataLabExport calendarConnected={calendarConnected} />
+          <DataLabInsights assistantInsight={assistantInsight} onAssistantInsightChange={onAssistantInsightChange} />
         </div>
       </div>
     </div>

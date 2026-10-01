@@ -67,6 +67,7 @@ export default function ActivityAssistantDialog(props) {
     telegramError = "",
     onOpenDailySummary,
     onSendTelegramMessage,
+    assistantInsight,
   } = props;
   const {
     messages,
@@ -131,6 +132,11 @@ export default function ActivityAssistantDialog(props) {
             {Math.max(0, aiStatus.userWindow.limit - aiStatus.userWindow.used)}/
             {aiStatus.userWindow.limit} ใน 15 นาที · AI ในแชตนี้{" "}
             {aiRequestCount} ครั้ง
+          </p>
+        )}
+        {assistantInsight && (
+          <p className="activity-ai-insight-context">
+            ใช้ {assistantInsight.title} เป็นบริบทเฉพาะ session นี้
           </p>
         )}
         <main className="activity-ai-messages">

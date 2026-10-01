@@ -214,6 +214,18 @@ behaviour. Record whether a proposed plan:
 This is evaluation tooling only. It does not alter the JavaScript scheduler or
 make a live scheduling decision.
 
+### Stage 5C: Local Export and Insight Review
+
+Turn the offline reports into an explicit, user-controlled loop without making
+Python a web service:
+
+- Let an authenticated user download a narrow 1-31 day activity export.
+- Keep the downloaded export on the user's device for manual Python analysis.
+- Let the user select a generated JSON report for an in-browser summary view.
+- Keep imported report data in the current browser session only.
+- Never upload a report, persist an inferred conclusion, write Calendar data,
+  or update assistant preferences from this surface.
+
 ### Stage 5A Implementation Status: Complete
 
 The authenticated `GET /api/data-lab/activity-export` route creates a download
@@ -256,6 +268,37 @@ with visible data-quality counts. Overlap is reported only as descriptive
 calendar density. The report makes no recommendation and does not modify
 Calendar data.
 
+### Stage 5C Implementation Status: Complete
+
+Settings now contains the user-controlled Data Lab loop. The `Data Lab`
+section downloads a sanitized export for an explicit window, while `Insight
+Review` accepts one local Data Lab JSON report and displays only supported
+summary metrics for activity quality, priority confidence, weekly patterns, or
+scheduling evaluation. The imported file stays in browser memory for the
+current session and cannot affect Calendar data or preferences.
+
+### Stage 6: Session-Approved Assistant Insight Context
+
+Make a currently opened Insight Review summary available to the assistant
+only after the user explicitly opts in for the current browser session.
+
+- Send only report `type` and a maximum of four supported metric key/value
+  pairs, never the raw report, activity titles, findings, or notes.
+- Validate the same per-report metric allowlist in Node.js before an AI call.
+- Show when this optional context is active and let the user turn it off.
+- Treat it as descriptive aggregate information, never as a priority rule,
+  Eisenhower classification, stored preference, or Calendar instruction.
+
+### Stage 6 Implementation Status: Complete
+
+The optional checkbox in Insight Review now makes the selected summary visible
+to the activity assistant for the current browser session only. The assistant
+header displays the active context. Frontend and backend both reduce it to a
+bounded report type and matching allowlisted metric keys; the raw report is
+never sent to Node.js or an AI provider. This information cannot write Calendar
+data or persist as a preference, and prompt rules prohibit deriving urgency,
+importance, an Eisenhower quadrant, or schedule changes from it.
+
 ## What Is Deliberately Out of Scope
 
 The first Python integration must not:
@@ -287,8 +330,7 @@ The first Python data milestone is complete when:
 
 ## Next Step
 
-The first Python Data Lab milestone is now complete. The application now offers
-an explicit, authenticated Data Lab download in Settings for a user-selected
-window up to 31 days. It keeps the exported file local for manual review with
-the offline reports. A separate human-approved insight surface in T.i.M.E.S.
-remains a future product decision.
+Review the real local reports and the usefulness of the optional context before
+designing any more interpretive, human-approved insight. Do not automate
+priority or Eisenhower conclusions until there is explicit product policy,
+review UX, and representative evaluation data.
