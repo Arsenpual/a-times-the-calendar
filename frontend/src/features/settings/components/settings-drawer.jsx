@@ -1,4 +1,5 @@
 import AssistantPreferenceCandidate from "./assistant-preference-candidate.jsx";
+import DataLabExport from "./data-lab-export.jsx";
 import React, { useEffect, useState } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
 import { ASSISTANT_PREFERENCE_FIELDS } from "../../activity/assistant/hooks/use-assistant-preferences.js";
@@ -229,6 +230,8 @@ export default function SettingsDrawer({
               </button>
             )}
           </section>
+
+          <DataLabExport calendarConnected={calendarConnected} />
         </div>
       </div>
     </div>

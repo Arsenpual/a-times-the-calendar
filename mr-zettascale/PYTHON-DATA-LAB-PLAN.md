@@ -287,6 +287,8 @@ The first Python data milestone is complete when:
 
 ## Next Step
 
-The first Python Data Lab milestone is now complete. The next decision is
-whether to review these offline reports with real local exports or design a
-separate human-approved insight surface in T.i.M.E.S.
+The first Python Data Lab milestone is now complete. The application now offers
+an explicit, authenticated Data Lab download in Settings for a user-selected
+window up to 31 days. It keeps the exported file local for manual review with
+the offline reports. A separate human-approved insight surface in T.i.M.E.S.
+remains a future product decision.
