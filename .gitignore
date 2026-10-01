@@ -45,6 +45,7 @@ Desktop.ini
 # personal scheduling data. Committed synthetic fixtures live under tests/.
 /mr-zettascale/lab/data/*.json
 !/mr-zettascale/lab/data/sample-activities.json
+!/mr-zettascale/lab/data/scheduling-evaluation.json
 /mr-zettascale/lab/reports/*.json
 /mr-zettascale/lab/reports/*.md
 !/mr-zettascale/lab/reports/.gitkeep

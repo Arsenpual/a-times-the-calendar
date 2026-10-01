@@ -229,6 +229,16 @@ Automated route tests cover bounded-window validation, recurring-id metadata
 joins, all-day records, cancelled/transparent event exclusion, and the absence
 of credential fields from the response.
 
+### Stage 5B Implementation Status: Complete
+
+The Data Lab now has a committed synthetic scheduling-evaluation dataset and
+an offline Python evaluator. It writes JSON and Markdown reports for future
+time suggestions, bounded planning windows, the three-overlap rule, protected
+90-minute focus blocks with 15-minute breaks, visibly unscheduled tasks, and
+editable proposals. It does not execute the production scheduler or write to
+Calendar; backend integration tests remain the source of truth for the live
+JavaScript behavior.
+
 ## What Is Deliberately Out of Scope
 
 The first Python integration must not:
@@ -260,6 +270,5 @@ The first Python data milestone is complete when:
 
 ## Next Step
 
-Start Stage 5B by turning the Phase 4 cases into a repeatable
-scheduling-evaluation dataset. An offline priority-confidence experiment or
-weekly time-pattern insight comes after that foundation is reliable.
+The next candidate is an offline priority-confidence experiment or weekly
+time-pattern insight, after reviewing the scheduling-evaluation reports.

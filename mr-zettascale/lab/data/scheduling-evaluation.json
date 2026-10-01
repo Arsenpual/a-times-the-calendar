@@ -1,0 +1,65 @@
+{
+  "evaluationVersion": 1,
+  "cases": [
+    {
+      "id": "future-today",
+      "windowStart": "2026-10-01T00:00",
+      "windowEnd": "2026-10-02T00:00",
+      "currentLocal": "2026-10-01T14:30",
+      "existingActivities": [],
+      "proposedActivities": [
+        {"title": "อ่านหนังสือ", "start": "2026-10-01T16:00", "end": "2026-10-01T17:00", "editable": true}
+      ],
+      "unscheduled": [],
+      "expect": {"startsInFuture": true, "staysWithinWindow": true, "maxOverlaps": 3, "reviewable": true}
+    },
+    {
+      "id": "three-overlaps-allowed",
+      "windowStart": "2026-10-02T00:00",
+      "windowEnd": "2026-10-03T00:00",
+      "existingActivities": [
+        {"title": "ประชุม A", "start": "2026-10-02T10:00", "end": "2026-10-02T11:00"},
+        {"title": "ประชุม B", "start": "2026-10-02T10:15", "end": "2026-10-02T10:45"}
+      ],
+      "proposedActivities": [
+        {"title": "งานที่สาม", "start": "2026-10-02T10:30", "end": "2026-10-02T10:45", "editable": true}
+      ],
+      "unscheduled": [],
+      "expect": {"maxOverlaps": 3, "staysWithinWindow": true, "reviewable": true}
+    },
+    {
+      "id": "protected-focus-break",
+      "windowStart": "2026-10-03T00:00",
+      "windowEnd": "2026-10-04T00:00",
+      "existingActivities": [],
+      "proposedActivities": [
+        {"title": "ทำรายงาน (1/2)", "kind": "focus", "start": "2026-10-03T08:00", "end": "2026-10-03T09:30", "editable": true},
+        {"title": "พัก 15 นาที", "kind": "break", "start": "2026-10-03T09:30", "end": "2026-10-03T09:45", "editable": true},
+        {"title": "ทำรายงาน (2/2)", "kind": "focus", "start": "2026-10-03T09:45", "end": "2026-10-03T11:15", "editable": true}
+      ],
+      "unscheduled": [],
+      "expect": {"focusBlockMinutes": 90, "breakMinutes": 15, "staysWithinWindow": true, "reviewable": true}
+    },
+    {
+      "id": "unscheduled-task-visible",
+      "windowStart": "2026-10-04T00:00",
+      "windowEnd": "2026-10-05T00:00",
+      "existingActivities": [{"title": "วันแน่น", "start": "2026-10-04T08:00", "end": "2026-10-04T22:00"}],
+      "proposedActivities": [],
+      "unscheduled": [{"title": "งานยาว", "durationMinutes": 480}],
+      "expect": {"unscheduledTitles": ["งานยาว"]}
+    },
+    {
+      "id": "reviewable-list-plan",
+      "windowStart": "2026-10-05T00:00",
+      "windowEnd": "2026-10-06T00:00",
+      "existingActivities": [],
+      "proposedActivities": [
+        {"title": "ออกกำลังกาย", "start": "2026-10-05T08:00", "end": "2026-10-05T08:30", "editable": true},
+        {"title": "อ่านหนังสือ", "start": "2026-10-05T08:30", "end": "2026-10-05T09:30", "editable": true}
+      ],
+      "unscheduled": [],
+      "expect": {"staysWithinWindow": true, "reviewable": true, "maxOverlaps": 3}
+    }
+  ]
+}

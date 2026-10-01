@@ -22,6 +22,17 @@ The command creates these local reports:
 python -m unittest discover -s tests -v
 ```
 
+## Run the scheduling evaluation
+
+```powershell
+python -m src.mr_zettascale_data --schedule-evaluation --input data/scheduling-evaluation.json --output reports
+```
+
+This synthetic evaluation checks Phase 4 proposals for future-time handling,
+window bounds, the three-overlap limit, protected 90/15 focus blocks, visible
+unscheduled tasks, and reviewable drafts. It evaluates data only; it does not
+run a live scheduler or modify Calendar data.
+
 ## Accepted input
 
 The input can be a JSON array or an object with an `activities` array. Each
