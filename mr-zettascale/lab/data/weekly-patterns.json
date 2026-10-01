@@ -1,0 +1,14 @@
+{
+  "activities": [
+    {"id": "work-monday", "summary": "วางแผนงานสัปดาห์", "start": "2026-10-05T09:00", "end": "2026-10-05T11:00", "category": "งาน", "tags": ["planning"]},
+    {"id": "study-monday", "summary": "อ่านบทที่ 4", "start": "2026-10-05T18:00", "end": "2026-10-05T19:30", "category": "การเรียน", "tags": ["study"]},
+    {"id": "health-tuesday", "summary": "ออกกำลังกาย", "start": "2026-10-06T07:00", "end": "2026-10-06T08:00", "category": "สุขภาพ", "tags": ["exercise"]},
+    {"id": "overnight-tuesday", "summary": "เดินทาง", "start": "2026-10-06T23:30", "end": "2026-10-07T01:00", "category": "ส่วนตัว", "tags": ["travel"]},
+    {"id": "deep-work-wednesday", "summary": "ทำรายงาน", "start": "2026-10-07T09:00", "end": "2026-10-07T11:00", "category": "งาน", "tags": ["focus"]},
+    {"id": "meeting-wednesday", "summary": "ประชุมทีม", "start": "2026-10-07T10:00", "end": "2026-10-07T12:00", "category": "งาน", "tags": ["meeting"]},
+    {"id": "all-day-thursday", "summary": "วันหยุด", "start": {"date": "2026-10-08"}, "end": {"date": "2026-10-09"}, "allDay": true, "category": "ส่วนตัว", "tags": ["holiday"]},
+    {"id": "errand-friday", "summary": "ซื้อของใช้", "start": "2026-10-09T17:00", "end": "2026-10-09T17:30", "tags": ["errand"]},
+    {"id": "clear-desk-saturday", "summary": "เก็บโต๊ะ", "start": "2026-10-10T20:00", "end": "2026-10-10T20:30", "tags": []},
+    {"id": "invalid-sunday", "summary": "ข้อมูลเวลาเสีย", "start": "invalid", "end": "2026-10-11T12:00", "category": "งาน", "tags": ["test"]}
+  ]
+}

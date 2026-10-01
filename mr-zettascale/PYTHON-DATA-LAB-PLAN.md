@@ -239,6 +239,23 @@ editable proposals. It does not execute the production scheduler or write to
 Calendar; backend integration tests remain the source of truth for the live
 JavaScript behavior.
 
+### Priority Confidence Experiment: Complete
+
+An offline, synthetic priority-confidence experiment now measures only data
+readiness for a future human priority review. Its transparent signals are a
+clear non-ambiguous title, category, tags, and notes. It reports high,
+moderate, or low confidence plus missing signals, and deliberately never
+assigns urgency, importance, or an Eisenhower quadrant.
+
+### Weekly Time-Pattern Insight: Complete
+
+An offline weekly report now aggregates scheduled minutes by category, date,
+and broad local start period. Overnight timed activities are split at midnight,
+all-day activities are reported separately, and malformed records are excluded
+with visible data-quality counts. Overlap is reported only as descriptive
+calendar density. The report makes no recommendation and does not modify
+Calendar data.
+
 ## What Is Deliberately Out of Scope
 
 The first Python integration must not:
@@ -270,5 +287,6 @@ The first Python data milestone is complete when:
 
 ## Next Step
 
-The next candidate is an offline priority-confidence experiment or weekly
-time-pattern insight, after reviewing the scheduling-evaluation reports.
+The first Python Data Lab milestone is now complete. The next decision is
+whether to review these offline reports with real local exports or design a
+separate human-approved insight surface in T.i.M.E.S.

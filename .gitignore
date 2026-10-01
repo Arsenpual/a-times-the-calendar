@@ -46,6 +46,8 @@ Desktop.ini
 /mr-zettascale/lab/data/*.json
 !/mr-zettascale/lab/data/sample-activities.json
 !/mr-zettascale/lab/data/scheduling-evaluation.json
+!/mr-zettascale/lab/data/priority-confidence.json
+!/mr-zettascale/lab/data/weekly-patterns.json
 /mr-zettascale/lab/reports/*.json
 /mr-zettascale/lab/reports/*.md
 !/mr-zettascale/lab/reports/.gitkeep

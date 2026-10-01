@@ -33,6 +33,27 @@ window bounds, the three-overlap limit, protected 90/15 focus blocks, visible
 unscheduled tasks, and reviewable drafts. It evaluates data only; it does not
 run a live scheduler or modify Calendar data.
 
+## Run the priority-confidence experiment
+
+```powershell
+python -m src.mr_zettascale_data --priority-confidence --input data/priority-confidence.json --output reports
+```
+
+The result explains whether an activity has enough clear title, category,
+tags, and notes context for a human to review its priority. It never labels an
+activity urgent, important, or assigns an Eisenhower Matrix quadrant.
+
+## Run the weekly time-pattern insight
+
+```powershell
+python -m src.mr_zettascale_data --weekly-insight --input data/weekly-patterns.json --output reports
+```
+
+This descriptive report totals scheduled time by category, date, and broad
+local start period. Timed overnight activities are split across dates, all-day
+activities are counted separately, and malformed time data is excluded with a
+visible quality note. It does not make recommendations or alter Calendar data.
+
 ## Accepted input
 
 The input can be a JSON array or an object with an `activities` array. Each
