@@ -214,6 +214,21 @@ behaviour. Record whether a proposed plan:
 This is evaluation tooling only. It does not alter the JavaScript scheduler or
 make a live scheduling decision.
 
+### Stage 5A Implementation Status: Complete
+
+The authenticated `GET /api/data-lab/activity-export` route creates a download
+for an explicit 1-31 day window. It reads only Primary Calendar event id,
+title, start/end, and all-day state, then joins category names, tags, and lock
+state from the requesting user's Firestore collections. The envelope has the
+documented version, generation time, `Asia/Bangkok` time zone, explicit
+exclusive window bounds, and a `truncated` flag when Google Calendar has more
+than 500 matching events. Tokens, descriptions, attendees, and unrelated
+Calendar fields never leave Node.js.
+
+Automated route tests cover bounded-window validation, recurring-id metadata
+joins, all-day records, cancelled/transparent event exclusion, and the absence
+of credential fields from the response.
+
 ## What Is Deliberately Out of Scope
 
 The first Python integration must not:
@@ -245,7 +260,6 @@ The first Python data milestone is complete when:
 
 ## Next Step
 
-Start Stage 5A with a narrow sanitized Node.js export, then use Stage 5B to
-turn the Phase 4 cases into a repeatable scheduling-evaluation dataset. An
-offline priority-confidence experiment or weekly time-pattern insight comes
-after those two foundations are reliable.
+Start Stage 5B by turning the Phase 4 cases into a repeatable
+scheduling-evaluation dataset. An offline priority-confidence experiment or
+weekly time-pattern insight comes after that foundation is reliable.
