@@ -432,7 +432,8 @@ async function registerBotCommands() {
   // same entries to both scopes every time the backend starts.
   const commands = [
     { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S." },
-    { command: "general_questions", description: "คำถามทั่วไป" }
+    { command: "general_questions", description: "คำถามทั่วไป" },
+    { command: "cmd", description: "ดูรายการคำสั่ง" }
   ];
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
