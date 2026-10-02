@@ -15,24 +15,25 @@ const pendingAnnouncementMessageEdits = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
-  "/cmd — ดูรายการคำสั่งนี้\n" +
-  "/times — T.i.M.E.S. คืออะไร\n" +
-  "/features — T.i.M.E.S. มีฟีเจอร์อะไรบ้าง\n" +
-  "/myid — ดู Telegram chat ID ของคุณ\n" +
-  "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
-  "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
+  "/general_questions — เลือกคำถามทั่วไป\n\n" +
+  "เลือกคำถามจากปุ่มด้านล่างเพื่อรับคำตอบจากฐานความรู้ของ T.i.M.E.S.";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
 const CUSTOM_COMMAND_KEYBOARD = {
-  keyboard: [[{ text: "/start" }, { text: "/cmd" }]],
+  keyboard: [[{ text: "/general_questions" }]],
   resize_keyboard: true,
   one_time_keyboard: true,
   input_field_placeholder: "เลือกคำสั่งด่วน หรือพิมพ์ข้อความ"
 };
 
-// The two roots belong in Telegram's persistent command menu. Everything
-// underneath is deliberately an inline, contextual follow-up—similar to the
-// guided question flow in the web Activity assistant, without invoking AI.
+// The only persistent bot-menu command opens these main questions. Follow-ups
+// remain inline and use deterministic product knowledge only.
+const GENERAL_QUESTION_BUTTONS = Object.freeze([
+  ["times", "T.i.M.E.S. คืออะไร?"],
+  ["features", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"],
+  ["data-lab", "Data Lab คืออะไร?"]
+]);
+
 const PRODUCT_QUESTION_NODES = Object.freeze({
   times: {
     question: "times คืออะไร",
@@ -49,6 +50,26 @@ const PRODUCT_QUESTION_NODES = Object.freeze({
       ["reminder", "🔔 ฟีเจอร์ Reminder Mode"],
       ["connection", "การเชื่อมต่อและการซิงก์"]
     ]
+  },
+  "data-lab": {
+    question: "Data Lab คืออะไร?",
+    buttons: [
+      ["data-lab-export", "ส่งออกข้อมูล Data Lab อย่างไร?"],
+      ["insight-review", "Insight Review ใช้อย่างไร?"],
+      ["general-questions", "← คำถามทั่วไป"]
+    ]
+  },
+  "data-lab-export": {
+    question: "ส่งออกข้อมูล Data Lab อย่างไร?",
+    buttons: [["insight-review", "Insight Review ใช้อย่างไร?"], ["data-lab", "← Data Lab"]]
+  },
+  "insight-review": {
+    question: "Insight Review ใช้อย่างไร?",
+    buttons: [["data-lab-export", "ส่งออกข้อมูล Data Lab อย่างไร?"], ["data-lab", "← Data Lab"]]
+  },
+  "general-questions": {
+    question: "",
+    buttons: GENERAL_QUESTION_BUTTONS
   },
   purpose: {
     question: "times คืออะไร",
@@ -134,7 +155,9 @@ function productQuestionResponse(nodeId) {
   const node = PRODUCT_QUESTION_NODES[nodeId] || PRODUCT_QUESTION_NODES.times;
   return {
     node,
-    text: answerTimesQuestion(node.question) || "ผมยังไม่มีข้อมูลยืนยันเกี่ยวกับส่วนนั้นใน T.i.M.E.S. ครับ"
+    text: nodeId === "general-questions"
+      ? "เลือกคำถามทั่วไปที่ต้องการได้เลยครับ"
+      : answerTimesQuestion(node.question) || "ผมยังไม่มีข้อมูลยืนยันเกี่ยวกับส่วนนั้นใน T.i.M.E.S. ครับ"
   };
 }
 
@@ -403,10 +426,9 @@ async function releaseDeliveryClaim(claim) {
 async function registerBotCommands() {
   // A bot can have a separate menu for all private chats. Updating only the
   // default scope leaves an older private-chat menu visible, so publish the
-  // same two roots to both scopes every time the backend starts.
+  // same single entry to both scopes every time the backend starts.
   const commands = [
-    { command: "times", description: "T.i.M.E.S. คืออะไร" },
-    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
+    { command: "general_questions", description: "คำถามทั่วไป" }
   ];
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
@@ -678,12 +700,15 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
     // Telegram can answer only documented product questions here. This is a
     // deterministic knowledge lookup, so it never calls Gemini or consumes
     // the Activity Mode AI quota.
-    const commandNodes = {
-      "/times": "times",
-      "/features": "features"
-    };
-    const commandName = text.match(/^\/(times|features)(?:@\w+)?$/i)?.[1]?.toLowerCase();
-    const requestedNode = commandName ? commandNodes[`/${commandName}`] : productNodeForText(text);
+    const commandName = text.match(/^\/(general_questions|times|features)(?:@\w+)?$/i)?.[1]?.toLowerCase();
+    const requestedNode = commandName === "general_questions"
+      ? "general-questions"
+      : commandName || productNodeForText(text);
+    if (commandName === "general_questions") {
+      const { node, text: menuText } = productQuestionResponse(requestedNode);
+      await reply(menuText, { reply_markup: productQuestionKeyboard(node) });
+      return res.sendStatus(200);
+    }
     const productQuestion = commandName ? PRODUCT_QUESTION_NODES[requestedNode].question : text;
     const productAnswer = answerTimesQuestion(productQuestion);
     if (productAnswer) {
@@ -695,7 +720,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
     const match = text.match(/^\/start\s+([A-Za-z0-9_-]{1,64})$/);
     if (!match) {
       if (/^\/start(?:@\w+)?$/i.test(text)) {
-        await reply("ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+        await reply("ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /general_questions เพื่อเลือกคำถามทั่วไป\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       }
       return res.sendStatus(200);
     }
