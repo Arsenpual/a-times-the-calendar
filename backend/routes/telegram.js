@@ -21,7 +21,7 @@ const COMMAND_HELP_TEXT =
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
-// ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
+// ปุ่มหนึ่งครั้ง การแสดงปุ่ม Bot Command Menu ขึ้นกับ Telegram client.
 const CUSTOM_COMMAND_KEYBOARD = {
   keyboard: [[{ text: "/start" }, { text: "/cmd" }]],
   resize_keyboard: true,
@@ -447,9 +447,29 @@ async function registerBotCommands() {
     await setCommandsForScope(scope);
   }
 
-  // BotCommandScopeChatMember is invalid for a private chat. The explicit
-  // all-private-chats scope above is the supported scope that overrides the
-  // default command menu for every direct conversation with this bot.
+  // Older releases registered chat-scoped commands before attempting an
+  // invalid private-chat chat_member scope. Those successful writes survive
+  // deployments and take precedence over all_private_chats. Remove the legacy
+  // language-neutral overrides so linked chats inherit the current menu.
+  // Page through IDs only; do not load chat messages or user profiles.
+  let cursor;
+  while (true) {
+    let query = db.collection("telegram-chat-owners").select().limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const chats = await query.get();
+    for (const chat of chats.docs) {
+      if (!/^\d+$/.test(chat.id)) continue;
+      const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/deleteMyCommands`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: { type: "chat", chat_id: chat.id } })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(`ล้างเมนูคำสั่ง Telegram เก่าไม่สำเร็จ: ${data.description || response.status}`);
+    }
+    if (chats.size < 100) break;
+    cursor = chats.docs[chats.docs.length - 1];
+  }
 }
 
 router.get("/status", async (req, res, next) => {
