@@ -41,13 +41,17 @@ function menuHarness(ids, failDeletion = false) {
   return { register, menus, reads: () => reads };
 }
 
-test("legacy chat menu is removed so the single current command becomes effective", async () => {
+test("legacy chat menu is removed so the current command menu becomes effective", async () => {
   const { register, menus } = menuHarness(["123", "-456"]);
   await register();
   assert.equal(menus.has("chat:123"), false);
   assert.equal(menus.has("chat:-456"), true, "group overrides must remain untouched");
   for (const scope of ["default", "all_private_chats"]) {
-    assert.deepEqual(menus.get(scope), [{ command: "general_questions", description: "คำถามทั่วไป" }]);
+    assert.deepEqual(menus.get(scope), [
+      { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S." },
+      { command: "general_questions", description: "คำถามทั่วไป" },
+      { command: "cmd", description: "ดูรายการคำสั่ง" }
+    ]);
   }
   await register();
   assert.equal(menus.has("chat:123"), false, "cleanup is safe to repeat");
