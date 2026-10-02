@@ -4,6 +4,8 @@ const { FieldValue } = require("firebase-admin/firestore");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
 const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
+const { generateContent } = require("../gemini-api.js");
+const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = require("../gemini-chat.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -11,12 +13,15 @@ const LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
 const ANNOUNCEMENT_EDIT_TTL_MS = 10 * 60 * 1000;
+const TELEGRAM_FREE_AI_HISTORY_LIMIT = 16;
+const TELEGRAM_FREE_AI_MESSAGE_LIMIT = 3_800;
 const pendingAnnouncementMessageEdits = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/general_questions — คำถามทั่วไปเกี่ยวกับ T.i.M.E.S.\n" +
+  "/ai on|off|clear — เปิด ปิด หรือล้างบทสนทนา AI ส่วนตัว\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
@@ -195,6 +200,86 @@ function requiredEnv(name) {
   const value = process.env[name];
   if (!value) throw new Error(`ไม่พบ ${name} ใน environment ของ backend`);
   return value;
+}
+
+function telegramFreeAiAllowedChatIds() {
+  return new Set(
+    String(process.env.TELEGRAM_FREE_AI_ALLOWED_CHAT_IDS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+}
+
+function isTelegramFreeAiAllowed(chatId, userId) {
+  // A linked Telegram chat must belong to a developer account. Deployments
+  // may additionally bind this to an exact Telegram chat ID; when that
+  // allowlist is empty, the developer-account check still fails closed for
+  // every ordinary linked user.
+  if (!userId || !isDeveloperUser(userId)) return false;
+  const allowedChatIds = telegramFreeAiAllowedChatIds();
+  return allowedChatIds.size === 0 || allowedChatIds.has(String(chatId));
+}
+
+function normalizedTelegramFreeAiHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter((item) => item && ["user", "model"].includes(item.role) && typeof item.text === "string")
+    .map((item) => ({ role: item.role, text: item.text.trim().slice(0, TELEGRAM_FREE_AI_MESSAGE_LIMIT) }))
+    .filter((item) => item.text)
+    .slice(-TELEGRAM_FREE_AI_HISTORY_LIMIT);
+}
+
+function telegramFreeAiText(payload) {
+  const text = payload?.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+  if (!text) throw new Error("Gemini ไม่ได้ส่งคำตอบกลับมา");
+  return text.slice(0, TELEGRAM_FREE_AI_MESSAGE_LIMIT);
+}
+
+function telegramFreeAiSystemInstruction() {
+  // Keeping this configurable makes it possible to introduce a light
+  // MR.Zettascale voice later without changing the free-conversation flow.
+  return String(process.env.TELEGRAM_FREE_AI_SYSTEM_INSTRUCTION ||
+    "You are a helpful, natural conversational assistant. Answer the user's question directly and clearly. Do not claim to control T.i.M.E.S. or perform actions unless the user explicitly asks and the capability is available.");
+}
+
+function freeAiQuotaReply(status) {
+  if (status === "window-limited") return "ใช้ AI ครบโควต้าชั่วคราวแล้ว กรุณาลองใหม่ในรอบถัดไปครับ";
+  if (status === "day-limited" || status === "global-limited") return "วันนี้ใช้ AI ครบโควต้าแล้ว กรุณาลองใหม่พรุ่งนี้ครับ";
+  if (status === "globally-disabled") return "โหมด AI ถูกปิดจากการตั้งค่าระบบอยู่ครับ";
+  return "บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้โหมด AI ครับ";
+}
+
+async function answerTelegramFreeAi(userId, text) {
+  const claim = await claimGeminiChatUsage(userId);
+  if (claim.status !== "claimed") return { text: freeAiQuotaReply(claim.status), usedAi: false };
+  try {
+    const auth = (await telegramAuthDoc(userId).get()).data() || {};
+    const history = normalizedTelegramFreeAiHistory(auth.telegramFreeAi?.history);
+    const payload = await generateContent({
+      systemInstruction: { parts: [{ text: telegramFreeAiSystemInstruction() }] },
+      contents: [
+        ...history.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
+        { role: "user", parts: [{ text }] }
+      ],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+    });
+    const reply = telegramFreeAiText(payload);
+    await telegramAuthDoc(userId).set({
+      telegramFreeAi: {
+        enabled: true,
+        history: [...history, { role: "user", text }, { role: "model", text: reply }].slice(-TELEGRAM_FREE_AI_HISTORY_LIMIT),
+        updatedAt: Date.now()
+      }
+    }, { merge: true });
+    return { text: reply, usedAi: true };
+  } catch (error) {
+    await releaseGeminiChatUsage(claim).catch(() => {});
+    throw error;
+  }
 }
 
 async function sendTelegram(chatId, text, options = {}) {
@@ -720,6 +805,49 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       await reply("✅ อัปเดตข้อความประกาศแล้ว");
       await sendAnnouncementPanel(reply);
       return res.sendStatus(200);
+    }
+
+    const freeAiCommand = text.match(/^\/ai(?:@\w+)?(?:\s+(on|off|clear|reset|status))?$/i);
+    if (freeAiCommand) {
+      if (!isTelegramFreeAiAllowed(chatId, chatOwner)) {
+        await reply("⛔ โหมด AI ส่วนตัวใช้ได้เฉพาะ Telegram ที่เชื่อมกับบัญชีเจ้าของเท่านั้น");
+        return res.sendStatus(200);
+      }
+      const action = (freeAiCommand[1] || "status").toLowerCase();
+      const authRef = telegramAuthDoc(chatOwner);
+      const current = (await authRef.get()).data()?.telegramFreeAi || {};
+      if (action === "on") {
+        await authRef.set({ telegramFreeAi: { enabled: true, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+        await reply("✦ เปิดโหมด AI แล้วครับ พิมพ์คุยได้อย่างอิสระ ใช้ /ai off เพื่อปิด และ /ai clear เพื่อล้างบริบท");
+      } else if (action === "off") {
+        await authRef.set({ telegramFreeAi: { enabled: false, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+        await reply("ปิดโหมด AI แล้วครับ ข้อความถัดไปจะกลับไปใช้คำสั่งและคำตอบ T.i.M.E.S. ตามปกติ");
+      } else if (action === "clear" || action === "reset") {
+        await authRef.set({ telegramFreeAi: { enabled: Boolean(current.enabled), history: [], updatedAt: Date.now() } }, { merge: true });
+        await reply("ล้างบริบทการคุย AI แล้วครับ");
+      } else {
+        await reply(current.enabled
+          ? "โหมด AI เปิดอยู่ครับ พิมพ์คุยได้เลย ใช้ /ai off เพื่อปิด"
+          : "โหมด AI ปิดอยู่ครับ ใช้ /ai on เพื่อเริ่มคุยอย่างอิสระ");
+      }
+      return res.sendStatus(200);
+    }
+
+    // When the owner enables free AI mode, ordinary text goes to Gemini before
+    // the deterministic T.i.M.E.S. keyword responder. Commands still keep
+    // their normal meaning and never become model input by accident.
+    if (chatOwner && text && !text.startsWith("/") && isTelegramFreeAiAllowed(chatId, chatOwner)) {
+      const freeAi = (await telegramAuthDoc(chatOwner).get()).data()?.telegramFreeAi;
+      if (freeAi?.enabled) {
+        try {
+          const result = await answerTelegramFreeAi(chatOwner, text);
+          await reply(result.text);
+        } catch (error) {
+          console.error("[telegram] free AI reply failed:", error.message);
+          await reply("ตอนนี้ AI ตอบไม่ได้ กรุณาลองใหม่อีกครั้งครับ");
+        }
+        return res.sendStatus(200);
+      }
     }
 
     // Telegram can answer only documented product questions here. This is a
