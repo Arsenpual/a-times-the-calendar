@@ -432,6 +432,8 @@ async function registerBotCommands() {
   // default scope leaves an older private-chat menu visible, so publish the
   // same entries to both scopes every time the backend starts.
   const commands = [
+    { command: "times", description: "T.i.M.E.S. คืออะไร" },
+    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" },
     { command: "general_questions", description: "คำถามทั่วไป" }
   ];
   const setCommandsForScope = async (scope) => {
