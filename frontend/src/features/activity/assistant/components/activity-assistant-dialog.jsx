@@ -25,12 +25,6 @@ const AI_COMMANDS = [
   { label: "วางแผนสัปดาห์หน้า", text: CALENDAR_AI_QUESTION_SUGGESTIONS[2] },
 ];
 
-const REFLECTION_COMMANDS = [
-  { label: "โฟกัสวันนี้", text: "ช่วยสรุปสิ่งที่ควรโฟกัสวันนี้จากตารางของฉัน" },
-  { label: "ตั้งเป้าพรุ่งนี้", text: "ช่วยตั้งเป้าหมายสำคัญ 3 ข้อสำหรับพรุ่งนี้" },
-  { label: "ทบทวนสัปดาห์นี้", text: "ช่วยทบทวนตารางสัปดาห์นี้และเสนอสิ่งที่ควรทำต่อ" },
-];
-
 function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
     <div className="activity-ai-command-grid">
@@ -67,16 +61,6 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
           </div>
         </section>
       )}
-      <section className="activity-ai-centered-questions activity-ai-reflection-questions" aria-label="คำสั่งทบทวนและตั้งเป้าหมาย">
-        <small>ทบทวนและตั้งเป้าหมาย</small>
-        <div>
-          {REFLECTION_COMMANDS.map((command) => (
-            <button key={command.label} type="button" onClick={() => onSend(null, command.text, "reflection")} disabled={pending || cooldownSeconds > 0}>
-              {command.label}
-            </button>
-          ))}
-        </div>
-      </section>
       {rootQuestions.length > 0 && (
         <section className="activity-ai-centered-questions activity-ai-knowledge-questions" aria-label="คำถามทั่วไป">
           <small>คำถามทั่วไป · ไม่ใช้ข้อมูลส่วนตัว · ไม่ใช้ AI quota</small>

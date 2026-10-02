@@ -24,7 +24,7 @@ export function loadSavedChat(userId) {
         role: message.role,
         text: message.text.slice(0, 1_200),
         source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
-        commandTone: ["planning", "calendar", "ai", "reflection", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
+        commandTone: ["planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
       }))
       : [];
     return {
