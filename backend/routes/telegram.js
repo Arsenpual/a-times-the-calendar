@@ -15,8 +15,12 @@ const pendingAnnouncementMessageEdits = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
-  "/general_questions — เลือกคำถามทั่วไป\n\n" +
-  "เลือกคำถามจากปุ่มด้านล่างเพื่อรับคำตอบจากฐานความรู้ของ T.i.M.E.S.";
+  "/cmd — ดูรายการคำสั่งนี้\n" +
+  "/times — T.i.M.E.S. คืออะไร\n" +
+  "/features — T.i.M.E.S. มีฟีเจอร์อะไรบ้าง\n" +
+  "/myid — ดู Telegram chat ID ของคุณ\n" +
+  "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
+  "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
 const CUSTOM_COMMAND_KEYBOARD = {
@@ -428,8 +432,7 @@ async function registerBotCommands() {
   // default scope leaves an older private-chat menu visible, so publish the
   // same entries to both scopes every time the backend starts.
   const commands = [
-    { command: "general_questions", description: "คำถามทั่วไป" },
-    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
+    { command: "general_questions", description: "คำถามทั่วไป" }
   ];
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
@@ -721,7 +724,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
     const match = text.match(/^\/start\s+([A-Za-z0-9_-]{1,64})$/);
     if (!match) {
       if (/^\/start(?:@\w+)?$/i.test(text)) {
-        await reply("ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /general_questions เพื่อเลือกคำถามทั่วไป\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
+        await reply("ยินดีต้อนรับสู่ MR.Zettascale ✨\nกด /cmd เพื่อดูคำสั่งทั้งหมด\n\nหากต้องการเชื่อมบัญชี T.i.M.E.S. ให้กดปุ่ม Telegram ใน Reminder Mode", { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       }
       return res.sendStatus(200);
     }
