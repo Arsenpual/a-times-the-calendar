@@ -82,6 +82,14 @@ cannot decide urgency, importance, an Eisenhower quadrant, or a Calendar write.
 
 ## Storage and verification
 
+General-question and follow-up buttons call `POST /api/ai/product-knowledge`.
+Only the question text is sent. The backend serves the curated answers in
+`backend/skills/activity-creation/times-knowledge.js` directly, with a fixed
+unknown-answer response when no topic matches. This endpoint never invokes AI,
+claims AI quota, or reads Calendar data. It also works during AI cooldown.
+Curated answers must be reviewed against implemented features when those
+features change; they are not automatically generated from source code.
+
 Chat storage is scoped to the authenticated UID (v2). AccountApp remounts on
 identity changes. Guest sessions do not persist; ownerless v1 history is not
 imported into another account. ActivityPopup is the sole review/save surface;

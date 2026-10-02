@@ -92,6 +92,37 @@ test("knowledge answer is deterministic and skips Gemini quota", async () => {
   assert.equal(geminiCalls, 0);
 });
 
+test("product knowledge answers known and unknown questions without AI or Calendar access", async () => {
+  let forbiddenCalls = 0;
+  const forbidden = async () => { forbiddenCalls += 1; throw new Error("Unexpected AI or Calendar access"); };
+  await withTestServer({
+    claimChatUsage: forbidden, claimDraftUsage: forbidden,
+    generateActivity: forbidden, generateCalendarAnswer: forbidden,
+    readCalendarQuestion: forbidden,
+  }, async (baseUrl) => {
+    for (const [text, found] of [["T.i.M.E.S. คืออะไร?", true], ["xyz987", false]]) {
+      const response = await fetch(`${baseUrl}/product-knowledge`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.source, "knowledge");
+      assert.equal(result.found, found);
+      assert.equal(result.ready, false);
+      assert.equal(result.draft, null);
+      if (!found) assert.match(result.reply, /ยังไม่มีข้อมูลยืนยัน/);
+    }
+    for (const text of [null, "", " ", "x".repeat(1201)]) {
+      const response = await fetch(`${baseUrl}/product-knowledge`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }),
+      });
+      assert.equal(response.status, 400);
+    }
+  });
+  assert.equal(forbiddenCalls, 0);
+});
+
 test("an explicitly approved bounded insight summary reaches AI context without report content", async () => {
   await withTestServer({
     answerKnowledge: () => null,

@@ -18,6 +18,9 @@ export function parseDataLabInsightReport(text) {
   }
   const summary = report.summary;
   if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    if (Array.isArray(report.activities)) {
+      throw new Error("ไฟล์นี้เป็น Activity Export กรุณาวิเคราะห์ด้วย Python Data Lab ก่อน แล้วเลือกไฟล์ *-report.json");
+    }
     throw new Error("ไม่พบ summary ใน Data Lab report");
   }
   if (Array.isArray(report.cases) && "totalCases" in summary) {

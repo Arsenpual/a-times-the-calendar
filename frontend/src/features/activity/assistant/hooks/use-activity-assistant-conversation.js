@@ -3,6 +3,7 @@ import {
   continueActivityAssistant,
   createActivityTemplateDraft,
   getActivityAssistantStatus,
+  fetchProductKnowledge,
 } from "../api/activity-assistant-api.js";
 import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
 import {
@@ -369,6 +370,27 @@ export function useActivityAssistantConversation({
     (option) => option.available !== false,
   );
   const rootQuestions = getActivityAssistantRootQuestions();
+  const sendKnowledge = async (text) => {
+    if (!text || pending) return;
+    setPending(true);
+    setPendingSource("knowledge");
+    setError("");
+    setMessages((current) => [...current, { role: "user", text, source: "knowledge" }]);
+    try {
+      const result = await fetchProductKnowledge(text);
+      setMessages((current) => [...current, {
+        role: "assistant",
+        text: result.reply,
+        source: "knowledge",
+        followUpQuestions: result.found ? getActivityAssistantKnowledgeFollowUps(text) : [],
+      }]);
+    } catch (requestError) {
+      setError(requestError.message || "โหลดคำตอบไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setPending(false);
+      setPendingSource("");
+    }
+  };
   const send = async (event, suggestedText = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
@@ -719,6 +741,7 @@ export function useActivityAssistantConversation({
     quickReplies,
     reset,
     send,
+    sendKnowledge,
     selectQuickReply,
     runDailySummary,
     selectScheduleAlternative,

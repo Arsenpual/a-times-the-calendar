@@ -6,6 +6,65 @@ import {
 } from "../config/activity-assistant-conversation-tree.js";
 import { formatScheduleOption, formatScheduleRange } from "../lib/schedule-format.js";
 
+const PLANNING_COMMANDS = [
+  { label: "หาเวลาออกกำลังกาย", text: "ช่วยหาเวลาว่างออกกำลังกาย 1 ชั่วโมงพรุ่งนี้" },
+  { label: "แบ่งงาน 3 ชั่วโมง", text: "ช่วยแบ่งงานทำรายงาน 3 ชั่วโมงพรุ่งนี้" },
+  { label: "วางแผนพรุ่งนี้", text: "ช่วยวางแผนพรุ่งนี้: อ่านหนังสือ 1 ชั่วโมง, ออกกำลังกาย 30 นาที" },
+];
+
+const CALENDAR_COMMANDS = [
+  { label: "วันนี้มีอะไร", text: CALENDAR_FACT_SUGGESTIONS[0] },
+  { label: "พรุ่งนี้ว่างไหม", text: CALENDAR_FACT_SUGGESTIONS[1] },
+  { label: "นัดสัปดาห์นี้", text: CALENDAR_FACT_SUGGESTIONS[2] },
+  { label: "ตารางชนไหม", text: CALENDAR_FACT_SUGGESTIONS[3] },
+];
+
+const AI_COMMANDS = [
+  { label: "จัดตารางวันนี้", text: CALENDAR_AI_QUESTION_SUGGESTIONS[0] },
+  { label: "หาเวลาพัก", text: CALENDAR_AI_QUESTION_SUGGESTIONS[1] },
+  { label: "วางแผนสัปดาห์หน้า", text: CALENDAR_AI_QUESTION_SUGGESTIONS[2] },
+];
+
+function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, pending }) {
+  return (
+    <>
+      <section className="activity-ai-centered-questions activity-ai-planning-questions" aria-label="คำสั่งวางแผน">
+        <small>วางแผนกิจกรรม</small>
+        <div>
+        {PLANNING_COMMANDS.map((command) => (
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+            {command.label}
+          </button>
+        ))}
+        </div>
+      </section>
+      <section className="activity-ai-centered-questions activity-ai-calendar-fact-questions" aria-label="คำสั่งดูตาราง">
+        <small>ดูตาราง</small>
+        <div>
+          {onDailySummary && <button type="button" onClick={onDailySummary} disabled={pending}>สรุปวันนี้</button>}
+        {CALENDAR_COMMANDS.map((command) => (
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+            {command.label}
+          </button>
+        ))}
+        </div>
+      </section>
+      {canUseGemini && (
+        <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="คำสั่ง AI">
+          <small>ทดลอง AI สำหรับนักพัฒนา · ใช้ AI quota 1 ครั้ง</small>
+          <div>
+          {AI_COMMANDS.map((command) => (
+            <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+              {command.label}
+            </button>
+          ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
 function replaceLocalDateTime(value, part, next) {
   if (typeof value !== "string" || !next) return value;
   return part === "date" ? `${next}${value.slice(10)}` : `${value.slice(0, 11)}${next}`;
@@ -88,6 +147,7 @@ export default function ActivityAssistantDialog(props) {
     quickReplies,
     reset,
     send,
+    sendKnowledge,
     selectQuickReply,
     runDailySummary,
     selectScheduleAlternative,
@@ -140,6 +200,15 @@ export default function ActivityAssistantDialog(props) {
           </p>
         )}
         <main className="activity-ai-messages">
+          {!guidedActivity && (
+            <ActivityAssistantCommandGroups
+              canUseGemini={canUseGemini}
+              cooldownSeconds={cooldownSeconds}
+              onDailySummary={onOpenDailySummary ? runDailySummary : null}
+              onSend={send}
+              pending={pending}
+            />
+          )}
           {rootQuestions.length > 0 && (
             <section
               className="activity-ai-centered-questions"
@@ -151,28 +220,8 @@ export default function ActivityAssistantDialog(props) {
                   <button
                     key={question}
                     type="button"
-                    onClick={() => send(null, question)}
+                    onClick={() => sendKnowledge(question)}
                     disabled={pending}
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-          {canUseGemini && (
-            <section
-              className="activity-ai-centered-questions activity-ai-calendar-questions"
-              aria-label="ให้ AI วิเคราะห์ข้อมูลส่วนตัว"
-            >
-              <small>ทดลอง AI สำหรับนักพัฒนา · ใช้ AI quota 1 ครั้ง</small>
-              <div>
-                {CALENDAR_AI_QUESTION_SUGGESTIONS.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    onClick={() => send(null, question)}
-                    disabled={pending || cooldownSeconds > 0}
                   >
                     {question}
                   </button>
@@ -196,7 +245,7 @@ export default function ActivityAssistantDialog(props) {
                     <button
                       key={question}
                       type="button"
-                      onClick={() => send(null, question)}
+                      onClick={() => sendKnowledge(question)}
                       disabled={pending}
                     >
                       {question}
@@ -265,7 +314,7 @@ export default function ActivityAssistantDialog(props) {
             <p
               className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}
             >
-              {pendingSource === "ai"
+              {pendingSource === "knowledge" ? "กำลังค้นหาคำตอบ…" : pendingSource === "ai"
                 ? "กำลังให้ AI ช่วยคิดรายละเอียด…"
                 : "กำลังสร้างร่างกิจกรรม…"}
             </p>
@@ -273,7 +322,16 @@ export default function ActivityAssistantDialog(props) {
           <div ref={bottomRef} />
         </main>
         {error && <p className="activity-ai-error">{error}</p>}
-        {(!guidedActivity || guidedConversationMode === "template") && (
+        {!guidedActivity && (
+          <div className="activity-ai-choice-strip activity-ai-create-shortcut">
+            <div className="activity-ai-quick-replies">
+              <button type="button" onClick={() => selectQuickReply({ kind: "start", next: "activity.title" })} disabled={pending}>
+                สร้างกิจกรรม
+              </button>
+            </div>
+          </div>
+        )}
+        {guidedActivity && guidedConversationMode === "template" && (
           <div
             className="activity-ai-choice-strip"
             aria-label="คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว"

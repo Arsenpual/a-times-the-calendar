@@ -18,6 +18,20 @@ function createActivityAssistantRouter({
   answerKnowledge = answerTimesQuestion
 } = {}) {
 const router = express.Router();
+router.post("/product-knowledge", (req, res) => {
+  const text = req.body?.text;
+  if (typeof text !== "string" || !text.trim() || text.length > 1200) {
+    return res.status(400).json({ error: "กรุณาระบุคำถามไม่เกิน 1200 ตัวอักษร" });
+  }
+  const reply = answerKnowledge(text);
+  return res.json({
+    reply: reply || "ผมยังไม่มีข้อมูลยืนยันเกี่ยวกับส่วนนั้นใน T.i.M.E.S. ครับ",
+    ready: false,
+    draft: null,
+    source: "knowledge",
+    found: Boolean(reply)
+  });
+});
 // Default assignment happens inside the factory body because default parameter
 // expressions cannot reference a function declared later in that same body.
 generateActivity ||= generateActivityWithGemini;

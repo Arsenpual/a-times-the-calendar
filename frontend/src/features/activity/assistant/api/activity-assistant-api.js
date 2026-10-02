@@ -1,5 +1,12 @@
 import { apiRequest, handleResponse } from "../../../../shared/api/client.js";
 
+export async function fetchProductKnowledge(text) {
+  return handleResponse(
+    await apiRequest("/api/ai/product-knowledge", { method: "POST", body: JSON.stringify({ text }) }),
+    "POST /api/ai/product-knowledge"
+  );
+}
+
 /** A single planning turn. It can only propose a draft; it never saves Calendar data. */
 export async function continueActivityAssistant(input) {
   return handleResponse(

@@ -15,5 +15,9 @@ test("recognizes each supported Data Lab report without importing activity detai
 test("rejects malformed or unsupported input", () => {
   assert.throws(() => parseDataLabInsightReport("not json"), /JSON/);
   assert.throws(() => parseDataLabInsightReport(JSON.stringify({})), /summary/);
+  assert.throws(
+    () => parseDataLabInsightReport(JSON.stringify({ exportVersion: 1, activities: [] })),
+    /Activity Export.*Python Data Lab.*\*-report\.json/
+  );
   assert.throws(() => parseDataLabInsightReport(JSON.stringify({ summary: { unexpected: true } })), /ไม่รู้จัก/);
 });
