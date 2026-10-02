@@ -14,7 +14,9 @@ const MAX_ANNOUNCEMENT_LENGTH = 500;
 const DAILY_NOTIFICATION_LIMIT = 720;
 const ANNOUNCEMENT_EDIT_TTL_MS = 10 * 60 * 1000;
 const TELEGRAM_FREE_AI_HISTORY_LIMIT = 16;
-const TELEGRAM_FREE_AI_MESSAGE_LIMIT = 3_800;
+const TELEGRAM_FREE_AI_HISTORY_MESSAGE_LIMIT = 4_000;
+const TELEGRAM_FREE_AI_REPLY_LIMIT = 12_000;
+const TELEGRAM_MESSAGE_CHUNK_LIMIT = 3_900;
 const pendingAnnouncementMessageEdits = new Map();
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
@@ -225,7 +227,7 @@ function normalizedTelegramFreeAiHistory(history) {
   if (!Array.isArray(history)) return [];
   return history
     .filter((item) => item && ["user", "model"].includes(item.role) && typeof item.text === "string")
-    .map((item) => ({ role: item.role, text: item.text.trim().slice(0, TELEGRAM_FREE_AI_MESSAGE_LIMIT) }))
+    .map((item) => ({ role: item.role, text: item.text.trim().slice(0, TELEGRAM_FREE_AI_HISTORY_MESSAGE_LIMIT) }))
     .filter((item) => item.text)
     .slice(-TELEGRAM_FREE_AI_HISTORY_LIMIT);
 }
@@ -236,14 +238,13 @@ function telegramFreeAiText(payload) {
     .join("")
     .trim();
   if (!text) throw new Error("Gemini ไม่ได้ส่งคำตอบกลับมา");
-  return text.slice(0, TELEGRAM_FREE_AI_MESSAGE_LIMIT);
+  return text.slice(0, TELEGRAM_FREE_AI_REPLY_LIMIT);
 }
 
 function telegramFreeAiSystemInstruction() {
-  // Keeping this configurable makes it possible to introduce a light
-  // MR.Zettascale voice later without changing the free-conversation flow.
+  // Deployments can override the voice without changing the conversation flow.
   return String(process.env.TELEGRAM_FREE_AI_SYSTEM_INSTRUCTION ||
-    "You are a helpful, natural conversational assistant. Answer the user's question directly and clearly. Do not claim to control T.i.M.E.S. or perform actions unless the user explicitly asks and the capability is available.");
+    "You are MR.Zettascale, a calm, thoughtful, and practical conversational assistant for T.i.M.E.S. Speak naturally and answer general questions freely, with clear reasoning and useful detail when requested. You may discuss any topic, not only T.i.M.E.S. When a question concerns T.i.M.E.S. but you have not been given verified project details, say so plainly instead of inventing product behavior. Do not claim to control T.i.M.E.S. or perform actions unless the user explicitly asks and the capability is available.");
 }
 
 function freeAiQuotaReply(status) {
@@ -265,13 +266,13 @@ async function answerTelegramFreeAi(userId, text) {
         ...history.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
         { role: "user", parts: [{ text }] }
       ],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+      generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
     });
     const reply = telegramFreeAiText(payload);
     await telegramAuthDoc(userId).set({
       telegramFreeAi: {
         enabled: true,
-        history: [...history, { role: "user", text }, { role: "model", text: reply }].slice(-TELEGRAM_FREE_AI_HISTORY_LIMIT),
+        history: normalizedTelegramFreeAiHistory([...history, { role: "user", text }, { role: "model", text: reply }]),
         updatedAt: Date.now()
       }
     }, { merge: true });
@@ -461,6 +462,30 @@ async function sendChatReply(userId, chatId, text, options = {}) {
   const sent = await sendTelegram(chatId, text, options);
   await saveChatMessage(userId, { direction: "outgoing", text, telegramMessageId: sent?.message_id });
   return sent;
+}
+
+function splitTelegramReply(text) {
+  const chunks = [];
+  let remaining = String(text || "").trim();
+  while (remaining.length > TELEGRAM_MESSAGE_CHUNK_LIMIT) {
+    const boundary = Math.max(
+      remaining.lastIndexOf("\n", TELEGRAM_MESSAGE_CHUNK_LIMIT),
+      remaining.lastIndexOf(" ", TELEGRAM_MESSAGE_CHUNK_LIMIT)
+    );
+    const end = boundary > TELEGRAM_MESSAGE_CHUNK_LIMIT * 0.6
+      ? boundary
+      : TELEGRAM_MESSAGE_CHUNK_LIMIT;
+    chunks.push(remaining.slice(0, end).trim());
+    remaining = remaining.slice(end).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+async function sendTelegramFreeAiReply(userId, chatId, text) {
+  for (const chunk of splitTelegramReply(text)) {
+    await sendChatReply(userId, chatId, chunk);
+  }
 }
 
 function bangkokDayKey(now = new Date()) {
@@ -841,7 +866,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       if (freeAi?.enabled) {
         try {
           const result = await answerTelegramFreeAi(chatOwner, text);
-          await reply(result.text);
+          await sendTelegramFreeAiReply(chatOwner, chatId, result.text);
         } catch (error) {
           console.error("[telegram] free AI reply failed:", error.message);
           await reply("ตอนนี้ AI ตอบไม่ได้ กรุณาลองใหม่อีกครั้งครับ");
