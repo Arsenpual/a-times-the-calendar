@@ -20,7 +20,7 @@ const COMMAND_HELP_TEXT =
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง แล้ว Bot Command Menu (สามขีด) ยังเป็นทางลัดถาวรเสมอ.
 const CUSTOM_COMMAND_KEYBOARD = {
-  keyboard: [[{ text: "/general_questions" }]],
+  keyboard: [[{ text: "/start" }, { text: "/cmd" }]],
   resize_keyboard: true,
   one_time_keyboard: true,
   input_field_placeholder: "เลือกคำสั่งด่วน หรือพิมพ์ข้อความ"
