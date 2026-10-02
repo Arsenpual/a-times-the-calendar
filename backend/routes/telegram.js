@@ -16,8 +16,7 @@ const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
-  "/times — T.i.M.E.S. คืออะไร\n" +
-  "/features — T.i.M.E.S. มีฟีเจอร์อะไรบ้าง\n" +
+  "/general_questions — คำถามทั่วไปเกี่ยวกับ T.i.M.E.S.\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
@@ -432,8 +431,6 @@ async function registerBotCommands() {
   // default scope leaves an older private-chat menu visible, so publish the
   // same entries to both scopes every time the backend starts.
   const commands = [
-    { command: "times", description: "T.i.M.E.S. คืออะไร" },
-    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" },
     { command: "general_questions", description: "คำถามทั่วไป" }
   ];
   const setCommandsForScope = async (scope) => {
