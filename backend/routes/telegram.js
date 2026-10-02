@@ -426,9 +426,10 @@ async function releaseDeliveryClaim(claim) {
 async function registerBotCommands() {
   // A bot can have a separate menu for all private chats. Updating only the
   // default scope leaves an older private-chat menu visible, so publish the
-  // same single entry to both scopes every time the backend starts.
+  // same entries to both scopes every time the backend starts.
   const commands = [
-    { command: "general_questions", description: "คำถามทั่วไป" }
+    { command: "general_questions", description: "คำถามทั่วไป" },
+    { command: "features", description: "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง" }
   ];
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
