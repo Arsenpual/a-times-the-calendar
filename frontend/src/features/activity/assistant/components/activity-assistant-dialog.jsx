@@ -25,6 +25,12 @@ const AI_COMMANDS = [
   { label: "วางแผนสัปดาห์หน้า", text: CALENDAR_AI_QUESTION_SUGGESTIONS[2] },
 ];
 
+const REFLECTION_COMMANDS = [
+  { label: "โฟกัสวันนี้", text: "ช่วยสรุปสิ่งที่ควรโฟกัสวันนี้จากตารางของฉัน" },
+  { label: "ตั้งเป้าพรุ่งนี้", text: "ช่วยตั้งเป้าหมายสำคัญ 3 ข้อสำหรับพรุ่งนี้" },
+  { label: "ทบทวนสัปดาห์นี้", text: "ช่วยทบทวนตารางสัปดาห์นี้และเสนอสิ่งที่ควรทำต่อ" },
+];
+
 function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, pending }) {
   return (
     <>
@@ -32,7 +38,7 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
         <small>วางแผนกิจกรรม</small>
         <div>
         {PLANNING_COMMANDS.map((command) => (
-          <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "planning")} disabled={pending || cooldownSeconds > 0}>
             {command.label}
           </button>
         ))}
@@ -43,7 +49,7 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
         <div>
           {onDailySummary && <button type="button" onClick={onDailySummary} disabled={pending}>สรุปวันนี้</button>}
         {CALENDAR_COMMANDS.map((command) => (
-          <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "calendar")} disabled={pending || cooldownSeconds > 0}>
             {command.label}
           </button>
         ))}
@@ -54,13 +60,23 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
           <small>ทดลอง AI สำหรับนักพัฒนา · ใช้ AI quota 1 ครั้ง</small>
           <div>
           {AI_COMMANDS.map((command) => (
-            <button key={command.label} type="button" onClick={() => onSend(null, command.text)} disabled={pending || cooldownSeconds > 0}>
+            <button key={command.label} type="button" onClick={() => onSend(null, command.text, "ai")} disabled={pending || cooldownSeconds > 0}>
               {command.label}
             </button>
           ))}
           </div>
         </section>
       )}
+      <section className="activity-ai-centered-questions activity-ai-reflection-questions" aria-label="คำสั่งทบทวนและตั้งเป้าหมาย">
+        <small>ทบทวนและตั้งเป้าหมาย</small>
+        <div>
+          {REFLECTION_COMMANDS.map((command) => (
+            <button key={command.label} type="button" onClick={() => onSend(null, command.text, "reflection")} disabled={pending || cooldownSeconds > 0}>
+              {command.label}
+            </button>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
@@ -220,7 +236,7 @@ export default function ActivityAssistantDialog(props) {
                   <button
                     key={question}
                     type="button"
-                    onClick={() => sendKnowledge(question)}
+                    onClick={() => sendKnowledge(question, "knowledge")}
                     disabled={pending}
                   >
                     {question}
@@ -235,17 +251,17 @@ export default function ActivityAssistantDialog(props) {
               className="activity-ai-message-group"
             >
               <div
-                className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}
+                className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}
               >
                 <span>{message.text}</span>
               </div>
               {message.followUpQuestions?.length > 0 && (
-                <div className="activity-ai-answer-followups">
+                <div className={`activity-ai-answer-followups${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}`}>
                   {message.followUpQuestions.map((question) => (
                     <button
                       key={question}
                       type="button"
-                      onClick={() => sendKnowledge(question)}
+                      onClick={() => sendKnowledge(question, message.commandTone || "knowledge")}
                       disabled={pending}
                     >
                       {question}

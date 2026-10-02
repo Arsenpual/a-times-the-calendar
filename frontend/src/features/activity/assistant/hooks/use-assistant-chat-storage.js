@@ -20,7 +20,12 @@ export function loadSavedChat(userId) {
   try {
     const saved = JSON.parse(window.localStorage.getItem(key) || "null");
     const messages = Array.isArray(saved?.messages)
-      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({ role: message.role, text: message.text.slice(0, 1_200), source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template" }))
+      ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({
+        role: message.role,
+        text: message.text.slice(0, 1_200),
+        source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
+        commandTone: ["planning", "calendar", "ai", "reflection", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
+      }))
       : [];
     return {
       // A new chat always begins with MR.Zettascale's greeting, including

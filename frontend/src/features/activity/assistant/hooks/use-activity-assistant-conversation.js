@@ -96,7 +96,7 @@ export function useActivityAssistantConversation({
     if (!onOpenDailySummary || pending) return;
     setMessages((current) => [
       ...current,
-      { role: "user", text: "สรุปกิจกรรมวันนี้", source: "template" },
+      { role: "user", text: "สรุปกิจกรรมวันนี้", source: "template", commandTone: "calendar" },
     ]);
     setPending(true);
     setPendingSource("template");
@@ -109,6 +109,7 @@ export function useActivityAssistantConversation({
           role: "assistant",
           text: buildDailySummaryChat(summary),
           source: "template",
+          commandTone: "calendar",
         },
       ]);
     } catch (requestError) {
@@ -370,18 +371,19 @@ export function useActivityAssistantConversation({
     (option) => option.available !== false,
   );
   const rootQuestions = getActivityAssistantRootQuestions();
-  const sendKnowledge = async (text) => {
+  const sendKnowledge = async (text, commandTone = "knowledge") => {
     if (!text || pending) return;
     setPending(true);
     setPendingSource("knowledge");
     setError("");
-    setMessages((current) => [...current, { role: "user", text, source: "knowledge" }]);
+    setMessages((current) => [...current, { role: "user", text, source: "knowledge", commandTone }]);
     try {
       const result = await fetchProductKnowledge(text);
       setMessages((current) => [...current, {
         role: "assistant",
         text: result.reply,
         source: "knowledge",
+        commandTone,
         followUpQuestions: result.found ? getActivityAssistantKnowledgeFollowUps(text) : [],
       }]);
     } catch (requestError) {
@@ -391,7 +393,7 @@ export function useActivityAssistantConversation({
       setPendingSource("");
     }
   };
-  const send = async (event, suggestedText = "") => {
+  const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
     if (!text || pending || cooldownSeconds > 0) return;
@@ -429,7 +431,7 @@ export function useActivityAssistantConversation({
       setGuidedActivity(immediateGuidedActivity);
       setConversationNodeId("activity.date");
     }
-    const nextMessages = [...messages, { role: "user", text, source: "ai" }];
+    const nextMessages = [...messages, { role: "user", text, source: "ai", commandTone }];
     setMessages(nextMessages);
     setInput("");
     setPending(true);
@@ -518,6 +520,7 @@ export function useActivityAssistantConversation({
             role: "assistant",
             text: result.reply,
             source: responseSource,
+            commandTone,
             scheduleOptions: result.scheduling?.options || [],
             planDrafts: result.planning?.drafts || [],
             followUpQuestions:
