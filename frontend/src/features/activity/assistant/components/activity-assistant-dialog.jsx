@@ -31,9 +31,9 @@ const REFLECTION_COMMANDS = [
   { label: "ทบทวนสัปดาห์นี้", text: "ช่วยทบทวนตารางสัปดาห์นี้และเสนอสิ่งที่ควรทำต่อ" },
 ];
 
-function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, pending }) {
+function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
-    <>
+    <div className="activity-ai-command-grid">
       <section className="activity-ai-centered-questions activity-ai-planning-questions" aria-label="คำสั่งวางแผน">
         <small>วางแผนกิจกรรม</small>
         <div>
@@ -77,7 +77,19 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
           ))}
         </div>
       </section>
-    </>
+      {rootQuestions.length > 0 && (
+        <section className="activity-ai-centered-questions activity-ai-knowledge-questions" aria-label="คำถามทั่วไป">
+          <small>คำถามทั่วไป · ไม่ใช้ข้อมูลส่วนตัว · ไม่ใช้ AI quota</small>
+          <div>
+            {rootQuestions.map((question) => (
+              <button key={question} type="button" onClick={() => onSendKnowledge(question, "knowledge")} disabled={pending}>
+                {question}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -222,28 +234,10 @@ export default function ActivityAssistantDialog(props) {
               cooldownSeconds={cooldownSeconds}
               onDailySummary={onOpenDailySummary ? runDailySummary : null}
               onSend={send}
+              onSendKnowledge={sendKnowledge}
               pending={pending}
+              rootQuestions={rootQuestions}
             />
-          )}
-          {rootQuestions.length > 0 && (
-            <section
-              className="activity-ai-centered-questions"
-              aria-label="คำถามทั่วไป"
-            >
-              <small>คำถามทั่วไป · ไม่ใช้ข้อมูลส่วนตัว · ไม่ใช้ AI quota</small>
-              <div>
-                {rootQuestions.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    onClick={() => sendKnowledge(question, "knowledge")}
-                    disabled={pending}
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </section>
           )}
           {messages.map((message, index) => (
             <div
