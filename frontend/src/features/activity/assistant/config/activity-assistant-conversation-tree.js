@@ -121,10 +121,13 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   }
 };
 
-// Deterministic product questions form a compact exploration tree. Only the
-// first root is placed in the middle of the chat; later roots attach below
-// the answer that introduced them.
-export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = ["T.i.M.E.S. คืออะไร?", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"];
+// Root questions separate the product overview, features, and data analysis.
+// Follow-up questions appear below the answer that introduced them.
+export const ACTIVITY_ASSISTANT_ROOT_QUESTIONS = [
+  "T.i.M.E.S. คืออะไร?",
+  "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?",
+  "Data Lab คืออะไร?"
+];
 
 // These have a fixed, verifiable calculation over a bounded Calendar range.
 // They are intentionally kept out of Gemini so an answer never costs AI quota.
@@ -173,7 +176,6 @@ const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
   ],
   "t.i.m.e.s. มีฟีเจอร์อะไรบ้าง?": [
     "MR.Zettascale ทำอะไรได้บ้าง?",
-    "Data Lab คืออะไร?",
     "ฟีเจอร์วางแผนกิจกรรมมีอะไรบ้าง?",
     "ฟีเจอร์ Reminder และการแจ้งเตือนมีอะไรบ้าง?",
     "ฟีเจอร์การเชื่อมต่อและการตั้งค่ามีอะไรบ้าง?"
