@@ -144,6 +144,13 @@ export const CALENDAR_AI_QUESTION_SUGGESTIONS = [
 ];
 
 const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
+  "mr.zettascale ทำอะไรได้บ้าง?": ["หาเวลาว่างทำงานอย่างไร?", "วางแผนหลายกิจกรรมอย่างไร?", "แบ่งงานและเวลาพักอย่างไร?", "คำสั่งไหนใช้ AI quota?"],
+  "ตั้งค่าความชอบของผู้ช่วยอย่างไร?": ["ผู้ช่วยเรียนรู้ความชอบเองไหม?"],
+  "data lab คืออะไร?": ["ส่งออกข้อมูล Data Lab อย่างไร?", "Insight Review ใช้อย่างไร?", "Priority Confidence คืออะไร?", "Weekly Time Pattern คืออะไร?"],
+  "ส่งออกข้อมูล data lab อย่างไร?": ["Activity Export ต่างจาก report อย่างไร?"],
+  "insight review ใช้อย่างไร?": ["Activity Export ต่างจาก report อย่างไร?", "ใช้ Insight เป็นบริบทผู้ช่วยอย่างไร?"],
+  "priority confidence คืออะไร?": ["ระบบใช้ Eisenhower Matrix แล้วหรือยัง?"],
+  "คำถามทั่วไปใช้ ai ไหม?": ["คำสั่งไหนใช้ AI quota?"],
   "t.i.m.e.s. คืออะไร?": [
     "Activity Mode คืออะไร?",
     "Reminder Mode คืออะไร?",
@@ -165,6 +172,8 @@ const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
     "Refresh Token ช่วยอะไร?"
   ],
   "t.i.m.e.s. มีฟีเจอร์อะไรบ้าง?": [
+    "MR.Zettascale ทำอะไรได้บ้าง?",
+    "Data Lab คืออะไร?",
     "ฟีเจอร์วางแผนกิจกรรมมีอะไรบ้าง?",
     "ฟีเจอร์ Reminder และการแจ้งเตือนมีอะไรบ้าง?",
     "ฟีเจอร์การเชื่อมต่อและการตั้งค่ามีอะไรบ้าง?"
@@ -180,6 +189,8 @@ const ACTIVITY_ASSISTANT_KNOWLEDGE_FOLLOW_UPS = {
     "Telegram แจ้งเตือนแยกตามอุปกรณ์อย่างไร?"
   ],
   "ฟีเจอร์การเชื่อมต่อและการตั้งค่ามีอะไรบ้าง?": [
+    "ตั้งค่าความชอบของผู้ช่วยอย่างไร?",
+    "คำถามทั่วไปใช้ AI ไหม?",
     "Google Calendar เชื่อมต่ออย่างไร?",
     "ข้อมูลซิงก์ข้ามอุปกรณ์อย่างไร?",
     "ตั้งค่าธีมและภาษาได้อย่างไร?"
