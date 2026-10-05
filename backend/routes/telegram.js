@@ -18,16 +18,22 @@ const TELEGRAM_FREE_AI_HISTORY_MESSAGE_LIMIT = 4_000;
 const TELEGRAM_FREE_AI_REPLY_LIMIT = 12_000;
 const TELEGRAM_MESSAGE_CHUNK_LIMIT = 3_900;
 const pendingAnnouncementMessageEdits = new Map();
+// Public Telegram commands have one source of truth. Add each new command here:
+// its entry is then published to Bot Menu and appears in /cmd automatically.
+const BOT_MENU_COMMANDS = Object.freeze([
+  { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S.", help: "เชื่อมต่อบัญชี T.i.M.E.S." },
+  { command: "general_questions", description: "คำถามทั่วไป", help: "คำถามทั่วไปเกี่ยวกับ T.i.M.E.S." },
+  { command: "cmd", description: "ดูรายการคำสั่งทั้งหมด", help: "ดูรายการคำสั่งนี้" },
+  { command: "times", description: "T.i.M.E.S. คืออะไร", help: "T.i.M.E.S. คืออะไร" },
+  { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S.", help: "ดูฟีเจอร์ของ T.i.M.E.S." },
+  { command: "ai", description: "สถานะและโหมด AI ส่วนตัว", help: "เปิด ปิด หรือล้างบทสนทนา AI ส่วนตัว", usage: "/ai on|off|clear" },
+  { command: "myid", description: "ดู Telegram chat ID", help: "ดู Telegram chat ID ของคุณ" },
+  { command: "announce", description: "ตั้งค่า announcement-ticker", help: "เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)" }
+]);
 const COMMAND_HELP_TEXT =
   "📚 คำสั่งของ MR.Zettascale\n\n" +
-  "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
-  "/cmd — ดูรายการคำสั่งนี้\n" +
-  "/general_questions — คำถามทั่วไปเกี่ยวกับ T.i.M.E.S.\n" +
-  "/times — T.i.M.E.S. คืออะไร\n" +
-  "/features — ดูฟีเจอร์ของ T.i.M.E.S.\n" +
-  "/ai on|off|clear — เปิด ปิด หรือล้างบทสนทนา AI ส่วนตัว\n" +
-  "/myid — ดู Telegram chat ID ของคุณ\n" +
-  "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
+  BOT_MENU_COMMANDS.map(({ command, help, usage }) => `${usage || `/${command}`} — ${help}`).join("\n") +
+  "\n\n" +
   "คำสั่ง /announce ใช้ได้เฉพาะ Telegram chat ID ที่ผู้ดูแลอนุญาตไว้";
 // ปุ่มลัดชั่วคราวใต้ช่องพิมพ์: Telegram จะซ่อน keyboard หลังผู้ใช้กด
 // ปุ่มหนึ่งครั้ง การแสดงปุ่ม Bot Command Menu ขึ้นกับ Telegram client.
@@ -539,16 +545,7 @@ async function registerBotCommands() {
   // A bot can have a separate menu for all private chats. Updating only the
   // default scope leaves an older private-chat menu visible, so publish the
   // same entries to both scopes every time the backend starts.
-  const commands = [
-    { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S." },
-    { command: "general_questions", description: "คำถามทั่วไป" },
-    { command: "cmd", description: "ดูรายการคำสั่งทั้งหมด" },
-    { command: "times", description: "T.i.M.E.S. คืออะไร" },
-    { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S." },
-    { command: "ai", description: "สถานะและโหมด AI ส่วนตัว" },
-    { command: "myid", description: "ดู Telegram chat ID" },
-    { command: "announce", description: "ตั้งค่า announcement-ticker" }
-  ];
+  const commands = BOT_MENU_COMMANDS.map(({ command, description }) => ({ command, description }));
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
       method: "POST",

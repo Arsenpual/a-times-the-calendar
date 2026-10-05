@@ -22,11 +22,15 @@ function menuHarness(ids, failDeletion = false) {
     };
   } };
   const source = fs.readFileSync(require.resolve("../routes/telegram.js"), "utf8");
+  const catalogStart = source.indexOf("const BOT_MENU_COMMANDS =");
+  const catalogEnd = source.indexOf("\nconst COMMAND_HELP_TEXT", catalogStart);
+  assert.ok(catalogStart >= 0 && catalogEnd > catalogStart);
+  const BOT_MENU_COMMANDS = vm.runInNewContext(source.slice(catalogStart, catalogEnd) + "\nBOT_MENU_COMMANDS");
   const start = source.indexOf("async function registerBotCommands()");
   const end = source.indexOf('\nrouter.get("/status"', start);
   assert.ok(start >= 0 && end > start);
   const register = vm.runInNewContext(source.slice(start, end) + "\nregisterBotCommands", {
-    db, BOT_API: "https://api.telegram.org", requiredEnv: () => "test-token",
+    db, BOT_API: "https://api.telegram.org", BOT_MENU_COMMANDS, requiredEnv: () => "test-token",
     fetch: async (url, options) => {
       const body = JSON.parse(options.body);
       const key = body.scope?.type === "chat" ? `chat:${body.scope.chat_id}` : body.scope?.type || "default";
