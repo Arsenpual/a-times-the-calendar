@@ -15,7 +15,6 @@ const activityNotificationsRouter = require("./routes/activity-notifications.js"
 const calendarAuthRouter = require("./routes/calendar-auth.js");
 const calendarRouter = require("./routes/calendar.js");
 const telegramRouter = require("./routes/telegram.js");
-const telegramAiRouter = require("./routes/telegram-ai.js");
 const announcementRouter = require("./routes/announcement.js");
 const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
 const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
@@ -163,7 +162,6 @@ app.use("/api/ai", requireAuth, aiLimiter, aiActivityDraftRouter);
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
 // กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
 app.post("/api/telegram/webhook", telegramRouter.webhook);
-app.post("/api/telegram-ai/webhook", telegramAiRouter.webhook);
 app.use("/api/telegram", requireAuth, telegramRouter);
 // OAuth callback มาจาก Google จึงไม่มี Firebase Authorization header;
 // state ที่ลงลายเซ็นไว้ผูก callback กลับเข้ากับ uid อย่างปลอดภัยแทน.
@@ -227,8 +225,16 @@ app.listen(PORT, () => {
     });
   };
   registerTelegramWebhook();
-  telegramAiRouter.registerWebhook(webhookBaseUrl).catch((error) => {
-    const reason = error?.cause?.message || error?.message || String(error);
-    console.error("[telegram-ai] ตั้ง webhook อัตโนมัติไม่สำเร็จ:", reason);
-  });
+  // The former standalone AI bot is retired. If its token remains configured
+  // during migration, stop Telegram from delivering updates to the removed
+  // endpoint. This does not delete its chat history or pending updates.
+  if (process.env.TELEGRAM_AI_BOT_TOKEN) {
+    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_AI_BOT_TOKEN}/deleteWebhook`, { method: "POST" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.description || String(response.status));
+        console.log("[telegram-ai] ปิด webhook ของบอต AI แยกแล้ว");
+      })
+      .catch((error) => console.error("[telegram-ai] ปิด webhook ของบอต AI แยกไม่สำเร็จ:", error.message));
+  }
 });

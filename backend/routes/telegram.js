@@ -206,7 +206,7 @@ function requiredEnv(name) {
 
 function telegramFreeAiAllowedChatIds() {
   return new Set(
-    String(process.env.TELEGRAM_FREE_AI_ALLOWED_CHAT_IDS || "")
+    String(process.env.TELEGRAM_FREE_AI_ALLOWED_CHAT_IDS || process.env.TELEGRAM_AI_ALLOWED_CHAT_IDS || "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean)
@@ -214,13 +214,11 @@ function telegramFreeAiAllowedChatIds() {
 }
 
 function isTelegramFreeAiAllowed(chatId, userId) {
-  // A linked Telegram chat must belong to a developer account. Deployments
-  // may additionally bind this to an exact Telegram chat ID; when that
-  // allowlist is empty, the developer-account check still fails closed for
-  // every ordinary linked user.
+  // Both the linked developer account and exact Telegram chat ID are required.
+  // An empty allowlist keeps the private AI mode disabled for everyone.
   if (!userId || !isDeveloperUser(userId)) return false;
   const allowedChatIds = telegramFreeAiAllowedChatIds();
-  return allowedChatIds.size === 0 || allowedChatIds.has(String(chatId));
+  return allowedChatIds.has(String(chatId));
 }
 
 function normalizedTelegramFreeAiHistory(history) {
@@ -271,7 +269,6 @@ async function answerTelegramFreeAi(userId, text) {
     const reply = telegramFreeAiText(payload);
     await telegramAuthDoc(userId).set({
       telegramFreeAi: {
-        enabled: true,
         history: normalizedTelegramFreeAiHistory([...history, { role: "user", text }, { role: "model", text: reply }]),
         updatedAt: Date.now()
       }
