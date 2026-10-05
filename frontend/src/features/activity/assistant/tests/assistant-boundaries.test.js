@@ -24,6 +24,11 @@ test("unrelated overcrowding cannot block an empty candidate slot", () => {
   assert.equal(assessAssistantDraftOverlap(draft, events, {}, now).status, "available");
 });
 
+test("all-day assistant drafts are outside the timed overlap rule", () => {
+  const events = [1, 2, 3].map(id => event(String(id), draft.startLocal, draft.endLocal));
+  assert.equal(assessAssistantDraftOverlap({ ...draft, allDay: true }, events, {}, now).status, "not-applicable");
+});
+
 test("chat restore isolates accounts and never adopts ownerless legacy history", () => {
   const previous = globalThis.window;
   const storage = new Map([

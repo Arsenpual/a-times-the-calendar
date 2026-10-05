@@ -264,10 +264,7 @@ export function useActivityAssistantConversation({
         activities,
         lockedActivities,
       );
-      const schedule =
-        localSchedule.status === "overlap-limit"
-          ? localSchedule
-          : result.schedule;
+      const schedule = localSchedule;
       if (schedule?.status === "overlap-limit") {
         const resolution = {
           formDraft: activityDraft,
@@ -550,10 +547,7 @@ export function useActivityAssistantConversation({
           activities,
           lockedActivities,
         );
-        const schedule =
-          localSchedule.status === "overlap-limit"
-            ? localSchedule
-            : result.schedule;
+        const schedule = localSchedule;
         if (schedule?.status === "overlap-limit") {
           const resolution = {
             formDraft: popupHandoff.values.formDraft,

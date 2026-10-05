@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { introducesOverlapLimitViolation } from "./timeline-layout.js";
 
 const source = readFileSync(new URL("./activity-mutation-logic.js", import.meta.url), "utf8")
   .replace(
@@ -24,6 +25,22 @@ const candidates = logic.activitySaveCandidateEntries({
 });
 assert.equal(candidates.length, 3);
 assert.equal(candidates.at(-1).id, "a");
+
+const interval = (start, end) => ({ start: new Date(`2027-09-02T${start}:00Z`), end: new Date(`2027-09-02T${end}:00Z`) });
+const crowdedMorning = Array.from({ length: 4 }, () => interval("08:00", "09:00"));
+assert.equal(introducesOverlapLimitViolation(crowdedMorning, [...crowdedMorning, interval("14:00", "15:00")]), false,
+  "existing overcrowding elsewhere must not block an empty slot");
+assert.equal(introducesOverlapLimitViolation(crowdedMorning, [...crowdedMorning, interval("09:00", "10:00")]), false,
+  "touching endpoints are not an overlap");
+assert.equal(introducesOverlapLimitViolation(crowdedMorning, [...crowdedMorning, interval("08:30", "09:30")]), true,
+  "a newly introduced fifth activity in a crowded interval must be blocked");
+const threeAfternoon = Array.from({ length: 3 }, () => interval("14:00", "15:00"));
+assert.equal(introducesOverlapLimitViolation(threeAfternoon, [...threeAfternoon, interval("14:30", "15:30")]), true,
+  "the fourth concurrent activity must be blocked");
+assert.equal(introducesOverlapLimitViolation(crowdedMorning, [...crowdedMorning, interval("14:00", "15:00"), interval("14:30", "15:30")]), false,
+  "a plan with two new activities can use an unrelated empty slot");
+assert.equal(introducesOverlapLimitViolation(crowdedMorning, [...crowdedMorning, ...threeAfternoon, interval("14:30", "15:30")]), true,
+  "a plan must reject new overcrowding");
 
 const allDay = { id: "all", start: { date: "2027-09-02" }, end: { date: "2027-09-04" } };
 assert.deepEqual(logic.buildActivityMoveBody({ activity: allDay, dateStr: "2027-10-31" }), {

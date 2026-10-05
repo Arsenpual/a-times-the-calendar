@@ -35,6 +35,31 @@ export function exceedsOverlapLimit(entries, limit = MAX_OVERLAP_STACKS) {
   return false;
 }
 
+/** Reject only overcrowding that the proposed change actually introduces. */
+export function introducesOverlapLimitViolation(existingEntries, proposedEntries, limit = MAX_OVERLAP_STACKS) {
+  const edges = new Map();
+  for (const [entries, key] of [[existingEntries, "before"], [proposedEntries, "after"]]) {
+    for (const entry of entries) {
+      const start = entry?.start instanceof Date ? entry.start.getTime() : NaN;
+      const end = entry?.end instanceof Date ? entry.end.getTime() : NaN;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+      for (const [time, delta] of [[start, 1], [end, -1]]) {
+        if (!edges.has(time)) edges.set(time, { before: 0, after: 0 });
+        edges.get(time)[key] += delta;
+      }
+    }
+  }
+  let before = 0;
+  let after = 0;
+  for (const time of [...edges.keys()].sort((a, b) => a - b)) {
+    const edge = edges.get(time);
+    before += edge.before;
+    after += edge.after;
+    if (after > limit && after > before) return true;
+  }
+  return false;
+}
+
 /** Minutes since local midnight, clamped to the 0–1440 day range. */
 export function minutesOfDay(date) {
   return Math.min(1440, Math.max(0, date.getHours() * 60 + date.getMinutes()));

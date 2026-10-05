@@ -1,26 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-
-const source = readFileSync(new URL("./activity-calendar-actions.js", import.meta.url), "utf8")
-  .replace(
-    'import { normalizeActivityId } from "../../../shared/lib/id-utils.js";',
-    "const normalizeActivityId = (id) => id;"
-  )
-  .replace(
-    'import { exceedsOverlapLimit } from "../lib/timeline-layout.js";',
-    "const exceedsOverlapLimit = () => false;"
-  )
-  .replace(
-    /import \{[\s\S]*?\} from "\.\.\/lib\/activity-mutation-logic\.js";/,
-    `const activitySaveCandidateEntries = () => [];
-    const overlapEntriesFromActivities = () => [];
-    const nextActivityCopySummary = (_, title) => \`${'${title}'} (copy)\`;
-    const buildActivityDuplicateBody = ({ activity, summary }) => ({ summary, start: activity.start, end: activity.end });
-    const buildActivityMoveBody = ({ dateStr }) => ({ start: { date: dateStr }, end: { date: dateStr } });`
-  );
-const { createActivityCalendarActions } = await import(
-  `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
-);
+import { createActivityCalendarActions } from "./activity-calendar-actions.js";
 
 const state = {
   activities: [],
@@ -132,4 +111,48 @@ assert.deepEqual(planResult.created, [{ id: "plan-1", title: "อ่านหน
 assert.deepEqual(planResult.failed, [{ title: "ออกกำลังกาย", error: "Calendar temporarily unavailable" }]);
 assert.deepEqual(planCalls, ["reload", "refresh"]);
 
-console.log("PASS: Activity calendar save ordering and recurring occurrence metadata retention");
+const calendarEvent = (id, start, end) => ({
+  id,
+  summary: id,
+  start: { dateTime: `2027-09-02T${start}:00Z` },
+  end: { dateTime: `2027-09-02T${end}:00Z` }
+});
+const overcrowdedElsewhere = [1, 2, 3, 4].map(id => calendarEvent(`morning-${id}`, "08:00", "09:00"));
+let createdInEmptySlot = 0;
+const overlapActions = createActivityCalendarActions({
+  ...common,
+  activities: overcrowdedElsewhere,
+  createActivity: async (_token, body) => { createdInEmptySlot += 1; return { id: `new-${createdInEmptySlot}`, ...body }; },
+  syncActivityNotification: async () => {},
+  assignActivityCategory: async () => {},
+  setActivityTags: async () => {},
+  loadActivities: async () => {},
+  refreshTagSearchIfActive: () => {}
+});
+const emptySlotBody = calendarEvent("draft", "14:00", "15:00");
+await overlapActions.handleSaveActivity({ activityBody: emptySlotBody, categoryId: null, tags: [], existingId: null });
+assert.equal(createdInEmptySlot, 1, "saving in an empty slot must ignore overcrowding elsewhere");
+await assert.rejects(
+  overlapActions.handleSaveActivity({ activityBody: calendarEvent("draft", "08:30", "09:30"), categoryId: null, tags: [], existingId: null }),
+  /ซ้อนกันเกิน 3/
+);
+assert.equal(createdInEmptySlot, 1, "a new conflict must be rejected before writing to Calendar");
+const planInEmptySlot = await overlapActions.handleSaveActivityPlan([
+  { activityBody: calendarEvent("plan-one", "14:00", "15:00"), categoryId: null, tags: [] },
+  { activityBody: calendarEvent("plan-two", "14:30", "15:30"), categoryId: null, tags: [] }
+]);
+assert.equal(planInEmptySlot.created.length, 2, "a plan in an empty slot must ignore overcrowding elsewhere");
+const crowdedWithMovable = [...overcrowdedElsewhere, calendarEvent("movable", "12:00", "13:00")];
+let moved = 0;
+const moveActions = createActivityCalendarActions({
+  ...common,
+  activities: crowdedWithMovable,
+  updateActivity: async (_token, id, body) => { moved += 1; return { id, ...body }; },
+  syncActivityNotification: async () => {},
+  loadActivities: async () => {},
+  refreshTagSearchIfActive: () => {}
+});
+assert.equal(await moveActions.handleSaveTimes([{ id: "movable", start: new Date("2027-09-02T14:00:00Z"), end: new Date("2027-09-02T15:00:00Z") }]), true);
+assert.equal(moved, 1, "moving into an empty slot must ignore overcrowding elsewhere");
+
+console.log("PASS: Activity calendar save ordering, overlap boundaries, and recurring occurrence metadata retention");

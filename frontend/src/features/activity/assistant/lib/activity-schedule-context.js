@@ -58,7 +58,7 @@ function formatLocalDateTime(date) {
 export function assessAssistantDraftOverlap(draft, activities = [], lockedActivities = {}, currentDate = new Date()) {
   const start = new Date(draft?.startLocal || "");
   const end = new Date(draft?.endLocal || "");
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return { status: "not-applicable", conflicts: [], alternatives: [] };
+  if (draft?.allDay || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return { status: "not-applicable", conflicts: [], alternatives: [] };
   const existing = activities.map((activity) => ({
     activity,
     start: activityDate(activity.start),

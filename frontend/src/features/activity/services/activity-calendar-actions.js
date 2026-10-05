@@ -1,5 +1,5 @@
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-import { exceedsOverlapLimit } from "../lib/timeline-layout.js";
+import { introducesOverlapLimitViolation } from "../lib/timeline-layout.js";
 import {
   activitySaveCandidateEntries,
   buildActivityDuplicateBody,
@@ -73,7 +73,7 @@ export function createActivityCalendarActions({
     if (!calendarAccessToken) return false;
 
     const candidateEntries = activitySaveCandidateEntries({ activities, existingId, activityBody });
-    if (exceedsOverlapLimit(candidateEntries)) {
+    if (introducesOverlapLimitViolation(overlapEntriesFromActivities(activities), candidateEntries)) {
       throw new Error("บันทึกไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
     }
 
@@ -118,7 +118,8 @@ export function createActivityCalendarActions({
     if (plannedEntries.some((entry) => !Number.isFinite(entry.start.getTime()) || !Number.isFinite(entry.end.getTime()) || entry.end <= entry.start)) {
       throw new Error("แผนมีวันเวลาที่ไม่ถูกต้อง");
     }
-    if (exceedsOverlapLimit([...overlapEntriesFromActivities(activities), ...plannedEntries])) {
+    const existingEntries = overlapEntriesFromActivities(activities);
+    if (introducesOverlapLimitViolation(existingEntries, [...existingEntries, ...plannedEntries])) {
       throw new Error("สร้างแผนไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
     }
 
@@ -149,7 +150,7 @@ export function createActivityCalendarActions({
       const change = changesById.get(entry.id);
       return change ? { ...entry, start: change.start, end: change.end } : entry;
     });
-    if (exceedsOverlapLimit(candidateEntries)) {
+    if (introducesOverlapLimitViolation(overlapEntriesFromActivities(activities), candidateEntries)) {
       setError("บันทึกไม่ได้: ช่วงเวลานี้มีกิจกรรมซ้อนกันเกิน 3 รายการ");
       return false;
     }
