@@ -23,6 +23,8 @@ const COMMAND_HELP_TEXT =
   "/start — เชื่อมต่อบัญชี T.i.M.E.S.\n" +
   "/cmd — ดูรายการคำสั่งนี้\n" +
   "/general_questions — คำถามทั่วไปเกี่ยวกับ T.i.M.E.S.\n" +
+  "/times — T.i.M.E.S. คืออะไร\n" +
+  "/features — ดูฟีเจอร์ของ T.i.M.E.S.\n" +
   "/ai on|off|clear — เปิด ปิด หรือล้างบทสนทนา AI ส่วนตัว\n" +
   "/myid — ดู Telegram chat ID ของคุณ\n" +
   "/announce — เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)\n\n" +
@@ -540,7 +542,12 @@ async function registerBotCommands() {
   const commands = [
     { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S." },
     { command: "general_questions", description: "คำถามทั่วไป" },
-    { command: "cmd", description: "ดูรายการคำสั่ง" }
+    { command: "cmd", description: "ดูรายการคำสั่งทั้งหมด" },
+    { command: "times", description: "T.i.M.E.S. คืออะไร" },
+    { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S." },
+    { command: "ai", description: "สถานะและโหมด AI ส่วนตัว" },
+    { command: "myid", description: "ดู Telegram chat ID" },
+    { command: "announce", description: "ตั้งค่า announcement-ticker" }
   ];
   const setCommandsForScope = async (scope) => {
     const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {

@@ -50,7 +50,12 @@ test("legacy chat menu is removed so the current command menu becomes effective"
     assert.deepEqual(menus.get(scope), [
       { command: "start", description: "เริ่มต้นใช้งาน T.i.M.E.S." },
       { command: "general_questions", description: "คำถามทั่วไป" },
-      { command: "cmd", description: "ดูรายการคำสั่ง" }
+      { command: "cmd", description: "ดูรายการคำสั่งทั้งหมด" },
+      { command: "times", description: "T.i.M.E.S. คืออะไร" },
+      { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S." },
+      { command: "ai", description: "สถานะและโหมด AI ส่วนตัว" },
+      { command: "myid", description: "ดู Telegram chat ID" },
+      { command: "announce", description: "ตั้งค่า announcement-ticker" }
     ]);
   }
   await register();
