@@ -58,6 +58,7 @@ test("legacy chat menu is removed so the current command menu becomes effective"
       { command: "times", description: "T.i.M.E.S. คืออะไร" },
       { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S." },
       { command: "ai", description: "สถานะและโหมด AI ส่วนตัว" },
+      { command: "ai_commands", description: "ชุดคำสั่ง AI" },
       { command: "ai_on", description: "เปิดโหมด AI (/ai on)" },
       { command: "ai_off", description: "ปิดโหมด AI (/ai off)" },
       { command: "ai_clear", description: "ล้างบริบท AI (/ai clear)" },

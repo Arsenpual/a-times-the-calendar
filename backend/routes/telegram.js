@@ -27,6 +27,7 @@ const BOT_MENU_COMMANDS = Object.freeze([
   { command: "times", description: "T.i.M.E.S. คืออะไร", help: "T.i.M.E.S. คืออะไร" },
   { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S.", help: "ดูฟีเจอร์ของ T.i.M.E.S." },
   { command: "ai", description: "สถานะและโหมด AI ส่วนตัว", help: "ดูสถานะโหมด AI ส่วนตัว" },
+  { command: "ai_commands", description: "ชุดคำสั่ง AI", help: "เปิดชุดคำสั่ง AI" },
   { command: "ai_on", description: "เปิดโหมด AI (/ai on)", help: "เปิดโหมด AI", usage: "/ai on หรือ /ai_on" },
   { command: "ai_off", description: "ปิดโหมด AI (/ai off)", help: "ปิดโหมด AI", usage: "/ai off หรือ /ai_off" },
   { command: "ai_clear", description: "ล้างบริบท AI (/ai clear)", help: "ล้างบริบท AI", usage: "/ai clear หรือ /ai_clear" },
@@ -48,6 +49,13 @@ const CUSTOM_COMMAND_KEYBOARD = {
   resize_keyboard: true,
   one_time_keyboard: true,
   input_field_placeholder: "เลือกคำสั่งด่วน หรือพิมพ์ข้อความ"
+};
+const AI_COMMAND_COLLECTION_KEYBOARD = {
+  inline_keyboard: [
+    [{ text: "🟢 เปิด AI", callback_data: "ai:on" }, { text: "⚫ ปิด AI", callback_data: "ai:off" }],
+    [{ text: "🧹 ล้างบริบท", callback_data: "ai:clear" }, { text: "↻ รีเซ็ตบริบท", callback_data: "ai:reset" }],
+    [{ text: "◉ ดูสถานะ AI", callback_data: "ai:status" }]
+  ]
 };
 
 // The only persistent bot-menu command opens these main questions. Follow-ups
@@ -499,6 +507,41 @@ async function sendTelegramFreeAiReply(userId, chatId, text) {
   }
 }
 
+async function runTelegramFreeAiCommand(chatId, chatOwner, action, reply) {
+  if (!isTelegramFreeAiAllowed(chatId, chatOwner)) {
+    await reply("⛔ โหมด AI ส่วนตัวใช้ได้เฉพาะ Telegram ที่เชื่อมกับบัญชีเจ้าของเท่านั้น");
+    return;
+  }
+  const authRef = telegramAuthDoc(chatOwner);
+  const current = (await authRef.get()).data()?.telegramFreeAi || {};
+  if (action === "on") {
+    await authRef.set({ telegramFreeAi: { enabled: true, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+    await reply("✦ เปิดโหมด AI แล้วครับ พิมพ์คุยได้อย่างอิสระ ใช้ /ai off เพื่อปิด และ /ai clear เพื่อล้างบริบท");
+  } else if (action === "off") {
+    await authRef.set({ telegramFreeAi: { enabled: false, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+    await reply("ปิดโหมด AI แล้วครับ ข้อความถัดไปจะกลับไปใช้คำสั่งและคำตอบ T.i.M.E.S. ตามปกติ");
+  } else if (action === "clear" || action === "reset") {
+    await authRef.set({ telegramFreeAi: { enabled: Boolean(current.enabled), history: [], updatedAt: Date.now() } }, { merge: true });
+    await reply("ล้างบริบทการคุย AI แล้วครับ");
+  } else {
+    await reply(current.enabled
+      ? "โหมด AI เปิดอยู่ครับ พิมพ์คุยได้เลย ใช้ /ai off เพื่อปิด"
+      : "โหมด AI ปิดอยู่ครับ ใช้ /ai on เพื่อเริ่มคุยอย่างอิสระ");
+  }
+}
+
+async function handleAiCommandCallback(callbackQuery) {
+  const chatId = callbackQuery.message?.chat?.id;
+  const action = String(callbackQuery.data || "").replace(/^ai:/, "");
+  if (!chatId || !callbackQuery.id || !["on", "off", "clear", "reset", "status"].includes(action)) return;
+  const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId || null;
+  const reply = chatOwner
+    ? (text, options) => sendChatReply(chatOwner, chatId, text, options)
+    : (text, options) => sendTelegram(chatId, text, options);
+  await answerTelegramCallback(callbackQuery.id);
+  await runTelegramFreeAiCommand(chatId, chatOwner, action, reply);
+}
+
 function bangkokDayKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit"
@@ -785,6 +828,10 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       await handleProductQuestionCallback(callbackQuery);
       return res.sendStatus(200);
     }
+    if (callbackQuery?.data?.startsWith("ai:")) {
+      await handleAiCommandCallback(callbackQuery);
+      return res.sendStatus(200);
+    }
     const message = req.body?.message;
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
@@ -839,30 +886,16 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       return res.sendStatus(200);
     }
 
+    if (/^\/ai_commands(?:@\w+)?$/i.test(text)) {
+      await reply("🤖 ชุดคำสั่ง AI\n\nเลือกสิ่งที่ต้องการทำได้จากปุ่มด้านล่าง", { reply_markup: AI_COMMAND_COLLECTION_KEYBOARD });
+      return res.sendStatus(200);
+    }
+
     const freeAiCommand = text.match(/^\/ai(?:@\w+)?(?:\s+(on|off|clear|reset|status))?$/i)
       || text.match(/^\/ai_(on|off|clear|reset|status)(?:@\w+)?$/i);
     if (freeAiCommand) {
-      if (!isTelegramFreeAiAllowed(chatId, chatOwner)) {
-        await reply("⛔ โหมด AI ส่วนตัวใช้ได้เฉพาะ Telegram ที่เชื่อมกับบัญชีเจ้าของเท่านั้น");
-        return res.sendStatus(200);
-      }
       const action = (freeAiCommand[1] || "status").toLowerCase();
-      const authRef = telegramAuthDoc(chatOwner);
-      const current = (await authRef.get()).data()?.telegramFreeAi || {};
-      if (action === "on") {
-        await authRef.set({ telegramFreeAi: { enabled: true, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
-        await reply("✦ เปิดโหมด AI แล้วครับ พิมพ์คุยได้อย่างอิสระ ใช้ /ai off เพื่อปิด และ /ai clear เพื่อล้างบริบท");
-      } else if (action === "off") {
-        await authRef.set({ telegramFreeAi: { enabled: false, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
-        await reply("ปิดโหมด AI แล้วครับ ข้อความถัดไปจะกลับไปใช้คำสั่งและคำตอบ T.i.M.E.S. ตามปกติ");
-      } else if (action === "clear" || action === "reset") {
-        await authRef.set({ telegramFreeAi: { enabled: Boolean(current.enabled), history: [], updatedAt: Date.now() } }, { merge: true });
-        await reply("ล้างบริบทการคุย AI แล้วครับ");
-      } else {
-        await reply(current.enabled
-          ? "โหมด AI เปิดอยู่ครับ พิมพ์คุยได้เลย ใช้ /ai off เพื่อปิด"
-          : "โหมด AI ปิดอยู่ครับ ใช้ /ai on เพื่อเริ่มคุยอย่างอิสระ");
-      }
+      await runTelegramFreeAiCommand(chatId, chatOwner, action, reply);
       return res.sendStatus(200);
     }
 
