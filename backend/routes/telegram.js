@@ -26,8 +26,14 @@ const BOT_MENU_COMMANDS = Object.freeze([
   { command: "cmd", description: "ดูรายการคำสั่งทั้งหมด", help: "ดูรายการคำสั่งนี้" },
   { command: "times", description: "T.i.M.E.S. คืออะไร", help: "T.i.M.E.S. คืออะไร" },
   { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S.", help: "ดูฟีเจอร์ของ T.i.M.E.S." },
-  { command: "ai", description: "สถานะและโหมด AI ส่วนตัว", help: "เปิด ปิด หรือล้างบทสนทนา AI ส่วนตัว", usage: "/ai on|off|clear" },
+  { command: "ai", description: "สถานะและโหมด AI ส่วนตัว", help: "ดูสถานะโหมด AI ส่วนตัว" },
+  { command: "ai_on", description: "เปิดโหมด AI (/ai on)", help: "เปิดโหมด AI", usage: "/ai on หรือ /ai_on" },
+  { command: "ai_off", description: "ปิดโหมด AI (/ai off)", help: "ปิดโหมด AI", usage: "/ai off หรือ /ai_off" },
+  { command: "ai_clear", description: "ล้างบริบท AI (/ai clear)", help: "ล้างบริบท AI", usage: "/ai clear หรือ /ai_clear" },
+  { command: "ai_reset", description: "ล้างบริบท AI (/ai reset)", help: "ล้างบริบท AI", usage: "/ai reset หรือ /ai_reset" },
+  { command: "ai_status", description: "ดูสถานะ AI (/ai status)", help: "ดูสถานะโหมด AI", usage: "/ai status หรือ /ai_status" },
   { command: "myid", description: "ดู Telegram chat ID", help: "ดู Telegram chat ID ของคุณ" },
+  { command: "chatid", description: "ดู Telegram chat ID (alias)", help: "ดู Telegram chat ID ของคุณ" },
   { command: "announce", description: "ตั้งค่า announcement-ticker", help: "เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)" }
 ]);
 const COMMAND_HELP_TEXT =
@@ -833,7 +839,8 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       return res.sendStatus(200);
     }
 
-    const freeAiCommand = text.match(/^\/ai(?:@\w+)?(?:\s+(on|off|clear|reset|status))?$/i);
+    const freeAiCommand = text.match(/^\/ai(?:@\w+)?(?:\s+(on|off|clear|reset|status))?$/i)
+      || text.match(/^\/ai_(on|off|clear|reset|status)(?:@\w+)?$/i);
     if (freeAiCommand) {
       if (!isTelegramFreeAiAllowed(chatId, chatOwner)) {
         await reply("⛔ โหมด AI ส่วนตัวใช้ได้เฉพาะ Telegram ที่เชื่อมกับบัญชีเจ้าของเท่านั้น");

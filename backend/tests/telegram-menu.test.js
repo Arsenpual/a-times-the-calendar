@@ -58,7 +58,13 @@ test("legacy chat menu is removed so the current command menu becomes effective"
       { command: "times", description: "T.i.M.E.S. คืออะไร" },
       { command: "features", description: "ดูฟีเจอร์ T.i.M.E.S." },
       { command: "ai", description: "สถานะและโหมด AI ส่วนตัว" },
+      { command: "ai_on", description: "เปิดโหมด AI (/ai on)" },
+      { command: "ai_off", description: "ปิดโหมด AI (/ai off)" },
+      { command: "ai_clear", description: "ล้างบริบท AI (/ai clear)" },
+      { command: "ai_reset", description: "ล้างบริบท AI (/ai reset)" },
+      { command: "ai_status", description: "ดูสถานะ AI (/ai status)" },
       { command: "myid", description: "ดู Telegram chat ID" },
+      { command: "chatid", description: "ดู Telegram chat ID (alias)" },
       { command: "announce", description: "ตั้งค่า announcement-ticker" }
     ]);
   }
