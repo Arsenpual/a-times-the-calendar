@@ -66,6 +66,11 @@ test("legacy chat menu is removed so the current command menu becomes effective"
       { command: "ai_status", description: "ดูสถานะ AI (/ai status)" },
       { command: "myid", description: "ดู Telegram chat ID" },
       { command: "chatid", description: "ดู Telegram chat ID (alias)" },
+      { command: "news", description: "เปิดชุดคำสั่งข่าว" },
+      { command: "news_add", description: "เพิ่มหัวข้อข่าว" },
+      { command: "news_remove", description: "ลบหัวข้อข่าว" },
+      { command: "news_list", description: "ดูหัวข้อข่าว" },
+      { command: "news_now", description: "อ่านข่าวล่าสุด" },
       { command: "announce", description: "ตั้งค่า announcement-ticker" }
     ]);
   }

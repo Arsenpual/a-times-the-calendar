@@ -6,6 +6,7 @@ const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 const { generateContent } = require("../gemini-api.js");
 const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = require("../gemini-chat.js");
+const { searchGoogleNews } = require("../google-news.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -17,7 +18,12 @@ const TELEGRAM_FREE_AI_HISTORY_LIMIT = 16;
 const TELEGRAM_FREE_AI_HISTORY_MESSAGE_LIMIT = 4_000;
 const TELEGRAM_FREE_AI_REPLY_LIMIT = 12_000;
 const TELEGRAM_MESSAGE_CHUNK_LIMIT = 3_900;
+const TELEGRAM_NEWS_TOPIC_LIMIT = 8;
+const TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT = 80;
+const TELEGRAM_NEWS_INPUT_TTL_MS = 10 * 60 * 1000;
+const TELEGRAM_NEWS_PERIODS = Object.freeze({ "1h": "1 ชั่วโมง", "6h": "6 ชั่วโมง", "1d": "24 ชั่วโมง", "7d": "7 วัน" });
 const pendingAnnouncementMessageEdits = new Map();
+const pendingTelegramNewsInputs = new Map();
 // Public Telegram commands have one source of truth. Add each new command here:
 // its entry is then published to Bot Menu and appears in /cmd automatically.
 const BOT_MENU_COMMANDS = Object.freeze([
@@ -35,6 +41,11 @@ const BOT_MENU_COMMANDS = Object.freeze([
   { command: "ai_status", description: "ดูสถานะ AI (/ai status)", help: "ดูสถานะโหมด AI", usage: "/ai status หรือ /ai_status" },
   { command: "myid", description: "ดู Telegram chat ID", help: "ดู Telegram chat ID ของคุณ" },
   { command: "chatid", description: "ดู Telegram chat ID (alias)", help: "ดู Telegram chat ID ของคุณ" },
+  { command: "news", description: "เปิดชุดคำสั่งข่าว", help: "เปิดชุดคำสั่งข่าวจาก Google News" },
+  { command: "news_add", description: "เพิ่มหัวข้อข่าว", help: "เพิ่มหัวข้อ เช่น /news_add AI" },
+  { command: "news_remove", description: "ลบหัวข้อข่าว", help: "ลบหัวข้อด้วยชื่อหรือลำดับ" },
+  { command: "news_list", description: "ดูหัวข้อข่าว", help: "ดูหัวข้อข่าวที่ติดตาม" },
+  { command: "news_now", description: "อ่านข่าวล่าสุด", help: "อ่านข่าวล่าสุดจากหัวข้อที่ติดตาม" },
   { command: "announce", description: "ตั้งค่า announcement-ticker", help: "เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)" }
 ]);
 const COMMAND_HELP_TEXT =
@@ -57,9 +68,8 @@ const AI_COMMAND_COLLECTION_KEYBOARD = {
     [{ text: "◉ ดูสถานะ AI", callback_data: "ai:status" }]
   ]
 };
-
-// The only persistent bot-menu command opens these main questions. Follow-ups
-// remain inline and use deterministic product knowledge only.
+// Product-question follow-ups remain inline and use deterministic product
+// knowledge only.
 const GENERAL_QUESTION_BUTTONS = Object.freeze([
   ["times", "T.i.M.E.S. คืออะไร?"],
   ["features", "T.i.M.E.S. มีฟีเจอร์อะไรบ้าง?"],
@@ -542,6 +552,204 @@ async function handleAiCommandCallback(callbackQuery) {
   await runTelegramFreeAiCommand(chatId, chatOwner, action, reply);
 }
 
+function normalizeTelegramNewsTopics(topics) {
+  const unique = new Map();
+  for (const topic of Array.isArray(topics) ? topics : []) {
+    const value = String(topic || "").trim().replace(/\s+/g, " ").slice(0, TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT);
+    if (value && !unique.has(value.toLocaleLowerCase("th"))) unique.set(value.toLocaleLowerCase("th"), value);
+  }
+  return [...unique.values()].slice(0, TELEGRAM_NEWS_TOPIC_LIMIT);
+}
+
+async function telegramNewsConfig(chatOwner) {
+  if (!chatOwner) return { topics: [], period: "1d" };
+  const auth = (await telegramAuthDoc(chatOwner).get()).data() || {};
+  const news = auth.telegramNews || {};
+  return {
+    topics: normalizeTelegramNewsTopics(news.topics),
+    period: TELEGRAM_NEWS_PERIODS[news.period] ? news.period : "1d"
+  };
+}
+
+async function telegramNewsTopics(chatOwner) {
+  return (await telegramNewsConfig(chatOwner)).topics;
+}
+
+async function saveTelegramNewsConfig(chatOwner, updates) {
+  const current = await telegramNewsConfig(chatOwner);
+  const next = {
+    topics: updates.topics === undefined ? current.topics : normalizeTelegramNewsTopics(updates.topics),
+    period: TELEGRAM_NEWS_PERIODS[updates.period] ? updates.period : current.period,
+    updatedAt: Date.now()
+  };
+  await telegramAuthDoc(chatOwner).set({ telegramNews: next }, { merge: true });
+  return next;
+}
+
+async function saveTelegramNewsTopics(chatOwner, topics) {
+  return (await saveTelegramNewsConfig(chatOwner, { topics })).topics;
+}
+
+function telegramNewsTopicList(topics) {
+  if (!topics.length) {
+    return "ยังไม่มีหัวข้อข่าวที่ติดตาม\nเพิ่มได้ด้วย /news_add ตามด้วยหัวข้อ เช่น /news_add AI";
+  }
+  return "📋 หัวข้อข่าวที่ติดตาม\n\n" + topics.map((topic, index) => `${index + 1}. ${topic}`).join("\n") +
+    "\n\nเพิ่ม: /news_add หัวข้อ\nลบ: /news_remove ลำดับหรือชื่อหัวข้อ";
+}
+
+function telegramNewsControllerText(config) {
+  const topicSummary = config.topics.length
+    ? config.topics.map((topic, index) => `${index + 1}. ${topic}`).join("\n")
+    : "ยังไม่มีหัวข้อ — กด ＋ เพิ่มหัวข้อ";
+  return "📰 News Controller\n\n" +
+    `ช่วงข่าว: ${TELEGRAM_NEWS_PERIODS[config.period]}\n` +
+    `หัวข้อที่ติดตาม (${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT}):\n${topicSummary}\n\n` +
+    "เลือกการทำงานจากปุ่มด้านล่าง";
+}
+
+function telegramNewsControllerKeyboard(config) {
+  const topicRows = [];
+  for (let index = 0; index < config.topics.length; index += 2) {
+    topicRows.push(config.topics.slice(index, index + 2).map((topic, offset) => ({
+      text: `🗞 ${topic.slice(0, 24)}`,
+      callback_data: `news:topic:${index + offset}`
+    })));
+  }
+  return {
+    inline_keyboard: [
+      [{ text: "📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🔎 ค้นหาข่าว", callback_data: "news:search" }],
+      ...topicRows,
+      [{ text: "＋ เพิ่มหัวข้อ", callback_data: "news:add" }, { text: "− ลบหัวข้อ", callback_data: "news:remove" }],
+      [
+        { text: config.period === "1h" ? "✓ 1 ชม." : "1 ชม.", callback_data: "news:period:1h" },
+        { text: config.period === "6h" ? "✓ 6 ชม." : "6 ชม.", callback_data: "news:period:6h" },
+        { text: config.period === "1d" ? "✓ 24 ชม." : "24 ชม.", callback_data: "news:period:1d" },
+        { text: config.period === "7d" ? "✓ 7 วัน" : "7 วัน", callback_data: "news:period:7d" }
+      ],
+      [{ text: "↻ รีเฟรชแผง", callback_data: "news:panel" }, { text: "✕ ปิดแผง", callback_data: "news:close" }]
+    ]
+  };
+}
+
+function formatGoogleNewsResults(topic, items, period = "1d") {
+  if (!items.length) return `📰 ${topic}\n\nยังไม่พบข่าวใหม่ในช่วง ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]} ที่ผ่านมา`;
+  let message = `📰 ข่าวล่าสุด: ${topic}\nช่วงเวลา: ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]}\n`;
+  for (const [index, item] of items.entries()) {
+    const source = item.source ? ` — ${item.source}` : "";
+    const entry = `\n${index + 1}. ${item.title}${source}\n${item.url}`;
+    if ((message + entry).length > TELEGRAM_MESSAGE_CHUNK_LIMIT) break;
+    message += entry;
+  }
+  return message;
+}
+
+async function sendTelegramNewsDigest(topics, reply, period = "1d") {
+  for (const topic of topics) {
+    try {
+      const items = await searchGoogleNews(topic, { limit: topics.length === 1 ? 5 : 2, period });
+      await reply(formatGoogleNewsResults(topic, items, period));
+    } catch (error) {
+      console.error(`[telegram] Google News topic "${topic}" failed:`, error.message);
+      await reply(`ตอนนี้ดึงข่าวหัวข้อ “${topic}” ไม่สำเร็จ กรุณาลองใหม่อีกครั้งครับ`);
+    }
+  }
+}
+
+async function handleNewsCommandCallback(callbackQuery) {
+  const chatId = callbackQuery.message?.chat?.id;
+  const messageId = callbackQuery.message?.message_id;
+  const action = String(callbackQuery.data || "").replace(/^news:/, "");
+  if (!chatId || !messageId || !callbackQuery.id) return;
+  const chatOwner = (await telegramChatOwnerDoc(chatId).get()).data()?.userId || null;
+  const reply = chatOwner
+    ? (text, options) => sendChatReply(chatOwner, chatId, text, options)
+    : (text, options) => sendTelegram(chatId, text, options);
+  if (!chatOwner) {
+    await answerTelegramCallback(callbackQuery.id);
+    await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะบันทึกหัวข้อข่าวได้ครับ");
+    return;
+  }
+  if (action === "close") {
+    await answerTelegramCallback(callbackQuery.id, "ปิดแผงแล้ว");
+    await editTelegramMessage(chatId, messageId, "📰 ปิด News Controller แล้ว");
+    return;
+  }
+  const config = await telegramNewsConfig(chatOwner);
+  if (action === "panel") {
+    await answerTelegramCallback(callbackQuery.id, "อัปเดตแล้ว");
+    await editTelegramMessage(chatId, messageId, telegramNewsControllerText(config), { reply_markup: telegramNewsControllerKeyboard(config) });
+    return;
+  }
+  if (action === "add" || action === "search") {
+    pendingTelegramNewsInputs.set(String(chatId), { action, expiresAt: Date.now() + TELEGRAM_NEWS_INPUT_TTL_MS });
+    await answerTelegramCallback(callbackQuery.id, action === "add" ? "รอรับหัวข้อใหม่" : "รอรับคำค้นหา");
+    await reply(action === "add"
+      ? "＋ ส่งหัวข้อที่ต้องการติดตามในข้อความถัดไป\nเพิ่มหลายหัวข้อได้โดยคั่นด้วยเครื่องหมายจุลภาค"
+      : "🔎 ส่งหัวข้อหรือคำค้นหาข่าวในข้อความถัดไป", {
+      reply_markup: { force_reply: true, input_field_placeholder: action === "add" ? "AI, เทคโนโลยี, เศรษฐกิจไทย" : "ค้นหาข่าวเรื่อง…" }
+    });
+    return;
+  }
+  if (action === "remove") {
+    await answerTelegramCallback(callbackQuery.id);
+    const rows = config.topics.map((topic, index) => [{ text: `− ${topic}`, callback_data: `news:remove:${index}` }]);
+    await editTelegramMessage(chatId, messageId, config.topics.length ? "เลือกหัวข้อที่ต้องการลบ" : "ยังไม่มีหัวข้อให้ลบ", {
+      reply_markup: { inline_keyboard: [...rows, [{ text: "← กลับ News Controller", callback_data: "news:panel" }]] }
+    });
+    return;
+  }
+  const removeMatch = action.match(/^remove:(\d+)$/);
+  if (removeMatch) {
+    const index = Number(removeMatch[1]);
+    const removed = config.topics[index];
+    if (!removed) {
+      await answerTelegramCallback(callbackQuery.id, "ไม่พบหัวข้อนี้");
+      return;
+    }
+    const next = await saveTelegramNewsConfig(chatOwner, { topics: config.topics.filter((_, topicIndex) => topicIndex !== index) });
+    await answerTelegramCallback(callbackQuery.id, `ลบ ${removed} แล้ว`);
+    await editTelegramMessage(chatId, messageId, telegramNewsControllerText(next), { reply_markup: telegramNewsControllerKeyboard(next) });
+    return;
+  }
+  const periodMatch = action.match(/^period:(1h|6h|1d|7d)$/);
+  if (periodMatch) {
+    const next = await saveTelegramNewsConfig(chatOwner, { period: periodMatch[1] });
+    await answerTelegramCallback(callbackQuery.id, `เลือกข่าวย้อนหลัง ${TELEGRAM_NEWS_PERIODS[next.period]}`);
+    await editTelegramMessage(chatId, messageId, telegramNewsControllerText(next), { reply_markup: telegramNewsControllerKeyboard(next) });
+    return;
+  }
+  const topicMatch = action.match(/^topic:(\d+)$/);
+  if (topicMatch) {
+    const topic = config.topics[Number(topicMatch[1])];
+    if (!topic) {
+      await answerTelegramCallback(callbackQuery.id, "ไม่พบหัวข้อนี้");
+      return;
+    }
+    await answerTelegramCallback(callbackQuery.id, `กำลังโหลด ${topic}`);
+    try {
+      const items = await searchGoogleNews(topic, { limit: 5, period: config.period });
+      await editTelegramMessage(chatId, messageId, formatGoogleNewsResults(topic, items, config.period), {
+        reply_markup: { inline_keyboard: [[{ text: "← กลับ News Controller", callback_data: "news:panel" }, { text: "↻ โหลดใหม่", callback_data: `news:topic:${topicMatch[1]}` }]] }
+      });
+    } catch (error) {
+      console.error(`[telegram] Google News topic "${topic}" failed:`, error.message);
+      await editTelegramMessage(chatId, messageId, `ตอนนี้ดึงข่าวหัวข้อ “${topic}” ไม่สำเร็จ`, {
+        reply_markup: { inline_keyboard: [[{ text: "← กลับ News Controller", callback_data: "news:panel" }, { text: "ลองใหม่", callback_data: `news:topic:${topicMatch[1]}` }]] }
+      });
+    }
+    return;
+  }
+  if (action === "now") {
+    await answerTelegramCallback(callbackQuery.id, "กำลังโหลดข่าวล่าสุด");
+    if (!config.topics.length) {
+      await reply("ยังไม่มีหัวข้อข่าว กด ＋ เพิ่มหัวข้อ ใน News Controller ก่อนครับ");
+      return;
+    }
+    await sendTelegramNewsDigest(config.topics, reply, config.period);
+  }
+}
+
 function bangkokDayKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit"
@@ -832,6 +1040,10 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       await handleAiCommandCallback(callbackQuery);
       return res.sendStatus(200);
     }
+    if (callbackQuery?.data?.startsWith("news:")) {
+      await handleNewsCommandCallback(callbackQuery);
+      return res.sendStatus(200);
+    }
     const message = req.body?.message;
     const chatId = message?.chat?.id;
     const text = String(message?.text || "").trim();
@@ -842,6 +1054,32 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       ? sendChatReply(chatOwner, chatId, replyText, options)
       : sendTelegram(chatId, replyText, options);
 
+    const pendingNewsInput = pendingTelegramNewsInputs.get(String(chatId));
+    if (pendingNewsInput?.expiresAt < Date.now()) pendingTelegramNewsInputs.delete(String(chatId));
+    if (pendingTelegramNewsInputs.has(String(chatId)) && text && !text.startsWith("/")) {
+      pendingTelegramNewsInputs.delete(String(chatId));
+      if (!chatOwner) {
+        await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะใช้ News Controller ได้ครับ");
+        return res.sendStatus(200);
+      }
+      if (pendingNewsInput.action === "search") {
+        const topic = normalizeTelegramNewsTopics([text])[0];
+        const config = await telegramNewsConfig(chatOwner);
+        await sendTelegramNewsDigest(topic ? [topic] : [], reply, config.period);
+        return res.sendStatus(200);
+      }
+      if (pendingNewsInput.action === "add") {
+        const additions = normalizeTelegramNewsTopics(text.split(","));
+        const current = await telegramNewsTopics(chatOwner);
+        const next = await saveTelegramNewsConfig(chatOwner, { topics: [...current, ...additions] });
+        const added = next.topics.filter((topic) => !current.some((old) => old.toLocaleLowerCase("th") === topic.toLocaleLowerCase("th")));
+        await reply(added.length
+          ? `✅ เพิ่มหัวข้อ: ${added.join(", ")}\nเปิด /news เพื่อเลือกอ่านข่าวได้เลย`
+          : `ไม่ได้เพิ่มหัวข้อใหม่ อาจมีหัวข้อนี้อยู่แล้วหรือครบ ${TELEGRAM_NEWS_TOPIC_LIMIT} หัวข้อแล้ว`);
+        return res.sendStatus(200);
+      }
+    }
+
     if (/^\/cmd(?:@\w+)?$/i.test(text)) {
       await reply(COMMAND_HELP_TEXT, { reply_markup: CUSTOM_COMMAND_KEYBOARD });
       return res.sendStatus(200);
@@ -849,6 +1087,76 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
 
     if (/^\/(?:myid|chatid)(?:@\w+)?$/i.test(text)) {
       await reply(`รหัส Telegram chat ของคุณ: ${chatId}\nตั้งค่า TELEGRAM_ANNOUNCEMENT_ADMIN_CHAT_IDS=${chatId} ใน Render เพื่อใช้คำสั่งประกาศ`);
+      return res.sendStatus(200);
+    }
+
+    if (/^\/news(?:@\w+)?$/i.test(text)) {
+      if (!chatOwner) {
+        await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะใช้ News Controller ได้ครับ");
+        return res.sendStatus(200);
+      }
+      const config = await telegramNewsConfig(chatOwner);
+      await reply(telegramNewsControllerText(config), { reply_markup: telegramNewsControllerKeyboard(config) });
+      return res.sendStatus(200);
+    }
+
+    const newsAddMatch = text.match(/^\/news_add(?:@\w+)?(?:\s+([\s\S]+))?$/i);
+    if (newsAddMatch) {
+      if (!chatOwner) {
+        await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะบันทึกหัวข้อข่าวได้ครับ");
+        return res.sendStatus(200);
+      }
+      const additions = normalizeTelegramNewsTopics(String(newsAddMatch[1] || "").split(","));
+      if (!additions.length) {
+        await reply("ใส่หัวข้อหลังคำสั่ง เช่น /news_add AI, เทคโนโลยี");
+        return res.sendStatus(200);
+      }
+      const current = await telegramNewsTopics(chatOwner);
+      const topics = await saveTelegramNewsTopics(chatOwner, [...current, ...additions]);
+      const added = topics.filter((topic) => !current.some((old) => old.toLocaleLowerCase("th") === topic.toLocaleLowerCase("th")));
+      await reply(added.length
+        ? `✅ เพิ่มหัวข้อ: ${added.join(", ")}\n\n${telegramNewsTopicList(topics)}`
+        : `หัวข้อนี้มีอยู่แล้ว หรือครบ ${TELEGRAM_NEWS_TOPIC_LIMIT} หัวข้อแล้ว\n\n${telegramNewsTopicList(topics)}`);
+      return res.sendStatus(200);
+    }
+
+    if (/^\/news_list(?:@\w+)?$/i.test(text)) {
+      const topics = await telegramNewsTopics(chatOwner);
+      await reply(chatOwner ? telegramNewsTopicList(topics) : "เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะบันทึกหัวข้อข่าวได้ครับ");
+      return res.sendStatus(200);
+    }
+
+    const newsRemoveMatch = text.match(/^\/news_remove(?:@\w+)?(?:\s+([\s\S]+))?$/i);
+    if (newsRemoveMatch) {
+      if (!chatOwner) {
+        await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะบันทึกหัวข้อข่าวได้ครับ");
+        return res.sendStatus(200);
+      }
+      const target = String(newsRemoveMatch[1] || "").trim();
+      const current = await telegramNewsTopics(chatOwner);
+      const position = /^\d+$/.test(target) ? Number(target) - 1 : -1;
+      const removed = position >= 0 && position < current.length
+        ? current[position]
+        : current.find((topic) => topic.toLocaleLowerCase("th") === target.toLocaleLowerCase("th"));
+      if (!removed) {
+        await reply("ไม่พบหัวข้อที่ต้องการลบ ดูชื่อและหมายเลขได้ด้วย /news_list");
+        return res.sendStatus(200);
+      }
+      const topics = await saveTelegramNewsTopics(chatOwner, current.filter((topic) => topic !== removed));
+      await reply(`ลบหัวข้อ “${removed}” แล้ว\n\n${telegramNewsTopicList(topics)}`);
+      return res.sendStatus(200);
+    }
+
+    const newsNowMatch = text.match(/^\/news_now(?:@\w+)?(?:\s+([\s\S]+))?$/i);
+    if (newsNowMatch) {
+      const requestedTopic = String(newsNowMatch[1] || "").trim();
+      const config = await telegramNewsConfig(chatOwner);
+      const topics = requestedTopic ? normalizeTelegramNewsTopics([requestedTopic]) : config.topics;
+      if (!topics.length) {
+        await reply(chatOwner ? telegramNewsTopicList(topics) : "ระบุหัวข้อได้โดยตรง เช่น /news_now AI");
+        return res.sendStatus(200);
+      }
+      await sendTelegramNewsDigest(topics, reply, config.period);
       return res.sendStatus(200);
     }
 
