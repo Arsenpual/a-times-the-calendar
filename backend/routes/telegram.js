@@ -632,23 +632,55 @@ function telegramNewsControllerKeyboard(config) {
   };
 }
 
-function formatGoogleNewsResults(topic, items, period = "1d") {
-  if (!items.length) return `📰 ${topic}\n\nยังไม่พบข่าวใหม่ในช่วง ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]} ที่ผ่านมา`;
-  let message = `📰 ข่าวล่าสุด: ${topic}\nช่วงเวลา: ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]}\n`;
-  for (const [index, item] of items.entries()) {
-    const source = item.source ? ` — ${item.source}` : "";
-    const entry = `\n${index + 1}. ${item.title}${source}\n${item.url}`;
-    if ((message + entry).length > TELEGRAM_MESSAGE_CHUNK_LIMIT) break;
-    message += entry;
+function thaiRelativeNewsTime(publishedAt) {
+  if (!publishedAt) return "เวลาไม่ระบุ";
+  const minutes = Math.max(0, Math.floor((Date.now() - publishedAt) / 60_000));
+  if (minutes < 1) return "เมื่อสักครู่";
+  if (minutes < 60) return `${minutes} นาทีที่แล้ว`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ชั่วโมงที่แล้ว`;
+  const days = Math.floor(hours / 24);
+  return `${days} วันที่แล้ว`;
+}
+
+function googleNewsArticleKeyboard(items, trailingRows = []) {
+  const articleRows = [];
+  for (let index = 0; index < items.length; index += 2) {
+    articleRows.push(items.slice(index, index + 2).map((item, offset) => ({
+      text: `↗ อ่านข่าว ${index + offset + 1}`,
+      url: item.url
+    })));
   }
-  return message;
+  return { inline_keyboard: [...articleRows, ...trailingRows] };
+}
+
+function formatGoogleNewsResults(topic, items, period = "1d") {
+  const periodLabel = TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"];
+  if (!items.length) {
+    return {
+      text: `📰 ${topic}\n\nไม่มีข่าวใหม่ในช่วง ${periodLabel} ที่ผ่านมา`,
+      items: []
+    };
+  }
+  let text = `📰 ${topic}\nข่าวย้อนหลัง ${periodLabel} · ${items.length} รายการ\n`;
+  const visibleItems = [];
+  for (const item of items) {
+    const index = visibleItems.length + 1;
+    const metadata = [item.source, thaiRelativeNewsTime(item.publishedAt)].filter(Boolean).join(" · ");
+    const entry = `\n${index}. ${item.title}\n   ${metadata}`;
+    if ((text + entry).length > TELEGRAM_MESSAGE_CHUNK_LIMIT) break;
+    text += entry;
+    visibleItems.push(item);
+  }
+  return { text, items: visibleItems };
 }
 
 async function sendTelegramNewsDigest(topics, reply, period = "1d") {
   for (const topic of topics) {
     try {
       const items = await searchGoogleNews(topic, { limit: topics.length === 1 ? 5 : 2, period });
-      await reply(formatGoogleNewsResults(topic, items, period));
+      const result = formatGoogleNewsResults(topic, items, period);
+      await reply(result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
     } catch (error) {
       console.error(`[telegram] Google News topic "${topic}" failed:`, error.message);
       await reply(`ตอนนี้ดึงข่าวหัวข้อ “${topic}” ไม่สำเร็จ กรุณาลองใหม่อีกครั้งครับ`);
@@ -729,8 +761,12 @@ async function handleNewsCommandCallback(callbackQuery) {
     await answerTelegramCallback(callbackQuery.id, `กำลังโหลด ${topic}`);
     try {
       const items = await searchGoogleNews(topic, { limit: 5, period: config.period });
-      await editTelegramMessage(chatId, messageId, formatGoogleNewsResults(topic, items, config.period), {
-        reply_markup: { inline_keyboard: [[{ text: "← กลับ News Controller", callback_data: "news:panel" }, { text: "↻ โหลดใหม่", callback_data: `news:topic:${topicMatch[1]}` }]] }
+      const result = formatGoogleNewsResults(topic, items, config.period);
+      await editTelegramMessage(chatId, messageId, result.text, {
+        reply_markup: googleNewsArticleKeyboard(result.items, [[
+          { text: "← กลับ News Controller", callback_data: "news:panel" },
+          { text: "↻ โหลดใหม่", callback_data: `news:topic:${topicMatch[1]}` }
+        ]])
       });
     } catch (error) {
       console.error(`[telegram] Google News topic "${topic}" failed:`, error.message);
