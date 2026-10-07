@@ -6,7 +6,7 @@ const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 const { generateContent } = require("../gemini-api.js");
 const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = require("../gemini-chat.js");
-const { searchGoogleNews } = require("../google-news.js");
+const { searchGoogleNews, getGoogleNewsTopStories } = require("../google-news.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -553,20 +553,26 @@ async function handleAiCommandCallback(callbackQuery) {
 }
 
 function normalizeTelegramNewsTopics(topics) {
+  return normalizeTelegramNewsTerms(topics, TELEGRAM_NEWS_TOPIC_LIMIT);
+}
+
+function normalizeTelegramNewsTerms(terms, limit = TELEGRAM_NEWS_TOPIC_LIMIT) {
   const unique = new Map();
-  for (const topic of Array.isArray(topics) ? topics : []) {
-    const value = String(topic || "").trim().replace(/\s+/g, " ").slice(0, TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT);
+  for (const term of Array.isArray(terms) ? terms : []) {
+    const value = String(term || "").trim().replace(/\s+/g, " ").slice(0, TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT);
     if (value && !unique.has(value.toLocaleLowerCase("th"))) unique.set(value.toLocaleLowerCase("th"), value);
   }
-  return [...unique.values()].slice(0, TELEGRAM_NEWS_TOPIC_LIMIT);
+  return [...unique.values()].slice(0, limit);
 }
 
 async function telegramNewsConfig(chatOwner) {
-  if (!chatOwner) return { topics: [], period: "1d" };
+  if (!chatOwner) return { topics: [], excludeTerms: [], allowedSources: [], period: "1d" };
   const auth = (await telegramAuthDoc(chatOwner).get()).data() || {};
   const news = auth.telegramNews || {};
   return {
     topics: normalizeTelegramNewsTopics(news.topics),
+    excludeTerms: normalizeTelegramNewsTerms(news.excludeTerms),
+    allowedSources: normalizeTelegramNewsTerms(news.allowedSources),
     period: TELEGRAM_NEWS_PERIODS[news.period] ? news.period : "1d"
   };
 }
@@ -579,6 +585,8 @@ async function saveTelegramNewsConfig(chatOwner, updates) {
   const current = await telegramNewsConfig(chatOwner);
   const next = {
     topics: updates.topics === undefined ? current.topics : normalizeTelegramNewsTopics(updates.topics),
+    excludeTerms: updates.excludeTerms === undefined ? current.excludeTerms : normalizeTelegramNewsTerms(updates.excludeTerms),
+    allowedSources: updates.allowedSources === undefined ? current.allowedSources : normalizeTelegramNewsTerms(updates.allowedSources),
     period: TELEGRAM_NEWS_PERIODS[updates.period] ? updates.period : current.period,
     updatedAt: Date.now()
   };
@@ -602,9 +610,14 @@ function telegramNewsControllerText(config) {
   const topicSummary = config.topics.length
     ? config.topics.map((topic, index) => `${index + 1}. ${topic}`).join("\n")
     : "ยังไม่มีหัวข้อ — กด ＋ เพิ่มหัวข้อ";
+  const filterSummary = [
+    config.excludeTerms.length ? `ตัดออก: ${config.excludeTerms.join(", ")}` : null,
+    config.allowedSources.length ? `เฉพาะแหล่งข่าว: ${config.allowedSources.join(", ")}` : null
+  ].filter(Boolean).join("\n") || "ยังไม่ได้ตั้งตัวกรองเพิ่มเติม";
   return "📰 News Controller\n\n" +
     `ช่วงข่าว: ${TELEGRAM_NEWS_PERIODS[config.period]}\n` +
     `หัวข้อที่ติดตาม (${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT}):\n${topicSummary}\n\n` +
+    `ตัวกรอง: ${filterSummary}\n\n` +
     "เลือกการทำงานจากปุ่มด้านล่าง";
 }
 
@@ -618,9 +631,11 @@ function telegramNewsControllerKeyboard(config) {
   }
   return {
     inline_keyboard: [
-      [{ text: "📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🔎 ค้นหาข่าว", callback_data: "news:search" }],
+      [{ text: "📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🌐 ข่าวเด่นตามตัวกรอง", callback_data: "news:top" }],
+      [{ text: "🔎 ค้นหาข่าว", callback_data: "news:search" }],
       ...topicRows,
       [{ text: "＋ เพิ่มหัวข้อ", callback_data: "news:add" }, { text: "− ลบหัวข้อ", callback_data: "news:remove" }],
+      [{ text: "⚙️ ตั้งตัวกรองข่าว", callback_data: "news:filters" }],
       [
         { text: config.period === "1h" ? "✓ 1 ชม." : "1 ชม.", callback_data: "news:period:1h" },
         { text: config.period === "6h" ? "✓ 6 ชม." : "6 ชม.", callback_data: "news:period:6h" },
@@ -628,6 +643,28 @@ function telegramNewsControllerKeyboard(config) {
         { text: config.period === "7d" ? "✓ 7 วัน" : "7 วัน", callback_data: "news:period:7d" }
       ],
       [{ text: "↻ รีเฟรชแผง", callback_data: "news:panel" }, { text: "✕ ปิดแผง", callback_data: "news:close" }]
+    ]
+  };
+}
+
+function telegramNewsFiltersText(config) {
+  const exclusions = config.excludeTerms.length ? config.excludeTerms.map((term, index) => `${index + 1}. ${term}`).join("\n") : "ยังไม่มี";
+  const sources = config.allowedSources.length ? config.allowedSources.map((source, index) => `${index + 1}. ${source}`).join("\n") : "ยังไม่มี (แสดงทุกแหล่งข่าว)";
+  return "⚙️ News Filters\n\n" +
+    `ไม่นำข่าวที่เกี่ยวกับ:\n${exclusions}\n\n` +
+    `แสดงเฉพาะแหล่งข่าว:\n${sources}\n\n` +
+    "ตัวกรองจะใช้กับทุกหัวข้อที่ติดตาม";
+}
+
+function telegramNewsFiltersKeyboard(config) {
+  const excludedRows = config.excludeTerms.map((term, index) => [{ text: `− ตัดคำ: ${term}`, callback_data: `news:filter_remove:exclude:${index}` }]);
+  const sourceRows = config.allowedSources.map((source, index) => [{ text: `− แหล่งข่าว: ${source}`, callback_data: `news:filter_remove:source:${index}` }]);
+  return {
+    inline_keyboard: [
+      [{ text: "＋ คำที่ไม่ต้องการ", callback_data: "news:filter_add:exclude" }, { text: "＋ แหล่งข่าว", callback_data: "news:filter_add:source" }],
+      ...excludedRows,
+      ...sourceRows,
+      [{ text: "← กลับ News Controller", callback_data: "news:panel" }]
     ]
   };
 }
@@ -675,10 +712,15 @@ function formatGoogleNewsResults(topic, items, period = "1d") {
   return { text, items: visibleItems };
 }
 
-async function sendTelegramNewsDigest(topics, reply, period = "1d") {
+async function sendTelegramNewsDigest(topics, reply, period = "1d", filters = {}) {
   for (const topic of topics) {
     try {
-      const items = await searchGoogleNews(topic, { limit: topics.length === 1 ? 5 : 2, period });
+      const items = await searchGoogleNews(topic, {
+        limit: topics.length === 1 ? 5 : 2,
+        period,
+        excludeTerms: filters.excludeTerms,
+        allowedSources: filters.allowedSources
+      });
       const result = formatGoogleNewsResults(topic, items, period);
       await reply(result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
     } catch (error) {
@@ -711,6 +753,38 @@ async function handleNewsCommandCallback(callbackQuery) {
   if (action === "panel") {
     await answerTelegramCallback(callbackQuery.id, "อัปเดตแล้ว");
     await editTelegramMessage(chatId, messageId, telegramNewsControllerText(config), { reply_markup: telegramNewsControllerKeyboard(config) });
+    return;
+  }
+  if (action === "filters") {
+    await answerTelegramCallback(callbackQuery.id);
+    await editTelegramMessage(chatId, messageId, telegramNewsFiltersText(config), { reply_markup: telegramNewsFiltersKeyboard(config) });
+    return;
+  }
+  const filterAddMatch = action.match(/^filter_add:(exclude|source)$/);
+  if (filterAddMatch) {
+    const type = filterAddMatch[1];
+    pendingTelegramNewsInputs.set(String(chatId), { action: `filter_add:${type}`, expiresAt: Date.now() + TELEGRAM_NEWS_INPUT_TTL_MS });
+    await answerTelegramCallback(callbackQuery.id, type === "exclude" ? "รอรับคำที่ต้องการตัด" : "รอรับชื่อแหล่งข่าว");
+    await reply(type === "exclude"
+      ? "ส่งคำหรือหัวข้อที่ไม่ต้องการเห็นในข่าวในข้อความถัดไป\nเพิ่มหลายคำได้โดยคั่นด้วยเครื่องหมายจุลภาค"
+      : "ส่งชื่อแหล่งข่าวที่ต้องการดูในข้อความถัดไป\nตัวอย่าง: Reuters, Bangkok Post", {
+      reply_markup: { force_reply: true, input_field_placeholder: type === "exclude" ? "คริปโต, อุบัติเหตุ" : "Reuters, Bangkok Post" }
+    });
+    return;
+  }
+  const filterRemoveMatch = action.match(/^filter_remove:(exclude|source):(\d+)$/);
+  if (filterRemoveMatch) {
+    const [, type, indexText] = filterRemoveMatch;
+    const index = Number(indexText);
+    const key = type === "exclude" ? "excludeTerms" : "allowedSources";
+    const values = config[key];
+    if (!values[index]) {
+      await answerTelegramCallback(callbackQuery.id, "ไม่พบตัวกรองนี้");
+      return;
+    }
+    const next = await saveTelegramNewsConfig(chatOwner, { [key]: values.filter((_, valueIndex) => valueIndex !== index) });
+    await answerTelegramCallback(callbackQuery.id, "ลบตัวกรองแล้ว");
+    await editTelegramMessage(chatId, messageId, telegramNewsFiltersText(next), { reply_markup: telegramNewsFiltersKeyboard(next) });
     return;
   }
   if (action === "add" || action === "search") {
@@ -760,7 +834,12 @@ async function handleNewsCommandCallback(callbackQuery) {
     }
     await answerTelegramCallback(callbackQuery.id, `กำลังโหลด ${topic}`);
     try {
-      const items = await searchGoogleNews(topic, { limit: 5, period: config.period });
+      const items = await searchGoogleNews(topic, {
+        limit: 5,
+        period: config.period,
+        excludeTerms: config.excludeTerms,
+        allowedSources: config.allowedSources
+      });
       const result = formatGoogleNewsResults(topic, items, config.period);
       await editTelegramMessage(chatId, messageId, result.text, {
         reply_markup: googleNewsArticleKeyboard(result.items, [[
@@ -782,7 +861,7 @@ async function handleNewsCommandCallback(callbackQuery) {
       await reply("ยังไม่มีหัวข้อข่าว กด ＋ เพิ่มหัวข้อ ใน News Controller ก่อนครับ");
       return;
     }
-    await sendTelegramNewsDigest(config.topics, reply, config.period);
+    await sendTelegramNewsDigest(config.topics, reply, config.period, config);
   }
 }
 
@@ -1101,7 +1180,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       if (pendingNewsInput.action === "search") {
         const topic = normalizeTelegramNewsTopics([text])[0];
         const config = await telegramNewsConfig(chatOwner);
-        await sendTelegramNewsDigest(topic ? [topic] : [], reply, config.period);
+        await sendTelegramNewsDigest(topic ? [topic] : [], reply, config.period, config);
         return res.sendStatus(200);
       }
       if (pendingNewsInput.action === "add") {
@@ -1112,6 +1191,19 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         await reply(added.length
           ? `✅ เพิ่มหัวข้อ: ${added.join(", ")}\nเปิด /news เพื่อเลือกอ่านข่าวได้เลย`
           : `ไม่ได้เพิ่มหัวข้อใหม่ อาจมีหัวข้อนี้อยู่แล้วหรือครบ ${TELEGRAM_NEWS_TOPIC_LIMIT} หัวข้อแล้ว`);
+        return res.sendStatus(200);
+      }
+      const filterInputMatch = pendingNewsInput.action.match(/^filter_add:(exclude|source)$/);
+      if (filterInputMatch) {
+        const type = filterInputMatch[1];
+        const key = type === "exclude" ? "excludeTerms" : "allowedSources";
+        const config = await telegramNewsConfig(chatOwner);
+        const additions = normalizeTelegramNewsTerms(text.split(","));
+        const next = await saveTelegramNewsConfig(chatOwner, { [key]: [...config[key], ...additions] });
+        const added = next[key].filter((value) => !config[key].some((old) => old.toLocaleLowerCase("th") === value.toLocaleLowerCase("th")));
+        await reply(added.length
+          ? `✅ เพิ่ม${type === "exclude" ? "คำที่ตัดออก" : "แหล่งข่าว"}: ${added.join(", ")}\nเปิด /news เพื่อดูตัวกรองทั้งหมด`
+          : `ไม่ได้เพิ่มรายการใหม่ อาจมีรายการนี้อยู่แล้วหรือครบ ${TELEGRAM_NEWS_TOPIC_LIMIT} รายการแล้ว`);
         return res.sendStatus(200);
       }
     }
@@ -1192,7 +1284,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         await reply(chatOwner ? telegramNewsTopicList(topics) : "ระบุหัวข้อได้โดยตรง เช่น /news_now AI");
         return res.sendStatus(200);
       }
-      await sendTelegramNewsDigest(topics, reply, config.period);
+      await sendTelegramNewsDigest(topics, reply, config.period, config);
       return res.sendStatus(200);
     }
 
