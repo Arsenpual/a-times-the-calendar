@@ -756,6 +756,23 @@ function telegramNewsResultLimit(period) {
   return TELEGRAM_NEWS_RESULTS_BY_PERIOD[period] || TELEGRAM_NEWS_RESULTS_BY_PERIOD["1d"];
 }
 
+function spaceTelegramNewsBrief(brief) {
+  const lines = String(brief || "").trim().split("\n").filter((line) => line.trim() !== "·");
+  const spaced = [];
+  let hasNewsItem = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const startsNewsItem = /^\d+[.)]\s+/.test(trimmed);
+    const startsSummary = /^สรุป\s*:/.test(trimmed);
+    if ((startsNewsItem && hasNewsItem) || (startsSummary && hasNewsItem)) {
+      if (spaced[spaced.length - 1] !== "·") spaced.push("", "·", "");
+    }
+    spaced.push(line);
+    if (startsNewsItem) hasNewsItem = true;
+  }
+  return spaced.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 async function summarizeTelegramNewsTopic(userId, topic, items) {
   if (!items.length) return null;
   const claim = await claimGeminiChatUsage(userId);
@@ -765,14 +782,14 @@ async function summarizeTelegramNewsTopic(userId, topic, items) {
       `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
     ).join("\n\n");
     const payload = await generateContent({
-      systemInstruction: { parts: [{ text: "You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. End with one short sentence beginning with 'สรุป:'." }] },
+      systemInstruction: { parts: [{ text: "You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item. End with one short sentence beginning with 'สรุป:' after another standalone middle dot." }] },
       contents: [{
         role: "user",
         parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...\nสรุป: ...` }]
       }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
     });
-    return telegramFreeAiText(payload).slice(0, TELEGRAM_NEWS_AI_BRIEF_LIMIT);
+    return spaceTelegramNewsBrief(telegramFreeAiText(payload).slice(0, TELEGRAM_NEWS_AI_BRIEF_LIMIT));
   } catch (error) {
     await releaseGeminiChatUsage(claim).catch(() => {});
     console.error(`[telegram] AI news brief for "${topic}" failed:`, error.message);
