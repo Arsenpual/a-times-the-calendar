@@ -21,8 +21,10 @@ const TELEGRAM_MESSAGE_CHUNK_LIMIT = 3_900;
 const TELEGRAM_NEWS_TOPIC_LIMIT = 8;
 const TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT = 80;
 const TELEGRAM_NEWS_TOPIC_PAGE_SIZE = 4;
+const TELEGRAM_NEWS_AI_BRIEF_LIMIT = 2_400;
 const TELEGRAM_NEWS_INPUT_TTL_MS = 10 * 60 * 1000;
 const TELEGRAM_NEWS_PERIODS = Object.freeze({ "1h": "1 ชั่วโมง", "6h": "6 ชั่วโมง", "1d": "24 ชั่วโมง", "7d": "7 วัน" });
+const TELEGRAM_NEWS_RESULTS_BY_PERIOD = Object.freeze({ "1h": 3, "6h": 5, "1d": 8, "7d": 10 });
 const pendingAnnouncementMessageEdits = new Map();
 const pendingTelegramNewsInputs = new Map();
 // Public Telegram commands have one source of truth. Add each new command here:
@@ -750,11 +752,48 @@ function formatGoogleNewsResults(topic, items, period = "1d") {
   return { text, items: visibleItems };
 }
 
+function telegramNewsResultLimit(period) {
+  return TELEGRAM_NEWS_RESULTS_BY_PERIOD[period] || TELEGRAM_NEWS_RESULTS_BY_PERIOD["1d"];
+}
+
+async function summarizeTelegramNewsTopic(userId, topic, items) {
+  if (!items.length) return null;
+  const claim = await claimGeminiChatUsage(userId);
+  if (claim.status !== "claimed") return null;
+  try {
+    const headlines = items.slice(0, TELEGRAM_NEWS_RESULTS_BY_PERIOD["7d"]).map((item, index) =>
+      `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
+    ).join("\n\n");
+    const payload = await generateContent({
+      systemInstruction: { parts: [{ text: "You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. End with one short sentence beginning with 'สรุป:'." }] },
+      contents: [{
+        role: "user",
+        parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...\nสรุป: ...` }]
+      }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
+    });
+    return telegramFreeAiText(payload).slice(0, TELEGRAM_NEWS_AI_BRIEF_LIMIT);
+  } catch (error) {
+    await releaseGeminiChatUsage(claim).catch(() => {});
+    console.error(`[telegram] AI news brief for "${topic}" failed:`, error.message);
+    return null;
+  }
+}
+
+function formatGoogleNewsBrief(topic, items, period, brief) {
+  if (!brief) return formatGoogleNewsResults(topic, items, period);
+  const periodLabel = TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"];
+  return {
+    text: `📰 ${topic}\nรายงานจากพาดหัวข่าวย้อนหลัง ${periodLabel}\n\n${brief}`,
+    items
+  };
+}
+
 async function sendTelegramNewsDigest(topics, reply, period = "1d", filters = {}) {
   for (const topic of topics) {
     try {
       const items = await searchGoogleNews(topic, {
-        limit: topics.length === 1 ? 5 : 2,
+        limit: topics.length === 1 ? telegramNewsResultLimit(period) : 2,
         period,
         excludeTerms: filters.excludeTerms,
         allowedSources: filters.allowedSources
@@ -885,12 +924,13 @@ async function handleNewsCommandCallback(callbackQuery) {
     await answerTelegramCallback(callbackQuery.id, `กำลังโหลด ${topic}`);
     try {
       const items = await searchGoogleNews(topic, {
-        limit: 5,
+        limit: telegramNewsResultLimit(config.period),
         period: config.period,
         excludeTerms: config.excludeTerms,
         allowedSources: config.allowedSources
       });
-      const result = formatGoogleNewsResults(topic, items, config.period);
+      const brief = await summarizeTelegramNewsTopic(chatOwner, topic, items);
+      const result = formatGoogleNewsBrief(topic, items, config.period, brief);
       await editTelegramMessage(chatId, messageId, result.text, {
         reply_markup: googleNewsArticleKeyboard(result.items, [[
           { text: "← กลับ News Controller", callback_data: "news:panel" },
