@@ -752,8 +752,8 @@ function spaceTelegramNewsBrief(brief) {
   return spaced.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-async function summarizeTelegramNewsTopic(userId, topic, items) {
-  if (!items.length) return null;
+async function summarizeTelegramNewsTopic(userId, topic, items, { includeSummary = true } = {}) {
+  if (!userId || !items.length) return null;
   const claim = await claimGeminiChatUsage(userId);
   if (claim.status !== "claimed") return null;
   try {
@@ -761,10 +761,10 @@ async function summarizeTelegramNewsTopic(userId, topic, items) {
       `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
     ).join("\n\n");
     const payload = await generateContent({
-      systemInstruction: { parts: [{ text: "You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item. End with one short sentence beginning with 'สรุป:' after another standalone middle dot." }] },
+      systemInstruction: { parts: [{ text: `You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " End with one short sentence beginning with 'สรุป:' after another standalone middle dot." : " Do not add a conclusion or overall summary."}` }] },
       contents: [{
         role: "user",
-        parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...\nสรุป: ...` }]
+        parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...${includeSummary ? "\nสรุป: ..." : ""}` }]
       }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
     });
@@ -787,14 +787,15 @@ function formatGoogleNewsBrief(topic, items, period, brief) {
   };
 }
 
-async function sendTelegramNewsDigest(topics, reply, period = "1d") {
+async function sendTelegramNewsDigest(userId, topics, reply, period = "1d", { includeSummary = false } = {}) {
   for (const topic of topics) {
     try {
       const items = await searchGoogleNews(topic, {
         limit: topics.length === 1 ? telegramNewsResultLimit(period) : 2,
         period
       });
-      const result = formatGoogleNewsResults(topic, items, period);
+      const brief = await summarizeTelegramNewsTopic(userId, topic, items, { includeSummary });
+      const result = formatGoogleNewsBrief(topic, items, period, brief);
       await reply(result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
     } catch (error) {
       console.error(`[telegram] Google News topic "${topic}" failed:`, error.message);
@@ -933,7 +934,7 @@ async function handleNewsCommandCallback(callbackQuery) {
       await reply("ยังไม่มีหัวข้อข่าว กด ＋ เพิ่มหัวข้อ ใน News Controller ก่อนครับ");
       return;
     }
-    await sendTelegramNewsDigest(config.topics, reply, config.period);
+    await sendTelegramNewsDigest(chatOwner, config.topics, reply, config.period);
   }
 }
 
@@ -1252,7 +1253,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       if (pendingNewsInput.action === "search") {
         const topic = normalizeTelegramNewsTopics([text])[0];
         const config = await telegramNewsConfig(chatOwner);
-        await sendTelegramNewsDigest(topic ? [topic] : [], reply, config.period);
+        await sendTelegramNewsDigest(chatOwner, topic ? [topic] : [], reply, config.period, { includeSummary: true });
         return res.sendStatus(200);
       }
       if (pendingNewsInput.action === "add") {
@@ -1343,7 +1344,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         await reply(chatOwner ? telegramNewsTopicList(topics) : "ระบุหัวข้อได้โดยตรง เช่น /news_now AI");
         return res.sendStatus(200);
       }
-      await sendTelegramNewsDigest(topics, reply, config.period);
+      await sendTelegramNewsDigest(chatOwner, topics, reply, config.period);
       return res.sendStatus(200);
     }
 
