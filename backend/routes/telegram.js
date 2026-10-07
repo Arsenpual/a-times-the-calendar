@@ -778,9 +778,11 @@ async function summarizeTelegramNewsTopic(userId, topic, items) {
 
 function formatGoogleNewsBrief(topic, items, period, brief) {
   if (!brief) return formatGoogleNewsResults(topic, items, period);
-  const periodLabel = TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"];
+  const label = period === "top"
+    ? "🌐 ข่าวเด่น Google News"
+    : `📰 ${topic}\nรายงานจากพาดหัวข่าวย้อนหลัง ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]}`;
   return {
-    text: `📰 ${topic}\nรายงานจากพาดหัวข่าวย้อนหลัง ${periodLabel}\n\n${brief}`,
+    text: `${label}\n\n${brief}`,
     items
   };
 }
@@ -880,7 +882,8 @@ async function handleNewsCommandCallback(callbackQuery) {
     await answerTelegramCallback(callbackQuery.id, "กำลังโหลดข่าวเด่น");
     try {
       const items = await getGoogleNewsTopStories({ limit: 10 });
-      const result = formatGoogleNewsResults("ข่าวเด่น Google News", items, "top");
+      const brief = await summarizeTelegramNewsTopic(chatOwner, "ข่าวเด่น Google News", items);
+      const result = formatGoogleNewsBrief("ข่าวเด่น Google News", items, "top", brief);
       await editTelegramMessage(chatId, messageId, result.text, {
         reply_markup: googleNewsArticleKeyboard(result.items, [[
           { text: "← กลับ News Controller", callback_data: "news:panel" },
