@@ -605,14 +605,15 @@ function telegramNewsControllerText(config) {
   return "📰 News Controller\n\n" +
     `ช่วงข่าว: ${TELEGRAM_NEWS_PERIODS[config.period]}\n` +
     `หัวข้อที่ติดตาม: ${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT}\n\n` +
+    "🤖 ปุ่มที่มีสัญลักษณ์นี้จะใช้ AI ย่อข่าว\n\n" +
     "เลือกการทำงานจากปุ่มด้านล่าง";
 }
 
 function telegramNewsControllerKeyboard(config) {
   return {
     inline_keyboard: [
-      [{ text: "📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🌐 ข่าวเด่น Google News", callback_data: "news:top" }],
-      [{ text: "🔎 ค้นหาข่าว", callback_data: "news:search" }],
+      [{ text: "🤖 📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🤖 🌐 ข่าวเด่น Google News", callback_data: "news:top" }],
+      [{ text: "🤖 🔎 ค้นหาข่าว", callback_data: "news:search" }],
       [{ text: `🗂 จัดการหัวข้อ (${config.topics.length})`, callback_data: "news:topics:0" }],
       [
         { text: config.period === "1h" ? "✓ 1 ชม." : "1 ชม.", callback_data: "news:period:1h" },
@@ -646,12 +647,12 @@ function telegramNewsTopicsText(config, page) {
   const list = view.topics.length
     ? view.topics.map((topic, index) => `${view.start + index + 1}. ${topic}`).join("\n")
     : "ยังไม่มีหัวข้อข่าว";
-  return `🗂 หัวข้อที่ติดตาม (${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT})\n\n${list}\n\nกดหัวข้อเพื่ออ่านข่าวล่าสุด`;
+  return `🗂 หัวข้อที่ติดตาม (${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT})\n\n${list}\n\nกดหัวข้อ 🤖 เพื่ออ่านรายงานข่าวล่าสุด`;
 }
 
 function telegramNewsTopicsKeyboard(config, page) {
   const view = newsTopicPage(config, page);
-  const topicRows = view.topics.map((topic, index) => [{ text: `🗞 ${topic}`, callback_data: `news:topic:${view.start + index}` }]);
+  const topicRows = view.topics.map((topic, index) => [{ text: `🤖 🗞 ${topic}`, callback_data: `news:topic:${view.start + index}` }]);
   return {
     inline_keyboard: [
       ...topicRows,
@@ -779,8 +780,8 @@ async function summarizeTelegramNewsTopic(userId, topic, items, { includeSummary
 function formatGoogleNewsBrief(topic, items, period, brief) {
   if (!brief) return formatGoogleNewsResults(topic, items, period);
   const label = period === "top"
-    ? "🌐 ข่าวเด่น Google News"
-    : `📰 ${topic}\nรายงานจากพาดหัวข่าวย้อนหลัง ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]}`;
+    ? "🤖 🌐 ข่าวเด่น Google News"
+    : `🤖 📰 ${topic}\nรายงานจากพาดหัวข่าวย้อนหลัง ${TELEGRAM_NEWS_PERIODS[period] || TELEGRAM_NEWS_PERIODS["1d"]}`;
   return {
     text: `${label}\n\n${brief}`,
     items
