@@ -743,8 +743,9 @@ function spaceTelegramNewsBrief(brief) {
   for (const line of lines) {
     const trimmed = line.trim();
     const startsNewsItem = /^\d+[.)]\s+/.test(trimmed);
+    const startsKeyDates = /^📅\s*กำหนดการสำคัญ/.test(trimmed);
     const startsSummary = /^สรุป\s*:/.test(trimmed);
-    if ((startsNewsItem && hasNewsItem) || (startsSummary && hasNewsItem)) {
+    if ((startsNewsItem && hasNewsItem) || (startsKeyDates && hasNewsItem) || (startsSummary && hasNewsItem)) {
       if (spaced[spaced.length - 1] !== "·") spaced.push("", "·", "");
     }
     spaced.push(line);
@@ -762,10 +763,10 @@ async function summarizeTelegramNewsTopic(userId, topic, items, { includeSummary
       `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
     ).join("\n\n");
     const payload = await generateContent({
-      systemInstruction: { parts: [{ text: `You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " End with one short sentence beginning with 'สรุป:' after another standalone middle dot." : " Do not add a conclusion or overall summary."}` }] },
+      systemInstruction: { parts: [{ text: `You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " Before the conclusion, add a section headed '📅 กำหนดการสำคัญ'. List only dates, times, deadlines, hearings, elections, announcements, or scheduled events that are explicitly stated in the supplied material, in the form '• วันที่ — เหตุการณ์'. Write '• ไม่พบกำหนดการที่ระบุชัด' when none are stated. End with one short sentence beginning with 'สรุป:' after another standalone middle dot." : " Do not add a conclusion, key-date section, or overall summary."}` }] },
       contents: [{
         role: "user",
-        parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...${includeSummary ? "\nสรุป: ..." : ""}` }]
+        parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...${includeSummary ? "\n📅 กำหนดการสำคัญ\n• วันที่ — เหตุการณ์\nสรุป: ..." : ""}` }]
       }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
     });
