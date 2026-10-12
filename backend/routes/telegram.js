@@ -9,6 +9,7 @@ const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = requir
 const { searchGoogleNews, getGoogleNewsTopStories } = require("../google-news.js");
 const { createWeatherController } = require("../lib/telegram-weather.js");
 const { buildZettascaleInstruction } = require("../lib/zettascale-persona.js");
+const { telegramFetch } = require("../lib/telegram-fetch.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -326,7 +327,7 @@ async function answerTelegramFreeAi(userId, text) {
 }
 
 async function sendTelegram(chatId, text, options = {}) {
-  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/sendMessage`, {
+  const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text, ...options })
@@ -384,7 +385,7 @@ function announcementInlineKeyboard(config) {
 }
 
 async function answerTelegramCallback(callbackQueryId, text = "") {
-  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/answerCallbackQuery`, {
+  const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ callback_query_id: callbackQueryId, text })
@@ -394,7 +395,7 @@ async function answerTelegramCallback(callbackQueryId, text = "") {
 }
 
 async function editTelegramMessage(chatId, messageId, text, options = {}) {
-  const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/editMessageText`, {
+  const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/editMessageText`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, ...options })
@@ -1005,7 +1006,7 @@ async function registerBotCommands() {
   // same entries to both scopes every time the backend starts.
   const commands = BOT_MENU_COMMANDS.map(({ command, description }) => ({ command, description }));
   const setCommandsForScope = async (scope) => {
-    const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
+    const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/setMyCommands`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ commands, ...(scope ? { scope } : {}) })
@@ -1030,7 +1031,7 @@ async function registerBotCommands() {
     const chats = await query.get();
     for (const chat of chats.docs) {
       if (!/^\d+$/.test(chat.id)) continue;
-      const response = await fetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/deleteMyCommands`, {
+      const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/deleteMyCommands`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: { type: "chat", chat_id: chat.id } })
@@ -1207,13 +1208,13 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
     console.warn(`[telegram] ข้ามการตั้ง webhook และ Bot Command Menu: ไม่พบ ${missing.join(", ")}`);
     return;
   }
-  const identityResponse = await fetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
+  const identityResponse = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
   const identity = await identityResponse.json().catch(() => ({}));
   if (!identityResponse.ok || !identity.ok) {
     throw new Error(`ตรวจ Telegram bot ไม่สำเร็จ: ${identity.description || identityResponse.status}`);
   }
   console.log(`[telegram] ยืนยัน bot @${identity.result?.username || "unknown"} สำเร็จ`);
-  const response = await fetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+  const response = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: `${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`, secret_token: process.env.TELEGRAM_WEBHOOK_SECRET })

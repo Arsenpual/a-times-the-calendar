@@ -15,6 +15,7 @@ const activityNotificationsRouter = require("./routes/activity-notifications.js"
 const calendarAuthRouter = require("./routes/calendar-auth.js");
 const calendarRouter = require("./routes/calendar.js");
 const telegramRouter = require("./routes/telegram.js");
+const { telegramFetch } = require("./lib/telegram-fetch.js");
 const announcementRouter = require("./routes/announcement.js");
 const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
 const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
@@ -229,7 +230,7 @@ app.listen(PORT, () => {
   // during migration, stop Telegram from delivering updates to the removed
   // endpoint. This does not delete its chat history or pending updates.
   if (process.env.TELEGRAM_AI_BOT_TOKEN) {
-    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_AI_BOT_TOKEN}/deleteWebhook`, { method: "POST" })
+    telegramFetch(`https://api.telegram.org/bot${process.env.TELEGRAM_AI_BOT_TOKEN}/deleteWebhook`, { method: "POST" })
       .then(async (response) => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.description || String(response.status));

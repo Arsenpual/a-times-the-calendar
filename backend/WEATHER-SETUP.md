@@ -1,32 +1,117 @@
 # Telegram Weather Controller
 
-## Configure the backend
+คู่มือนี้อธิบายพฤติกรรมตามโค้ดปัจจุบันใน `google-weather.js`, `lib/telegram-weather.js` และ `routes/telegram.js` การมีโค้ดและผลทดสอบจำลองไม่ได้ยืนยันว่าระบบบน Render เชื่อม Google API จริงแล้ว
 
-1. Enable billing, Weather API, and Geocoding API in your Google Cloud project.
-2. Create a server API key restricted to these two APIs. Set appropriate API quotas in Google Cloud.
-3. Set `GOOGLE_WEATHER_API_KEY` in Render's backend environment. Never place the key in frontend configuration or Telegram messages.
-4. For AI advice, retain the existing `GEMINI_API_KEY`, `GEMINI_CHAT_ENABLED`, and `GEMINI_CHAT_DEVELOPER_UIDS` configuration. AI advice uses the existing developer access rules and Gemini quota. Linked accounts without AI access still receive weather data.
-5. Deploy the backend. Startup republishes the shared Bot Menu including `/weather`, `/weather_ask`, and `/weather_cancel`.
+## ภาพรวมการทำงาน
 
-Google documentation:
-- https://developers.google.com/maps/documentation/weather/get-api-key
-- https://developers.google.com/maps/documentation/weather/hourly-forecast
-- https://developers.google.com/maps/documentation/weather/policies
+Telegram → backend ของ T.i.M.E.S. → Google Geocoding / Weather API → Gemini สำหรับคำแนะนำ → Telegram
 
-## Use in Telegram
+- Google Geocoding ใช้แปลงชื่อสถานที่เป็นพิกัด หากผู้ใช้ส่ง GPS จะข้ามขั้นตอนนี้
+- Google Weather ให้ข้อมูลอากาศปัจจุบันและพยากรณ์ ระบบจัดรูปแบบตัวเลขโดยตรง
+- Gemini ให้คำแนะนำและตอบคำถามจากข้อมูลที่ backend ส่งให้ ส่วนนี้ระบุด้วย 🤖 และใช้บุคลิก MR.Zettascale จาก Afterlight
+- การเลือกสถานที่และบันทึกสถานที่โปรดไม่ใช้ AI ส่วนการเรียกรายงานแต่ละครั้งจะพยายามขอคำแนะนำ AI ตามสิทธิ์และโควต้า
+- เมื่อ AI ไม่พร้อมหรือบัญชีไม่มีสิทธิ์ รายงานข้อมูลอากาศยังแสดงได้ พร้อมข้อความแจ้งสถานะ AI
 
-- Connect T.i.M.E.S. with the bot and use its private chat.
-- `/weather` opens the controller. `/weather อำเภอเมือง เชียงใหม่` selects a place directly.
-- Choose ตอนนี้, วันนี้, พรุ่งนี้, or 3 วัน. Today and tomorrow display local-hour forecasts at three-hour intervals; already elapsed hours are unavailable from the forecast endpoint.
-- เปลี่ยนสถานที่ prompts for a specific address. Reply to that prompt, or send a location using Telegram's attachment menu while the location prompt is active. Ambiguous geocoding results require a more specific query.
-- Save up to five favorite locations with your own labels; select and delete them in สถานที่โปรด.
-- Ask AI using the button or `/weather_ask พรุ่งนี้เย็นเหมาะกับวิ่งไหม`. Questions use the selected location and up to 48 hours of hourly data plus three daily forecasts. Dates outside those returned observations are unsupported and must not be invented by AI.
-- `/weather_cancel` closes the session. Ordinary notes are not consumed: textual inputs must reply to the active prompt.
+## ตั้งค่า Google Cloud และ Render
 
-The controller session expires after 30 minutes of inactivity and is reset when the backend restarts. Favorites persist in Firestore. Stored favorites contain user-supplied place queries or user-shared GPS coordinates and labels, not forecast responses or geocoding results. Named favorites are geocoded again when selected. No automatic weather notifications are sent.
+1. เลือก Google Cloud project เปิด billing และเปิดใช้ **Weather API** กับ **Geocoding API**
+2. สร้าง API key สำหรับ backend และจำกัด API ที่ใช้ได้ให้เหลือสองบริการข้างต้น ตั้งโควต้าให้เหมาะกับการใช้งาน
+3. เพิ่ม `GOOGLE_WEATHER_API_KEY` ใน Environment ของบริการ backend บน Render เก็บ key ฝั่งเซิร์ฟเวอร์เท่านั้น
+4. หากทดสอบในเครื่อง ให้เพิ่มค่าใน `backend/.env` และรัน backend จากโฟลเดอร์ `backend`
+5. ใช้ค่าการเชื่อม Telegram และ Firebase เดิม ได้แก่ `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, URL webhook และการเข้าถึง Firestore
+6. Deploy commit ที่มี Weather Controller เมื่อ backend เริ่มทำงานสำเร็จจะลงทะเบียนคำสั่งใน Bot Menu จากรายการกลาง
 
-## Verification
+ไม่ต้องสร้าง Telegram bot ใหม่ และไม่ต้องนำ Weather key ไปแทน `GEMINI_API_KEY` หรือข้อมูลยืนยันตัวตน Firebase
 
-Run `node --test backend/tests/telegram-weather.test.js backend/tests/telegram-menu.test.js` from the repository root. The automated tests use mock Google/Gemini responses and do not consume API quota.
+[วิธีเปิดใช้ Weather API สำหรับ production](https://developers.google.com/maps/documentation/weather/get-api-key) ต้องตั้งบัญชีและ billing; Demo Key เหมาะกับการทดลอง ไม่ใช่ production
 
-After deployment, verify one named location and one shared GPS location, today/tomorrow around the location's midnight, favorite selection/removal, AI advice and unavailable forecast dates, and the no-AI fallback. Live Google/Telegram requests require production credentials and are not verified by the mock tests.
+## สิทธิ์ AI
+
+| Environment | หน้าที่ |
+| --- | --- |
+| `GOOGLE_WEATHER_API_KEY` | ใช้ Weather API และ Geocoding API |
+| `GEMINI_API_KEY` | ใช้ Gemini สำหรับคำแนะนำและคำถาม |
+| `GEMINI_MODEL` | เลือกโมเดลตามการตั้งค่า Gemini เดิม |
+| `GEMINI_CHAT_ENABLED=true` | เปิดสิทธิ์ใช้งาน AI ในระดับระบบ |
+| `GEMINI_CHAT_DEVELOPER_UIDS` | Firebase UID ที่ได้รับสิทธิ์ AI คั่นหลายบัญชีด้วยจุลภาค |
+
+Weather Controller ต้องใช้ในแชทส่วนตัวและเชื่อมบัญชี T.i.M.E.S. ก่อน ข้อมูลอากาศใช้ได้สำหรับบัญชีที่เชื่อมแล้ว ส่วน AI จำกัดตาม developer UID และใช้โควต้า Gemini ร่วมกับระบบเดิม
+
+ไม่ต้องเปิด `/ai on` เพื่อใช้คำแนะนำอากาศหรือ `/weather_ask` และการปิด `/ai off` ไม่ปิด AI ของ Weather Controller เพราะคำสั่งอากาศมีเส้นทางแยกจากแชทอิสระ ตัวแปร `TELEGRAM_FREE_AI_ALLOWED_CHAT_IDS` ใช้กับแชทอิสระ ไม่ใช่เงื่อนไขสิทธิ์ Weather Controller
+
+บุคลิกอากาศใช้ `lib/zettascale-persona.js` ส่วน `TELEGRAM_FREE_AI_SYSTEM_INSTRUCTION` ปรับน้ำเสียงเพิ่มเติมเฉพาะแชทอิสระ
+
+## ใช้งานใน Telegram
+
+| คำสั่ง / ปุ่ม | การทำงาน |
+| --- | --- |
+| `/weather` | เปิด Weather Controller |
+| `/weather อำเภอเมือง เชียงใหม่` | เลือกสถานที่และแสดงรายงานทันที |
+| ตอนนี้ | อุณหภูมิ ความรู้สึกเหมือน โอกาสฝน ความชื้น และลม |
+| วันนี้ / พรุ่งนี้ | แสดงตัวอย่างข้อมูลรายชั่วโมงทุก 3 ชั่วโมงตามวันและเขตเวลาของสถานที่ |
+| 3 วัน | พยากรณ์รายวันสูงสุด 3 วัน เริ่มจากวันนี้ แยกกลางวันและกลางคืน |
+| เปลี่ยนสถานที่ | ให้ตอบชื่อสถานที่กลับไปยังข้อความที่บอตถาม หรือส่งพิกัดจากเมนูแนบขณะขั้นตอนนี้เปิดอยู่ |
+| บันทึกสถานที่ | ตั้งชื่อสถานที่โปรด เช่น บ้าน หรือที่ทำงาน |
+| สถานที่โปรด | เลือกสถานที่ที่บันทึกไว้ หรือกด − เพื่อลบ |
+| 🤖 ถามเรื่องอากาศ | ให้ตอบคำถามกลับไปยังข้อความที่บอตถาม |
+| `/weather_ask พรุ่งนี้เย็นเหมาะกับวิ่งไหม` | ถาม AI โดยใช้สถานที่ที่เลือกอยู่ |
+| อัปเดต | ดึงข้อมูลใหม่และขอคำแนะนำ AI อีกครั้ง |
+| `/weather_cancel` / ปิด | ยกเลิกขั้นตอนและล้างสถานที่ที่เลือกใน session |
+
+ต้องเลือกสถานที่ก่อนถาม AI หากใช้ `/weather_ask` ขณะยังไม่มีสถานที่ บอตจะขอสถานที่ก่อน หลังเลือกแล้วให้ถามคำถามอีกครั้ง
+
+เมื่อรับชื่อสถานที่จาก Google ระบบแสดงที่อยู่ที่ค้นพบ หากพบหลายผลลัพธ์หรือผลลัพธ์ไม่ตรงครบถ้วน จะขอให้ระบุสถานที่เจาะจงขึ้นหรือส่ง GPS การส่งพิกัดขณะที่ไม่ได้อยู่ในขั้นตอนเลือกสถานที่จะไม่เรียกพยากรณ์อัตโนมัติ
+
+สถานที่โปรดบันทึกได้สูงสุด 5 แห่ง ชื่อยาวสูงสุด 40 ตัวอักษร การใช้ชื่อเดิมตรงกันทุกตัวอักษรจะอัปเดตสถานที่ของชื่อนั้นแทนการเพิ่มรายการ
+
+## ขอบเขตข้อมูลและคำตอบ
+
+ระบบดึงข้อมูลรายวัน 3 วัน ส่วนวันนี้ พรุ่งนี้ และคำถาม AI จะดึงรายชั่วโมงสูงสุด 48 ชั่วโมง โดยอ่านหน้าข้อมูลต่อเมื่อ Google ส่ง page token มา
+
+[Google รองรับพยากรณ์รายชั่วโมงสูงสุด 240 ชั่วโมง](https://developers.google.com/maps/documentation/weather/hourly-forecast) แต่โค้ดรอบนี้ใช้เพียง 48 ชั่วโมง ไม่ได้เปิดช่วง 10 วันในแผง
+
+- วันนี้แสดงเฉพาะชั่วโมงที่ forecast endpoint ส่งกลับมา ซึ่งเริ่มจากชั่วโมงปัจจุบัน ไม่ครอบคลุมชั่วโมงที่ผ่านไปแล้ว
+- รายการทุก 3 ชั่วโมงเป็นการเลือกตัวอย่างรายชั่วโมง ไม่ใช่ค่าเฉลี่ยหรือโอกาสฝนรวมของช่วง 3 ชั่วโมง
+- คำแนะนำอัตโนมัติอิงข้อมูลที่แสดงในโหมดที่เลือก ส่วนคำถามผ่านปุ่มหรือ `/weather_ask` จะส่งข้อมูลปัจจุบัน รายวัน และรายชั่วโมงที่ดึงได้ให้ AI
+- หากช่วงที่ถามไม่มีข้อมูล AI ถูกกำหนดให้บอกว่ายังไม่มีพยากรณ์ ห้ามสร้างตัวเลข วันที่ หรือประกาศเตือนเอง
+- หัวรายงานแสดงเวลา `currentTime` จาก Google; หากไม่มี ใช้เวลาที่ backend ดึงข้อมูลสำเร็จ เขตเวลาใช้ค่าจาก Google และสำรองเป็น Asia/Bangkok หากไม่มี
+- ไม่มีการแจ้งเตือนอากาศอัตโนมัติ และยังไม่เชื่อมสร้างกิจกรรมลงปฏิทิน
+
+## Session และการเก็บข้อมูล
+
+Session อยู่ในหน่วยความจำของ backend หมดอายุหลังไม่มีการใช้งาน Controller 30 นาที และหายเมื่อ backend restart/deploy การเปิดแผงเก่าหลังหมดอายุอาจต้องเลือกสถานที่ใหม่ Session ไม่แชร์ระหว่างหลาย instance
+
+สถานที่โปรดอยู่ใน Firestore ที่ `telegramAuthDoc(userId).telegramWeatherFavorites` เก็บชื่อที่ผู้ใช้ตั้งและคำค้นสถานที่หรือ GPS ที่ผู้ใช้ส่ง สถานที่แบบชื่อจะถูกค้นหาพิกัดใหม่เมื่อเลือกใช้งาน ไม่เก็บผล geocoding หรือ JSON พยากรณ์เป็นฐานข้อมูลเฉพาะ
+
+**ข้อความรายงานและคำแนะนำที่ส่งออกยังถูกเก็บในประวัติข้อความ Telegram ของ T.i.M.E.S. ผ่าน `sendChatReply`** รวมถึงคำสั่งและคำตอบข้อความที่ผู้ใช้ส่งเข้ามา จึงไม่ควรตีความว่าผลพยากรณ์ไม่มีการเก็บเลย
+
+ข้อความทั่วไปจะไม่ถูก Weather Controller รับเป็นคำตอบ เว้นแต่ผู้ใช้ตอบกลับข้อความถามที่ยังเปิดอยู่ คำสั่งอื่นยกเลิกการรอข้อความของอากาศ อย่างไรก็ตาม หากเปิดแชทอิสระด้วย `/ai on` ข้อความทั่วไปยังอาจได้รับคำตอบจากแชท AI ตามโหมดนั้น
+
+## แหล่งข้อมูลและ attribution
+
+รายงานแสดง `Google Maps` และ `Source: Includes weather data from Google` แยกจากส่วน 🤖 อ้างอิง [ข้อกำหนด attribution ของ Weather API](https://developers.google.com/maps/documentation/weather/policies)
+
+## ตรวจสอบและแก้ปัญหา
+
+จากโฟลเดอร์รากของ repository รัน:
+
+```powershell
+node --test backend/tests/telegram-weather.test.js backend/tests/telegram-menu.test.js backend/tests/zettascale-persona.test.js
+```
+
+ชุดทดสอบใช้ข้อมูลจำลองของ Google/Gemini และไม่ใช้โควต้า API จริง ครอบคลุมการเลือกช่วงเวลา เขตเวลา สถานที่โปรด สิทธิ์ AI การตอบกลับ prompt และบุคลิกใน prompt แต่ไม่ยืนยันคุณภาพคำตอบจริงของโมเดลหรือการตั้งค่าบน Render
+
+หลัง deploy ให้ตรวจสถานที่แบบชื่อและ GPS, วันนี้/พรุ่งนี้ใกล้เที่ยงคืน, บันทึก/เลือก/ลบสถานที่โปรด, คำถามวันที่ไม่มีพยากรณ์ และกรณี AI ไม่พร้อม
+
+| อาการ | จุดที่ควรตรวจ |
+| --- | --- |
+| ไม่พบ `GOOGLE_WEATHER_API_KEY` | ตั้ง Environment ในบริการ backend ที่รันจริงแล้ว restart/deploy |
+| Geocoding ไม่พร้อม / REQUEST_DENIED | ตรวจการเปิด Geocoding API, billing และข้อจำกัด API key |
+| Weather API ตอบ 403 | ตรวจการเปิด Weather API, billing และสิทธิ์ API key |
+| Weather API ตอบ 429 | ตรวจโควต้าใน Google Cloud และรอเรียกใหม่ |
+| พบสถานที่ไม่ชัดเจน | เพิ่มอำเภอ จังหวัด หรือส่ง GPS |
+| มีรายงานแต่ไม่มีคำแนะนำ AI | ตรวจ Gemini key, `GEMINI_CHAT_ENABLED`, developer Firebase UID และโควต้า Gemini |
+| ไม่เห็นคำสั่งใน Bot Menu | ตรวจ commit ที่ deploy และ log การลงทะเบียน Bot Command Menu; ลองพิมพ์คำสั่งตรง ๆ |
+| แผงเก่าจำสถานที่ไม่ได้ | Session อาจหมดอายุหรือ backend เพิ่ง restart; เปิด `/weather` และเลือกสถานที่ใหม่ |
+
+ทุกครั้งที่เรียกรายงานหรือกดอัปเดตมีการดึงข้อมูล Google ใหม่ โหมดตอนนี้และ 3 วันเรียก current/daily ส่วนวันนี้ พรุ่งนี้ และคำถามเพิ่ม hourly และอาจมีหลายหน้า โควต้า Gemini ไม่ได้จำกัดจำนวนการเรียก Weather API ต้องตั้งโควต้า Google แยกกัน
