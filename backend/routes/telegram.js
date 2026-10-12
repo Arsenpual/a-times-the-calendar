@@ -7,7 +7,7 @@ const { answerTimesQuestion } = require("../skills/activity-creation/times-knowl
 const { generateContent } = require("../gemini-api.js");
 const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = require("../gemini-chat.js");
 const { searchGoogleNews, getGoogleNewsTopStories } = require("../google-news.js");
-const { findGoogleWeatherLocation, lookupGoogleWeather, coordinates } = require("../google-weather.js");
+const { createWeatherController } = require("../lib/telegram-weather.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -28,6 +28,10 @@ const TELEGRAM_NEWS_PERIODS = Object.freeze({ "1h": "1 ชั่วโมง", "
 const TELEGRAM_NEWS_RESULTS_BY_PERIOD = Object.freeze({ "1h": 3, "6h": 5, "1d": 8, "7d": 10 });
 const pendingAnnouncementMessageEdits = new Map();
 const pendingTelegramNewsInputs = new Map();
+const weatherController = createWeatherController({
+  authDoc: telegramAuthDoc, claimUsage: claimGeminiChatUsage, releaseUsage: releaseGeminiChatUsage,
+  generate: generateContent, aiText: telegramFreeAiText, quotaText: freeAiQuotaReply
+});
 // Public Telegram commands have one source of truth. Add each new command here:
 // its entry is then published to Bot Menu and appears in /cmd automatically.
 const BOT_MENU_COMMANDS = Object.freeze([
@@ -51,6 +55,8 @@ const BOT_MENU_COMMANDS = Object.freeze([
   { command: "news_list", description: "ดูหัวข้อข่าว", help: "ดูหัวข้อข่าวที่ติดตาม" },
   { command: "news_now", description: "อ่านข่าวล่าสุด", help: "อ่านข่าวล่าสุดจากหัวข้อที่ติดตาม" },
   { command: "weather", description: "พยากรณ์อากาศด้วย Google", help: "พิมพ์ /weather กรุงเทพฯ หรือส่งตำแหน่งปัจจุบัน" },
+  { command: "weather_ask", description: "ถาม AI เรื่องอากาศ", help: "ถามอากาศของสถานที่ที่เลือก เช่น /weather_ask พรุ่งนี้เย็นเหมาะกับวิ่งไหม" },
+  { command: "weather_cancel", description: "ปิดแผงพยากรณ์อากาศ", help: "ยกเลิกขั้นตอนและปิด Weather Controller" },
   { command: "announce", description: "ตั้งค่า announcement-ticker", help: "เปิดแผงตั้งค่า announcement-ticker (ผู้ดูแล)" }
 ]);
 const COMMAND_HELP_TEXT =
@@ -808,71 +814,6 @@ async function sendTelegramNewsDigest(userId, topics, reply, period = "1d", { in
   }
 }
 
-function weatherDegrees(value) {
-  const degrees = Number(value?.degrees);
-  return Number.isFinite(degrees) ? `${Math.round(degrees)}°C` : "ไม่ระบุ";
-}
-
-function weatherPercent(value) {
-  const percent = Number(value?.percent ?? value);
-  return Number.isFinite(percent) ? `${Math.round(percent)}%` : "ไม่ระบุ";
-}
-
-function weatherDescription(condition) {
-  return condition?.description?.text || "สภาพอากาศไม่ระบุ";
-}
-
-function weatherDayLabel(day) {
-  const date = day?.displayDate;
-  if (!date?.year || !date?.month || !date?.day) return "วันถัดไป";
-  return new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short" })
-    .format(new Date(Date.UTC(date.year, date.month - 1, date.day)));
-}
-
-function formatGoogleWeatherReport(weather, advice = null) {
-  const current = weather.current || {};
-  const forecast = weather.daily.slice(0, 3).map((day) => {
-    const part = day.daytimeForecast || day.nighttimeForecast || {};
-    const rain = part.precipitation?.probability || day.precipitation?.probability;
-    return `• ${weatherDayLabel(day)} — ${weatherDescription(part.weatherCondition)} · ${weatherDegrees(day.minTemperature)}–${weatherDegrees(day.maxTemperature)} · ฝน ${weatherPercent(rain)}`;
-  });
-  const rain = current.precipitation?.probability;
-  return `☁️ พยากรณ์อากาศ Google Weather\n📍 ${weather.location.name}\n\n` +
-    `ตอนนี้: ${weatherDescription(current.weatherCondition)} · ${weatherDegrees(current.temperature)} (รู้สึกเหมือน ${weatherDegrees(current.feelsLikeTemperature)})\n` +
-    `ความชื้น ${weatherPercent(current.relativeHumidity)} · โอกาสฝน ${weatherPercent(rain)}\n\n` +
-    `📅 พยากรณ์ 3 วัน\n${forecast.length ? forecast.join("\n") : "ไม่มีข้อมูลพยากรณ์รายวัน"}` +
-    (advice ? `\n\n🤖 คำแนะนำ: ${advice}` : "") +
-    "\n\nข้อมูลจาก Google Weather";
-}
-
-async function summarizeGoogleWeather(userId, weather) {
-  if (!userId) return null;
-  const claim = await claimGeminiChatUsage(userId);
-  if (claim.status !== "claimed") return null;
-  try {
-    const current = weather.current || {};
-    const forecast = weather.daily.slice(0, 3).map((day) => {
-      const part = day.daytimeForecast || day.nighttimeForecast || {};
-      return `${weatherDayLabel(day)}: ${weatherDescription(part.weatherCondition)}, ${weatherDegrees(day.minTemperature)}–${weatherDegrees(day.maxTemperature)}, ฝน ${weatherPercent(part.precipitation?.probability || day.precipitation?.probability)}`;
-    }).join("\n");
-    const payload = await generateContent({
-      systemInstruction: { parts: [{ text: "You are MR.Zettascale. Give exactly one concise Thai practical weather recommendation using only the supplied weather measurements. Do not invent weather facts, warnings, locations, or dates. Do not repeat the raw forecast." }] },
-      contents: [{ role: "user", parts: [{ text: `สถานที่: ${weather.location.name}\nตอนนี้: ${weatherDescription(current.weatherCondition)}, ${weatherDegrees(current.temperature)}, ฝน ${weatherPercent(current.precipitation?.probability)}\nพยากรณ์:\n${forecast}` }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 100 }
-    });
-    return telegramFreeAiText(payload).replace(/\s+/g, " ").slice(0, 300);
-  } catch (error) {
-    await releaseGeminiChatUsage(claim).catch(() => {});
-    console.error("[telegram] AI weather summary failed:", error.message);
-    return null;
-  }
-}
-
-async function sendGoogleWeather(userId, reply, location) {
-  const weather = await lookupGoogleWeather(location);
-  const advice = await summarizeGoogleWeather(userId, weather);
-  await reply(formatGoogleWeatherReport(weather, advice));
-}
 
 async function handleNewsCommandCallback(callbackQuery) {
   const chatId = callbackQuery.message?.chat?.id;
@@ -1286,6 +1227,20 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
   if (req.get("X-Telegram-Bot-Api-Secret-Token") !== process.env.TELEGRAM_WEBHOOK_SECRET) return res.sendStatus(401);
   try {
     const callbackQuery = req.body?.callback_query;
+    if (callbackQuery?.data?.startsWith("weather:")) {
+      const chatId = callbackQuery.message?.chat?.id;
+      await answerTelegramCallback(callbackQuery.id);
+      if (!chatId) return res.sendStatus(200);
+      const userId = (await telegramChatOwnerDoc(chatId).get()).data()?.userId || null;
+      pendingTelegramNewsInputs.delete(String(chatId));
+      pendingAnnouncementMessageEdits.delete(String(chatId));
+      await weatherController.handle({
+        chatId, userId, privateChat: callbackQuery.message.chat.type === "private",
+        action: callbackQuery.data.slice("weather:".length),
+        reply: (text, options) => userId ? sendChatReply(userId, chatId, text, options) : sendTelegram(chatId, text, options)
+      });
+      return res.sendStatus(200);
+    }
     if (callbackQuery?.data?.startsWith("announce:")) {
       await handleAnnouncementCallback(callbackQuery);
       return res.sendStatus(200);
@@ -1312,14 +1267,14 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       ? sendChatReply(chatOwner, chatId, replyText, options)
       : sendTelegram(chatId, replyText, options);
 
-    if (message?.location) {
-      try {
-        const location = { name: "ตำแหน่งปัจจุบัน", ...coordinates(message.location.latitude, message.location.longitude) };
-        await sendGoogleWeather(chatOwner, reply, location);
-      } catch (error) {
-        console.error("[telegram] Google Weather location lookup failed:", error.message);
-        await reply(`ตอนนี้ดึงพยากรณ์อากาศไม่สำเร็จ: ${error.message}`);
-      }
+    if (/^\/weather(?:_ask|_cancel)?(?:@\w+)?(?:\s|$)/i.test(text)) {
+      pendingTelegramNewsInputs.delete(String(chatId));
+      pendingAnnouncementMessageEdits.delete(String(chatId));
+    }
+    if (await weatherController.handle({
+      chatId, userId: chatOwner, privateChat: message.chat.type === "private",
+      text, location: message.location, replyTo: message.reply_to_message?.message_id, reply
+    })) {
       return res.sendStatus(200);
     }
 
@@ -1359,27 +1314,6 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       return res.sendStatus(200);
     }
 
-    const weatherMatch = text.match(/^\/weather(?:@\w+)?(?:\s+([\s\S]+))?$/i);
-    if (weatherMatch) {
-      const place = String(weatherMatch[1] || "").trim();
-      if (!place) {
-        await reply("☁️ พิมพ์ /weather ตามด้วยสถานที่ เช่น /weather เชียงใหม่\nหรือกดปุ่มด้านล่างเพื่อส่งตำแหน่งปัจจุบัน", {
-          reply_markup: {
-            keyboard: [[{ text: "📍 ส่งตำแหน่งปัจจุบัน", request_location: true }]],
-            resize_keyboard: true,
-            one_time_keyboard: true
-          }
-        });
-        return res.sendStatus(200);
-      }
-      try {
-        await sendGoogleWeather(chatOwner, reply, await findGoogleWeatherLocation(place));
-      } catch (error) {
-        console.error(`[telegram] Google Weather lookup for "${place}" failed:`, error.message);
-        await reply(`ตอนนี้ดึงพยากรณ์อากาศของ “${place}” ไม่สำเร็จ: ${error.message}`);
-      }
-      return res.sendStatus(200);
-    }
 
     if (/^\/news(?:@\w+)?$/i.test(text)) {
       if (!chatOwner) {

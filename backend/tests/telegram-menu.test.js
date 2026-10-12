@@ -71,6 +71,9 @@ test("legacy chat menu is removed so the current command menu becomes effective"
       { command: "news_remove", description: "ลบหัวข้อข่าว" },
       { command: "news_list", description: "ดูหัวข้อข่าว" },
       { command: "news_now", description: "อ่านข่าวล่าสุด" },
+      { command: "weather", description: "พยากรณ์อากาศด้วย Google" },
+      { command: "weather_ask", description: "ถาม AI เรื่องอากาศ" },
+      { command: "weather_cancel", description: "ปิดแผงพยากรณ์อากาศ" },
       { command: "announce", description: "ตั้งค่า announcement-ticker" }
     ]);
   }
