@@ -75,6 +75,8 @@ test("forecast mode and questions request hourly data; AI receives location and 
   assert.equal(supplied.question, "เดือนหน้าเหมาะกับวิ่งไหม");
   assert.equal(supplied.weather.hourly.length, 2);
   assert.match(payload.systemInstruction.parts[0].text, /no forecast is available/);
+  assert.match(payload.systemInstruction.parts[0].text, /THE AFTERLIGHT UNIVERSE/);
+  assert.match(payload.systemInstruction.parts[0].text, /Reporting mode/);
 });
 
 test("favorites store user query, not weather or Google geocoded coordinates; selection and deletion work", async () => {

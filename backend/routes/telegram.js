@@ -8,6 +8,7 @@ const { generateContent } = require("../gemini-api.js");
 const { claimGeminiChatUsage, releaseGeminiChatUsage, isDeveloperUser } = require("../gemini-chat.js");
 const { searchGoogleNews, getGoogleNewsTopStories } = require("../google-news.js");
 const { createWeatherController } = require("../lib/telegram-weather.js");
+const { buildZettascaleInstruction } = require("../lib/zettascale-persona.js");
 
 const router = express.Router();
 const BOT_API = "https://api.telegram.org";
@@ -283,9 +284,10 @@ function telegramFreeAiText(payload) {
 }
 
 function telegramFreeAiSystemInstruction() {
-  // Deployments can override the voice without changing the conversation flow.
-  return String(process.env.TELEGRAM_FREE_AI_SYSTEM_INSTRUCTION ||
-    "You are MR.Zettascale, a calm, thoughtful, and practical conversational assistant for T.i.M.E.S. Speak naturally and answer general questions freely, with clear reasoning and useful detail when requested. You may discuss any topic, not only T.i.M.E.S. When a question concerns T.i.M.E.S. but you have not been given verified project details, say so plainly instead of inventing product behavior. Do not claim to control T.i.M.E.S. or perform actions unless the user explicitly asks and the capability is available.");
+  return buildZettascaleInstruction(
+    "Answer general questions freely with clear reasoning and useful detail when requested. You may discuss any topic, not only T.i.M.E.S. For questions about T.i.M.E.S., use only verified product details supplied in context; otherwise say what is unknown. Do not claim to control T.i.M.E.S. or perform actions unless explicitly requested and the capability is available.",
+    { customInstruction: String(process.env.TELEGRAM_FREE_AI_SYSTEM_INSTRUCTION || "") }
+  );
 }
 
 function freeAiQuotaReply(status) {
@@ -771,7 +773,7 @@ async function summarizeTelegramNewsTopic(userId, topic, items, { includeSummary
       `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
     ).join("\n\n");
     const payload = await generateContent({
-      systemInstruction: { parts: [{ text: `You are MR.Zettascale. Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " Return every block in this exact order: numbered news items; a standalone middle dot; the heading '📅 กำหนดการสำคัญ'; key dates; a standalone middle dot; one sentence beginning with 'สรุป:'. List every date, time, deadline, hearing, election, announcement, or scheduled event explicitly stated in the supplied material, whether it is past, current, or upcoming, in the form '• วันที่ — เหตุการณ์'. Write '• ไม่พบกำหนดการที่ระบุชัด' when none are stated." : " Do not add a conclusion, key-date section, or overall summary."}` }] },
+      systemInstruction: { parts: [{ text: buildZettascaleInstruction(`Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " Return every block in this exact order: numbered news items; a standalone middle dot; the heading '📅 กำหนดการสำคัญ'; key dates; a standalone middle dot; one sentence beginning with 'สรุป:'. List every date, time, deadline, hearing, election, announcement, or scheduled event explicitly stated in the supplied material, whether it is past, current, or upcoming, in the form '• วันที่ — เหตุการณ์'. Write '• ไม่พบกำหนดการที่ระบุชัด' when none are stated." : " Do not add a conclusion, key-date section, or overall summary."}`, { reporting: true }) }] },
       contents: [{
         role: "user",
         parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...${includeSummary ? "\n📅 กำหนดการสำคัญ\n• วันที่ — เหตุการณ์\nสรุป: ..." : ""}` }]
