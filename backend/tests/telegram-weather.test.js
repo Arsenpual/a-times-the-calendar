@@ -154,6 +154,18 @@ test("Google hourly transport follows pagination, rejects invalid coordinates an
     assert.throws(() => coordinates(null, 1), /ไม่ถูกต้อง/);
     assert.throws(() => coordinates(91, 1), /ไม่ถูกต้อง/);
     await assert.rejects(findGoogleWeatherLocation("เมือง"), /ไม่ชัดเจน/);
+    global.fetch = async () => ({ ok: true, json: async () => ({ status: "REQUEST_DENIED", error_message: "API not authorized for dummy-weather-key" }) });
+    await assert.rejects(findGoogleWeatherLocation("เชียงใหม่"), error => {
+      assert.match(error.message, /REQUEST_DENIED.*API not authorized/);
+      assert.doesNotMatch(error.message, /dummy-weather-key/);
+      return true;
+    });
+    global.fetch = async () => ({ ok: false, status: 403, json: async () => ({ error: { message: "API disabled for dummy-weather-key" } }) });
+    await assert.rejects(lookupGoogleWeather({ latitude: 1, longitude: 2 }), error => {
+      assert.match(error.message, /403.*API disabled/);
+      assert.doesNotMatch(error.message, /dummy-weather-key/);
+      return true;
+    });
     global.fetch = async () => { throw new Error("https://weather.googleapis.com/?key=dummy-weather-key"); };
     await assert.rejects(lookupGoogleWeather({ latitude: 1, longitude: 2 }), error => !error.message.includes("dummy-weather-key"));
   } finally {

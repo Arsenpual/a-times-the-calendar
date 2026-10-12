@@ -7,6 +7,13 @@ function weatherApiKey() {
   return key;
 }
 
+function googleErrorDetail(payload) {
+  let detail = String(payload?.error_message || payload?.error?.message || "");
+  const key = String(process.env.GOOGLE_WEATHER_API_KEY || "").trim();
+  if (key) detail = detail.split(key).join("[redacted]");
+  return detail.replace(/([?&]key=)[^\s&]+/gi, "$1[redacted]").replace(/\s+/g, " ").slice(0, 400);
+}
+
 async function googleJson(url, label) {
   let response;
   try {
@@ -15,7 +22,10 @@ async function googleJson(url, label) {
     throw new Error(`เชื่อมต่อ ${label} ไม่สำเร็จ กรุณาลองใหม่ภายหลัง`);
   }
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${label} ตอบ ${response.status}`);
+  if (!response.ok) {
+    const detail = googleErrorDetail(payload);
+    throw new Error(`${label} ตอบ ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
   if (!payload || typeof payload !== "object") throw new Error(`${label} ส่งข้อมูลที่อ่านไม่ได้`);
   return payload;
 }
@@ -37,7 +47,10 @@ async function findGoogleWeatherLocation(query) {
   const payload = await googleJson(`${GEOCODING_API_URL}?${params}`, "Google Geocoding API");
   const result = payload?.results?.[0];
   if (payload?.status === "ZERO_RESULTS") throw new Error("ไม่พบสถานที่นี้จาก Google Maps");
-  if (payload?.status !== "OK" || !result?.geometry?.location) throw new Error(`Google Geocoding API ไม่พร้อม (${payload?.status || "UNKNOWN"}) ตรวจการเปิดใช้ API และสิทธิ์ API key`);
+  if (payload?.status !== "OK" || !result?.geometry?.location) {
+    const detail = googleErrorDetail(payload);
+    throw new Error(`Google Geocoding API ไม่พร้อม (${payload?.status || "UNKNOWN"}): ${detail || "ตรวจการเปิดใช้ API, billing และสิทธิ์ API key"}`);
+  }
   if (payload.results.length > 1 || result.partial_match) throw new Error("พบสถานที่ไม่ชัดเจน กรุณาระบุอำเภอ จังหวัด หรือส่งพิกัด");
   return {
     name: result.formatted_address || address,
