@@ -1,5 +1,5 @@
 const WEATHER_API_BASE = "https://weather.googleapis.com/v1";
-const GEOCODING_API_URL = "https://maps.googleapis.com/maps/api/geocode/json";
+const GEOCODING_API_URL = "https://geocode.googleapis.com/v4/geocode/address";
 
 function weatherApiKey() {
   const key = String(process.env.GOOGLE_WEATHER_API_KEY || "").trim();
@@ -14,10 +14,10 @@ function googleErrorDetail(payload) {
   return detail.replace(/([?&]key=)[^\s&]+/gi, "$1[redacted]").replace(/\s+/g, " ").slice(0, 400);
 }
 
-async function googleJson(url, label) {
+async function googleJson(url, label, options = {}) {
   let response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    response = await fetch(url, { ...options, signal: AbortSignal.timeout(20_000) });
   } catch {
     throw new Error(`เชื่อมต่อ ${label} ไม่สำเร็จ กรุณาลองใหม่ภายหลัง`);
   }
@@ -43,18 +43,18 @@ function coordinates(latitude, longitude) {
 async function findGoogleWeatherLocation(query) {
   const address = String(query || "").trim();
   if (!address) throw new Error("ระบุสถานที่ที่ต้องการพยากรณ์อากาศก่อนครับ");
-  const params = new URLSearchParams({ address, language: "th", key: weatherApiKey() });
-  const payload = await googleJson(`${GEOCODING_API_URL}?${params}`, "Google Geocoding API");
+  // Maps Demo Keys support v4, not the legacy /maps/api/geocode/json endpoint.
+  const params = new URLSearchParams({ languageCode: "th" });
+  const payload = await googleJson(`${GEOCODING_API_URL}/${encodeURIComponent(address)}?${params}`, "Google Geocoding API v4", {
+    headers: { "X-Goog-Api-Key": weatherApiKey(), "X-Goog-FieldMask": "results.location,results.formattedAddress" }
+  });
   const result = payload?.results?.[0];
-  if (payload?.status === "ZERO_RESULTS") throw new Error("ไม่พบสถานที่นี้จาก Google Maps");
-  if (payload?.status !== "OK" || !result?.geometry?.location) {
-    const detail = googleErrorDetail(payload);
-    throw new Error(`Google Geocoding API ไม่พร้อม (${payload?.status || "UNKNOWN"}): ${detail || "ตรวจการเปิดใช้ API, billing และสิทธิ์ API key"}`);
-  }
-  if (payload.results.length > 1 || result.partial_match) throw new Error("พบสถานที่ไม่ชัดเจน กรุณาระบุอำเภอ จังหวัด หรือส่งพิกัด");
+  if (!result) throw new Error("ไม่พบสถานที่นี้จาก Google Maps");
+  if (!result.location) throw new Error("Google Geocoding API v4 ส่งพิกัดที่อ่านไม่ได้");
+  if (payload.results.length > 1) throw new Error("พบสถานที่ไม่ชัดเจน กรุณาระบุอำเภอ จังหวัด หรือส่งพิกัด");
   return {
-    name: result.formatted_address || address,
-    ...coordinates(result.geometry.location.lat, result.geometry.location.lng)
+    name: result.formattedAddress || address,
+    ...coordinates(result.location.latitude, result.location.longitude)
   };
 }
 

@@ -145,7 +145,7 @@ test("Google hourly transport follows pagination, rejects invalid coordinates an
       calls.push(parsed);
       let value = {};
       if (parsed.pathname.includes("forecast/hours")) value = parsed.searchParams.has("pageToken") ? { forecastHours: [{ second: true }] } : { forecastHours: [{ first: true }], nextPageToken: "next" };
-      if (parsed.pathname.includes("geocode")) value = { status: "OK", results: [1, 2].map(() => ({ geometry: { location: { lat: 1, lng: 2 } } })) };
+      if (parsed.pathname.includes("geocode")) value = { results: [1, 2].map(() => ({ location: { latitude: 1, longitude: 2 } })) };
       return { ok: true, json: async () => value };
     };
     const weather = await lookupGoogleWeather({ name: "GPS", latitude: 1, longitude: 2 }, { hours: 48 });
@@ -154,9 +154,24 @@ test("Google hourly transport follows pagination, rejects invalid coordinates an
     assert.throws(() => coordinates(null, 1), /ไม่ถูกต้อง/);
     assert.throws(() => coordinates(91, 1), /ไม่ถูกต้อง/);
     await assert.rejects(findGoogleWeatherLocation("เมือง"), /ไม่ชัดเจน/);
-    global.fetch = async () => ({ ok: true, json: async () => ({ status: "REQUEST_DENIED", error_message: "API not authorized for dummy-weather-key" }) });
+    global.fetch = async (url, options) => {
+      const parsed = new URL(url);
+      assert.equal(parsed.origin, "https://geocode.googleapis.com");
+      assert.equal(decodeURIComponent(parsed.pathname), "/v4/geocode/address/7/1 เชียงใหม่ + #1");
+      assert.equal(parsed.searchParams.get("languageCode"), "th");
+      assert.equal(parsed.searchParams.has("key"), false);
+      assert.equal(options.headers["X-Goog-Api-Key"], "dummy-weather-key");
+      assert.equal(options.headers["X-Goog-FieldMask"], "results.location,results.formattedAddress");
+      return { ok: true, json: async () => ({ results: [{ formattedAddress: "เชียงใหม่ ประเทศไทย", location: { latitude: 18.8, longitude: 99 } }] }) };
+    };
+    assert.deepEqual(await findGoogleWeatherLocation("7/1 เชียงใหม่ + #1"), { name: "เชียงใหม่ ประเทศไทย", latitude: 18.8, longitude: 99 });
+    global.fetch = async () => ({ ok: true, json: async () => ({}) });
+    await assert.rejects(findGoogleWeatherLocation("ไม่มีสถานที่"), /ไม่พบสถานที่/);
+    global.fetch = async () => ({ ok: true, json: async () => ({ results: [{ location: { latitude: 91, longitude: 99 } }] }) });
+    await assert.rejects(findGoogleWeatherLocation("เชียงใหม่"), /ไม่ถูกต้อง/);
+    global.fetch = async () => ({ ok: false, status: 403, json: async () => ({ error: { status: "PERMISSION_DENIED", message: "API not authorized for dummy-weather-key" } }) });
     await assert.rejects(findGoogleWeatherLocation("เชียงใหม่"), error => {
-      assert.match(error.message, /REQUEST_DENIED.*API not authorized/);
+      assert.match(error.message, /v4.*403.*API not authorized/);
       assert.doesNotMatch(error.message, /dummy-weather-key/);
       return true;
     });
