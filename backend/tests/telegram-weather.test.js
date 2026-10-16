@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createWeatherController, reportData } = require("../lib/telegram-weather.js");
+const { createWeatherController, reportData, recommendedSlots } = require("../lib/telegram-weather.js");
 const { coordinates, lookupGoogleWeather, findGoogleWeatherLocation } = require("../google-weather.js");
 
 function sampleWeather() {
@@ -50,6 +50,25 @@ test("today/tomorrow use local date across UTC midnight; zero and missing data s
   assert.match(reportData(weather, "now").details, /โอกาสฝน ไม่ระบุ/);
 });
 
+test("activity recommendations rank measurable weather, keep slots apart, and never pretend missing data is good", () => {
+  const weather = sampleWeather();
+  weather.current.currentTime = "2026-10-12T03:00:00Z";
+  weather.hourly = [
+    { interval: { startTime: "2026-10-12T04:00:00Z" }, temperature: { degrees: 27 }, precipitation: { probability: { percent: 5 } }, wind: { speed: { value: 8, unit: "KILOMETERS_PER_HOUR" } } },
+    { interval: { startTime: "2026-10-12T05:00:00Z" }, temperature: { degrees: 27 }, precipitation: { probability: { percent: 90 } }, wind: { speed: { value: 8, unit: "KILOMETERS_PER_HOUR" } } },
+    { interval: { startTime: "2026-10-12T07:00:00Z" }, temperature: { degrees: 40 }, precipitation: { probability: { percent: 10 } }, wind: { speed: { value: 40, unit: "KILOMETERS_PER_HOUR" } } },
+    { interval: { startTime: "2026-10-12T09:00:00Z" }, temperature: { degrees: 26 }, precipitation: { probability: { percent: 15 } }, wind: { speed: { value: 7, unit: "KILOMETERS_PER_HOUR" } } },
+    { interval: { startTime: "2026-10-12T10:00:00Z" }, temperature: { degrees: 26 } }
+  ];
+  const result = recommendedSlots(weather, "now", "Asia/Bangkok", weather.current.currentTime, "exercise");
+  assert.equal(result.activity, "ออกกำลังกาย");
+  assert.equal(result.slots.length, 3);
+  assert.match(result.text, /ประเมินจากฝน อุณหภูมิ และลม/);
+  assert.ok(result.slots[0].score > result.slots.at(-1).score);
+  assert.ok(result.slots.some(slot => /ไม่ระบุโอกาสฝน/.test(slot.reasons.join(" "))));
+  assert.match(reportData(weather, "now", "exercise").details, /แนวโน้มรายชั่วโมง/);
+});
+
 test("controller scopes location input to explicit replies; ordinary notes and locations are untouched", async () => {
   const h = harness();
   assert.equal(await h.controller.handle({ ...h.ctx, location: { latitude: 1, longitude: 2 } }), false);
@@ -77,6 +96,17 @@ test("forecast mode and questions request hourly data; AI receives location and 
   assert.match(payload.systemInstruction.parts[0].text, /no forecast is available/);
   assert.match(payload.systemInstruction.parts[0].text, /THE AFTERLIGHT UNIVERSE/);
   assert.match(payload.systemInstruction.parts[0].text, /Reporting mode/);
+});
+
+test("activity buttons refresh a full forecast and give the deterministic recommendation to AI", async () => {
+  const h = harness();
+  await h.controller.handle({ ...h.ctx, text: "/weather เชียงใหม่" });
+  await h.controller.handle({ ...h.ctx, action: "activity:exercise" });
+  assert.equal(h.calls.at(-1).params.hours, 48);
+  assert.match(h.replies.at(-1).text, /ช่วงที่น่าพิจารณาสำหรับออกกำลังกาย/);
+  const supplied = JSON.parse(h.prompts.at(-1).contents[0].parts[0].text);
+  assert.equal(supplied.weather.recommendation.activity, "ออกกำลังกาย");
+  assert.ok(h.replies.at(-1).reply_markup.inline_keyboard.flat().some(button => button.callback_data === "weather:activity:laundry"));
 });
 
 test("favorites store user query, not weather or Google geocoded coordinates; selection and deletion work", async () => {
