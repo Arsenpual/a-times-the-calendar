@@ -26,6 +26,9 @@ const TELEGRAM_NEWS_TOPIC_LENGTH_LIMIT = 80;
 const TELEGRAM_NEWS_TOPIC_PAGE_SIZE = 4;
 const TELEGRAM_NEWS_AI_BRIEF_LIMIT = 2_400;
 const TELEGRAM_NEWS_INPUT_TTL_MS = 10 * 60 * 1000;
+const PRIORITY_NEWS_SUBSCRIPTIONS = "telegram-priority-news";
+const PRIORITY_NEWS_POLL_MS = Math.max(60_000, Number(process.env.TELEGRAM_PRIORITY_NEWS_POLL_MS || 5 * 60_000));
+const PRIORITY_NEWS_RESULT_LIMIT = 5;
 const TELEGRAM_NEWS_PERIODS = Object.freeze({ "1h": "1 ชั่วโมง", "6h": "6 ชั่วโมง", "1d": "24 ชั่วโมง", "7d": "7 วัน" });
 const TELEGRAM_NEWS_RESULTS_BY_PERIOD = Object.freeze({ "1h": 3, "6h": 5, "1d": 8, "7d": 10 });
 const pendingAnnouncementMessageEdits = new Map();
@@ -56,6 +59,7 @@ const BOT_MENU_COMMANDS = Object.freeze([
   { command: "news_remove", description: "ลบหัวข้อข่าว", help: "ลบหัวข้อด้วยชื่อหรือลำดับ" },
   { command: "news_list", description: "ดูหัวข้อข่าว", help: "ดูหัวข้อข่าวที่ติดตาม" },
   { command: "news_now", description: "อ่านข่าวล่าสุด", help: "อ่านข่าวล่าสุดจากหัวข้อที่ติดตาม" },
+  { command: "news_priority", description: "ตั้งหัวข้อข่าวเร่งด่วน", help: "เลือกหนึ่งหัวข้อเพื่อรับข่าวใหม่ทันที", usage: "/news_priority หัวข้อ หรือ /news_priority off" },
   { command: "weather", description: "พยากรณ์อากาศด้วย Google", help: "พิมพ์ /weather กรุงเทพฯ หรือส่งตำแหน่งปัจจุบัน" },
   { command: "weather_ask", description: "ถาม AI เรื่องอากาศ", help: "ถามอากาศของสถานที่ที่เลือก เช่น /weather_ask พรุ่งนี้เย็นเหมาะกับวิ่งไหม" },
   { command: "weather_cancel", description: "ปิดแผงพยากรณ์อากาศ", help: "ยกเลิกขั้นตอนและปิด Weather Controller" },
@@ -576,11 +580,14 @@ function normalizeTelegramNewsTopics(topics) {
 }
 
 async function telegramNewsConfig(chatOwner) {
-  if (!chatOwner) return { topics: [], period: "1d" };
+  if (!chatOwner) return { topics: [], priorityTopic: null, period: "1d" };
   const auth = (await telegramAuthDoc(chatOwner).get()).data() || {};
   const news = auth.telegramNews || {};
+  const topics = normalizeTelegramNewsTopics(news.topics);
+  const requestedPriority = normalizeTelegramNewsTopics([news.priorityTopic])[0];
   return {
-    topics: normalizeTelegramNewsTopics(news.topics),
+    topics,
+    priorityTopic: requestedPriority && topics.find(topic => topic.toLocaleLowerCase("th") === requestedPriority.toLocaleLowerCase("th")) || null,
     period: TELEGRAM_NEWS_PERIODS[news.period] ? news.period : "1d"
   };
 }
@@ -591,8 +598,11 @@ async function telegramNewsTopics(chatOwner) {
 
 async function saveTelegramNewsConfig(chatOwner, updates) {
   const current = await telegramNewsConfig(chatOwner);
+  const topics = updates.topics === undefined ? current.topics : normalizeTelegramNewsTopics(updates.topics);
+  const requestedPriority = updates.priorityTopic === undefined ? current.priorityTopic : normalizeTelegramNewsTopics([updates.priorityTopic])[0];
   const next = {
-    topics: updates.topics === undefined ? current.topics : normalizeTelegramNewsTopics(updates.topics),
+    topics,
+    priorityTopic: requestedPriority && topics.find(topic => topic.toLocaleLowerCase("th") === requestedPriority.toLocaleLowerCase("th")) || null,
     period: TELEGRAM_NEWS_PERIODS[updates.period] ? updates.period : current.period,
     updatedAt: Date.now()
   };
@@ -602,6 +612,34 @@ async function saveTelegramNewsConfig(chatOwner, updates) {
 
 async function saveTelegramNewsTopics(chatOwner, topics) {
   return (await saveTelegramNewsConfig(chatOwner, { topics })).topics;
+}
+
+async function closePreviousNewsPanel(userId, chatId) {
+  const auth = (await telegramAuthDoc(userId).get()).data() || {};
+  const messageId = Number(auth.telegramNews?.panelMessageId);
+  if (!Number.isInteger(messageId) || messageId <= 0) return;
+  try {
+    await editTelegramMessage(chatId, messageId, "📰 ปิด News Controller แล้ว");
+  } catch (error) {
+    // A panel can have been deleted manually or become too old for Telegram to
+    // edit. It must not prevent a fresh /news panel from opening.
+    console.warn("[telegram] close previous news panel failed:", error.message);
+  } finally {
+    await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": FieldValue.delete() }, { merge: true });
+  }
+}
+
+async function rememberNewsPanel(userId, messageId) {
+  if (!Number.isInteger(Number(messageId)) || Number(messageId) <= 0) return;
+  await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": Number(messageId) }, { merge: true });
+}
+
+async function clearRememberedNewsPanel(userId, messageId) {
+  if (!userId) return;
+  const auth = (await telegramAuthDoc(userId).get()).data() || {};
+  if (Number(auth.telegramNews?.panelMessageId) === Number(messageId)) {
+    await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": FieldValue.delete() }, { merge: true });
+  }
 }
 
 function telegramNewsTopicList(topics) {
@@ -615,7 +653,8 @@ function telegramNewsTopicList(topics) {
 function telegramNewsControllerText(config) {
   return "📰 News Controller\n\n" +
     `ช่วงข่าว: ${TELEGRAM_NEWS_PERIODS[config.period]}\n` +
-    `หัวข้อที่ติดตาม: ${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT}\n\n` +
+    `หัวข้อที่ติดตาม: ${config.topics.length}/${TELEGRAM_NEWS_TOPIC_LIMIT}\n` +
+    `⚡ หัวข้อเร่งด่วน: ${config.priorityTopic || "ยังไม่ตั้ง"}\n\n` +
     "🤖 ปุ่มที่มีสัญลักษณ์นี้จะใช้ AI ย่อข่าว\n\n" +
     "เลือกการทำงานจากปุ่มด้านล่าง";
 }
@@ -626,6 +665,7 @@ function telegramNewsControllerKeyboard(config) {
       [{ text: "🤖 📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🤖 🌐 ข่าวเด่น Google News", callback_data: "news:top" }],
       [{ text: "🤖 🔎 ค้นหาข่าว", callback_data: "news:search" }],
       [{ text: `🗂 จัดการหัวข้อ (${config.topics.length})`, callback_data: "news:topics:0" }],
+      [{ text: config.priorityTopic ? `⚡ เร่งด่วน: ${config.priorityTopic}` : "⚡ ตั้งหัวข้อเร่งด่วน", callback_data: "news:priority" }],
       [
         { text: config.period === "1h" ? "✓ 1 ชม." : "1 ชม.", callback_data: "news:period:1h" },
         { text: config.period === "6h" ? "✓ 6 ชม." : "6 ชม.", callback_data: "news:period:6h" },
@@ -669,6 +709,24 @@ function telegramNewsTopicsKeyboard(config, page) {
       ...topicRows,
       ...newsTopicPagination("topics", view.currentPage, view.pageCount),
       [{ text: "＋ เพิ่มหัวข้อ", callback_data: "news:add" }, { text: "− ลบหัวข้อ", callback_data: `news:remove:0` }],
+      [{ text: "← กลับ News Controller", callback_data: "news:panel" }]
+    ]
+  };
+}
+
+function telegramNewsPriorityText(config, page) {
+  const view = newsTopicPage(config, page);
+  if (!config.topics.length) return "⚡ หัวข้อเร่งด่วน\n\nเพิ่มหัวข้อข่าวก่อน แล้วจึงเลือกหนึ่งหัวข้อเพื่อรับแจ้งข่าวใหม่";
+  return `⚡ หัวข้อเร่งด่วน\n\nเลือกได้หนึ่งหัวข้อ ระบบจะตรวจ Google News ทุก 5 นาที และแจ้งเฉพาะข่าวใหม่ที่พบ\n\nกำลังติดตาม: ${config.priorityTopic || "ยังไม่ตั้ง"}`;
+}
+
+function telegramNewsPriorityKeyboard(config, page) {
+  const view = newsTopicPage(config, page);
+  return {
+    inline_keyboard: [
+      ...view.topics.map((topic, index) => [{ text: `${config.priorityTopic === topic ? "✓ " : ""}⚡ ${topic}`, callback_data: `news:priority_set:${view.start + index}` }]),
+      ...newsTopicPagination("priority", view.currentPage, view.pageCount),
+      ...(config.priorityTopic ? [[{ text: "ปิดหัวข้อเร่งด่วน", callback_data: "news:priority_off" }]] : []),
       [{ text: "← กลับ News Controller", callback_data: "news:panel" }]
     ]
   };
@@ -817,6 +875,84 @@ async function sendTelegramNewsDigest(userId, topics, reply, period = "1d", { in
   }
 }
 
+function priorityNewsSubscriptionDoc(userId) {
+  return db.collection(PRIORITY_NEWS_SUBSCRIPTIONS).doc(String(userId));
+}
+
+function googleNewsItemKey(item) {
+  return crypto.createHash("sha256").update(`${item.url || ""}\n${item.title || ""}\n${item.publishedAt || ""}`).digest("base64url");
+}
+
+async function syncPriorityNewsSubscription(userId, priorityTopic) {
+  const ref = priorityNewsSubscriptionDoc(userId);
+  if (!priorityTopic) {
+    await ref.delete();
+    return null;
+  }
+  const auth = (await telegramAuthDoc(userId).get()).data() || {};
+  if (!auth.chatId) throw new Error("ยังไม่ได้เชื่อม Telegram");
+  const existing = (await ref.get()).data() || {};
+  const topicChanged = existing.topic?.toLocaleLowerCase("th") !== priorityTopic.toLocaleLowerCase("th");
+  await ref.set({
+    userId, chatId: String(auth.chatId), topic: priorityTopic,
+    seenItemKeys: topicChanged ? [] : Array.isArray(existing.seenItemKeys) ? existing.seenItemKeys.slice(0, 100) : [],
+    updatedAt: Date.now()
+  }, { merge: true });
+  return ref;
+}
+
+function formatPriorityNewsAlert(topic, items) {
+  let text = `⚡ ข่าวใหม่ในหัวข้อเร่งด่วน: ${topic}\nพบจาก Google News\n`;
+  const visibleItems = [];
+  for (const item of items) {
+    const index = visibleItems.length + 1;
+    const metadata = [item.source, thaiRelativeNewsTime(item.publishedAt)].filter(Boolean).join(" · ");
+    const entry = `\n${index}. ${item.title}\n   ${metadata}`;
+    if ((text + entry).length > TELEGRAM_MESSAGE_CHUNK_LIMIT) break;
+    text += entry;
+    visibleItems.push(item);
+  }
+  return { text, items: visibleItems };
+}
+
+async function checkPriorityNewsSubscription(subscriptionRef) {
+  const before = (await subscriptionRef.get()).data();
+  if (!before?.userId || !before?.chatId || !before?.topic) return;
+  const items = await searchGoogleNews(before.topic, { limit: PRIORITY_NEWS_RESULT_LIMIT, period: "1d" });
+  const freshItems = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(subscriptionRef);
+    const current = snapshot.data();
+    if (!current?.userId || current.topic !== before.topic) return [];
+    const seen = new Set(Array.isArray(current.seenItemKeys) ? current.seenItemKeys : []);
+    const fresh = items.filter(item => !seen.has(googleNewsItemKey(item)));
+    const allKeys = [...items.map(googleNewsItemKey), ...seen].slice(0, 100);
+    transaction.set(subscriptionRef, { seenItemKeys: allKeys, lastCheckedAt: Date.now() }, { merge: true });
+    return fresh;
+  });
+  if (!freshItems.length) return;
+  const deliveryKey = `priority-news:${before.topic}:${freshItems.map(googleNewsItemKey).join(",")}`;
+  const deliveryClaim = await claimDelivery(before.userId, deliveryKey, "priority-news", `ข่าวใหม่: ${before.topic}`);
+  if (deliveryClaim.status !== "claimed") return;
+  try {
+    const result = formatPriorityNewsAlert(before.topic, freshItems);
+    await sendChatReply(before.userId, before.chatId, result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
+  } catch (error) {
+    await releaseDeliveryClaim(deliveryClaim).catch(() => {});
+    throw error;
+  }
+}
+
+async function runPriorityNewsChecks() {
+  const subscriptions = await db.collection(PRIORITY_NEWS_SUBSCRIPTIONS).limit(100).get();
+  for (const subscription of subscriptions.docs) {
+    try {
+      await checkPriorityNewsSubscription(subscription.ref);
+    } catch (error) {
+      console.error(`[telegram] priority news check failed for ${subscription.id}:`, error.message);
+    }
+  }
+}
+
 
 async function handleNewsCommandCallback(callbackQuery) {
   const chatId = callbackQuery.message?.chat?.id;
@@ -835,6 +971,7 @@ async function handleNewsCommandCallback(callbackQuery) {
   if (action === "close") {
     await answerTelegramCallback(callbackQuery.id, "ปิดแผงแล้ว");
     await editTelegramMessage(chatId, messageId, "📰 ปิด News Controller แล้ว");
+    await clearRememberedNewsPanel(chatOwner, messageId);
     return;
   }
   const config = await telegramNewsConfig(chatOwner);
@@ -845,6 +982,34 @@ async function handleNewsCommandCallback(callbackQuery) {
   }
   if (action === "noop") {
     await answerTelegramCallback(callbackQuery.id);
+    return;
+  }
+  const priorityPageMatch = action.match(/^priority:(\d+)$/);
+  if (action === "priority" || priorityPageMatch) {
+    const page = priorityPageMatch ? Number(priorityPageMatch[1]) : 0;
+    await answerTelegramCallback(callbackQuery.id);
+    await editTelegramMessage(chatId, messageId, telegramNewsPriorityText(config, page), { reply_markup: telegramNewsPriorityKeyboard(config, page) });
+    return;
+  }
+  const prioritySetMatch = action.match(/^priority_set:(\d+)$/);
+  if (prioritySetMatch) {
+    const topic = config.topics[Number(prioritySetMatch[1])];
+    if (!topic) {
+      await answerTelegramCallback(callbackQuery.id, "ไม่พบหัวข้อนี้");
+      return;
+    }
+    const next = await saveTelegramNewsConfig(chatOwner, { priorityTopic: topic });
+    const subscription = await syncPriorityNewsSubscription(chatOwner, next.priorityTopic);
+    await answerTelegramCallback(callbackQuery.id, `ติดตาม ${topic} แล้ว`);
+    await editTelegramMessage(chatId, messageId, telegramNewsControllerText(next), { reply_markup: telegramNewsControllerKeyboard(next) });
+    if (subscription) checkPriorityNewsSubscription(subscription).catch(error => console.error("[telegram] initial priority news check failed:", error.message));
+    return;
+  }
+  if (action === "priority_off") {
+    const next = await saveTelegramNewsConfig(chatOwner, { priorityTopic: null });
+    await syncPriorityNewsSubscription(chatOwner, null);
+    await answerTelegramCallback(callbackQuery.id, "ปิดหัวข้อเร่งด่วนแล้ว");
+    await editTelegramMessage(chatId, messageId, telegramNewsControllerText(next), { reply_markup: telegramNewsControllerKeyboard(next) });
     return;
   }
   const topicsMatch = action.match(/^topics:(\d+)$/);
@@ -882,6 +1047,7 @@ async function handleNewsCommandCallback(callbackQuery) {
       return;
     }
     const next = await saveTelegramNewsConfig(chatOwner, { topics: config.topics.filter((_, topicIndex) => topicIndex !== index) });
+    await syncPriorityNewsSubscription(chatOwner, next.priorityTopic);
     await answerTelegramCallback(callbackQuery.id, `ลบ ${removed} แล้ว`);
     await editTelegramMessage(chatId, messageId, telegramNewsControllerText(next), { reply_markup: telegramNewsControllerKeyboard(next) });
     return;
@@ -1195,7 +1361,17 @@ router.post("/notify", async (req, res, next) => {
   }
 });
 
+let priorityNewsTimer = null;
 module.exports = router;
+module.exports.startPriorityNewsWatcher = function startPriorityNewsWatcher() {
+  if (priorityNewsTimer) return;
+  const run = () => runPriorityNewsChecks().catch(error => console.error("[telegram] priority news watcher failed:", error.message));
+  const initial = setTimeout(run, 15_000);
+  initial.unref?.();
+  priorityNewsTimer = setInterval(run, PRIORITY_NEWS_POLL_MS);
+  priorityNewsTimer.unref?.();
+  console.log(`[telegram] เปิดตัวตรวจหัวข้อข่าวเร่งด่วนทุก ${Math.round(PRIORITY_NEWS_POLL_MS / 60_000)} นาที`);
+};
 
 module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   const missing = [
@@ -1324,7 +1500,9 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         return res.sendStatus(200);
       }
       const config = await telegramNewsConfig(chatOwner);
-      await reply(telegramNewsControllerText(config), { reply_markup: telegramNewsControllerKeyboard(config) });
+      await closePreviousNewsPanel(chatOwner, chatId);
+      const panel = await reply(telegramNewsControllerText(config), { reply_markup: telegramNewsControllerKeyboard(config) });
+      await rememberNewsPanel(chatOwner, panel?.message_id);
       return res.sendStatus(200);
     }
 
@@ -1345,6 +1523,37 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
       await reply(added.length
         ? `✅ เพิ่มหัวข้อ: ${added.join(", ")}\n\n${telegramNewsTopicList(topics)}`
         : `หัวข้อนี้มีอยู่แล้ว หรือครบ ${TELEGRAM_NEWS_TOPIC_LIMIT} หัวข้อแล้ว\n\n${telegramNewsTopicList(topics)}`);
+      return res.sendStatus(200);
+    }
+
+    const newsPriorityMatch = text.match(/^\/news_priority(?:@\w+)?(?:\s+([\s\S]+))?$/i);
+    if (newsPriorityMatch) {
+      if (!chatOwner) {
+        await reply("เชื่อมบัญชี T.i.M.E.S. กับ Telegram ก่อน จึงจะตั้งหัวข้อเร่งด่วนได้ครับ");
+        return res.sendStatus(200);
+      }
+      const config = await telegramNewsConfig(chatOwner);
+      const requested = String(newsPriorityMatch[1] || "").trim();
+      if (!requested) {
+        await reply(telegramNewsPriorityText(config, 0), { reply_markup: telegramNewsPriorityKeyboard(config, 0) });
+        return res.sendStatus(200);
+      }
+      if (/^(off|clear|ปิด)$/i.test(requested)) {
+        await saveTelegramNewsConfig(chatOwner, { priorityTopic: null });
+        await syncPriorityNewsSubscription(chatOwner, null);
+        await reply("ปิดหัวข้อข่าวเร่งด่วนแล้ว");
+        return res.sendStatus(200);
+      }
+      const requestedTopic = normalizeTelegramNewsTopics([requested])[0];
+      const topic = requestedTopic && config.topics.find(item => item.toLocaleLowerCase("th") === requestedTopic.toLocaleLowerCase("th"));
+      if (!topic) {
+        await reply("หัวข้อเร่งด่วนต้องเป็นหัวข้อที่ติดตามอยู่ก่อน เพิ่มด้วย /news_add แล้วเลือกใหม่ครับ");
+        return res.sendStatus(200);
+      }
+      const next = await saveTelegramNewsConfig(chatOwner, { priorityTopic: topic });
+      const subscription = await syncPriorityNewsSubscription(chatOwner, next.priorityTopic);
+      await reply(`⚡ ตั้ง “${topic}” เป็นหัวข้อข่าวเร่งด่วนแล้ว\nระบบจะตรวจ Google News ทุก 5 นาที และส่งเมื่อพบข่าวใหม่`);
+      if (subscription) checkPriorityNewsSubscription(subscription).catch(error => console.error("[telegram] initial priority news check failed:", error.message));
       return res.sendStatus(200);
     }
 
@@ -1370,8 +1579,9 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         await reply("ไม่พบหัวข้อที่ต้องการลบ ดูชื่อและหมายเลขได้ด้วย /news_list");
         return res.sendStatus(200);
       }
-      const topics = await saveTelegramNewsTopics(chatOwner, current.filter((topic) => topic !== removed));
-      await reply(`ลบหัวข้อ “${removed}” แล้ว\n\n${telegramNewsTopicList(topics)}`);
+      const next = await saveTelegramNewsConfig(chatOwner, { topics: current.filter((topic) => topic !== removed) });
+      await syncPriorityNewsSubscription(chatOwner, next.priorityTopic);
+      await reply(`ลบหัวข้อ “${removed}” แล้ว\n\n${telegramNewsTopicList(next.topics)}`);
       return res.sendStatus(200);
     }
 

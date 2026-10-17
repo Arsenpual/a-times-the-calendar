@@ -13,10 +13,8 @@ await writeFile(new URL("txph-wordmark-mono.svg", assets), mono);
 const square = dark.replace('viewBox="0 0 352 108"', 'viewBox="0 0 352 352"')
   .replace('<g fill=', '<g transform="translate(0 122)"><g fill=')
   .replace('</svg>', '</g></svg>');
-const adaptive = mono.replace('role="img"', 'style="color-scheme:light dark" role="img"')
-  .replace('<g fill="#1C1C1A">', '<style>@media(prefers-color-scheme:dark){.ink{fill:#F2F1ED}}</style><g class="ink" fill="#1C1C1A">')
-  .replace('<path fill="#1C1C1A"', '<path class="ink" fill="#1C1C1A"');
-await writeFile(new URL("txph-favicon.svg", assets), adaptive);
+// tx-favicon.svg is a separate, optically adjusted TX master for browser tabs.
+// Keep it as SVG rather than deriving a four-letter raster favicon here.
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 try {
@@ -28,10 +26,9 @@ try {
     await page.locator("img").evaluate((img) => img.decode());
     await page.screenshot({ path: new URL(name, assets).pathname.replace(/^\/(?=[A-Za-z]:)/, ""), omitBackground: background === "transparent" });
   }
-  for (const size of [16, 32]) await render(`txph-favicon-${size}.png`, size, size, mono, "#F2F1ED");
   for (const size of [180, 192, 512]) await render(`txph-icon-${size}.png`, size, size, square, "#1C1C1A");
   await render("txph-social.png", 1200, 630, dark, "#1C1C1A", 900);
-  console.log("Generated TXph light, dark, monochrome, favicon, OS icons and social image in public/logo.");
+  console.log("Generated TXph light, dark, monochrome, OS icons and social image in public/logo.");
 } finally {
   await browser.close();
 }

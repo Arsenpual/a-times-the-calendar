@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title" style="color-scheme:light dark">
+  <title id="title">TX</title>
+  <style>
+    .ink { fill: #1C1C1A; }
+    @media (prefers-color-scheme: dark) { .ink { fill: #F2F1ED; } }
+  </style>
+  <!-- Optical small-size cut: wider stems and taller letters keep TX clear at 16px. -->
+  <g class="ink">
+    <path d="M1 5h13l-2 4H9v18H5V9H1z"/>
+    <path d="M16 5h4l3.5 7L27 5h4l-5.5 11L31 27h-4l-3.5-7L20 27h-4l5.5-11z"/>
+  </g>
+</svg>

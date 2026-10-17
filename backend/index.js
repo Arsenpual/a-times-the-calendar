@@ -226,6 +226,7 @@ app.listen(PORT, () => {
     });
   };
   registerTelegramWebhook();
+  telegramRouter.startPriorityNewsWatcher();
   // The former standalone AI bot is retired. If its token remains configured
   // during migration, stop Telegram from delivering updates to the removed
   // endpoint. This does not delete its chat history or pending updates.
