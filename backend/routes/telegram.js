@@ -585,9 +585,11 @@ async function telegramNewsConfig(chatOwner) {
   const news = auth.telegramNews || {};
   const topics = normalizeTelegramNewsTopics(news.topics);
   const requestedPriority = normalizeTelegramNewsTopics([news.priorityTopic])[0];
+  const panelMessageId = Number.isInteger(Number(news.panelMessageId)) && Number(news.panelMessageId) > 0 ? Number(news.panelMessageId) : null;
   return {
     topics,
     priorityTopic: requestedPriority && topics.find(topic => topic.toLocaleLowerCase("th") === requestedPriority.toLocaleLowerCase("th")) || null,
+    panelMessageId,
     period: TELEGRAM_NEWS_PERIODS[news.period] ? news.period : "1d"
   };
 }
@@ -603,6 +605,7 @@ async function saveTelegramNewsConfig(chatOwner, updates) {
   const next = {
     topics,
     priorityTopic: requestedPriority && topics.find(topic => topic.toLocaleLowerCase("th") === requestedPriority.toLocaleLowerCase("th")) || null,
+    ...(current.panelMessageId ? { panelMessageId: current.panelMessageId } : {}),
     period: TELEGRAM_NEWS_PERIODS[updates.period] ? updates.period : current.period,
     updatedAt: Date.now()
   };
@@ -625,20 +628,20 @@ async function closePreviousNewsPanel(userId, chatId) {
     // edit. It must not prevent a fresh /news panel from opening.
     console.warn("[telegram] close previous news panel failed:", error.message);
   } finally {
-    await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": FieldValue.delete() }, { merge: true });
+    await telegramAuthDoc(userId).set({ telegramNews: { panelMessageId: FieldValue.delete() } }, { merge: true });
   }
 }
 
 async function rememberNewsPanel(userId, messageId) {
   if (!Number.isInteger(Number(messageId)) || Number(messageId) <= 0) return;
-  await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": Number(messageId) }, { merge: true });
+  await telegramAuthDoc(userId).set({ telegramNews: { panelMessageId: Number(messageId) } }, { merge: true });
 }
 
 async function clearRememberedNewsPanel(userId, messageId) {
   if (!userId) return;
   const auth = (await telegramAuthDoc(userId).get()).data() || {};
   if (Number(auth.telegramNews?.panelMessageId) === Number(messageId)) {
-    await telegramAuthDoc(userId).set({ "telegramNews.panelMessageId": FieldValue.delete() }, { merge: true });
+    await telegramAuthDoc(userId).set({ telegramNews: { panelMessageId: FieldValue.delete() } }, { merge: true });
   }
 }
 
@@ -665,7 +668,7 @@ function telegramNewsControllerKeyboard(config) {
       [{ text: "🤖 📰 อ่านทุกหัวข้อ", callback_data: "news:now" }, { text: "🤖 🌐 ข่าวเด่น Google News", callback_data: "news:top" }],
       [{ text: "🤖 🔎 ค้นหาข่าว", callback_data: "news:search" }],
       [{ text: `🗂 จัดการหัวข้อ (${config.topics.length})`, callback_data: "news:topics:0" }],
-      [{ text: config.priorityTopic ? `⚡ เร่งด่วน: ${config.priorityTopic}` : "⚡ ตั้งหัวข้อเร่งด่วน", callback_data: "news:priority" }],
+      [{ text: config.priorityTopic ? `⚡ 🤖 เร่งด่วน: ${config.priorityTopic}` : "⚡ 🤖 ตั้งหัวข้อเร่งด่วน", callback_data: "news:priority" }],
       [
         { text: config.period === "1h" ? "✓ 1 ชม." : "1 ชม.", callback_data: "news:period:1h" },
         { text: config.period === "6h" ? "✓ 6 ชม." : "6 ชม.", callback_data: "news:period:6h" },
@@ -901,20 +904,6 @@ async function syncPriorityNewsSubscription(userId, priorityTopic) {
   return ref;
 }
 
-function formatPriorityNewsAlert(topic, items) {
-  let text = `⚡ ข่าวใหม่ในหัวข้อเร่งด่วน: ${topic}\nพบจาก Google News\n`;
-  const visibleItems = [];
-  for (const item of items) {
-    const index = visibleItems.length + 1;
-    const metadata = [item.source, thaiRelativeNewsTime(item.publishedAt)].filter(Boolean).join(" · ");
-    const entry = `\n${index}. ${item.title}\n   ${metadata}`;
-    if ((text + entry).length > TELEGRAM_MESSAGE_CHUNK_LIMIT) break;
-    text += entry;
-    visibleItems.push(item);
-  }
-  return { text, items: visibleItems };
-}
-
 async function checkPriorityNewsSubscription(subscriptionRef) {
   const before = (await subscriptionRef.get()).data();
   if (!before?.userId || !before?.chatId || !before?.topic) return;
@@ -934,7 +923,13 @@ async function checkPriorityNewsSubscription(subscriptionRef) {
   const deliveryClaim = await claimDelivery(before.userId, deliveryKey, "priority-news", `ข่าวใหม่: ${before.topic}`);
   if (deliveryClaim.status !== "claimed") return;
   try {
-    const result = formatPriorityNewsAlert(before.topic, freshItems);
+    // Priority alerts intentionally use the same Gemini summary template as a
+    // manually opened topic: numbered short reports, separators, key dates,
+    // and a final overview. If AI is unavailable, the existing formatter
+    // provides the same Google News titles and article links as its fallback.
+    const priorityTopic = `⚡ ข่าวด่วน: ${before.topic}`;
+    const brief = await summarizeTelegramNewsTopic(before.userId, priorityTopic, freshItems);
+    const result = formatGoogleNewsBrief(priorityTopic, freshItems, "1h", brief);
     await sendChatReply(before.userId, before.chatId, result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
   } catch (error) {
     await releaseDeliveryClaim(deliveryClaim).catch(() => {});
