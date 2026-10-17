@@ -1,6 +1,6 @@
 // Generated derivatives share the exact master paths; no font or image dependency.
 // Run from frontend with: node scripts/generate-brand-assets.mjs
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const assets = new URL("../public/logo/", import.meta.url);
@@ -31,12 +31,7 @@ try {
   for (const size of [16, 32]) await render(`txph-favicon-${size}.png`, size, size, mono, "#F2F1ED");
   for (const size of [180, 192, 512]) await render(`txph-icon-${size}.png`, size, size, square, "#1C1C1A");
   await render("txph-social.png", 1200, 630, dark, "#1C1C1A", 900);
-  const preview = new URL("../branding/preview/", import.meta.url);
-  await mkdir(preview, { recursive: true });
-  await page.setViewportSize({ width: 960, height: 600 });
-  await page.setContent(`<style>body{margin:0;font:14px Arial;background:#F2F1ED;color:#1C1C1A}.row{padding:32px;display:flex;align-items:center;gap:48px;height:236px;box-sizing:border-box}.dark{background:#1C1C1A;color:#F2F1ED}.sizes{display:grid;gap:24px}img{display:block}</style>${[[master,""],[dark,"dark"]].map(([svg,cls])=>`<div class="row ${cls}"><img alt="TXph display" width="460" src="${svgImage(svg)}"><div class="sizes">${[154,120,80].map(w=>`<div>${w}px<img alt="TXph ${w}px" width="${w}" src="${svgImage(svg)}"></div>`).join("")}</div></div>`).join("")}<div class="row" style="height:128px">${[16,32].map(s=>`<img alt="favicon ${s}" width="${s}" src="${svgImage(mono)}">`).join("")}<span>TXph · wordmark / UI / favicon</span></div>`);
-  await page.screenshot({ path: new URL("txph-brand-sheet.png", preview).pathname.replace(/^\/(?=[A-Za-z]:)/, "") });
-  console.log("Generated TXph light, dark, monochrome, favicon, OS icons, social image and preview.");
+  console.log("Generated TXph light, dark, monochrome, favicon, OS icons and social image in public/logo.");
 } finally {
   await browser.close();
 }
