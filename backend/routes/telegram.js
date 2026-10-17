@@ -925,12 +925,12 @@ async function checkPriorityNewsSubscription(subscriptionRef) {
   const deliveryClaim = await claimDelivery(before.userId, deliveryKey, "priority-news", `ข่าวใหม่: ${before.topic}`);
   if (deliveryClaim.status !== "claimed") return;
   try {
-    // Priority alerts intentionally use the same Gemini summary template as a
-    // manually opened topic: numbered short reports, separators, key dates,
-    // and a final overview. If AI is unavailable, the existing formatter
-    // provides the same Google News titles and article links as its fallback.
+    // Breaking-news alerts should be immediately scannable: short numbered
+    // reports and article links only, with no key-date section or final recap.
+    // If AI is unavailable, the existing formatter still provides the Google
+    // News titles and article links as its fallback.
     const priorityTopic = `⚡ ข่าวด่วน: ${before.topic}`;
-    const brief = await summarizeTelegramNewsTopic(before.userId, priorityTopic, freshItems);
+    const brief = await summarizeTelegramNewsTopic(before.userId, priorityTopic, freshItems, { includeSummary: false });
     const result = formatGoogleNewsBrief(priorityTopic, freshItems, "1h", brief);
     await sendChatReply(before.userId, before.chatId, result.text, { reply_markup: googleNewsArticleKeyboard(result.items) });
   } catch (error) {

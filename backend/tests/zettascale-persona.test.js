@@ -66,3 +66,11 @@ test("news reports cap a single report at 10 items and all-topics mode at 3 per 
   await digest("owner", ["หัวข้อเดียว"], async () => {}, "7d", { maxItemsPerTopic: 3 });
   assert.equal(calls.pop().limit, 3);
 });
+
+test("breaking-news alerts omit the final summary and key-date section", () => {
+  const start = source.indexOf("async function checkPriorityNewsSubscription(");
+  const end = source.indexOf("async function runPriorityNewsChecks", start);
+  const prioritySource = source.slice(start, end);
+  assert.match(prioritySource, /summarizeTelegramNewsTopic\(before\.userId, priorityTopic, freshItems, \{ includeSummary: false \}\)/);
+  assert.doesNotMatch(prioritySource, /a final overview/);
+});
