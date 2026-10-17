@@ -18,7 +18,7 @@ export default function ActivityAuthState({
             {authReady && !firebaseUser && (
               <div className="login-screen">
                 <div className="login-card">
-                  <img className="login-logo" src={brandWordmarkSrc} alt="T.i.M.E.S." />
+                  <img className="login-logo" src={brandWordmarkSrc} alt="TXph" />
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
                     T.i.M.E.S. ช่วยวางแผนกิจกรรม ดูภาพรวมเวลา และจัดการ Reminder ของคุณ โดยเชื่อม Google Calendar เมื่อคุณเลือกเชื่อมต่อ

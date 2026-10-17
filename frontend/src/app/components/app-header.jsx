@@ -37,7 +37,7 @@ export default function AppHeader({
 {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
-            <img className="app-logo" src={brandWordmarkSrc} alt="T.i.M.E.S." />
+            <img className="app-logo" src={brandWordmarkSrc} alt="TXph" />
             <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
               <button
                 type="button"
