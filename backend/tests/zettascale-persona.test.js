@@ -30,7 +30,7 @@ test("news generation receives the character without changing the report templat
     generateContent: async body => { instruction = body.systemInstruction.parts[0].text; return {}; },
     telegramFreeAiText: () => "รายงาน",
     spaceTelegramNewsBrief: text => text,
-    TELEGRAM_NEWS_RESULTS_BY_PERIOD: { "7d": 10 }, TELEGRAM_NEWS_AI_BRIEF_LIMIT: 2400,
+    TELEGRAM_NEWS_MAX_REPORT_ITEMS: 10, TELEGRAM_NEWS_AI_BRIEF_LIMIT: 2400,
     thaiRelativeNewsTime: () => "วันนี้"
   });
   await summarize("owner", "ข่าวเด่น", [{ title: "ข่าว", source: "แหล่งข่าว", publishedAt: Date.now() }]);
@@ -39,6 +39,30 @@ test("news generation receives the character without changing the report templat
   assert.match(instruction, /📅 กำหนดการสำคัญ/);
   assert.match(instruction, /whether it is past, current, or upcoming/);
   assert.match(instruction, /Never infer article details/);
+  assert.match(instruction, /at most 24 Thai words/);
   await summarize("owner", "ทุกหัวข้อ", [{ title: "ข่าว" }], { includeSummary: false });
   assert.match(instruction, /Do not add a conclusion, key-date section, or overall summary/);
+});
+
+test("news reports cap a single report at 10 items and all-topics mode at 3 per topic", async () => {
+  const start = source.indexOf("async function sendTelegramNewsDigest(");
+  const end = source.indexOf("function priorityNewsSubscriptionDoc", start);
+  const calls = [];
+  const digest = vm.runInNewContext(source.slice(start, end) + "\nsendTelegramNewsDigest", {
+    TELEGRAM_NEWS_MAX_REPORT_ITEMS: 10,
+    TELEGRAM_NEWS_ALL_TOPICS_ITEMS_PER_TOPIC: 3,
+    telegramNewsResultLimit: () => 10,
+    searchGoogleNews: async (_topic, options) => { calls.push(options); return []; },
+    summarizeTelegramNewsTopic: async () => null,
+    formatGoogleNewsBrief: () => ({ text: "ข่าว", items: [] }),
+    googleNewsArticleKeyboard: () => ({}),
+    console
+  });
+  await digest("owner", ["หัวข้อเดียว"], async () => {}, "7d");
+  assert.equal(calls.pop().limit, 10);
+  await digest("owner", ["หนึ่ง", "สอง"], async () => {}, "7d");
+  assert.deepEqual(calls.map(call => call.limit), [3, 3]);
+  calls.length = 0;
+  await digest("owner", ["หัวข้อเดียว"], async () => {}, "7d", { maxItemsPerTopic: 3 });
+  assert.equal(calls.pop().limit, 3);
 });

@@ -28,7 +28,9 @@ const TELEGRAM_NEWS_AI_BRIEF_LIMIT = 2_400;
 const TELEGRAM_NEWS_INPUT_TTL_MS = 10 * 60 * 1000;
 const PRIORITY_NEWS_SUBSCRIPTIONS = "telegram-priority-news";
 const PRIORITY_NEWS_POLL_MS = Math.max(60_000, Number(process.env.TELEGRAM_PRIORITY_NEWS_POLL_MS || 5 * 60_000));
-const PRIORITY_NEWS_RESULT_LIMIT = 5;
+const PRIORITY_NEWS_RESULT_LIMIT = TELEGRAM_NEWS_MAX_REPORT_ITEMS;
+const TELEGRAM_NEWS_MAX_REPORT_ITEMS = 10;
+const TELEGRAM_NEWS_ALL_TOPICS_ITEMS_PER_TOPIC = 3;
 const TELEGRAM_NEWS_PERIODS = Object.freeze({ "1h": "1 ชั่วโมง", "6h": "6 ชั่วโมง", "1d": "24 ชั่วโมง", "7d": "7 วัน" });
 const TELEGRAM_NEWS_RESULTS_BY_PERIOD = Object.freeze({ "1h": 3, "6h": 5, "1d": 8, "7d": 10 });
 const pendingAnnouncementMessageEdits = new Map();
@@ -805,7 +807,7 @@ function formatGoogleNewsResults(topic, items, period = "1d") {
 }
 
 function telegramNewsResultLimit(period) {
-  return TELEGRAM_NEWS_RESULTS_BY_PERIOD[period] || TELEGRAM_NEWS_RESULTS_BY_PERIOD["1d"];
+  return Math.min(TELEGRAM_NEWS_MAX_REPORT_ITEMS, TELEGRAM_NEWS_RESULTS_BY_PERIOD[period] || TELEGRAM_NEWS_RESULTS_BY_PERIOD["1d"]);
 }
 
 function spaceTelegramNewsBrief(brief) {
@@ -831,11 +833,11 @@ async function summarizeTelegramNewsTopic(userId, topic, items, { includeSummary
   const claim = await claimGeminiChatUsage(userId);
   if (claim.status !== "claimed") return null;
   try {
-    const headlines = items.slice(0, TELEGRAM_NEWS_RESULTS_BY_PERIOD["7d"]).map((item, index) =>
+    const headlines = items.slice(0, TELEGRAM_NEWS_MAX_REPORT_ITEMS).map((item, index) =>
       `${index + 1}. ${item.title}\nแหล่งข่าว: ${item.source || "ไม่ระบุ"}\nเผยแพร่: ${thaiRelativeNewsTime(item.publishedAt)}`
     ).join("\n\n");
     const payload = await generateContent({
-      systemInstruction: { parts: [{ text: buildZettascaleInstruction(`Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Write one numbered item for every supplied headline, with each item limited to one short sentence. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " Return every block in this exact order: numbered news items; a standalone middle dot; the heading '📅 กำหนดการสำคัญ'; key dates; a standalone middle dot; one sentence beginning with 'สรุป:'. List every date, time, deadline, hearing, election, announcement, or scheduled event explicitly stated in the supplied material, whether it is past, current, or upcoming, in the form '• วันที่ — เหตุการณ์'. Write '• ไม่พบกำหนดการที่ระบุชัด' when none are stated." : " Do not add a conclusion, key-date section, or overall summary."}`, { reporting: true }) }] },
+      systemInstruction: { parts: [{ text: buildZettascaleInstruction(`Write concise Thai news briefs using only the supplied headlines, sources, and publication times. Never infer article details, causes, numbers, or facts that are not explicitly supplied. Rewrite every supplied headline into plain, easy Thai in one short numbered sentence of at most 24 Thai words. Keep the important named people, places, dates, and figures only when supplied. Put a standalone middle dot '·' on its own line between each news item.${includeSummary ? " Return every block in this exact order: numbered news items; a standalone middle dot; the heading '📅 กำหนดการสำคัญ'; key dates; a standalone middle dot; one sentence beginning with 'สรุป:'. List every date, time, deadline, hearing, election, announcement, or scheduled event explicitly stated in the supplied material, whether it is past, current, or upcoming, in the form '• วันที่ — เหตุการณ์'. Write '• ไม่พบกำหนดการที่ระบุชัด' when none are stated." : " Do not add a conclusion, key-date section, or overall summary."}`, { reporting: true }) }] },
       contents: [{
         role: "user",
         parts: [{ text: `หัวข้อข่าว: ${topic}\n\nพาดหัวที่ให้มา:\n${headlines}\n\nตอบเป็นภาษาไทยในรูปแบบ:\n1. ...\n2. ...${includeSummary ? "\n📅 กำหนดการสำคัญ\n• วันที่ — เหตุการณ์\nสรุป: ..." : ""}` }]
@@ -861,11 +863,11 @@ function formatGoogleNewsBrief(topic, items, period, brief) {
   };
 }
 
-async function sendTelegramNewsDigest(userId, topics, reply, period = "1d", { includeSummary = false } = {}) {
+async function sendTelegramNewsDigest(userId, topics, reply, period = "1d", { includeSummary = false, maxItemsPerTopic } = {}) {
   for (const topic of topics) {
     try {
       const items = await searchGoogleNews(topic, {
-        limit: topics.length === 1 ? telegramNewsResultLimit(period) : 2,
+        limit: Math.min(TELEGRAM_NEWS_MAX_REPORT_ITEMS, maxItemsPerTopic || (topics.length === 1 ? telegramNewsResultLimit(period) : TELEGRAM_NEWS_ALL_TOPICS_ITEMS_PER_TOPIC)),
         period
       });
       const brief = await summarizeTelegramNewsTopic(userId, topic, items, { includeSummary });
@@ -1057,7 +1059,7 @@ async function handleNewsCommandCallback(callbackQuery) {
   if (action === "top") {
     await answerTelegramCallback(callbackQuery.id, "กำลังโหลดข่าวเด่น");
     try {
-      const items = await getGoogleNewsTopStories({ limit: 10 });
+      const items = await getGoogleNewsTopStories({ limit: TELEGRAM_NEWS_MAX_REPORT_ITEMS });
       const brief = await summarizeTelegramNewsTopic(chatOwner, "ข่าวเด่น Google News", items);
       const result = formatGoogleNewsBrief("ข่าวเด่น Google News", items, "top", brief);
       await editTelegramMessage(chatId, messageId, result.text, {
@@ -1109,7 +1111,7 @@ async function handleNewsCommandCallback(callbackQuery) {
       await reply("ยังไม่มีหัวข้อข่าว กด ＋ เพิ่มหัวข้อ ใน News Controller ก่อนครับ");
       return;
     }
-    await sendTelegramNewsDigest(chatOwner, config.topics, reply, config.period);
+    await sendTelegramNewsDigest(chatOwner, config.topics, reply, config.period, { maxItemsPerTopic: TELEGRAM_NEWS_ALL_TOPICS_ITEMS_PER_TOPIC });
   }
 }
 
@@ -1589,7 +1591,7 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
         await reply(chatOwner ? telegramNewsTopicList(topics) : "ระบุหัวข้อได้โดยตรง เช่น /news_now AI");
         return res.sendStatus(200);
       }
-      await sendTelegramNewsDigest(chatOwner, topics, reply, config.period);
+      await sendTelegramNewsDigest(chatOwner, topics, reply, config.period, requestedTopic ? {} : { maxItemsPerTopic: TELEGRAM_NEWS_ALL_TOPICS_ITEMS_PER_TOPIC });
       return res.sendStatus(200);
     }
 
