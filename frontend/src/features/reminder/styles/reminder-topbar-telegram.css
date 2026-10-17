@@ -24,9 +24,7 @@
           white-space: nowrap;
         }
 
-        .topbar-logo-icon {
-          font-size: 18px;
-        }
+        .reminder-wordmark { width: clamp(80px, 10vw, 112px); }
 
         .topbar-omnibar-wrap {
           flex: 1;

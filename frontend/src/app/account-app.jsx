@@ -43,8 +43,6 @@ import { setFirestoreQuotaStatus, useFirestoreQuotaStatus } from "../shared/api/
 // Fallback only: after sign-in the app replaces this with the announcement
 // configured through the authorised Telegram command. It remains useful when
 // no remote announcement has ever been set or the backend is temporarily down.
-const BRAND_WORDMARK_LIGHT_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark.svg`;
-const BRAND_WORDMARK_DARK_SRC = `${import.meta.env.BASE_URL}logo/times-wordmark-dark.svg`;
 const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 
 /**
@@ -188,7 +186,6 @@ export default function AccountApp({ auth }) {
     activityDashboardRef,
     handleActivityDashboardScroll
   } = useAppShellUi({ mode, userId: firebaseUser?.uid });
-  const brandWordmarkSrc = theme === "dark" ? BRAND_WORDMARK_DARK_SRC : BRAND_WORDMARK_LIGHT_SRC;
 
   const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
   const {
@@ -416,7 +413,6 @@ export default function AccountApp({ auth }) {
     <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
       <AppHeader
         firebaseUser={firebaseUser}
-        brandWordmarkSrc={brandWordmarkSrc}
         mode={mode}
         setMode={setMode}
         goToday={goToday}
@@ -490,7 +486,6 @@ export default function AccountApp({ auth }) {
             <ActivityAuthState
               authReady={authReady}
               firebaseUser={firebaseUser}
-              brandWordmarkSrc={brandWordmarkSrc}
               privacyPolicyUrl={PRIVACY_POLICY_URL}
               handleLogin={handleLogin}
             />

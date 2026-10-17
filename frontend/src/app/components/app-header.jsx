@@ -1,9 +1,9 @@
 import React from "react";
+import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
 import TelegramChatLauncher from "../../features/notifications/telegram/components/telegram-chat-launcher.jsx";
 
 export default function AppHeader({
   firebaseUser,
-  brandWordmarkSrc,
   mode,
   setMode,
   goToday,
@@ -37,7 +37,7 @@ export default function AppHeader({
 {firebaseUser && (
         <header className="app-header">
           <div className="app-header-left">
-            <img className="app-logo" src={brandWordmarkSrc} alt="TXph" />
+            <BrandWordmark className="app-logo" />
             <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
               <button
                 type="button"

@@ -175,8 +175,6 @@
   font-size: 18px;
 }
 
-.reminder-app-container .topbar-logo-icon { width: 28px; height: 28px; font-size: 15px; }
-.reminder-app-container .topbar-logo-text { font-size: 16px; }
 .reminder-app-container .topbar-omnibar { min-height: 36px; }
 
 .reminder-app-container .add-reminder-btn,

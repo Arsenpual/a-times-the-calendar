@@ -1,12 +1,12 @@
 import { useState } from "react";
+import BrandWordmark from "../../../shared/ui/brand-wordmark.jsx";
 
 export default function ReminderTopbar({ t, omnibarInput, setOmnibarInput, submitOmnibar, omnibarEnabled, omnibarPreview, telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, unreadTelegramMessages = 0, openTelegramChat, isPushEnabled, openStats }) {
 const [telegramMenuOpen, setTelegramMenuOpen] = useState(false);
 return (
 <header className="app-topbar">
         <div className="topbar-logo">
-          <span className="topbar-logo-icon" aria-hidden="true">⏰</span>
-          <span className="topbar-logo-text">ReminderOS</span>
+          <BrandWordmark className="reminder-wordmark" />
         </div>
         <div className="topbar-omnibar-wrap">
           <input

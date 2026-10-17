@@ -1,9 +1,9 @@
 import React from "react";
+import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
 
 export default function ActivityAuthState({
   authReady,
   firebaseUser,
-  brandWordmarkSrc,
   privacyPolicyUrl,
   handleLogin,
 }) {
@@ -18,7 +18,7 @@ export default function ActivityAuthState({
             {authReady && !firebaseUser && (
               <div className="login-screen">
                 <div className="login-card">
-                  <img className="login-logo" src={brandWordmarkSrc} alt="TXph" />
+                  <BrandWordmark className="login-logo" />
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
                     T.i.M.E.S. ช่วยวางแผนกิจกรรม ดูภาพรวมเวลา และจัดการ Reminder ของคุณ โดยเชื่อม Google Calendar เมื่อคุณเลือกเชื่อมต่อ

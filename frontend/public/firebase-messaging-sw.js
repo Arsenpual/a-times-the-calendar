@@ -45,7 +45,7 @@ messaging.onBackgroundMessage((payload) => {
   const title = payload.data?.title || "ถึงเวลาแล้ว";
   const options = {
     body: payload.data?.body || "",
-    icon: new URL("logo/icon-512.png", self.registration.scope).toString(),
+    icon: new URL("logo/txph-icon-512.png", self.registration.scope).toString(),
     tag: payload.data?.reminderId || "times-reminder" // tag เดียวกันทับ notification เก่าของ reminder เดียวกัน กัน spam ถ้า due ซ้ำถี่ๆ
   };
   self.registration.showNotification(title, options);
