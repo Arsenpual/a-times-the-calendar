@@ -537,6 +537,51 @@ async function sendTelegramFreeAiReply(userId, chatId, text) {
   }
 }
 
+function telegramAiStatusPanel(enabled) {
+  return {
+    text: enabled
+      ? "🟢 โหมด AI เปิดอยู่\nข้อความทั่วไปที่ส่งในแชตนี้จะให้ AI ตอบ\nใช้ /ai off เพื่อปิดโหมด"
+      : "⚫ โหมด AI ปิดอยู่\nใช้ /ai on เพื่อเปิดโหมด AI",
+    reply_markup: { inline_keyboard: [[{
+      text: enabled ? "⚫ ปิดโหมด AI" : "🟢 เปิดโหมด AI",
+      callback_data: enabled ? "ai:off" : "ai:on"
+    }]] }
+  };
+}
+
+async function pinTelegramMessage(chatId, messageId) {
+  const response = await telegramFetch(`${BOT_API}/bot${requiredEnv("TELEGRAM_BOT_TOKEN")}/pinChatMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId, disable_notification: true })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`ปักหมุดสถานะ AI ไม่สำเร็จ: ${data.description || response.status}`);
+}
+
+async function syncTelegramAiStatusPanel(chatId, chatOwner, enabled, statusMessageId) {
+  const panel = telegramAiStatusPanel(enabled);
+  let messageId = Number(statusMessageId);
+  if (Number.isSafeInteger(messageId) && messageId > 0) {
+    try {
+      await editTelegramMessage(chatId, messageId, panel.text, { reply_markup: panel.reply_markup });
+      await saveChatMessage(chatOwner, { direction: "outgoing", text: panel.text, telegramMessageId: messageId });
+    } catch (error) {
+      // The user may have deleted the old panel for both sides of the chat.
+      if (!/message to edit not found|message_id_invalid|message can't be edited/i.test(error.message)) throw error;
+      messageId = null;
+    }
+  } else {
+    messageId = null;
+  }
+  if (!messageId) {
+    const sent = await sendChatReply(chatOwner, chatId, panel.text, { reply_markup: panel.reply_markup });
+    messageId = sent.message_id;
+    await telegramAuthDoc(chatOwner).set({ telegramFreeAi: { statusMessageId: messageId } }, { merge: true });
+  }
+  await pinTelegramMessage(chatId, messageId);
+}
+
 async function runTelegramFreeAiCommand(chatId, chatOwner, action, reply) {
   if (!isTelegramFreeAiAllowed(chatId, chatOwner)) {
     await reply("⛔ โหมด AI ส่วนตัวใช้ได้เฉพาะ Telegram ที่เชื่อมกับบัญชีเจ้าของเท่านั้น");
@@ -546,14 +591,22 @@ async function runTelegramFreeAiCommand(chatId, chatOwner, action, reply) {
   const current = (await authRef.get()).data()?.telegramFreeAi || {};
   if (action === "on") {
     await authRef.set({ telegramFreeAi: { enabled: true, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+    await syncTelegramAiStatusPanel(chatId, chatOwner, true, current.statusMessageId)
+      .catch(error => console.error("[telegram] AI status panel failed:", error.message));
     await reply("✦ เปิดโหมด AI แล้วครับ พิมพ์คุยได้อย่างอิสระ ใช้ /ai off เพื่อปิด และ /ai clear เพื่อล้างบริบท");
   } else if (action === "off") {
     await authRef.set({ telegramFreeAi: { enabled: false, history: normalizedTelegramFreeAiHistory(current.history), updatedAt: Date.now() } }, { merge: true });
+    await syncTelegramAiStatusPanel(chatId, chatOwner, false, current.statusMessageId)
+      .catch(error => console.error("[telegram] AI status panel failed:", error.message));
     await reply("ปิดโหมด AI แล้วครับ ข้อความถัดไปจะกลับไปใช้คำสั่งและคำตอบ T.i.M.E.S. ตามปกติ");
   } else if (action === "clear" || action === "reset") {
     await authRef.set({ telegramFreeAi: { enabled: Boolean(current.enabled), history: [], updatedAt: Date.now() } }, { merge: true });
     await reply("ล้างบริบทการคุย AI แล้วครับ");
   } else {
+    if (current.enabled) {
+      await syncTelegramAiStatusPanel(chatId, chatOwner, true, current.statusMessageId)
+        .catch(error => console.error("[telegram] AI status panel failed:", error.message));
+    }
     await reply(current.enabled
       ? "โหมด AI เปิดอยู่ครับ พิมพ์คุยได้เลย ใช้ /ai off เพื่อปิด"
       : "โหมด AI ปิดอยู่ครับ ใช้ /ai on เพื่อเริ่มคุยอย่างอิสระ");
