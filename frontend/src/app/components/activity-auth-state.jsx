@@ -17,8 +17,20 @@ export default function ActivityAuthState({
 
             {authReady && !firebaseUser && (
               <div className="login-screen">
+                <div className="login-layout">
+                  <section className="login-portal-intro" aria-labelledby="login-portal-title">
+                    <span className="login-portal-eyebrow">T.i.M.E.S. / TIME PORTAL</span>
+                    <div className="login-portal-art" aria-hidden="true">
+                      <BrandWordmark className="login-portal-mark" />
+                    </div>
+                    <div className="login-portal-caption">
+                      <h2 id="login-portal-title">พื้นที่ของเวลา<br />ที่คุณออกแบบได้</h2>
+                      <p>มองเห็นจังหวะของทุกวัน แล้วจัดพื้นที่ให้สิ่งที่สำคัญ</p>
+                      <span>Activity / Reminder / Calendar</span>
+                    </div>
+                  </section>
                 <div className="login-card">
-                  <BrandWordmark className="login-logo" />
+                  <span className="login-card-eyebrow">เริ่มต้นกับ T.i.M.E.S.</span>
                   <h1 className="login-headline">สรุปชีวิตคุณ ทุกสัปดาห์</h1>
                   <p className="login-subtext">
                     T.i.M.E.S. ช่วยวางแผนกิจกรรม ดูภาพรวมเวลา และจัดการ Reminder ของคุณ โดยเชื่อม Google Calendar เมื่อคุณเลือกเชื่อมต่อ
@@ -41,6 +53,7 @@ export default function ActivityAuthState({
                     การเข้าสู่ระบบใช้สำหรับระบุตัวตนเท่านั้น คุณจะเลือกเชื่อม Google Calendar ในขั้นตอนถัดไป
                     <a href={privacyPolicyUrl} target="_blank" rel="noreferrer">อ่านนโยบายความเป็นส่วนตัว</a>
                   </p>
+                </div>
                 </div>
               </div>
             )}

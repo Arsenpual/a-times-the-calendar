@@ -37,6 +37,7 @@ import ReminderAlerts from "./reminder-alerts.jsx";
 
 export default function ReminderDashboard({
   firebaseUser,
+  headerTarget,
   calendarAccessToken,
   onReauthRequired,
   archivedActivityIds,
@@ -219,6 +220,7 @@ export default function ReminderDashboard({
 
       {/* Top Bar — Omnibar แบบ rule-based (Phase 6); สถิติยังรอ Phase 7 */}
       <ReminderTopbar
+        headerTarget={headerTarget} isVisible={isVisible}
         t={t} omnibarInput={omnibarInput} setOmnibarInput={setOmnibarInput}
         submitOmnibar={submitOmnibar} omnibarEnabled={omnibarEnabled} omnibarPreview={omnibarPreview}
         telegramConnection={telegramConnection} areTelegramAlertsEnabled={areTelegramAlertsEnabled}

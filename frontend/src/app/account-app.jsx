@@ -71,6 +71,7 @@ const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 // Reset all feature state and effect subscriptions when the Firebase identity
 // changes. Mode switches keep this boundary mounted so reminder timers continue.
 export default function AccountApp({ auth }) {
+  const [reminderHeaderTarget, setReminderHeaderTarget] = useState(null);
   const firestoreQuota = useFirestoreQuotaStatus();
   const handleTestFirestoreQuota = useCallback(() => {
     if (firestoreQuota) {
@@ -413,6 +414,7 @@ export default function AccountApp({ auth }) {
     <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
       <AppHeader
         firebaseUser={firebaseUser}
+        reminderHeaderRef={setReminderHeaderTarget}
         mode={mode}
         setMode={setMode}
         goToday={goToday}
@@ -463,6 +465,7 @@ export default function AccountApp({ auth }) {
           // continue while this browser tab remains open.
           <div className="reminder-mode-runtime" hidden={mode !== "reminder"} aria-hidden={mode !== "reminder"}>
             <ReminderMode
+              headerTarget={reminderHeaderTarget}
               calendarAccessToken={calendarAccessToken}
               onReauthRequired={setCalendarAccessToken}
               archivedActivityIds={archivedActivityIds}

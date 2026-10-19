@@ -1,11 +1,21 @@
 :root {
-  /* Brand palette — shared with the TXph wordmark. Keep these as the
+  /* Brand palette — shared with the Time Portal mark. Keep these as the
      source of truth; the legacy semantic aliases below preserve existing
      component styles while giving both modes the same visual identity. */
   --brand-ink: #1C1C1A;
   --brand-accent: #D85A30;
-  --brand-muted: #8A8A85;
-  --brand-divider: #E4E2DC;
+  --brand-muted: #686960;
+  --brand-divider: #D7D6CD;
+  --accent: var(--brand-accent);
+  --surface: var(--bg-muted);
+  --portal-radius: 10px;
+  --portal-control-radius: 6px;
+  --portal-action: #B74623;
+  --portal-on-action: #FFFFFF;
+  --portal-raised: #FFFEFB;
+  --portal-grid: rgb(28 28 26 / 5%);
+  --portal-shadow: 0 12px 36px rgb(28 28 26 / 9%);
+  --portal-focus: #B74623;
   --blue: var(--brand-accent);
   --blue-dark: #B74623;
   --blue-tint: #F9E8E1;
@@ -14,9 +24,9 @@
   --border: var(--brand-divider);
   --text-primary: var(--brand-ink);
   --text-secondary: var(--brand-muted);
-  --bg: #F7F6F2;
-  --bg-muted: #ffffff;
-  --hover: #F0EEE8;
+  --bg: #F2F1ED;
+  --bg-muted: #FCFBF8;
+  --hover: #EAE9E2;
   --today: var(--brand-accent);
   font-family: "Google Sans", "Roboto", Arial, sans-serif;
 }
@@ -33,19 +43,26 @@
    spillover indicators, etc. that don't yet reference these variables)
    are NOT covered by this block — a separate pass. */
 html[data-theme="dark"] {
+  color-scheme: dark;
   --brand-ink: #F2F1ED;
   --brand-accent: #E8703F;
-  --brand-muted: #9C9C97;
-  --brand-divider: #3A3A38;
+  --brand-muted: #B2B6AC;
+  --brand-divider: #3C453E;
+  --portal-action: #E8703F;
+  --portal-on-action: #171C19;
+  --portal-raised: #29312B;
+  --portal-grid: rgb(242 241 237 / 5%);
+  --portal-shadow: 0 16px 40px rgb(0 0 0 / 25%);
+  --portal-focus: #F08A60;
   --blue-dark: #F08A60;
   --blue-tint: #4A2920;
   --red-tint: #3c1c1c;
   --border: var(--brand-divider);
   --text-primary: var(--brand-ink);
   --text-secondary: var(--brand-muted);
-  --bg: #20201E;
-  --bg-muted: #292927;
-  --hover: #353532;
+  --bg: #171C19;
+  --bg-muted: #202722;
+  --hover: #2D3730;
   --today: var(--brand-accent);
 }
 

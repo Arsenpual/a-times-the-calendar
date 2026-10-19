@@ -6,3 +6,4 @@
 @import "./features/auth/styles/auth.css";
 @import "./features/calendar-connection/styles/calendar-connection.css";
 @import "./features/activity/styles/activity-mode.css";
+@import "./shared/styles/portal-theme.css";

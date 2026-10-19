@@ -4,6 +4,7 @@ import TelegramChatLauncher from "../../features/notifications/telegram/componen
 
 export default function AppHeader({
   firebaseUser,
+  reminderHeaderRef,
   mode,
   setMode,
   goToday,
@@ -35,7 +36,7 @@ export default function AppHeader({
   return (
     <>
 {firebaseUser && (
-        <header className="app-header">
+        <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}`}>
           <div className="app-header-left">
             <BrandWordmark className="app-logo" />
             <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
@@ -86,6 +87,10 @@ export default function AppHeader({
               </>
             )}
           </div>
+
+          {mode === "reminder" && (
+            <div className="app-header-reminder-slot" ref={reminderHeaderRef} role="group" aria-label="เครื่องมือ Reminder" />
+          )}
 
           <div className="app-header-right">
             {mode === "activity" ? (

@@ -1,13 +1,11 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import BrandWordmark from "../../../shared/ui/brand-wordmark.jsx";
 
-export default function ReminderTopbar({ t, omnibarInput, setOmnibarInput, submitOmnibar, omnibarEnabled, omnibarPreview, telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, unreadTelegramMessages = 0, openTelegramChat, isPushEnabled, openStats }) {
+export default function ReminderTopbar({ t, omnibarInput, setOmnibarInput, submitOmnibar, omnibarEnabled, omnibarPreview, telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, unreadTelegramMessages = 0, openTelegramChat, isPushEnabled, openStats, headerTarget, isVisible = true }) {
 const [telegramMenuOpen, setTelegramMenuOpen] = useState(false);
-return (
-<header className="app-topbar">
-        <div className="topbar-logo">
-          <BrandWordmark className="reminder-wordmark" />
-        </div>
+const controls = (
+      <div className="reminder-header-tools">
         <div className="topbar-omnibar-wrap">
           <input
             type="text"
@@ -21,6 +19,7 @@ return (
               }
             }}
             placeholder={t("reminder.omnibarPlaceholder")}
+            aria-label={t("reminder.omnibarCreateHint")}
             disabled={!omnibarEnabled}
             title={omnibarEnabled ? t("reminder.omnibarCreateHint") : t("reminder.omnibarDisabledHint")}
           />
@@ -61,8 +60,20 @@ return (
           >
             {isPushEnabled ? "🔔" : "🔕"}
           </button>
-          <button type="button" className="topbar-icon-btn" onClick={() => openStats()} title={t("reminder.viewStats")}>📊</button>
+          <button type="button" className="topbar-icon-btn" onClick={() => openStats()} title={t("reminder.viewStats")} aria-label={t("reminder.viewStats")}>📊</button>
         </div>
-      </header>
+      </div>
 );
+// An explicit null target waits for the shared header to mount. Undefined
+// keeps standalone previews working. Hidden Reminder runtime must not paint
+// its controls into Activity Mode, because portals escape the hidden wrapper.
+if (headerTarget !== undefined) {
+  return headerTarget && isVisible ? createPortal(controls, headerTarget) : null;
+}
+return isVisible ? (
+  <header className="app-topbar">
+    <div className="topbar-logo"><BrandWordmark className="reminder-wordmark" /></div>
+    {controls}
+  </header>
+) : null;
 }

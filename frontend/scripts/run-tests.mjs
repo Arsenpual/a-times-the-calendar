@@ -35,6 +35,7 @@ const browserTests = [
   "tests/i18n-provider-browser.mjs",
   "tests/reminder-phase2-browser.mjs",
   "tests/reminder-shell-browser.mjs",
+  "tests/reminder-header-browser.mjs",
 ];
 
 const flags = new Set(process.argv.slice(2));

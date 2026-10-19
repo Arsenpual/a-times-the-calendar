@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">T.i.M.E.S. — Time portal</title>
+  <desc id="desc">An open wireframe passage with four perspective planes converging on a square doorway to the left. No lettering or clock symbols.</desc>
+  <!-- A finite grid draws the eye into the empty doorway; no gradients or fonts. -->
+  <g fill="none" stroke="#D85A30" stroke-linejoin="miter" stroke-linecap="butt">
+    <g stroke-width="3" opacity=".62">
+      <path d="M65.6 95.36H386.88V416.64H65.6Z M73.6 128.16H329.28V383.84H73.6Z M80.8 157.68H277.44V354.32H80.8Z M86.4 180.64H237.12V331.36H86.4Z M91.2 200.32H202.56V311.68H91.2Z"/>
+      <path d="M136 56L110.4 220 M136 456L110.4 292 M56 136L96 234.4 M456 136L168 234.4 M216 56L124.8 220 M216 456L124.8 292 M56 216L96 248.8 M456 216L168 248.8 M296 56L139.2 220 M296 456L139.2 292 M56 296L96 263.2 M456 296L168 263.2 M376 56L153.6 220 M376 456L153.6 292 M56 376L96 277.6 M456 376L168 277.6"/>
+    </g>
+    <path stroke-width="5" d="M56 56L96 220 M456 56L168 220 M456 456L168 292 M56 456L96 292"/>
+    <path stroke-width="7" d="M56 56H456V456H56Z"/>
+    <path stroke-width="8" d="M96 220H168V292H96Z"/>
+  </g>
+</svg>

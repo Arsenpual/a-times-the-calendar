@@ -1,9 +1,5 @@
-        /* Top bar — เพิ่มเข้ามาในรอบ layout-only ของ migration plan v2 เฟส 1
-           (โครง 3 คอลัมน์ + top bar) โลโก้/omnibar/ปุ่มสถิติเป็น placeholder
-           ล้วนๆ ในรอบนี้ ยังไม่ผูก logic จริง — omnibar รอเฟส 6, สถิติรอ
-           เฟส 7 ปุ่มตั้งค่าตั้งใจไม่ใส่ซ้ำที่นี่ เพราะ app-header.jsx render ปุ่ม
-           settings ของตัวเองอยู่แล้วเป็นปุ่มเดียวฝั่งขวาบนตอนอยู่ใน
-           reminder mode (ดู settings-drawer.jsx's module comment) */
+        /* Standalone header for previews. AccountApp supplies a shared header
+           target so the same controls render beside the global mode switch. */
         .app-topbar {
           display: flex;
           align-items: center;
@@ -24,7 +20,9 @@
           white-space: nowrap;
         }
 
-        .reminder-wordmark { width: clamp(80px, 10vw, 112px); }
+        .reminder-wordmark { width: clamp(40px, 5vw, 48px); }
+
+        .reminder-header-tools { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; }
 
         .topbar-omnibar-wrap {
           flex: 1;

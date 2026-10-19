@@ -1,0 +1,288 @@
+/* Time Portal visual system. Loaded after feature styles: presentation only;
+   timeline dimensions, category colours and interaction geometry stay owned
+   by their features. The quiet grid belongs to the surrounding workspace. */
+:root { color-scheme: light; }
+
+body { -webkit-font-smoothing: antialiased; }
+.app { background: var(--bg); }
+.app :where(button, input, textarea, select) { font-family: inherit; }
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--portal-focus);
+  outline-offset: 3px;
+}
+.app-main {
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--portal-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--portal-grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Crisp, framed navigation; active tabs read as a doorway rather than a pill. */
+.app-header {
+  background: var(--bg-muted);
+  border-bottom-color: color-mix(in srgb, var(--brand-accent) 40%, var(--border));
+  box-shadow: 0 1px 0 var(--bg-muted);
+}
+.app-logo { width: 42px; margin-right: 10px; }
+.app-header-reminder-slot { flex: 1 1 260px; min-width: 0; }
+.app-header-reminder-slot .reminder-header-tools {
+  --g-blue: var(--brand-accent);
+  --g-blue-light: var(--blue-tint);
+  --g-surface: var(--portal-raised);
+  --g-background: var(--bg);
+  --g-on-surface: var(--text-primary);
+  --g-on-surface-variant: var(--text-secondary);
+  --g-outline: var(--border);
+  --g-outline-variant: var(--border);
+  --g-surface-variant: var(--hover);
+  width: 100%;
+}
+.app-header-reminder-slot .topbar-omnibar-wrap { display: block; min-width: 0; }
+.app-header-reminder-slot .topbar-omnibar {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--portal-control-radius);
+  color: var(--text-primary);
+}
+.app-header-reminder-slot .topbar-actions { flex-shrink: 0; }
+.app-header-reminder-slot .topbar-icon-btn { border-radius: var(--portal-control-radius); }
+.app-header-reminder-slot .omnibar-preview button { background: var(--portal-action); color: var(--portal-on-action); }
+.app-header-reminder-slot :is(button, input):focus-visible { outline: 2px solid var(--portal-focus); outline-offset: 3px; }
+.mode-switch, .header-week-spine-view-switch {
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--portal-control-radius);
+  background: var(--bg);
+}
+.mode-switch button { border-radius: 3px; font-weight: 600; }
+.mode-switch button.active {
+  background: var(--portal-raised);
+  color: var(--blue-dark);
+  box-shadow: inset 0 -2px var(--brand-accent), 0 1px 2px rgb(0 0 0 / 5%);
+}
+.header-week-spine-view-switch button { border-radius: 3px; }
+.header-week-spine-view-switch button.is-active {
+  background: var(--portal-action);
+  color: var(--portal-on-action);
+}
+.app-title { font-weight: 600; letter-spacing: -.025em; }
+.btn, .tag-search-wrap, .account-menu, .account-menu-actions button {
+  border-radius: var(--portal-control-radius);
+}
+.btn { font-weight: 600; transition: background-color 150ms ease, border-color 150ms ease; }
+.btn-outline { background: var(--bg-muted); }
+.btn-primary { border-color: var(--portal-action); background: var(--portal-action); color: var(--portal-on-action); }
+.btn-primary:hover { background: color-mix(in srgb, var(--portal-action) 88%, var(--text-primary)); }
+.btn-icon, .account-menu-trigger { border-radius: var(--portal-control-radius); }
+.account-menu { box-shadow: var(--portal-shadow); background: var(--portal-raised); }
+.tag-search-wrap { min-height: 34px; background: var(--bg); }
+.tag-search-chip { border-radius: 3px; }
+.announcement-ticker { border-bottom-color: var(--border); }
+
+/* Login uses the actual vector mark as its hero, with a calm reading surface. */
+.login-screen { align-items: flex-start; padding: clamp(20px, 5vw, 64px); }
+.login-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  align-items: center;
+  gap: clamp(36px, 6vw, 96px);
+  width: 100%;
+  max-width: 1080px;
+  margin: auto;
+}
+.login-portal-intro { min-width: 0; }
+.login-portal-eyebrow, .login-card-eyebrow {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: .12em;
+}
+.login-portal-art { width: min(100%, 350px); margin: 16px 0 20px -20px; }
+.login-portal-mark { width: 100%; }
+.login-portal-caption h2 {
+  margin: 0 0 14px;
+  font-size: clamp(28px, 3.3vw, 44px);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -.03em;
+}
+.login-portal-caption p { max-width: 340px; margin: 0 0 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
+.login-portal-caption > span { color: var(--text-secondary); font: 11px/1.6 ui-monospace, Consolas, monospace; }
+.login-card {
+  position: relative;
+  align-items: stretch;
+  gap: 18px;
+  max-width: none;
+  padding: 36px 32px;
+  border-radius: var(--portal-radius);
+  background: var(--portal-raised);
+  box-shadow: var(--portal-shadow);
+  text-align: left;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 36px;
+  height: 36px;
+  border-top: 2px solid var(--brand-accent);
+  border-left: 2px solid var(--brand-accent);
+  border-top-left-radius: var(--portal-radius);
+  pointer-events: none;
+}
+.login-headline { margin: 0; font-size: 24px; line-height: 1.5; font-weight: 600; letter-spacing: -.02em; }
+.login-subtext { line-height: 1.85; }
+.login-feature-list { margin: 0; padding: 16px 0 16px 20px; border-block: 1px solid var(--border); line-height: 2; }
+.login-feature-list li::marker { color: var(--brand-accent); }
+.google-signin-btn { min-height: 46px; margin-top: 0; border-radius: var(--portal-control-radius); background: var(--bg-muted); }
+.google-signin-btn:hover { border-color: var(--text-secondary); box-shadow: none; }
+.login-privacy-note { margin: 0; line-height: 1.8; }
+.login-privacy-note a { margin-top: 8px; color: var(--blue-dark); }
+
+/* Activity: retain scheduling grids and event colours, unify their frames. */
+.week-spine, .agenda-view, .summary-panel, .timeline-card,
+.week-spine-overview-week, .summary-panel-glass-stack {
+  border-radius: var(--portal-radius);
+  border-color: var(--border);
+}
+.week-spine, .agenda-view, .summary-panel:not(.summary-panel--glass):not(.summary-panel--glass-wallpaper), .timeline-card {
+  background-color: var(--bg-muted);
+}
+.week-spine { box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+.week-spine-track, .week-spine-overview-day, .week-spine-overview-day-track { border-radius: 3px; }
+.week-spine-day strong span { border-radius: 4px; }
+.week-spine-day.is-selected .week-spine-day-label { color: var(--blue-dark); font-weight: 700; }
+.week-spine-overview-week.is-focus-week { border-color: var(--brand-accent); }
+.summary-label, .day-timeline-title { font-weight: 600; }
+.summary-total { font-size: 30px; letter-spacing: -.04em; }
+.summary-total, .week-spine-hours, .mini-timeline-date-title time, .activity-popup-time {
+  font-variant-numeric: tabular-nums;
+}
+.day-timeline-header, .week-spine-overview-week-header { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.agenda-row.is-today { background: color-mix(in srgb, var(--brand-accent) 7%, var(--bg-muted)); box-shadow: inset 3px 0 var(--brand-accent); }
+.agenda-row.is-today:hover { background: color-mix(in srgb, var(--brand-accent) 11%, var(--bg-muted)); }
+
+/* Reminder's legacy palette aliases deliberately resolve to the same tokens. */
+html .reminder-app-container, html[data-theme="dark"] .reminder-app-container {
+  --g-blue: var(--brand-accent);
+  --g-blue-hover: var(--blue-dark);
+  --g-blue-light: var(--blue-tint);
+  --g-blue-light-hover: color-mix(in srgb, var(--brand-accent) 22%, var(--bg-muted));
+  --g-surface: var(--bg-muted);
+  --g-background: var(--bg);
+  --g-on-surface: var(--text-primary);
+  --g-on-surface-variant: var(--text-secondary);
+  --g-outline: var(--border);
+  --g-outline-variant: var(--border);
+  --g-active-bg: color-mix(in srgb, var(--brand-accent) 4%, var(--bg-muted));
+  --g-active-border: color-mix(in srgb, var(--brand-accent) 20%, var(--border));
+  --md-ref-radius-card: var(--portal-radius);
+  --md-ref-radius-control: var(--portal-control-radius);
+  --md-ref-radius-pill: var(--portal-control-radius);
+  --md-ref-elevation-1: 0 1px 2px rgb(0 0 0 / 5%);
+  --md-ref-elevation-2: var(--portal-shadow);
+}
+.reminder-app-container .app-topbar { border-bottom: 1px solid var(--border); box-shadow: none; }
+.reminder-app-container .topbar-omnibar { border-radius: var(--portal-control-radius); background: var(--bg); }
+.reminder-app-container .nav-sidebar { box-shadow: none; border: 1px solid var(--border); border-radius: var(--portal-radius); }
+.reminder-app-container .nav-item { border-radius: 4px; }
+.reminder-app-container .nav-item.is-active { color: var(--blue-dark); background: var(--blue-tint); box-shadow: inset 3px 0 var(--brand-accent); }
+.reminder-app-container :is(.main-panel, .timeline-panel, .composer-card, .reminder-card) { border-radius: var(--portal-radius); border-color: var(--border); box-shadow: none; }
+.reminder-app-container :is(.main-panel-toolbar, .timeline-header, .tab-bar) { border-color: var(--border); }
+.reminder-app-container .main-panel-toolbar h2 { font-size: 19px; letter-spacing: -.025em; }
+.reminder-app-container :is(.add-reminder-btn, .btn-contained) { border-radius: var(--portal-control-radius); background: var(--portal-action); color: var(--portal-on-action); box-shadow: none; }
+.reminder-app-container :is(.add-reminder-btn, .btn-contained):hover { background: color-mix(in srgb, var(--portal-action) 88%, var(--text-primary)); box-shadow: none; transform: none; }
+.reminder-app-container :is(.tab-btn, .form-input, .form-select, .reminder-action-btn, .topbar-icon-btn) { border-radius: var(--portal-control-radius); }
+.reminder-app-container :is(.tab-btn, .reminder-status-tab).is-active { color: var(--blue-dark); }
+.reminder-app-container .reminder-status-tab { min-height: 34px; padding: 7px 6px; font-size: 11px; }
+.reminder-app-container .reminder-type-icon { border-radius: 4px; }
+.reminder-app-container .reminder-card:hover,
+.reminder-app-container .reminder-card:focus-within { transform: none; box-shadow: inset 0 0 0 1px var(--border); }
+.reminder-app-container :is(.time-display, .tape-time, .timeline-time) { font-variant-numeric: tabular-nums; }
+.reminder-app-container :is(button, input, textarea, select):focus-visible { outline: 2px solid var(--portal-focus); outline-offset: 3px; }
+
+/* Shared overlay surfaces extend the same framing to editing and settings. */
+.modal-box, .activity-popup, .activity-ai-assistant, .login-guide-panel,
+.token-expiry-banner { border-radius: var(--portal-radius); border-color: var(--border); box-shadow: var(--portal-shadow); }
+.settings-drawer { background: var(--bg-muted); border-left: 1px solid var(--border); box-shadow: var(--portal-shadow); }
+.settings-drawer-header, .modal-header, .activity-ai-header {
+  border-bottom-color: color-mix(in srgb, var(--brand-accent) 38%, var(--border));
+  background: var(--portal-raised);
+}
+.settings-drawer-title, .modal-title { font-weight: 600; letter-spacing: -.025em; }
+.settings-section + .settings-section { border-top: 1px solid var(--border); }
+.settings-section-title { color: var(--blue-dark); letter-spacing: .06em; }
+.settings-row-label { min-width: 0; }
+.settings-lang-switch { display: inline-flex; flex: 0 0 auto; padding: 3px; border: 1px solid var(--border); border-radius: var(--portal-control-radius); background: var(--bg); }
+.settings-lang-option { min-height: 30px; padding: 5px 8px; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.settings-lang-option.is-active { background: var(--blue-tint); color: var(--blue-dark); font-weight: 600; }
+.settings-lang-switch, .settings-lang-option, .settings-color-input,
+.modal-field input, .modal-field select, .modal-field textarea { border-radius: var(--portal-control-radius); }
+.modal-box .modal-field :is(input, select, textarea) {
+  background: var(--bg);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.modal-box { border: 1px solid var(--border); }
+.modal-box .tag-input-wrap { border-color: var(--border); border-radius: var(--portal-control-radius); background: var(--bg); }
+.modal-box .tag-input-wrap:focus-within { outline: 2px solid var(--portal-focus); outline-offset: 2px; }
+.modal-box .tag-input { background: transparent; }
+.activity-ai-composer textarea, .activity-ai-message, .activity-ai-quick-replies button { border-radius: var(--portal-control-radius); }
+
+@media (max-width: 900px) {
+  .app-header { flex-wrap: wrap; gap: 8px; }
+  .app-header-left { flex-wrap: wrap; min-width: 0; }
+  .app-header-right { margin-left: auto; min-width: 0; }
+  .app-logo { width: 36px; margin-right: 2px; }
+  .mode-switch button { min-width: 82px; padding-inline: 12px; }
+  .app-title { font-size: 14px; }
+  /* Stack whole reading surfaces. Grid's automatic rows used to shrink the
+     middle list to its toolbar, hiding cards between the nav and timeline. */
+  .reminder-app-container .dashboard-body { display: flex; flex-direction: column; overflow-y: auto; gap: 12px; padding: 12px 0; }
+  .reminder-app-container .nav-sidebar { flex: 0 0 auto; height: auto; max-height: 220px; }
+  .reminder-app-container .main-panel { flex: 0 0 auto; height: auto; min-height: 280px; }
+  .reminder-app-container .main-panel-toolbar { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .reminder-app-container .main-panel-toolbar h2 { font-size: 17px; }
+  .reminder-app-container .reminders-scroll-area { flex: none; min-height: 160px; overflow: visible; }
+  .reminder-app-container .tab-bar { flex-wrap: wrap; }
+  .reminder-app-container .timeline-panel { flex: 0 0 420px; height: 420px; min-height: 360px; }
+}
+@media (max-width: 760px) {
+  .app-header--reminder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .app-header--reminder .app-header-left { grid-column: 1; grid-row: 1; }
+  .app-header--reminder .app-header-right { grid-column: 2; grid-row: 1; }
+  .app-header--reminder .app-header-reminder-slot { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .login-layout { grid-template-columns: minmax(0, 1fr); max-width: 440px; gap: 28px; }
+  .login-portal-intro { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 10px 16px; }
+  .login-portal-eyebrow { grid-column: 1 / -1; }
+  .login-portal-art { width: 112px; margin: 0 0 0 -12px; }
+  .login-portal-caption h2 { font-size: 23px; margin-bottom: 6px; }
+  .login-portal-caption p { font-size: 12px; line-height: 1.6; margin-bottom: 8px; }
+  .login-portal-caption > span { font-size: 9px; }
+  .login-card { padding: 28px 24px; gap: 16px; }
+  .login-headline { font-size: 22px; }
+  .week-spine { padding: 14px; }
+  .week-spine-grid-wrap { grid-template-columns: 36px minmax(350px, 1fr); overflow-x: auto; padding-bottom: 6px; }
+}
+@media (max-width: 480px) {
+  .app-main { padding: 10px; background-size: 32px 32px; }
+  .app-header { padding-inline: 10px; max-height: none; }
+  .app-header-left { gap: 5px; }
+  .app-header-right { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+  .mode-switch button { min-width: 70px; padding: 7px 8px; font-size: 12px; }
+  .tag-search-wrap { max-width: 170px; }
+  .login-screen { padding: 20px 6px; }
+  .login-card { padding: 24px 20px; }
+  .login-portal-caption h2 { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .mode-switch button, .reminder-app-container .topbar-omnibar { transition: none; }
+}
+@media (forced-colors: active) {
+  .app-main { background-image: none; }
+  .mode-switch button.active, .reminder-app-container .nav-item.is-active { outline: 2px solid Highlight; }
+}
+html.screen-reader-mode .app-main { background-image: none; }
