@@ -152,6 +152,18 @@ body { -webkit-font-smoothing: antialiased; }
   background-color: var(--bg-muted);
 }
 .week-spine { box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+.activity-archive {
+  padding: 18px 16px 24px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 28%, var(--border));
+  border-inline-start: 3px solid var(--brand-accent);
+  border-radius: var(--portal-radius);
+  background: var(--portal-raised);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 6%);
+}
+.activity-archive-heading {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
 .week-spine-track, .week-spine-overview-day, .week-spine-overview-day-track { border-radius: 3px; }
 .week-spine-day strong span { border-radius: 4px; }
 .week-spine-day.is-selected .week-spine-day-label { color: var(--blue-dark); font-weight: 700; }
