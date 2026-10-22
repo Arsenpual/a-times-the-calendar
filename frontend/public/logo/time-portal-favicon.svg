@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-  <title id="title">Time portal</title>
-  <!-- Fewer depth planes and wider strokes preserve the doorway at tab size. -->
-  <g fill="none" stroke="#D85A30" stroke-width="3" stroke-linejoin="miter">
-    <path d="M6 6H58V58H6Z M9.3 17H39.3V47H9.3Z M12 26H24V38H12Z"/>
-    <path stroke-width="2.5" d="M6 6L12 26 M58 6L24 26 M58 58L24 38 M6 58L12 38"/>
-  </g>
-</svg>

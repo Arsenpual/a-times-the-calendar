@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { formatWeekLabel, getYearCycle } from "../../../shared/lib/date-utils.js";
+import { formatWeekLabel, getYearCycle, getYearWeekRange } from "../../../shared/lib/date-utils.js";
 
 function formatCycleLabel(date) {
   const cycle = getYearCycle(date);
@@ -78,8 +78,15 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
     closeDay();
     setSummaryPanelMode("week");
   }, [closeDay]);
-  const activityHeaderTitle = weekSpineViewMode === "four-weeks"
+  const headerLabel = weekSpineViewMode === "four-weeks"
     ? formatCycleLabel(cycleAnchorDate)
     : formatWeekLabel(cursorDate);
+  const headerDate = weekSpineViewMode === "four-weeks"
+    ? getYearCycle(cycleAnchorDate).start
+    : getYearWeekRange(cursorDate)[0];
+  const activityHeaderTitle = {
+    date: headerDate.toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }),
+    period: headerLabel.slice(headerLabel.indexOf(weekSpineViewMode === "four-weeks" ? "cycle ที่" : "สัปดาห์ที่")),
+  };
   return { weekSpineViewMode, cycleAnchorDate, weekSpineFullscreenRequest, summaryPanelMode, setWeekSpineView, navigateCycle, openCycleWeekEditor, openCycleWeekView, handleTimelineFullscreenChange, selectCycleWeek, focusCycleSummary, focusWeeklySummary, activityHeaderTitle };
 }

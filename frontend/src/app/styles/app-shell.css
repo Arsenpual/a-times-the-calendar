@@ -52,11 +52,18 @@
 }
 
 .app-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
   font-size: 16px;
   font-weight: 400;
   margin: 0 0 0 8px;
   color: var(--text-primary);
 }
+
+.app-title-date { color: var(--text-primary); }
+.app-title-period { color: var(--today); font-size: 12px; }
 
 .header-week-spine-view-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .header-week-spine-view-switch button { min-height: 28px; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font: 600 11px/1 inherit; cursor: pointer; }

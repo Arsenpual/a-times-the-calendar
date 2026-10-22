@@ -23,7 +23,8 @@ body { -webkit-font-smoothing: antialiased; }
   border-bottom-color: color-mix(in srgb, var(--brand-accent) 40%, var(--border));
   box-shadow: 0 1px 0 var(--bg-muted);
 }
-.app-logo { width: 42px; margin-right: 10px; }
+.app-logo { width: 144px; margin-right: 10px; }
+.reminder-wordmark { width: 144px; }
 .app-header-reminder-slot { flex: 1 1 260px; min-width: 0; }
 .app-header-reminder-slot .reminder-header-tools {
   --g-blue: var(--brand-accent);
@@ -248,7 +249,7 @@ html .reminder-app-container, html[data-theme="dark"] .reminder-app-container {
   .app-header { flex-wrap: wrap; gap: 8px; }
   .app-header-left { flex-wrap: wrap; min-width: 0; }
   .app-header-right { margin-left: auto; min-width: 0; }
-  .app-logo { width: 36px; margin-right: 2px; }
+  .app-logo { width: 88px; margin-right: 2px; }
   .mode-switch button { min-width: 82px; padding-inline: 12px; }
   .app-title { font-size: 14px; }
   /* Stack whole reading surfaces. Grid's automatic rows used to shrink the

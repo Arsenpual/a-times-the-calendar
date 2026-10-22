@@ -79,7 +79,10 @@ export default function AppHeader({
                     ▼
                   </button>
                 </div>
-                <h1 className="app-title">{activityHeaderTitle}</h1>
+                <h1 className="app-title">
+                  <span className="app-title-date">{activityHeaderTitle.date}</span>
+                  <span className="app-title-period">{activityHeaderTitle.period}</span>
+                </h1>
                 <div className="header-week-spine-view-switch" role="group" aria-label="มุมมอง Activity Mode">
                   <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
                   <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Cycle</button>
