@@ -7,3 +7,5 @@
 @import "./features/calendar-connection/styles/calendar-connection.css";
 @import "./features/activity/styles/activity-mode.css";
 @import "./shared/styles/portal-theme.css";
+@import "./app/styles/app-header.css";
+@import "./app/styles/app-taskbar.css";

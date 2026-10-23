@@ -1,12 +1,12 @@
 import React from "react";
 import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
-import TelegramChatLauncher from "../../features/notifications/telegram/components/telegram-chat-launcher.jsx";
 
 export default function AppHeader({
+  navigationExpanded,
+  onToggleNavigation,
   firebaseUser,
   reminderHeaderRef,
   mode,
-  setMode,
   goToday,
   navigateDay,
   navigateWeek,
@@ -24,9 +24,6 @@ export default function AppHeader({
   calendarTokenExpiresAtStorageKey,
   onTestFirestoreQuota,
   firestoreQuotaTestActive,
-  telegramConnected,
-  telegramUnreadCount,
-  onOpenMrZettascaleChat,
   accountMenuRef,
   accountMenuOpen,
   setAccountMenuOpen,
@@ -38,29 +35,13 @@ export default function AppHeader({
 {firebaseUser && (
         <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}`}>
           <div className="app-header-left">
+            <button id="app-navigation-toggle" className="btn-icon app-navigation-toggle" type="button" onClick={onToggleNavigation} aria-label={navigationExpanded ? "ย่อเมนูฟีเจอร์" : "เปิดเมนูฟีเจอร์"} aria-expanded={Boolean(navigationExpanded)} aria-controls="app-taskbar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
             <BrandWordmark className="app-logo" />
-            <div className="mode-switch" role="tablist" aria-label="สลับโหมด">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "activity"}
-                className={mode === "activity" ? "active" : ""}
-                onClick={() => setMode("activity")}
-              >
-                Activity
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "reminder"}
-                className={mode === "reminder" ? "active" : ""}
-                onClick={() => setMode("reminder")}
-              >
-                Reminder
-              </button>
-            </div>
+            {mode === "reminder" && <span className="header-feature-title">Reminder</span>}
             {mode === "activity" && (
-              <>
+              <div className="header-calendar-tools">
                 <button className="btn btn-outline" onClick={goToday}>
                   วันนี้
                 </button>
@@ -87,7 +68,7 @@ export default function AppHeader({
                   <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
                   <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Cycle</button>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
@@ -99,7 +80,10 @@ export default function AppHeader({
             {mode === "activity" ? (
               <>
                 <div className="tag-search-wrap">
-                  <span className="tag-search-icon">🔍</span>
+                  <svg className="tag-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="10.5" cy="10.5" r="6.5" />
+                    <path d="m16 16 4.5 4.5" />
+                  </svg>
                   {tagSearchTerms.map((term) => (
                     <span key={term} className="tag-search-chip">
                       #{term}
@@ -212,12 +196,6 @@ export default function AppHeader({
                 )}
               </>
             ) : null}
-            <TelegramChatLauncher
-              placement="header"
-              connected={telegramConnected}
-              unreadCount={telegramUnreadCount}
-              onOpenChat={onOpenMrZettascaleChat}
-            />
             <div className="account-menu-wrap" ref={accountMenuRef}>
               <button
                 type="button"

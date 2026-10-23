@@ -6,8 +6,6 @@ const WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
 export function ActivityModalHeader({
   isEditing,
-  onSyncGoogleCalendar,
-  googleCalendarSyncing,
   onOpenAssistant,
   onClose
 }) {
@@ -15,12 +13,6 @@ export function ActivityModalHeader({
     <div className="modal-header">
       <h2 className="modal-title">{isEditing ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</h2>
       <div className="modal-header-actions">
-        {!isEditing && onSyncGoogleCalendar && (
-          <button type="button" className="google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} title="ดึงกิจกรรมของสัปดาห์นี้จาก Google Calendar">
-            <img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" />
-            <span>{googleCalendarSyncing ? "กำลังดึง..." : "ดึงจาก Google Calendar"}</span>
-          </button>
-        )}
         {!isEditing && onOpenAssistant && (
           <button
             type="button"

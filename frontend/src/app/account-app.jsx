@@ -34,6 +34,7 @@ import { useAssistantPreferences } from "../features/activity/assistant/hooks/us
 import { useTelegramConnection } from "../features/reminder/hooks/use-telegram-connection.js";
 import { useTelegramWebChat } from "../features/notifications/telegram/hooks/use-telegram-web-chat.js";
 import AppHeader from "./components/app-header.jsx";
+import AppTaskbar from "./components/app-taskbar.jsx";
 import CalendarConnectionOverlays from "./components/calendar-connection-overlays.jsx";
 import ActivityAuthState from "./components/activity-auth-state.jsx";
 import FirestoreQuotaBanner from "./components/firestore-quota-banner.jsx";
@@ -130,6 +131,7 @@ export default function AccountApp({ auth }) {
   }, [error, setError, setAuthError]);
 
   const { mode, setMode, settingsOpen, setSettingsOpen } = useAppNavigation();
+  const [navigationExpanded, setNavigationExpanded] = useState(false);
   const {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled,
@@ -217,7 +219,7 @@ export default function AccountApp({ auth }) {
       await loadActivities();
     } catch {
       // loadActivities already exposes a recoverable error and clears an
-      // expired token. Keep the modal usable after a failed manual sync.
+      // expired token. Keep navigation usable after a failed manual sync.
     }
   }, [calendarAccessToken, loadActivities, setError]);
 
@@ -413,6 +415,8 @@ export default function AccountApp({ auth }) {
   return (
     <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
       <AppHeader
+        navigationExpanded={navigationExpanded}
+        onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
         firebaseUser={firebaseUser}
         reminderHeaderRef={setReminderHeaderTarget}
         mode={mode}
@@ -434,9 +438,6 @@ export default function AccountApp({ auth }) {
         calendarTokenExpiresAtStorageKey={CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY}
         onTestFirestoreQuota={handleTestFirestoreQuota}
         firestoreQuotaTestActive={Boolean(firestoreQuota?.simulated)}
-        telegramConnected={telegramIntegration.telegramConnection.isConnected}
-        telegramUnreadCount={telegramChat.unreadCount}
-        onOpenMrZettascaleChat={openMrZettascaleChat}
         accountMenuRef={accountMenuRef}
         accountMenuOpen={accountMenuOpen}
         setAccountMenuOpen={setAccountMenuOpen}
@@ -455,7 +456,18 @@ export default function AccountApp({ auth }) {
       <FirestoreQuotaBanner quota={firestoreQuota} />
 
       {error && <PopupLayerItem id="app-error" region="top-right" priority={90}><div className="error-banner" role="alert">{error}</div></PopupLayerItem>}
-      <main className="app-main">
+      <div className="app-workspace">
+        {firebaseUser && <AppTaskbar
+          mode={mode}
+          expanded={navigationExpanded}
+          onClose={() => setNavigationExpanded(false)}
+          onSelectMode={(nextMode) => { setMode(nextMode); setNavigationExpanded(false); }}
+          onOpenAssistant={() => { openMrZettascaleChat(); setNavigationExpanded(false); }}
+          unreadCount={telegramChat.unreadCount}
+          onSyncGoogleCalendar={handleManualCalendarSync}
+          googleCalendarSyncing={loading}
+        />}
+      <main className="app-main" id="app-workspace-content">
         {firebaseUser && (
           // Keep the reminder runtime mounted while Activity Mode is open.
           // Its due-check loop owns Telegram reminder delivery, so unmounting
@@ -646,6 +658,7 @@ export default function AccountApp({ auth }) {
           </React.Fragment>
         )}
       </main>
+      </div>
 
       <ActivityModal
         // key เปลี่ยนตามกิจกรรมที่กำลังแก้ไข (หรือวันที่ที่กำลังจะสร้างใหม่)
@@ -679,8 +692,6 @@ export default function AccountApp({ auth }) {
         onDeleteCategory={handleDeleteCategory}
         onSave={saveActivityWithAssistantLearning}
         onDelete={handleDeleteActivity}
-        onSyncGoogleCalendar={handleManualCalendarSync}
-        googleCalendarSyncing={loading}
         onOpenAssistant={() => {
           setActivityAssistantOpen(true);
           setActivityAssistantStartRequest((current) => current + 1);

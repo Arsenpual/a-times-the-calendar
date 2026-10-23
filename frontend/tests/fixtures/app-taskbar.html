@@ -1,0 +1,26 @@
+<!doctype html><html lang="th"><meta charset="UTF-8"><div id="root"></div>
+<script type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import AppHeader from '/src/app/components/app-header.jsx';
+import AppTaskbar from '/src/app/components/app-taskbar.jsx';
+import '/src/features/reminder/styles/reminder-mode.css';
+import '/src/index.css';
+const h = React.createElement;
+function Fixture() {
+  const [mode, setMode] = useState('activity');
+  const [expanded, setExpanded] = useState(false);
+  const [action, setAction] = useState('');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const select = mode => { setMode(mode); setExpanded(false); };
+  return h('div', {className: 'app app--'+mode},
+    h(AppHeader, {firebaseUser: {displayName:'Preview'}, mode, navigationExpanded:expanded,
+      onToggleNavigation:()=>setExpanded(v=>!v), activityHeaderTitle:{date:'18 ตุลาคม 2026',period:'สัปดาห์ที่ 43/53 ของปี'},
+      weekSpineViewMode:'week',setWeekSpineView:()=>{},tagSearchTerms:[],tagSearchDraft:'',setTagSearchDraft:()=>{},
+      calendarAccessToken:'preview',cursorDate:new Date(),accountMenuOpen,setAccountMenuOpen,setSettingsOpen:()=>setAction('settings')}),
+    h('div',{className:'app-workspace'},
+      h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>setAction('assistant'),unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
+      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action))));
+}
+createRoot(document.getElementById('root')).render(h(Fixture));
+</script></html>

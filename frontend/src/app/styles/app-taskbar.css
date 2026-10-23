@@ -1,0 +1,38 @@
+/* Shared navigation frame: feature runtimes stay inside the existing main. */
+.app-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.app-workspace > .app-main { min-width: 0; min-height: 0; }
+.app-taskbar { display: flex; flex-direction: column; flex: 0 0 88px; width: 88px; gap: 16px; padding: 16px 8px; overflow-y: auto; background: var(--bg-muted); }
+.taskbar-destinations { display: flex; flex-direction: column; gap: 8px; }
+.app-taskbar .taskbar-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 64px; padding: 4px; border: 0; border-radius: 16px; background: transparent; color: var(--text-secondary); font: 500 12px/1.4 inherit; font-family: inherit; font-size: 12px; cursor: pointer; }
+.taskbar-icon { display: grid; place-items: center; width: 56px; height: 32px; border-radius: 999px; }
+.taskbar-icon svg { width: 22px; height: 22px; }
+.app-taskbar .taskbar-item:hover { background: var(--hover); }
+.app-taskbar .taskbar-item.is-active { color: var(--blue-dark); font-weight: 600; }
+.taskbar-item.is-active .taskbar-icon { background: var(--blue-tint); }
+.taskbar-item:active .taskbar-icon { background: color-mix(in srgb, var(--text-primary) 12%, var(--blue-tint)); }
+.app-taskbar .google-calendar-sync-btn { margin-top: auto; }
+.app-taskbar .google-calendar-sync-btn:disabled { opacity: .65; cursor: wait; }
+.app-taskbar .google-calendar-sync-btn img { width: 22px; height: 22px; }
+.app-taskbar .taskbar-icon { position: relative; }
+.taskbar-unread { position: absolute; top: -3px; right: 0; min-width: 18px; padding: 1px 4px; border-radius: 999px; background: var(--portal-action); color: var(--portal-on-action); font-size: 10px; line-height: 16px; }
+.app-taskbar.is-expanded { flex-basis: 216px; width: 216px; padding-inline: 12px; }
+.app-taskbar.is-expanded .taskbar-item { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 999px; font-size: 14px; }
+.app-taskbar.is-expanded .taskbar-icon { width: 32px; flex-shrink: 0; }
+.app-taskbar.is-expanded .taskbar-item.is-active { background: var(--blue-tint); }
+.app-header .app-navigation-toggle { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; }
+.app-navigation-toggle svg { width: 24px; height: 24px; }
+.header-feature-title { font-size: 18px; font-weight: 500; color: var(--text-primary); }
+/* Navigation remains available while reading a feature's scrollable content. */
+.app--activity.is-reading .app-header { max-height: 420px; padding: 12px 20px; border-bottom-color: var(--border); opacity: 1; overflow: visible; pointer-events: auto; }
+@media (max-width: 760px) {
+  .app-workspace { flex-direction: column; }
+  .app-taskbar { display: none; }
+  .app-taskbar.is-expanded { display: flex; flex: 0 0 auto; width: 100%; max-height: 45vh; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+  .app-taskbar.is-expanded .taskbar-destinations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-taskbar.is-expanded .google-calendar-sync-btn { margin-top: 0; }
+  .app--activity.is-reading .app-header { padding: 12px 16px; }
+}
+@media (max-width: 480px) {
+  .app--activity.is-reading .app-header { padding: 10px 12px; }
+  .app-header--reminder .header-feature-title { flex-basis: 100%; padding-left: 8px; }
+}

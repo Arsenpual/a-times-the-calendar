@@ -448,33 +448,3 @@
   align-items: center;
   gap: 8px;
 }
-
-.google-calendar-sync-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-muted);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.google-calendar-sync-btn:hover:not(:disabled) {
-  background: var(--bg-hover, rgba(60, 64, 67, 0.08));
-}
-
-.google-calendar-sync-btn:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
-.google-calendar-sync-btn img {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}

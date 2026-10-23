@@ -98,8 +98,6 @@ export default function ActivityModal({
   onDeleteCategory,
   onSave,
   onDelete,
-  onSyncGoogleCalendar,
-  googleCalendarSyncing = false,
   onOpenAssistant,
   onClose
 }) {
@@ -550,8 +548,6 @@ export default function ActivityModal({
       <div ref={modalBoxRef} className="modal-box" onClick={(e) => e.stopPropagation()}>
         <ActivityModalHeader
           isEditing={isEditing}
-          onSyncGoogleCalendar={onSyncGoogleCalendar}
-          googleCalendarSyncing={googleCalendarSyncing}
           onOpenAssistant={onOpenAssistant}
           onClose={onClose}
         />

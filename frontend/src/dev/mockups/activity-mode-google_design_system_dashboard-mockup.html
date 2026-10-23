@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Calendar - Google Material You 7-Day Overview</title>
+    
+    <!-- Google Fonts: Inter as primary font family -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Material Symbols Outlined Icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Material Design 3 Color Tokens
+                        md: {
+                            bg: '#141318',              // Base canvas level 0
+                            surface1: '#1E1B24',        // Surface Level 1 (Sidebars/Containers)
+                            surface2: '#25232A',        // Surface Level 2 (Cards/Tiles)
+                            surface3: '#2D2933',        // Surface Level 3 (Hover/Elevated)
+                            surface4: '#36323D',        // Active / Highlight state
+                            primary: '#A8C7FA',         // Google Blue Soft Accent
+                            primaryContainer: '#004A77',
+                            onPrimaryContainer: '#C2E7FF',
+                            purple: '#D0BCFF',          // Material Purple Accent
+                            purpleContainer: '#4F378B',
+                            onSurface: '#E6E1E5',       // High Contrast Text
+                            onSurfaceVariant: '#C6C5D0',// Medium Contrast Text
+                            outline: '#49454F',
+                            outlineVariant: '#36343B',
+                            
+                            // Signature Google 4 Colors
+                            gBlue: '#4285F4',
+                            gRed: '#EA4335',
+                            gYellow: '#FBBC05',
+                            gGreen: '#34A853',
+                        }
+                    },
+                    borderRadius: {
+                        'pill': '9999px',
+                        'md3-sm': '12px',
+                        'md3-md': '18px',
+                        'md3-lg': '28px',
+                    },
+                    boxShadow: {
+                        'md3-elevation1': '0px 1px 3px 1px rgba(0, 0, 0, 0.2), 0px 1px 2px 0px rgba(0, 0, 0, 0.4)',
+                        'md3-elevation3': '0px 4px 12px 3px rgba(0, 0, 0, 0.3), 0px 1px 3px 0px rgba(0, 0, 0, 0.5)',
+                        'fab-glow': '0px 4px 16px rgba(168, 199, 250, 0.25), 0px 2px 4px rgba(0,0,0,0.4)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Base Styling & Custom Scrollbar */
+        body {
+            background-color: #141318;
+            color: #E6E1E5;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #141318;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2D2933;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #49454F;
+        }
+
+        /* Material Ripple Overlay Effect */
+        .md-ripple {
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+        .md-ripple::after {
+            content: "";
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10, 10);
+            opacity: 0;
+            transition: transform .4s, opacity 0.8s;
+        }
+        .md-ripple:active::after {
+            transform: scale(0, 0);
+            opacity: 0.3;
+            transition: 0s;
+        }
+
+        /* Standard MD3 Transition Easing Curve */
+        .md-transition {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+            transition-duration: 250ms;
+        }
+
+        /* Continuous Pulse/Spin Keyframes */
+        @keyframes syncSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: syncSpin 1s linear infinite;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-md-primaryContainer selection:text-md-onPrimaryContainer">
+
+    <!-- ==================== SIDE NAVIGATION BAR (Desktop) ==================== -->
+    <aside class="hidden md:flex flex-col w-64 bg-md-surface1 border-r border-md-outlineVariant/30 p-4 shrink-0 select-none">
+        <!-- Google Calendar Header Logo & Brand -->
+        <div class="flex items-center gap-3 px-3 py-3 mb-4">
+            <div class="relative flex items-center justify-center w-9 h-9 rounded-md3-sm bg-md-surface2 border border-md-outlineVariant/40">
+                <span class="material-symbols-outlined text-md-gBlue text-2xl">calendar_today</span>
+                <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-md-gGreen border-2 border-md-surface1"></span>
+            </div>
+            <div>
+                <span class="font-bold text-base text-md-onSurface tracking-tight block leading-none">Focus Calendar</span>
+                <span class="text-[11px] text-md-onSurfaceVariant/80 font-medium">Google Sync 7-Day View</span>
+            </div>
+        </div>
+
+        <!-- Navigation Categories -->
+        <nav class="space-y-1.5 flex-1" id="desktopNav">
+            <button onclick="switchTab('focus')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3 rounded-pill text-sm font-medium md-transition text-md-onSurface bg-md-primaryContainer text-md-onPrimaryContainer" data-tab="focus">
+                <span class="material-symbols-outlined text-xl">view_week</span>
+                <span>7-Day Focused View</span>
+            </button>
+            <button onclick="switchTab('today')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3 rounded-pill text-sm font-medium md-transition text-md-onSurfaceVariant hover:bg-md-surface2" data-tab="today">
+                <span class="material-symbols-outlined text-xl">today</span>
+                <span>Today's Blocks</span>
+            </button>
+            <button onclick="switchTab('starred')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3 rounded-pill text-sm font-medium md-transition text-md-onSurfaceVariant hover:bg-md-surface2" data-tab="starred">
+                <span class="material-symbols-outlined text-xl">star</span>
+                <span>Starred Activities</span>
+            </button>
+            <button onclick="switchTab('completed')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3 rounded-pill text-sm font-medium md-transition text-md-onSurfaceVariant hover:bg-md-surface2" data-tab="completed">
+                <span class="material-symbols-outlined text-xl">task_alt</span>
+                <span>Completed Tasks</span>
+            </button>
+        </nav>
+
+        <!-- Google Calendar Sync Status Widget -->
+        <div class="p-3.5 bg-md-surface2 rounded-md3-md mt-auto text-xs text-md-onSurfaceVariant space-y-2 border border-md-outlineVariant/30">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span id="syncDot" class="w-2.5 h-2.5 rounded-full bg-md-gGreen"></span>
+                    <span class="font-medium text-md-onSurface">Google Calendar</span>
+                </div>
+                <span class="text-[10px] bg-md-gGreen/15 text-md-gGreen font-semibold px-2 py-0.5 rounded-pill">Live</span>
+            </div>
+            <p id="syncTimeText" class="text-[11px] text-md-onSurfaceVariant/80">Synced just now</p>
+            
+            <button onclick="triggerSync()" id="syncBtn" class="w-full flex items-center justify-center gap-2 bg-md-surface3 hover:bg-md-surface4 text-md-onSurface py-2 px-3 rounded-pill text-xs font-medium md-transition md-ripple">
+                <span id="syncIcon" class="material-symbols-outlined text-sm text-md-primary">sync</span>
+                <span>Sync Calendar Now</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ==================== MAIN APPLICATION CONTENT ==================== -->
+    <main class="flex-1 flex flex-col min-w-0 max-w-6xl mx-auto w-full p-4 md:p-8 pb-24 md:pb-8">
+        
+        <!-- TOP TOOLBAR: Search Bar, Sync Indicator, Profile -->
+        <header class="flex items-center gap-3 mb-6">
+            <!-- Pill Search Input -->
+            <div class="flex-1 flex items-center bg-md-surface2 hover:bg-md-surface3 focus-within:bg-md-surface3 px-4 py-2.5 rounded-pill md-transition border border-transparent focus-within:border-md-outline/40 shadow-sm">
+                <span class="material-symbols-outlined text-md-onSurfaceVariant mr-3">search</span>
+                <input type="text" id="searchInput" placeholder="Search 7-day schedule, work blocks, fitness..." 
+                       class="w-full bg-transparent text-md-onSurface placeholder:text-md-onSurfaceVariant/60 text-sm focus:outline-none">
+                <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-md-onSurfaceVariant hover:text-md-onSurface p-1">
+                    <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+            </div>
+
+            <!-- Sync Button (Mobile Trigger) -->
+            <button onclick="triggerSync()" class="md:hidden p-2.5 bg-md-surface2 hover:bg-md-surface3 rounded-full text-md-primary md-transition">
+                <span class="material-symbols-outlined text-xl">sync</span>
+            </button>
+
+            <!-- Profile Avatar with Signature 4-Color Ring -->
+            <div class="relative shrink-0 cursor-pointer" title="Google Account Connected">
+                <div class="p-0.5 rounded-full bg-gradient-to-tr from-md-gBlue via-md-gRed to-md-gYellow">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" 
+                         alt="User Avatar" 
+                         class="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-md-bg">
+                </div>
+            </div>
+        </header>
+
+        <!-- HERO SECTION: Currently Active Focus Block -->
+        <section class="bg-gradient-to-r from-md-surface1 via-md-surface2 to-md-surface1 border border-md-outlineVariant/40 p-5 md:p-6 rounded-md3-lg mb-6 shadow-md relative overflow-hidden">
+            <div class="absolute -top-12 -right-12 w-48 h-48 bg-md-gBlue/10 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-pill bg-md-gBlue/15 text-md-gBlue text-xs font-semibold">
+                            <span class="w-2 h-2 rounded-full bg-md-gBlue animate-ping"></span>
+                            ACTIVE NOW
+                        </span>
+                        <span class="text-xs text-md-onSurfaceVariant font-medium">Google Calendar Event</span>
+                    </div>
+                    <h2 id="heroEventTitle" class="text-xl sm:text-2xl font-bold text-md-onSurface tracking-tight">Breakfast & Morning Planning Routine</h2>
+                    <p id="heroEventDetails" class="text-xs sm:text-sm text-md-onSurfaceVariant flex items-center gap-3">
+                        <span class="flex items-center gap-1"><span class="material-symbols-outlined text-base text-md-primary">schedule</span> 10:00 - 12:00</span>
+                        <span>•</span>
+                        <span class="flex items-center gap-1"><span class="material-symbols-outlined text-base text-md-gGreen">category</span> Personal & Family</span>
+                    </p>
+                </div>
+
+                <!-- Remaining Time Badge -->
+                <div class="flex sm:flex-col items-center sm:items-end justify-between bg-md-surface3/80 border border-md-outlineVariant/30 p-3 sm:px-4 sm:py-3 rounded-md3-md shrink-0">
+                    <span class="text-xs text-md-onSurfaceVariant">Time Remaining</span>
+                    <span id="countdownTimer" class="text-lg sm:text-xl font-bold font-mono text-md-primary">01h 35m 20s</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- KEY FOCUS FEATURE: 7-DAY CONDENSED OVERVIEW & FOCUS STRIP -->
+        <section class="mb-8">
+            <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-md-primary text-xl">view_week</span>
+                    <h3 class="text-base font-semibold text-md-onSurface">7-Day Condensed Overview</h3>
+                    <span class="text-xs text-md-onSurfaceVariant hidden sm:inline">(Oct 22 - Oct 28, 2026)</span>
+                </div>
+                <button onclick="selectDay('all')" id="resetDayBtn" class="text-xs font-medium text-md-primary hover:bg-md-surface2 px-3 py-1.5 rounded-pill md-transition">
+                    Show All 7 Days
+                </button>
+            </div>
+
+            <!-- 7-Day Horizontal Scroll Strip -->
+            <div class="grid grid-cols-7 gap-1.5 sm:gap-3 overflow-x-auto pb-1 no-scrollbar" id="sevenDayStrip">
+                <!-- Dynamically Generated Day Cards -->
+            </div>
+        </section>
+
+        <!-- EVENT CATEGORY FILTER CHIPS -->
+        <section class="flex items-center gap-2 overflow-x-auto pb-3 mb-6 no-scrollbar">
+            <button onclick="setFilter('all')" data-filter="all" class="filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 bg-md-primary text-md-bg">
+                <span class="material-symbols-outlined text-base">apps</span>
+                <span>All Categories</span>
+            </button>
+            <button onclick="setFilter('work')" data-filter="work" class="filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 bg-md-surface2 text-md-onSurfaceVariant hover:bg-md-surface3">
+                <span class="w-2.5 h-2.5 rounded-full bg-md-gBlue"></span>
+                <span>Work / Code</span>
+            </button>
+            <button onclick="setFilter('personal')" data-filter="personal" class="filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 bg-md-surface2 text-md-onSurfaceVariant hover:bg-md-surface3">
+                <span class="w-2.5 h-2.5 rounded-full bg-md-gGreen"></span>
+                <span>Personal & Family</span>
+            </button>
+            <button onclick="setFilter('fitness')" data-filter="fitness" class="filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 bg-md-surface2 text-md-onSurfaceVariant hover:bg-md-surface3">
+                <span class="w-2.5 h-2.5 rounded-full bg-md-gYellow"></span>
+                <span>Fitness & Health</span>
+            </button>
+            <button onclick="setFilter('deepwork')" data-filter="deepwork" class="filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 bg-md-surface2 text-md-onSurfaceVariant hover:bg-md-surface3">
+                <span class="w-2.5 h-2.5 rounded-full bg-md-purple"></span>
+                <span>Deep Work</span>
+            </button>
+        </section>
+
+        <!-- ACTIVE FILTER STATUS LABEL -->
+        <div class="flex items-center justify-between mb-4 px-1">
+            <p id="currentViewHeading" class="text-sm font-semibold text-md-onSurface flex items-center gap-2">
+                <span>Showing Schedule for:</span>
+                <span id="activeDayLabel" class="text-md-primary font-bold bg-md-surface2 px-2.5 py-0.5 rounded-pill text-xs border border-md-outlineVariant/30">All 7 Days</span>
+            </p>
+            <span id="eventCountBadge" class="text-xs text-md-onSurfaceVariant">0 items</span>
+        </div>
+
+        <!-- EVENT CARDS CONTAINER -->
+        <section id="eventList" class="space-y-3 flex-1 min-h-[280px]">
+            <!-- Dynamic Schedule Items Populated Here -->
+        </section>
+
+        <!-- EMPTY STATE -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-16 text-center">
+            <div class="w-16 h-16 rounded-full bg-md-surface1 border border-md-outlineVariant/30 flex items-center justify-center text-md-onSurfaceVariant/50 mb-3">
+                <span class="material-symbols-outlined text-3xl">event_busy</span>
+            </div>
+            <h4 class="text-sm font-semibold text-md-onSurface">No scheduled blocks found</h4>
+            <p class="text-xs text-md-onSurfaceVariant mt-1 max-w-xs">No activity matches your selected day or category filter.</p>
+        </div>
+    </main>
+
+    <!-- ==================== SIGNATURE GOOGLE FAB (Floating Action Button) ==================== -->
+    <button onclick="openModal()" 
+            class="fixed bottom-20 md:bottom-8 right-6 z-30 flex items-center gap-3 bg-md-primary text-md-bg px-5 py-4 rounded-md3-md font-medium text-sm shadow-fab-glow hover:scale-105 active:scale-95 md-transition md-ripple">
+        <span class="material-symbols-outlined text-2xl">add</span>
+        <span class="hidden sm:inline">Add Event</span>
+    </button>
+
+    <!-- ==================== MOBILE BOTTOM NAVIGATION BAR ==================== -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 bg-md-surface1 border-t border-md-outlineVariant/30 px-4 py-2 flex justify-around z-20">
+        <button onclick="switchTab('focus')" data-tab="focus" class="mobile-nav-btn flex flex-col items-center gap-1 text-md-primary">
+            <div class="px-5 py-1 rounded-pill bg-md-primaryContainer text-md-onPrimaryContainer md-transition">
+                <span class="material-symbols-outlined text-xl">view_week</span>
+            </div>
+            <span class="text-[10px] font-medium">7 Days</span>
+        </button>
+        <button onclick="switchTab('today')" data-tab="today" class="mobile-nav-btn flex flex-col items-center gap-1 text-md-onSurfaceVariant">
+            <div class="px-5 py-1 rounded-pill md-transition">
+                <span class="material-symbols-outlined text-xl">today</span>
+            </div>
+            <span class="text-[10px] font-medium">Today</span>
+        </button>
+        <button onclick="switchTab('starred')" data-tab="starred" class="mobile-nav-btn flex flex-col items-center gap-1 text-md-onSurfaceVariant">
+            <div class="px-5 py-1 rounded-pill md-transition">
+                <span class="material-symbols-outlined text-xl">star</span>
+            </div>
+            <span class="text-[10px] font-medium">Starred</span>
+        </button>
+        <button onclick="switchTab('completed')" data-tab="completed" class="mobile-nav-btn flex flex-col items-center gap-1 text-md-onSurfaceVariant">
+            <div class="px-5 py-1 rounded-pill md-transition">
+                <span class="material-symbols-outlined text-xl">task_alt</span>
+            </div>
+            <span class="text-[10px] font-medium">Done</span>
+        </button>
+    </div>
+
+    <!-- ==================== ADD/EDIT EVENT MODAL SHEET ==================== -->
+    <div id="modalBackdrop" class="fixed inset-0 bg-black/60 z-40 hidden opacity-0 md-transition flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <!-- MD3 Sheet Container (28px top radiuses) -->
+        <div id="modalSheet" class="w-full max-w-lg bg-md-surface1 rounded-t-md3-lg sm:rounded-md3-lg p-6 transform translate-y-full sm:translate-y-0 sm:scale-95 md-transition border border-md-outlineVariant/30 shadow-2xl">
+            <!-- Drag Handle Mobile -->
+            <div class="w-12 h-1.5 bg-md-outline/40 rounded-full mx-auto mb-5 sm:hidden"></div>
+
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-md-gBlue">edit_calendar</span>
+                    <h3 class="text-lg font-bold text-md-onSurface">Schedule New Block</h3>
+                </div>
+                <button onclick="closeModal()" class="text-md-onSurfaceVariant hover:text-md-onSurface p-1 rounded-full hover:bg-md-surface2">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <form id="eventForm" onsubmit="handleAddEvent(event)" class="space-y-4">
+                <!-- Title Input -->
+                <div>
+                    <label class="block text-xs font-medium text-md-onSurfaceVariant mb-1.5">Event Title</label>
+                    <input type="text" id="eventTitle" required placeholder="e.g. Deep Work: System Architecture" 
+                           class="w-full bg-md-surface2 border border-md-outlineVariant/50 rounded-md3-sm px-4 py-3 text-sm text-md-onSurface placeholder:text-md-onSurfaceVariant/50 focus:outline-none focus:border-md-primary">
+                </div>
+
+                <!-- Category Selection -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-md-onSurfaceVariant mb-1.5">Category</label>
+                        <select id="eventCategory" class="w-full bg-md-surface2 border border-md-outlineVariant/50 rounded-md3-sm px-3 py-2.5 text-sm text-md-onSurface focus:outline-none focus:border-md-primary">
+                            <option value="work">Work / Code</option>
+                            <option value="personal">Personal & Family</option>
+                            <option value="fitness">Fitness & Health</option>
+                            <option value="deepwork">Deep Work</option>
+                        </select>
+                    </div>
+
+                    <!-- Target Day (Within the 7-day window) -->
+                    <div>
+                        <label class="block text-xs font-medium text-md-onSurfaceVariant mb-1.5">Day</label>
+                        <select id="eventDayIndex" class="w-full bg-md-surface2 border border-md-outlineVariant/50 rounded-md3-sm px-3 py-2.5 text-sm text-md-onSurface focus:outline-none focus:border-md-primary">
+                            <!-- Populated dynamically with the 7 days -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Time Range -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-md-onSurfaceVariant mb-1.5">Start Time</label>
+                        <input type="time" id="eventStart" required value="10:00"
+                               class="w-full bg-md-surface2 border border-md-outlineVariant/50 rounded-md3-sm px-3 py-2.5 text-sm text-md-onSurface focus:outline-none focus:border-md-primary">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-md-onSurfaceVariant mb-1.5">End Time</label>
+                        <input type="time" id="eventEnd" required value="12:00"
+                               class="w-full bg-md-surface2 border border-md-outlineVariant/50 rounded-md3-sm px-3 py-2.5 text-sm text-md-onSurface focus:outline-none focus:border-md-primary">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-end gap-3 pt-3">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2.5 text-sm font-medium text-md-primary hover:bg-md-surface2 rounded-pill md-transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 text-sm font-medium bg-md-primary text-md-bg rounded-pill md-ripple">
+                        Sync & Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT STATE & CALENDAR ENGINE ==================== -->
+    <script>
+        // 7-Day Window Date Range Setup starting Oct 22, 2026
+        const baseDate = new Date(2026, 9, 22); // Month is 0-indexed (9 = Oct)
+        
+        // Generate the 7 days array dynamically
+        const daysOfWeek = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(baseDate);
+            d.setDate(baseDate.getDate() + i);
+            
+            const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+            const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const dateIso = d.toISOString().split('T')[0];
+            
+            daysOfWeek.push({
+                index: i,
+                dayName: dayName,
+                dateLabel: monthDay,
+                fullDate: dateIso,
+                isToday: i === 0 // Oct 22, 2026 is Today
+            });
+        }
+
+        // Realistic Pre-loaded Mock Schedule Data
+        let events = [
+            { id: 101, dayIndex: 0, title: 'Breakfast & Morning Planning Routine', startTime: '10:00', endTime: '12:00', category: 'personal', completed: false, starred: true },
+            { id: 102, dayIndex: 0, title: 'Deep Work: Core Engine & API Architecture', startTime: '13:00', endTime: '15:30', category: 'deepwork', completed: false, starred: true },
+            { id: 103, dayIndex: 0, title: 'Mobility Stretch & Fitness Session', startTime: '16:30', endTime: '17:30', category: 'fitness', completed: false, starred: false },
+            { id: 104, dayIndex: 0, title: 'Family Dinner & Sync Call', startTime: '19:00', endTime: '20:30', category: 'personal', completed: true, starred: false },
+            
+            { id: 105, dayIndex: 1, title: 'Sprint Backlog Planning with Tech Leads', startTime: '09:30', endTime: '11:00', category: 'work', completed: false, starred: true },
+            { id: 106, dayIndex: 1, title: 'Frontend Material 3 Design Polish', startTime: '11:30', endTime: '13:30', category: 'work', completed: false, starred: false },
+            { id: 107, dayIndex: 1, title: 'Evening Cardio & Run', startTime: '17:00', endTime: '18:00', category: 'fitness', completed: false, starred: false },
+
+            { id: 108, dayIndex: 2, title: 'Deep Work: Database Query Optimization', startTime: '10:00', endTime: '13:00', category: 'deepwork', completed: false, starred: true },
+            { id: 109, dayIndex: 2, title: 'Family Game Night', startTime: '18:30', endTime: '21:00', category: 'personal', completed: false, starred: false },
+
+            { id: 110, dayIndex: 3, title: 'Weekly Architecture Review', startTime: '10:30', endTime: '12:00', category: 'work', completed: false, starred: false },
+            { id: 111, dayIndex: 3, title: 'Strength Training Routine', startTime: '16:00', endTime: '17:15', category: 'fitness', completed: false, starred: false },
+
+            { id: 112, dayIndex: 4, title: 'Client Sync & Demo Presentation', startTime: '14:00', endTime: '15:30', category: 'work', completed: false, starred: true },
+            { id: 113, dayIndex: 4, title: 'Read Book & Relaxation', startTime: '20:00', endTime: '21:30', category: 'personal', completed: false, starred: false },
+
+            { id: 114, dayIndex: 5, title: 'Weekend Outdoor Cycling', startTime: '08:00', endTime: '10:30', category: 'fitness', completed: false, starred: true },
+            { id: 115, dayIndex: 5, title: 'Side Project Hacking', startTime: '14:00', endTime: '17:00', category: 'deepwork', completed: false, starred: false },
+
+            { id: 116, dayIndex: 6, title: 'Family Brunch & Grocery Run', startTime: '10:30', endTime: '13:00', category: 'personal', completed: false, starred: false },
+            { id: 117, dayIndex: 6, title: 'Weekly Goal Reset & Planning', startTime: '16:00', endTime: '17:30', category: 'work', completed: false, starred: false }
+        ];
+
+        // State variables
+        let selectedDay = 'all'; // 'all' or dayIndex 0..6
+        let currentFilter = 'all';
+        let currentTab = 'focus';
+        let searchQuery = '';
+
+        // Category Color Mapping (Material Design Tokens)
+        const categoryMeta = {
+            work: { label: 'Work / Code', color: 'bg-md-gBlue', text: 'text-md-gBlue', border: 'border-md-gBlue' },
+            personal: { label: 'Personal & Family', color: 'bg-md-gGreen', text: 'text-md-gGreen', border: 'border-md-gGreen' },
+            fitness: { label: 'Fitness & Health', color: 'bg-md-gYellow', text: 'text-md-gYellow', border: 'border-md-gYellow' },
+            deepwork: { label: 'Deep Work', color: 'bg-md-purple', text: 'text-md-purple', border: 'border-md-purple' }
+        };
+
+        // Initialize App on DOM Load
+        document.addEventListener('DOMContentLoaded', () => {
+            render7DayStrip();
+            populateModalDaySelect();
+            renderEvents();
+            startCountdownTimer();
+
+            // Search Listener
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                searchQuery = e.target.value.toLowerCase().trim();
+                document.getElementById('clearSearchBtn').classList.toggle('hidden', searchQuery === '');
+                renderEvents();
+            });
+        });
+
+        // Render the 7-Day Horizontal Summary Strip
+        function render7DayStrip() {
+            const stripContainer = document.getElementById('sevenDayStrip');
+            stripContainer.innerHTML = '';
+
+            daysOfWeek.forEach((day) => {
+                // Count total events for this day
+                const dayEvents = events.filter(e => e.dayIndex === day.index);
+                const count = dayEvents.length;
+
+                const isSelected = selectedDay === day.index;
+
+                const card = document.createElement('button');
+                card.onclick = () => selectDay(day.index);
+                card.className = `flex flex-col items-center p-2.5 sm:p-3 rounded-md3-md md-transition border text-center shrink-0 min-w-[70px] sm:min-w-[90px] ${
+                    isSelected 
+                        ? 'bg-md-primaryContainer text-md-onPrimaryContainer border-md-primary shadow-sm scale-[1.02]' 
+                        : 'bg-md-surface1 border-md-outlineVariant/30 text-md-onSurfaceVariant hover:bg-md-surface2'
+                }`;
+
+                // Calculate event density dots
+                let dotsHtml = '';
+                dayEvents.slice(0, 3).forEach(ev => {
+                    const meta = categoryMeta[ev.category] || categoryMeta.work;
+                    dotsHtml += `<span class="w-1.5 h-1.5 rounded-full ${meta.color}"></span>`;
+                });
+
+                card.innerHTML = `
+                    <span class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider ${day.isToday ? 'text-md-gBlue font-bold' : ''}">${day.dayName}</span>
+                    <span class="text-sm sm:text-base font-bold my-0.5 ${isSelected ? 'text-md-onPrimaryContainer' : 'text-md-onSurface'}">${day.dateLabel.split(' ')[1]}</span>
+                    <span class="text-[10px] text-md-onSurfaceVariant/80">${count} events</span>
+                    
+                    <!-- Density Indicator Dots -->
+                    <div class="flex items-center gap-1 mt-1.5 h-2">
+                        ${dotsHtml || '<span class="text-[9px] text-md-outline">Free</span>'}
+                    </div>
+                `;
+
+                stripContainer.appendChild(card);
+            });
+        }
+
+        // Render Event List based on Day, Filter, Tab, and Search
+        function renderEvents() {
+            const listEl = document.getElementById('eventList');
+            const emptyEl = document.getElementById('emptyState');
+            listEl.innerHTML = '';
+
+            let filtered = events.filter(ev => {
+                // Filter by Selected Day
+                if (selectedDay !== 'all' && ev.dayIndex !== selectedDay) return false;
+
+                // Filter by Tab
+                if (currentTab === 'today' && ev.dayIndex !== 0) return false;
+                if (currentTab === 'starred' && !ev.starred) return false;
+                if (currentTab === 'completed' && !ev.completed) return false;
+
+                // Filter by Category
+                if (currentFilter !== 'all' && ev.category !== currentFilter) return false;
+
+                // Filter by Search Query
+                if (searchQuery && !ev.title.toLowerCase().includes(searchQuery)) return false;
+
+                return true;
+            });
+
+            // Sort chronologically by start time
+            filtered.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+            // Update Label & Count
+            document.getElementById('eventCountBadge').innerText = `${filtered.length} scheduled item${filtered.length === 1 ? '' : 's'}`;
+            
+            if (selectedDay === 'all') {
+                document.getElementById('activeDayLabel').innerText = 'All 7 Days (Oct 22 - 28)';
+            } else {
+                const dayObj = daysOfWeek.find(d => d.index === selectedDay);
+                document.getElementById('activeDayLabel').innerText = `${dayObj.dayName}, ${dayObj.dateLabel}`;
+            }
+
+            if (filtered.length === 0) {
+                emptyEl.classList.remove('hidden');
+                emptyEl.classList.add('flex');
+                return;
+            } else {
+                emptyEl.classList.add('hidden');
+                emptyEl.classList.remove('flex');
+            }
+
+            filtered.forEach(ev => {
+                const dayObj = daysOfWeek.find(d => d.index === ev.dayIndex);
+                const meta = categoryMeta[ev.category] || categoryMeta.work;
+
+                const card = document.createElement('div');
+                card.className = `bg-md-surface1 border border-md-outlineVariant/30 p-4 rounded-md3-md flex items-center justify-between gap-3 md-transition hover:bg-md-surface2 group ${ev.completed ? 'opacity-55' : ''}`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3.5 min-w-0">
+                        <!-- Checkbox Button -->
+                        <button onclick="toggleEventComplete(${ev.id})" class="shrink-0 w-6 h-6 rounded-full border-2 ${ev.completed ? 'bg-md-primary border-md-primary text-md-bg' : 'border-md-outline hover:border-md-primary'} flex items-center justify-center md-transition">
+                            ${ev.completed ? '<span class="material-symbols-outlined text-sm font-bold">check</span>' : ''}
+                        </button>
+
+                        <!-- Left Accent Colored Indicator Bar -->
+                        <div class="w-1 h-10 rounded-full ${meta.color} shrink-0"></div>
+
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-sm font-semibold text-md-onSurface truncate ${ev.completed ? 'line-through text-md-onSurfaceVariant' : ''}">${escapeHtml(ev.title)}</h4>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="text-xs font-mono text-md-primary font-medium flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-xs">schedule</span>
+                                    ${ev.startTime} - ${ev.endTime}
+                                </span>
+                                <span class="text-xs text-md-outlineVariant">•</span>
+                                <span class="text-xs text-md-onSurfaceVariant font-medium">${dayObj.dayName}, ${dayObj.dateLabel}</span>
+                                <span class="text-xs text-md-outlineVariant">•</span>
+                                <span class="text-[11px] ${meta.text} bg-md-surface2 px-2 py-0.5 rounded-pill font-medium border border-md-outlineVariant/20">${meta.label}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Toolbar -->
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="toggleStar(${ev.id})" class="p-2 rounded-full text-md-onSurfaceVariant hover:text-md-gYellow hover:bg-md-surface3 md-transition" title="Star Activity">
+                            <span class="material-symbols-outlined text-xl">${ev.starred ? 'star' : 'star_outline'}</span>
+                        </button>
+                        <button onclick="deleteEvent(${ev.id})" class="p-2 rounded-full text-md-onSurfaceVariant hover:text-md-gRed hover:bg-md-surface3 md-transition opacity-0 group-hover:opacity-100" title="Delete Event">
+                            <span class="material-symbols-outlined text-xl">delete</span>
+                        </button>
+                    </div>
+                `;
+
+                listEl.appendChild(card);
+            });
+        }
+
+        // Select Focus Day
+        function selectDay(index) {
+            selectedDay = index;
+            render7DayStrip();
+            renderEvents();
+        }
+
+        // Toggle Event Completion State
+        function toggleEventComplete(id) {
+            events = events.map(e => e.id === id ? { ...e, completed: !e.completed } : e);
+            renderEvents();
+        }
+
+        // Toggle Starred Item
+        function toggleStar(id) {
+            events = events.map(e => e.id === id ? { ...e, starred: !e.starred } : e);
+            renderEvents();
+        }
+
+        // Delete Event
+        function deleteEvent(id) {
+            events = events.filter(e => e.id !== id);
+            render7DayStrip();
+            renderEvents();
+        }
+
+        // Simulate Live Google Calendar Sync
+        function triggerSync() {
+            const btn = document.getElementById('syncBtn');
+            const icon = document.getElementById('syncIcon');
+            const dot = document.getElementById('syncDot');
+            const timeText = document.getElementById('syncTimeText');
+
+            icon.classList.add('spinning');
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-md-gYellow animate-pulse';
+            timeText.innerText = 'Syncing with Google Calendar...';
+
+            setTimeout(() => {
+                icon.classList.remove('spinning');
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-md-gGreen';
+                timeText.innerText = 'Synced just now';
+                render7DayStrip();
+                renderEvents();
+            }, 1200);
+        }
+
+        // Category Filter Selection
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(btn => {
+                const isActive = btn.getAttribute('data-filter') === filter;
+                btn.className = `filter-chip px-4 py-2 rounded-pill text-xs font-medium md-transition flex items-center gap-2 shrink-0 ${
+                    isActive ? 'bg-md-primary text-md-bg' : 'bg-md-surface2 text-md-onSurfaceVariant hover:bg-md-surface3'
+                }`;
+            });
+            renderEvents();
+        }
+
+        // Navigation Tab Switcher
+        function switchTab(tab) {
+            currentTab = tab;
+
+            if (tab === 'today') {
+                selectedDay = 0; // Focus Today
+                render7DayStrip();
+            }
+
+            // Update Desktop Nav
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tab;
+                btn.className = `nav-btn w-full flex items-center gap-3.5 px-4 py-3 rounded-pill text-sm font-medium md-transition ${
+                    isActive ? 'bg-md-primaryContainer text-md-onPrimaryContainer font-semibold' : 'text-md-onSurfaceVariant hover:bg-md-surface2'
+                }`;
+            });
+
+            // Update Mobile Nav
+            document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tab;
+                const pill = btn.querySelector('div');
+                if (isActive) {
+                    pill.className = 'px-5 py-1 rounded-pill bg-md-primaryContainer text-md-onPrimaryContainer md-transition';
+                    btn.className = 'mobile-nav-btn flex flex-col items-center gap-1 text-md-primary';
+                } else {
+                    pill.className = 'px-5 py-1 rounded-pill md-transition';
+                    btn.className = 'mobile-nav-btn flex flex-col items-center gap-1 text-md-onSurfaceVariant';
+                }
+            });
+
+            renderEvents();
+        }
+
+        // Populate Modal Day Dropdown Options
+        function populateModalDaySelect() {
+            const select = document.getElementById('eventDayIndex');
+            select.innerHTML = '';
+            daysOfWeek.forEach(day => {
+                const opt = document.createElement('option');
+                opt.value = day.index;
+                opt.innerText = `${day.dayName}, ${day.dateLabel} ${day.isToday ? '(Today)' : ''}`;
+                select.appendChild(opt);
+            });
+        }
+
+        // Handle Add New Event Form Submission
+        function handleAddEvent(e) {
+            e.preventDefault();
+            const title = document.getElementById('eventTitle').value;
+            const category = document.getElementById('eventCategory').value;
+            const dayIndex = parseInt(document.getElementById('eventDayIndex').value, 10);
+            const startTime = document.getElementById('eventStart').value;
+            const endTime = document.getElementById('eventEnd').value;
+
+            const newEv = {
+                id: Date.now(),
+                dayIndex,
+                title,
+                startTime,
+                endTime,
+                category,
+                completed: false,
+                starred: false
+            };
+
+            events.push(newEv);
+            closeModal();
+            triggerSync(); // Simulate sync update
+            document.getElementById('eventForm').reset();
+        }
+
+        // Countdown Timer Simulation for Active Hero Event
+        function startCountdownTimer() {
+            let totalSeconds = 5720; // ~1h 35m 20s
+            setInterval(() => {
+                if (totalSeconds > 0) {
+                    totalSeconds--;
+                    const h = Math.floor(totalSeconds / 3600);
+                    const m = Math.floor((totalSeconds % 3600) / 60);
+                    const s = totalSeconds % 60;
+                    document.getElementById('countdownTimer').innerText = 
+                        `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+                }
+            }, 1000);
+        }
+
+        // Search Reset
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchQuery = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            renderEvents();
+        }
+
+        // Modal Controls
+        function openModal() {
+            const backdrop = document.getElementById('modalBackdrop');
+            const sheet = document.getElementById('modalSheet');
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.classList.remove('opacity-0');
+                sheet.classList.remove('translate-y-full', 'sm:scale-95');
+                sheet.classList.add('translate-y-0', 'sm:scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const backdrop = document.getElementById('modalBackdrop');
+            const sheet = document.getElementById('modalSheet');
+            sheet.classList.remove('translate-y-0', 'sm:scale-100');
+            sheet.classList.add('translate-y-full', 'sm:scale-95');
+            backdrop.classList.add('opacity-0');
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 250);
+        }
+
+        // Utility: HTML Escaping
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+    </script>
+</body>
+</html>
