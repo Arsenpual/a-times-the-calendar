@@ -2,10 +2,10 @@ const { findGoogleWeatherLocation, lookupGoogleWeather, coordinates } = require(
 const { buildZettascaleInstruction } = require("./zettascale-persona.js");
 const MODES = Object.freeze({ now: "ตอนนี้", today: "วันนี้", tomorrow: "พรุ่งนี้", days: "3 วัน" });
 const ACTIVITIES = Object.freeze({
-  outdoor: { label: "กิจกรรมกลางแจ้ง", button: "🌤 กลางแจ้ง", rainWeight: 1.2, windLimit: 28, idealMin: 21, idealMax: 31 },
-  exercise: { label: "ออกกำลังกาย", button: "🏃 ออกกำลัง", rainWeight: 1.6, windLimit: 22, idealMin: 20, idealMax: 29 },
-  travel: { label: "เดินทาง", button: "🧳 เดินทาง", rainWeight: 1.25, windLimit: 35, idealMin: 19, idealMax: 33 },
-  laundry: { label: "ซัก/ตากผ้า", button: "👕 ซักผ้า", rainWeight: 1.8, windLimit: 40, idealMin: 22, idealMax: 34 }
+  outdoor: { label: "กิจกรรมกลางแจ้ง", button: "🌤 กลางแจ้ง", rainWeight: 1.2, windLimit: 28, idealMin: 21, idealMax: 31, from: 6, until: 22 },
+  exercise: { label: "ออกกำลังกาย", button: "🏃 ออกกำลัง", rainWeight: 1.6, windLimit: 22, idealMin: 20, idealMax: 29, from: 6, until: 22 },
+  travel: { label: "เดินทาง", button: "🧳 เดินทาง", rainWeight: 1.25, windLimit: 35, idealMin: 19, idealMax: 33, from: 0, until: 24 },
+  laundry: { label: "ซัก/ตากผ้า", button: "👕 ซักผ้า", rainWeight: 1.8, windLimit: 40, idealMin: 22, idealMax: 34, from: 7, until: 18 }
 });
 const TTL = 30 * 60_000;
 
@@ -33,52 +33,91 @@ function weatherHours(weather, mode, timeZone, now) {
   const tomorrow = new Date(`${today}T00:00:00Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const target = mode === "tomorrow" ? tomorrow.toISOString().slice(0, 10) : today;
-  return { target, hours: weather.hourly.filter(hour => hour.interval?.startTime && localDay(hour.interval.startTime, timeZone) === target) };
+  return { target, hours: (weather.hourly || []).filter(hour => Number.isFinite(Date.parse(hour.interval?.startTime)) && localDay(hour.interval.startTime, timeZone) === target) };
+}
+function windKph(hour) {
+  const speed = hour?.wind?.speed;
+  const value = optionalNumber(speed?.value);
+  if (value == null || value < 0) return null;
+  const factor = { KILOMETERS_PER_HOUR: 1, MILES_PER_HOUR: 1.609344, METERS_PER_SECOND: 3.6 }[speed.unit];
+  return factor ? value * factor : null;
 }
 function rankHour(hour, activity, timeZone) {
   const preset = ACTIVITIES[activity] || ACTIVITIES.outdoor;
   const precipitation = optionalNumber(hour?.precipitation?.probability?.percent);
   const degrees = optionalNumber(hour?.temperature?.degrees);
-  const wind = optionalNumber(hour?.wind?.speed?.value);
-  let score = 100;
+  const wind = windKph(hour);
+  const valid = precipitation != null && precipitation >= 0 && precipitation <= 100 &&
+    degrees != null && (!hour.temperature.unit || hour.temperature.unit === "CELSIUS") && wind != null;
   const reasons = [];
-  if (precipitation != null) {
-    score -= Math.round(precipitation * preset.rainWeight);
-    if (precipitation >= 60) reasons.push(`ฝน ${Math.round(precipitation)}%`);
-    else if (precipitation <= 20) reasons.push(`ฝนต่ำ ${Math.round(precipitation)}%`);
-  } else {
-    score -= 12;
-    reasons.push("ไม่ระบุโอกาสฝน");
+  if (!valid) return { hour, score: null, reasons: ["ข้อมูลฝน อุณหภูมิ หรือลมไม่ครบ"], localHour: localHour(hour.interval.startTime, timeZone) };
+  const outside = Math.max(0, preset.idealMin - degrees, degrees - preset.idealMax);
+  let score = 100 - precipitation * preset.rainWeight - outside * 5 - Math.min(30, Math.max(0, wind - preset.windLimit) * 2);
+  reasons.push(`โอกาสฝน ${Math.round(precipitation)}%`, `${Math.round(degrees)}°C`, `ลม ${Math.round(wind)} กม./ชม.`);
+  const thunder = optionalNumber(hour.thunderstormProbability);
+  if (/THUNDERSTORM/.test(hour.weatherCondition?.type || "") || (thunder != null && thunder >= 30)) {
+    score = 0;
+    reasons.push("มีพยากรณ์พายุฝนฟ้าคะนอง");
   }
-  if (degrees != null) {
-    const outside = degrees < preset.idealMin ? preset.idealMin - degrees : Math.max(0, degrees - preset.idealMax);
-    score -= outside * 5;
-    if (outside >= 2) reasons.push(`${Math.round(degrees)}°C`);
-  } else score -= 8;
-  if (wind != null && wind > preset.windLimit) {
-    score -= Math.min(30, Math.round((wind - preset.windLimit) * 2));
-    reasons.push(`ลม ${Math.round(wind)} ${hour?.wind?.speed?.unit === "KILOMETERS_PER_HOUR" ? "กม./ชม." : ""}`.trim());
-  }
-  if (!reasons.length) reasons.push("ข้อมูลอากาศอยู่ในเกณฑ์ที่ตั้งไว้");
   return { hour, score: Math.max(0, Math.min(100, Math.round(score))), reasons, localHour: localHour(hour.interval.startTime, timeZone) };
 }
-function recommendedSlots(weather, mode, timeZone, now, activity = "outdoor") {
-  if (mode === "days") return { activity: ACTIVITIES[activity]?.label || ACTIVITIES.outdoor.label, slots: [], text: "เลือก วันนี้ หรือ พรุ่งนี้ เพื่อดูช่วงเวลาที่แนะนำ" };
+function recommendedSlots(weather, mode, timeZone, now, activity = "outdoor", duration = 1) {
+  const preset = ACTIVITIES[activity] || ACTIVITIES.outdoor;
+  const length = [1, 2, 3].includes(duration) ? duration : 1;
+  const empty = text => ({ activity: preset.label, duration: length, slots: [], text });
+  if (mode === "days") return empty("เลือก วันนี้ หรือ พรุ่งนี้ เพื่อหาช่วงเวลา");
   const { hours } = weatherHours(weather, mode, timeZone, now);
-  const ranked = hours.map(hour => rankHour(hour, activity, timeZone)).sort((a, b) => b.score - a.score || a.hour.interval.startTime.localeCompare(b.hour.interval.startTime));
-  const slots = [];
-  for (const item of ranked) {
-    if (slots.every(chosen => Math.abs(chosen.localHour - item.localHour) >= 2)) slots.push(item);
-    if (slots.length === 3) break;
+  const ranked = hours.filter(h => Number.isFinite(Date.parse(h.interval?.startTime)))
+    .sort((a, b) => Date.parse(a.interval.startTime) - Date.parse(b.interval.startTime))
+    .map(hour => rankHour(hour, activity, timeZone));
+  const candidates = [];
+  for (let index = 0; index < ranked.length; index++) {
+    const window = ranked.slice(index, index + length);
+    if (window.length !== length) continue;
+    const start = Date.parse(window[0].hour.interval.startTime);
+    if (start < Date.parse(now)) continue;
+    if (window.some((item, offset) => {
+      const at = Date.parse(item.hour.interval.startTime);
+      const end = item.hour.interval.endTime ? Date.parse(item.hour.interval.endTime) : at + 3_600_000;
+      return item.score == null || item.score < 50 || item.localHour < preset.from ||
+        item.localHour >= preset.until || at !== start + offset * 3_600_000 || end !== at + 3_600_000;
+    })) continue;
+    const end = start + length * 3_600_000;
+    const score = Math.min(...window.map(item => item.score));
+    const worst = window.find(item => item.score === score);
+    candidates.push({ start, end, score, reasons: worst.reasons });
   }
-  if (!slots.length) return { activity: ACTIVITIES[activity]?.label || ACTIVITIES.outdoor.label, slots: [], text: "ยังไม่มีพยากรณ์รายชั่วโมงพอจะเปรียบเทียบช่วงเวลา" };
+  candidates.sort((a, b) => b.score - a.score || a.start - b.start);
+  const chosen = [];
+  for (const item of candidates) {
+    if (chosen.every(other => item.end <= other.start || item.start >= other.end)) chosen.push(item);
+    if (chosen.length === 3) break;
+  }
+  if (!chosen.length) return empty(`ยังไม่มีช่วง ${length} ชม. ที่ข้อมูลครบและผ่านเกณฑ์สำหรับ${preset.label} ลองเปลี่ยนวันหรือระยะเวลา`);
+  const slots = chosen.map(item => ({
+    start: new Date(item.start).toISOString(), end: new Date(item.end).toISOString(),
+    at: `${stamp(item.start, timeZone)}–${new Intl.DateTimeFormat("th-TH", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(item.end))}`,
+    score: item.score, reasons: item.reasons
+  }));
   return {
-    activity: ACTIVITIES[activity]?.label || ACTIVITIES.outdoor.label,
-    slots: slots.map(({ hour, score, reasons }) => ({ at: stamp(hour.interval.startTime, timeZone), score, reasons, condition: condition(hour), temperature: temperature(hour), rain: rain(hour) })),
-    text: `ช่วงที่น่าพิจารณาสำหรับ${ACTIVITIES[activity]?.label || ACTIVITIES.outdoor.label} (ประเมินจากฝน อุณหภูมิ และลม)\n${slots.map((item, index) => `${index + 1}. ${stamp(item.hour.interval.startTime, timeZone)} — คะแนน ${item.score}/100 · ${item.reasons.join(" · ")}`).join("\n")}`
+    activity: preset.label, duration: length, slots,
+    text: `${preset.label} · ${length} ชม.\n${slots.map((slot, index) => `${index === 0 ? "แนะนำ" : `สำรอง ${index}`}: ${slot.at}\n  ${slot.reasons.join(" · ")}`).join("\n")}\nเกณฑ์เปรียบเทียบของแอป ไม่รับประกันสภาพอากาศ`
   };
 }
-function reportData(weather, mode, activity = "outdoor") {
+function activityCriteria(activity) {
+  const p = ACTIVITIES[activity] || ACTIVITIES.outdoor;
+  return `🎯 เกณฑ์สำหรับ${p.label}\n\nช่วงเวลา ${String(p.from).padStart(2, "0")}:00–${String(p.until).padStart(2, "0")}:00 ตามเวลาท้องถิ่น\nเริ่ม 100 คะแนน หักตามโอกาสฝน × ${p.rainWeight}\nอุณหภูมิเป้าหมาย ${p.idealMin}–${p.idealMax}°C หัก 5 คะแนน/องศาที่อยู่นอกช่วง\nลมเกิน ${p.windLimit} กม./ชม. หัก 2 คะแนน/กม./ชม. สูงสุด 30\n\nต้องมีข้อมูลครบทุกชั่วโมงต่อเนื่อง และทุกชั่วโมงได้อย่างน้อย 50 คะแนน พยากรณ์พายุฝนฟ้าคะนองหรือโอกาสพายุ ≥30% ไม่เสนอช่วงนั้น\nเรียงจากคะแนนชั่วโมงที่ต่ำสุดในแต่ละช่วง เลือกสำรองที่ไม่ทับกัน\n\nนี่เป็นเกณฑ์เปรียบเทียบของแอป ไม่ใช่มาตรฐานความปลอดภัย และไม่ประเมินคุณภาพอากาศหรือสภาพเส้นทาง`;
+}
+function weatherIcon(hour) {
+  const type = hour.weatherCondition?.type || "";
+  if (type.includes("THUNDER")) return "⛈";
+  if (/(RAIN|DRIZZLE|SHOWER)/.test(type)) return "🌧";
+  if (type.includes("SNOW")) return "❄️";
+  if (type.includes("CLOUD")) return "☁️";
+  if (type.includes("CLEAR") || type.includes("SUNNY")) return hour.isDaytime === false ? "🌙" : "☀️";
+  return "🌡";
+}
+function reportData(weather, mode, activity = "outdoor", duration = 1, expanded = false) {
   const c = weather.current || {};
   const timeZone = c.timeZone?.id || "Asia/Bangkok";
   const now = c.currentTime || weather.retrievedAt;
@@ -91,16 +130,13 @@ function reportData(weather, mode, activity = "outdoor") {
       const label = date ? `${date.day}/${date.month}/${date.year}` : stamp(day.interval.startTime, timeZone);
       return `• ${label} — ${temperature(day.minTemperature)} ถึง ${temperature(day.maxTemperature)}\n  กลางวัน: ${condition(day.daytimeForecast)} · ฝน ${rain(day.daytimeForecast)}\n  กลางคืน: ${condition(day.nighttimeForecast)} · ฝน ${rain(day.nighttimeForecast)}`;
     }).join("\n\n") || "ไม่มีพยากรณ์รายวัน";
-  } else if (mode !== "now") {
-    details = `${target} · รายชั่วโมง (แสดงทุก 3 ชั่วโมง)\n` + (hours.length ? hours.filter((_, index) => index % 3 === 0).map(hour =>
-      `• ${stamp(hour.interval.startTime, timeZone)} — ${condition(hour)} · ${temperature(hour.temperature)} · ฝน ${rain(hour)}`
-    ).join("\n") : "ไม่มีข้อมูลรายชั่วโมงในช่วงนี้");
-  } else if (hours.length) {
-    details += `\n\nวันนี้ · แนวโน้มรายชั่วโมง\n${hours.filter((_, index) => index % 3 === 0).map(hour =>
-      `• ${stamp(hour.interval.startTime, timeZone)} — ${condition(hour)} · ${temperature(hour)} · ฝน ${rain(hour)}`
-    ).join("\n")}`;
+  } else {
+    const timeline = hours.length ? (expanded ? hours : hours.filter((_, i) => i % 3 === 0)).map(hour =>
+      `• ${stamp(hour.interval.startTime, timeZone)} ${weatherIcon(hour)} ${expanded ? `${condition(hour)} · ` : ""}${temperature(hour.temperature)} · ฝน ${rain(hour)}`
+    ).join("\n") : "ไม่มีข้อมูลรายชั่วโมงในช่วงนี้";
+    details = (mode === "now" ? `${current}\n\n` : "") + `${target} · ไทม์ไลน์${expanded ? "รายชั่วโมง" : "ย่อ (ทุก 3 ชั่วโมง)"}\n${timeline}`;
   }
-  const recommendation = recommendedSlots(weather, mode, timeZone, now, activity);
+  const recommendation = recommendedSlots(weather, mode, timeZone, now, activity, duration);
   return { details, recommendation, timeZone, asOf: now, location: weather.location.name, header: `☁️ ${MODES[mode]} — ${weather.location.name}\nข้อมูล ณ ${stamp(now, timeZone)} (${timeZone})` };
 }
 
@@ -109,7 +145,7 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
   function session(chatId, userId) {
     for (const [key, value] of sessions) if (value.expiresAt < Date.now()) sessions.delete(key);
     const key = String(chatId);
-    if (!sessions.has(key) || sessions.get(key).userId !== userId) sessions.set(key, { userId, mode: "now", activity: "outdoor" });
+    if (!sessions.has(key) || sessions.get(key).userId !== userId) sessions.set(key, { userId, mode: "now", activity: "outdoor", duration: 1, expanded: false });
     const state = sessions.get(key);
     state.expiresAt = Date.now() + TTL;
     return state;
@@ -119,6 +155,8 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
       Object.entries(MODES).map(([mode, label]) => ({ text: `${state.mode === mode ? "✓ " : ""}${label}`, callback_data: `weather:mode:${mode}` })),
       ["outdoor", "exercise"].map(activity => ({ text: `${state.activity === activity ? "✓ " : ""}${ACTIVITIES[activity].button}`, callback_data: `weather:activity:${activity}` })),
       ["travel", "laundry"].map(activity => ({ text: `${state.activity === activity ? "✓ " : ""}${ACTIVITIES[activity].button}`, callback_data: `weather:activity:${activity}` })),
+      [1, 2, 3].map(duration => ({ text: `${state.duration === duration ? "✓ " : ""}${duration} ชม.`, callback_data: `weather:duration:${duration}` })),
+      [{ text: state.expanded ? "ย่อรายงาน" : "ดูรายชั่วโมง", callback_data: `weather:view:${state.expanded ? "compact" : "details"}` }, { text: "ℹ️ เกณฑ์แนะนำ", callback_data: "weather:criteria" }],
       [{ text: "📍 เปลี่ยนสถานที่", callback_data: "weather:place" }, { text: "⭐ สถานที่โปรด", callback_data: "weather:favorites" }],
       [{ text: "⭐ บันทึกสถานที่", callback_data: "weather:save" }, { text: "🤖 ถามเรื่องอากาศ", callback_data: "weather:ask" }],
       [{ text: "↻ อัปเดต", callback_data: "weather:refresh" }, { text: "✕ ปิด", callback_data: "weather:close" }]
@@ -147,13 +185,24 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
     // Persist only user-supplied queries/GPS and favorite labels, never weather responses.
     const location = resolved || (state.location.query ? await find(state.location.query) : state.location);
     const weather = await lookup(location, { days: 3, hours: 48 });
-    const data = reportData(weather, state.mode, state.activity);
+    const data = reportData(weather, state.mode, state.activity, state.duration, state.expanded);
     const adviceData = question ? {
       ...data, current: weather.current, daily: weather.daily, hourly: weather.hourly
     } : data;
     const advice = await ai(ctx.userId, adviceData, question);
     const text = `${data.header}\n\n${data.details}\n\n🎯 ${data.recommendation.text}\n\n${question ? `คำถาม: ${question}\n` : ""}${advice}\n\nGoogle Maps\nSource: Includes weather data from Google`;
-    await ctx.reply(text, { reply_markup: keyboard(state) });
+    // Telegram limits message length. Split long expanded reports at line breaks;
+    // keep controls on the final message so all data remains readable.
+    const chunks = [];
+    let remaining = text;
+    while (remaining.length > 3800) {
+      const boundary = remaining.lastIndexOf("\n", 3800);
+      const cut = boundary > 0 ? boundary : 3800;
+      chunks.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut).trimStart();
+    }
+    chunks.push(remaining);
+    for (let i = 0; i < chunks.length; i++) await ctx.reply(chunks[i], i === chunks.length - 1 ? { reply_markup: keyboard(state) } : undefined);
   }
   async function prompt(ctx, state, action) {
     const texts = {
@@ -240,6 +289,7 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
         delete state.pending;
         await ctx.reply(`☁️ Weather Controller\n📍 ${state.location?.name || "ยังไม่ได้เลือกสถานที่"}`, { reply_markup: keyboard(state) });
       } else if (action === "place") await prompt(ctx, state, "place");
+      else if (action === "criteria") await ctx.reply(activityCriteria(state.activity), { reply_markup: keyboard(state) });
       else if (action === "ask" || action === "save") {
         await prompt(ctx, state, state.location ? action : "place");
       } else if (action === "favorites") await favorites(ctx, state);
@@ -254,7 +304,7 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
           await ref.set({ telegramWeatherFavorites: list.filter(f => f.label !== selected.label) }, { merge: true });
           await favorites(ctx, state);
         }
-      } else if (action === "refresh" || action?.startsWith("mode:") || action?.startsWith("activity:")) {
+      } else if (action === "refresh" || action?.startsWith("mode:") || action?.startsWith("activity:") || action?.startsWith("duration:") || action?.startsWith("view:")) {
         delete state.pending;
         if (action.startsWith("mode:")) {
           const mode = action.slice(5);
@@ -265,6 +315,17 @@ function createWeatherController({ authDoc, claimUsage, releaseUsage, generate, 
           const activity = action.slice(9);
           if (!ACTIVITIES[activity]) return true;
           state.activity = activity;
+          state.duration = activity === "laundry" ? 3 : 1;
+        }
+        if (action.startsWith("duration:")) {
+          const duration = Number(action.slice(9));
+          if (![1, 2, 3].includes(duration)) return true;
+          state.duration = duration;
+        }
+        if (action.startsWith("view:")) {
+          const view = action.slice(5);
+          if (!["details", "compact"].includes(view)) return true;
+          state.expanded = view === "details";
         }
         await show(ctx, state);
       }

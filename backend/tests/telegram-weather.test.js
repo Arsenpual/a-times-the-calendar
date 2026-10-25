@@ -50,23 +50,72 @@ test("today/tomorrow use local date across UTC midnight; zero and missing data s
   assert.match(reportData(weather, "now").details, /โอกาสฝน ไม่ระบุ/);
 });
 
-test("activity recommendations rank measurable weather, keep slots apart, and never pretend missing data is good", () => {
+function planningWeather() {
   const weather = sampleWeather();
-  weather.current.currentTime = "2026-10-12T03:00:00Z";
-  weather.hourly = [
-    { interval: { startTime: "2026-10-12T04:00:00Z" }, temperature: { degrees: 27 }, precipitation: { probability: { percent: 5 } }, wind: { speed: { value: 8, unit: "KILOMETERS_PER_HOUR" } } },
-    { interval: { startTime: "2026-10-12T05:00:00Z" }, temperature: { degrees: 27 }, precipitation: { probability: { percent: 90 } }, wind: { speed: { value: 8, unit: "KILOMETERS_PER_HOUR" } } },
-    { interval: { startTime: "2026-10-12T07:00:00Z" }, temperature: { degrees: 40 }, precipitation: { probability: { percent: 10 } }, wind: { speed: { value: 40, unit: "KILOMETERS_PER_HOUR" } } },
-    { interval: { startTime: "2026-10-12T09:00:00Z" }, temperature: { degrees: 26 }, precipitation: { probability: { percent: 15 } }, wind: { speed: { value: 7, unit: "KILOMETERS_PER_HOUR" } } },
-    { interval: { startTime: "2026-10-12T10:00:00Z" }, temperature: { degrees: 26 } }
-  ];
-  const result = recommendedSlots(weather, "now", "Asia/Bangkok", weather.current.currentTime, "exercise");
-  assert.equal(result.activity, "ออกกำลังกาย");
+  weather.current.currentTime = "2026-10-12T23:00:00Z"; // 06:00 in Thailand.
+  weather.hourly = Array.from({ length: 24 }, (_, i) => ({
+    interval: {
+      startTime: new Date(Date.parse(weather.current.currentTime) + i * 3_600_000).toISOString(),
+      endTime: new Date(Date.parse(weather.current.currentTime) + (i + 1) * 3_600_000).toISOString()
+    },
+    temperature: { degrees: 27, unit: "CELSIUS" },
+    precipitation: { probability: { percent: 5 } },
+    wind: { speed: { value: 8, unit: "KILOMETERS_PER_HOUR" } },
+    weatherCondition: { type: "PARTLY_CLOUDY", description: { text: "มีเมฆบางส่วน" } }
+  }));
+  return weather;
+}
+
+test("recommendations use complete continuous windows with non-overlapping alternatives and actual end times", () => {
+  const weather = planningWeather();
+  const result = recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 2);
   assert.equal(result.slots.length, 3);
-  assert.match(result.text, /ประเมินจากฝน อุณหภูมิ และลม/);
-  assert.ok(result.slots[0].score > result.slots.at(-1).score);
-  assert.ok(result.slots.some(slot => /ไม่ระบุโอกาสฝน/.test(slot.reasons.join(" "))));
-  assert.match(reportData(weather, "now", "exercise").details, /แนวโน้มรายชั่วโมง/);
+  assert.equal(result.duration, 2);
+  for (const slot of result.slots) assert.equal(Date.parse(slot.end) - Date.parse(slot.start), 2 * 3_600_000);
+  for (let i = 1; i < result.slots.length; i++) assert.ok(Date.parse(result.slots[i].start) >= Date.parse(result.slots[i - 1].end));
+  assert.match(result.text, /สำรอง 1/);
+  assert.match(reportData(weather, "now", "exercise").details, /ไทม์ไลน์ย่อ/);
+  assert.match(reportData(weather, "now", "exercise").details, /27°C/);
+});
+
+test("missing or adverse weather never produces a recommendation; every hour must pass", () => {
+  for (const mutate of [
+    hour => { delete hour.wind; },
+    hour => { delete hour.precipitation; },
+    hour => { hour.precipitation.probability.percent = 95; },
+    hour => { hour.thunderstormProbability = 60; },
+    hour => { hour.wind.speed.unit = "UNKNOWN"; }
+  ]) {
+    const weather = planningWeather();
+    weather.hourly.forEach(mutate);
+    const result = recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 1);
+    assert.equal(result.slots.length, 0);
+    assert.match(result.text, /ยังไม่มีช่วง/);
+  }
+  const weather = planningWeather();
+  weather.hourly = weather.hourly.slice(0, 2);
+  weather.hourly[1].precipitation.probability.percent = 90;
+  assert.equal(recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 2).slots.length, 0);
+});
+
+test("windows exclude elapsed hours, gaps, and laundry at night", () => {
+  const weather = planningWeather();
+  weather.hourly = [weather.hourly[1], weather.hourly[3]];
+  assert.equal(recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 2).slots.length, 0);
+  weather.hourly = planningWeather().hourly.slice(16, 18); // 22:00 and 23:00.
+  assert.equal(recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "laundry", 1).slots.length, 0);
+  assert.ok(recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "travel", 1).slots.length > 0);
+  weather.hourly = planningWeather().hourly.slice(0, 1);
+  assert.equal(recommendedSlots(weather, "today", "Asia/Bangkok", "2026-10-12T23:30:00Z", "exercise", 1).slots.length, 0);
+});
+
+test("wind units are normalized and three-day reports ask for a day before ranking", () => {
+  const weather = planningWeather();
+  const baseline = recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 1);
+  weather.hourly.forEach(hour => { hour.wind.speed = { value: 8 / 3.6, unit: "METERS_PER_SECOND" }; });
+  const converted = recommendedSlots(weather, "today", "Asia/Bangkok", weather.current.currentTime, "exercise", 1);
+  assert.deepEqual(converted.slots, baseline.slots);
+  assert.equal(recommendedSlots(weather, "days", "Asia/Bangkok", weather.current.currentTime).slots.length, 0);
 });
 
 test("controller scopes location input to explicit replies; ordinary notes and locations are untouched", async () => {
@@ -103,7 +152,7 @@ test("activity buttons refresh a full forecast and give the deterministic recomm
   await h.controller.handle({ ...h.ctx, text: "/weather เชียงใหม่" });
   await h.controller.handle({ ...h.ctx, action: "activity:exercise" });
   assert.equal(h.calls.at(-1).params.hours, 48);
-  assert.match(h.replies.at(-1).text, /ช่วงที่น่าพิจารณาสำหรับออกกำลังกาย/);
+  assert.match(h.replies.at(-1).text, /ออกกำลังกาย/);
   const supplied = JSON.parse(h.prompts.at(-1).contents[0].parts[0].text);
   assert.equal(supplied.weather.recommendation.activity, "ออกกำลังกาย");
   assert.ok(h.replies.at(-1).reply_markup.inline_keyboard.flat().some(button => button.callback_data === "weather:activity:laundry"));
@@ -119,6 +168,42 @@ test("favorites store user query, not weather or Google geocoded coordinates; se
   assert.equal(h.calls.length, 2);
   await h.controller.handle({ ...h.ctx, action: "delete:0" });
   assert.deepEqual(h.stored().telegramWeatherFavorites, []);
+});
+
+test("duration and activity choices reach AI, and criteria do not consume API quota", async () => {
+  const h = harness({ lookup: async () => planningWeather() });
+  await h.controller.handle({ ...h.ctx, text: "/weather เชียงใหม่" });
+  await h.controller.handle({ ...h.ctx, action: "activity:laundry" });
+  let supplied = JSON.parse(h.prompts.at(-1).contents[0].parts[0].text);
+  assert.equal(supplied.weather.recommendation.duration, 3);
+  assert.match(h.replies.at(-1).text, /ซัก\/ตากผ้า/);
+  await h.controller.handle({ ...h.ctx, action: "duration:2" });
+  supplied = JSON.parse(h.prompts.at(-1).contents[0].parts[0].text);
+  assert.equal(supplied.weather.recommendation.duration, 2);
+  const prompts = h.prompts.length;
+  await h.controller.handle({ ...h.ctx, action: "criteria" });
+  assert.match(h.replies.at(-1).text, /07:00–18:00/);
+  assert.match(h.replies.at(-1).text, /ไม่ใช่มาตรฐานความปลอดภัย/);
+  assert.equal(h.prompts.length, prompts);
+  await h.controller.handle({ ...h.ctx, action: "duration:99" });
+  assert.equal(h.prompts.length, prompts);
+});
+
+test("expanded reports show more hours, split Telegram messages, and keep controls at the end", async () => {
+  const weather = planningWeather();
+  weather.hourly.forEach(hour => { hour.weatherCondition.description.text = "เมฆมาก ".repeat(50); });
+  const h = harness({ lookup: async () => weather, generate: async () => ({ text: "ก".repeat(1000) }) });
+  await h.controller.handle({ ...h.ctx, text: "/weather เชียงใหม่" });
+  const start = h.replies.length;
+  await h.controller.handle({ ...h.ctx, action: "view:details" });
+  const replies = h.replies.slice(start + 1); // Skip loading message.
+  assert.ok(replies.length > 1);
+  assert.ok(replies.every(reply => reply.text.length <= 3800));
+  assert.match(replies.map(reply => reply.text).join("\n"), /ไทม์ไลน์รายชั่วโมง/);
+  assert.equal(replies[0].reply_markup, undefined);
+  assert.ok(replies.at(-1).reply_markup.inline_keyboard.flat().some(button => button.callback_data === "weather:view:compact"));
+  await h.controller.handle({ ...h.ctx, action: "view:compact" });
+  assert.match(h.replies.at(-1).text, /ไทม์ไลน์ย่อ/);
 });
 
 test("AI failure returns real weather and releases claim; no rights still show real data", async () => {
