@@ -15,6 +15,13 @@ export async function continueActivityAssistant(input) {
   );
 }
 
+export async function continueFreeConversation(input) {
+  return handleResponse(
+    await apiRequest("/api/ai/free-conversation", { method: "POST", body: JSON.stringify(input) }),
+    "POST /api/ai/free-conversation"
+  );
+}
+
 export async function getActivityAssistantStatus() {
   return handleResponse(await apiRequest("/api/ai/activity-assistant-status", { cache: "no-store" }), "GET /api/ai/activity-assistant-status");
 }

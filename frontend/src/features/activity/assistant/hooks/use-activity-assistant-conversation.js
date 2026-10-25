@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   continueActivityAssistant,
+  continueFreeConversation,
   createActivityTemplateDraft,
   getActivityAssistantStatus,
   fetchProductKnowledge,
@@ -50,6 +51,9 @@ function describeScheduleConflict(schedule) {
 export function useActivityAssistantConversation({
   userId,
   open,
+  closeOnEscape = true,
+  clearTelegramOnReset = true,
+  freeConversation = false,
   onClose,
   categories,
   activities = [],
@@ -71,6 +75,7 @@ export function useActivityAssistantConversation({
   const initialChat = useInitialAssistantChat(userId);
   const [messages, setMessages] = useState(initialChat.messages);
   const [input, setInput] = useState("");
+  const [chatStyle, setChatStyle] = useState(freeConversation ? "free" : "planning");
   const [pending, setPending] = useState(false);
   const [pendingSource, setPendingSource] = useState("");
   const [error, setError] = useState("");
@@ -123,13 +128,13 @@ export function useActivityAssistantConversation({
     if (open) bottomRef.current?.scrollIntoView({ block: "end" });
   }, [open, messages, pending]);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !closeOnEscape) return undefined;
     const onKeyDown = (event) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEscape]);
   useEffect(() => {
     if (!open) return;
     getActivityAssistantStatus()
@@ -198,7 +203,7 @@ export function useActivityAssistantConversation({
     aiStatus?.isDeveloper === true && aiStatus?.enabled === true;
   const aiRequestCount = messages.filter(
     (message) =>
-      ["ai", "calendar"].includes(message.source) && message.role === "user",
+      ["ai", "free-ai", "calendar"].includes(message.source) && message.role === "user",
   ).length;
   const reset = async () => {
     // One clear action owns every disposable transcript shown in this dialog.
@@ -211,7 +216,7 @@ export function useActivityAssistantConversation({
     setConversationNodeId("home");
     setGuidedConversationMode("template");
     setScheduleResolution(null);
-    if (!onClearTelegramMessages) return;
+    if (!clearTelegramOnReset || !onClearTelegramMessages) return;
     setPending(true);
     setPendingSource("telegram");
     try {
@@ -394,6 +399,27 @@ export function useActivityAssistantConversation({
     event?.preventDefault();
     const text = (suggestedText || input).trim();
     if (!text || pending || cooldownSeconds > 0) return;
+    if (freeConversation && chatStyle === "free" && !suggestedText && !guidedActivity) {
+      const history = messages.filter((message) => message.source === "free-ai" && ["user", "assistant"].includes(message.role)).slice(-16).map(({ role, text: turnText }) => ({ role, text: turnText }));
+      setMessages((current) => [...current, { role: "user", text, source: "free-ai" }]);
+      setInput("");
+      setPending(true);
+      setPendingSource("ai");
+      setError("");
+      try {
+        const result = await continueFreeConversation({ text, history });
+        if (result.source === "knowledge") setMessages((current) => current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message));
+        setMessages((current) => [...current, { role: "assistant", text: result.reply, source: result.source === "knowledge" ? "knowledge" : "free-ai" }]);
+      } catch (requestError) {
+        setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
+        if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
+      } finally {
+        setPending(false);
+        setPendingSource("");
+        getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch(() => {});
+      }
+      return;
+    }
     const directTitleReply =
       guidedActivity &&
       conversationNodeId === "activity.title" &&
@@ -745,5 +771,7 @@ export function useActivityAssistantConversation({
     selectScheduleOption,
     confirmActivityPlan,
     sendToTelegram,
+    chatStyle,
+    setChatStyle,
   };
 }

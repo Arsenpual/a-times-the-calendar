@@ -40,6 +40,7 @@ export default function AppHeader({
             </button>
             <BrandWordmark className="app-logo" />
             {mode === "reminder" && <span className="header-feature-title">Reminder</span>}
+            {mode === "ai" && <span className="header-feature-title">AI Mode</span>}
             {mode === "activity" && (
               <div className="header-calendar-tools">
                 <button className="btn btn-outline" onClick={goToday}>

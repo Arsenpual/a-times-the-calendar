@@ -1,5 +1,5 @@
-/* MR.Zettascale lives in Activity Mode: this is deliberately a full-screen
-   planning surface, separate from Telegram and from the compact editor. */
+/* Shared conversation content: the app renders it as AI Mode; the dialog
+   presentation remains available to isolated previews and embedded callers. */
 .activity-ai-backdrop { position: fixed; z-index: 9000; inset: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 18px; background: color-mix(in srgb, var(--text-primary) 16%, transparent); }
 .activity-ai-assistant { display: flex; flex-direction: column; width: min(380px, 100%); height: min(570px, calc(100dvh - 36px)); overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); color: var(--text-primary); box-shadow: 0 18px 52px color-mix(in srgb, var(--text-primary) 28%, transparent); }
 .activity-ai-backdrop.is-activity-form-open { pointer-events: none; background: transparent; }.activity-ai-backdrop.is-activity-form-open .activity-ai-assistant { pointer-events: auto; }

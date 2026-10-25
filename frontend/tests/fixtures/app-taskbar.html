@@ -4,13 +4,16 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AppHeader from '/src/app/components/app-header.jsx';
 import AppTaskbar from '/src/app/components/app-taskbar.jsx';
+import ActivityAssistant from '/src/features/activity/assistant/components/activity-assistant-dialog.jsx';
+import { useAppNavigation } from '/src/app/hooks/use-app-navigation.js';
 import '/src/features/reminder/styles/reminder-mode.css';
 import '/src/index.css';
 const h = React.createElement;
 function Fixture() {
-  const [mode, setMode] = useState('activity');
+  const {mode,setMode,toggleAiMode,closeAiMode} = useAppNavigation();
   const [expanded, setExpanded] = useState(false);
   const [action, setAction] = useState('');
+  const [telegramMessages, setTelegramMessages] = useState([{id:'preview-1',direction:'incoming',text:'บันทึกสั้นจาก Telegram'}]);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const select = mode => { setMode(mode); setExpanded(false); };
   return h('div', {className: 'app app--'+mode},
@@ -19,8 +22,9 @@ function Fixture() {
       weekSpineViewMode:'week',setWeekSpineView:()=>{},tagSearchTerms:[],tagSearchDraft:'',setTagSearchDraft:()=>{},
       calendarAccessToken:'preview',cursorDate:new Date(),accountMenuOpen,setAccountMenuOpen,setSettingsOpen:()=>setAction('settings')}),
     h('div',{className:'app-workspace'},
-      h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>setAction('assistant'),unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
-      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action))));
+      h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>{toggleAiMode();setAction('assistant');setExpanded(false);},unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
+      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),
+        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities:[],userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([])}))));
 }
 createRoot(document.getElementById('root')).render(h(Fixture));
 </script></html>

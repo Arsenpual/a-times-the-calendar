@@ -23,7 +23,7 @@ export default function AppTaskbar({ mode, expanded, onClose, onSelectMode, onOp
           <span className="taskbar-icon"><TaskbarIcon name={id} /></span><span>{label}</span>
         </button>
       )}
-      <button type="button" className="taskbar-item" onClick={onOpenAssistant} aria-label={`เปิดผู้ช่วย MR.Zettascale${unreadCount > 0 ? ` มี ${unreadCount} ข้อความที่ยังไม่อ่าน` : ""}`}><span className="taskbar-icon"><TaskbarIcon name="assistant" />{unreadCount > 0 && <span className="taskbar-unread" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}</span><span>ผู้ช่วย</span></button>
+      <button type="button" className={`taskbar-item${mode === "ai" ? " is-active" : ""}`} onClick={() => { onOpenAssistant(); document.getElementById("app-navigation-toggle")?.focus(); }} aria-pressed={mode === "ai"} aria-controls="ai-mode-workspace" aria-label={`${mode === "ai" ? "ออกจาก AI Mode" : "เปิด AI Mode MR.Zettascale"}${unreadCount > 0 ? ` มี ${unreadCount} ข้อความที่ยังไม่อ่าน` : ""}`}><span className="taskbar-icon"><TaskbarIcon name="assistant" />{unreadCount > 0 && <span className="taskbar-unread" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}</span><span>AI Mode</span></button>
     </div>
     <button type="button" className="taskbar-item google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} aria-busy={googleCalendarSyncing} aria-label={googleCalendarSyncing ? "กำลังซิงค์ Google Calendar" : "ซิงค์ Google Calendar"} title="ดึงกิจกรรมสัปดาห์นี้">
       <span className="taskbar-icon"><img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" /></span>

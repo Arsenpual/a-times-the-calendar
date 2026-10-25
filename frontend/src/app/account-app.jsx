@@ -130,7 +130,7 @@ export default function AccountApp({ auth }) {
     };
   }, [error, setError, setAuthError]);
 
-  const { mode, setMode, settingsOpen, setSettingsOpen } = useAppNavigation();
+  const { mode, setMode, closeAiMode, toggleAiMode, settingsOpen, setSettingsOpen } = useAppNavigation();
   const [navigationExpanded, setNavigationExpanded] = useState(false);
   const {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
@@ -254,16 +254,21 @@ export default function AccountApp({ auth }) {
     closeModal,
     handleEditSeries
   } = activityModal;
-  const [activityAssistantOpen, setActivityAssistantOpen] = useState(false);
+  const activityAssistantOpen = mode === "ai";
+  const setActivityAssistantOpen = useCallback((open) => {
+    if (open) setMode("ai");
+    else closeAiMode();
+  }, [setMode, closeAiMode]);
   const [assistantInsight, setAssistantInsight] = useState(null);
   const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
   const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
   const [activityAssistantDailySummaryRequest, setActivityAssistantDailySummaryRequest] = useState(0);
   const [assistantDailySummary, setAssistantDailySummary] = useState({ open: false, loading: false, error: "", data: null });
-  const openMrZettascaleChat = useCallback(() => {
-    setActivityAssistantOpen(true);
-    telegramChat.openChat();
-  }, [telegramChat.openChat]);
+  useEffect(() => {
+    if (mode === "ai") return;
+    telegramChat.closeChat();
+    setAssistantDailySummary(current => current.open ? { open: false, loading: false, error: "", data: null } : current);
+  }, [mode, telegramChat.closeChat]);
   const handleCloseActivityModal = () => {
     // An assistant hand-off belongs only to the current form.  Clearing it on
     // close prevents an old chat reply from refilling the next blank form.
@@ -305,7 +310,7 @@ export default function AccountApp({ auth }) {
   const requestAssistantDailySummary = useCallback(() => {
     setActivityAssistantOpen(true);
     setActivityAssistantDailySummaryRequest((current) => current + 1);
-  }, []);
+  }, [setActivityAssistantOpen]);
 
   const mutations = useActivityMutations({
     calendarAccessToken,
@@ -462,7 +467,7 @@ export default function AccountApp({ auth }) {
           expanded={navigationExpanded}
           onClose={() => setNavigationExpanded(false)}
           onSelectMode={(nextMode) => { setMode(nextMode); setNavigationExpanded(false); }}
-          onOpenAssistant={() => { openMrZettascaleChat(); setNavigationExpanded(false); }}
+          onOpenAssistant={() => { toggleAiMode(); setNavigationExpanded(false); }}
           unreadCount={telegramChat.unreadCount}
           onSyncGoogleCalendar={handleManualCalendarSync}
           googleCalendarSyncing={loading}
@@ -657,6 +662,40 @@ export default function AccountApp({ auth }) {
             )}
           </React.Fragment>
         )}
+      <ActivityAiAssistant
+        presentation="page"
+        open={activityAssistantOpen}
+        activityFormOpen={modalOpen}
+        dailySummaryOpen={assistantDailySummary.open}
+        startActivityCreationRequest={activityAssistantStartRequest}
+        startDailySummaryRequest={activityAssistantDailySummaryRequest}
+        onClose={() => {
+          setActivityAssistantOpen(false);
+          telegramChat.closeChat();
+          setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
+        }}
+        categories={categories}
+        activities={activities}
+        activityTagMap={activityTagMap}
+        assistantPreferences={assistantPreferences.values}
+        telegramMessages={telegramChat.messages}
+        telegramError={telegramChat.error}
+        onOpenTelegramChat={telegramChat.openChat}
+        onSendTelegramMessage={telegramChat.sendChatMessage}
+        onClearTelegramMessages={telegramChat.clearChatMessages}
+        lockedActivities={lockedActivities}
+        userId={firebaseUser?.uid}
+        onOpenActivityForm={(draft) => {
+          setActivityAssistantFormUpdate(null);
+          const start = new Date(draft.startLocal || new Date());
+          const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
+          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: { ...draft, assistantOrigin: "mr-zettascale" } });
+        }}
+        onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
+        onConfirmActivityPlan={saveAssistantPlan}
+        onOpenDailySummary={openAssistantDailySummary}
+        assistantInsight={assistantInsight}
+      />
       </main>
       </div>
 
@@ -693,45 +732,13 @@ export default function AccountApp({ auth }) {
         onSave={saveActivityWithAssistantLearning}
         onDelete={handleDeleteActivity}
         onOpenAssistant={() => {
+          handleCloseActivityModal();
           setActivityAssistantOpen(true);
           setActivityAssistantStartRequest((current) => current + 1);
         }}
         onClose={handleCloseActivityModal}
       />
 
-      <ActivityAiAssistant
-        open={activityAssistantOpen}
-        activityFormOpen={modalOpen}
-        dailySummaryOpen={assistantDailySummary.open}
-        startActivityCreationRequest={activityAssistantStartRequest}
-        startDailySummaryRequest={activityAssistantDailySummaryRequest}
-        onClose={() => {
-          setActivityAssistantOpen(false);
-          telegramChat.closeChat();
-          setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
-        }}
-        categories={categories}
-        activities={activities}
-        activityTagMap={activityTagMap}
-        assistantPreferences={assistantPreferences.values}
-        telegramMessages={telegramChat.messages}
-        telegramError={telegramChat.error}
-        onOpenTelegramChat={telegramChat.openChat}
-        onSendTelegramMessage={telegramChat.sendChatMessage}
-        onClearTelegramMessages={telegramChat.clearChatMessages}
-        lockedActivities={lockedActivities}
-        userId={firebaseUser?.uid}
-        onOpenActivityForm={(draft) => {
-          setActivityAssistantFormUpdate(null);
-          const start = new Date(draft.startLocal || new Date());
-          const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
-          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: { ...draft, assistantOrigin: "mr-zettascale" } });
-        }}
-        onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
-        onConfirmActivityPlan={saveAssistantPlan}
-        onOpenDailySummary={openAssistantDailySummary}
-        assistantInsight={assistantInsight}
-      />
 
       <SettingsDrawer
         open={settingsOpen}

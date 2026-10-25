@@ -1,5 +1,6 @@
 import { useActivityAssistantConversation } from "../hooks/use-activity-assistant-conversation.js";
 import { useState } from "react";
+import { INITIAL_ASSISTANT_MESSAGE } from "../hooks/use-assistant-chat-storage.js";
 import {
   CALENDAR_AI_QUESTION_SUGGESTIONS,
   CALENDAR_FACT_SUGGESTIONS,
@@ -129,8 +130,10 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
 }
 
 export default function ActivityAssistantDialog(props) {
+  const [telegramArchiveError, setTelegramArchiveError] = useState("");
   const {
     open,
+    presentation = "dialog",
     onClose,
     activityFormOpen = false,
     dailySummaryOpen = false,
@@ -138,6 +141,7 @@ export default function ActivityAssistantDialog(props) {
     telegramError = "",
     onOpenDailySummary,
     onSendTelegramMessage,
+    onClearTelegramMessages,
     assistantInsight,
   } = props;
   const {
@@ -154,6 +158,8 @@ export default function ActivityAssistantDialog(props) {
     guidedConversationMode,
     input,
     setInput,
+    chatStyle,
+    setChatStyle,
     bottomRef,
     rootQuestions,
     quickReplies,
@@ -166,33 +172,34 @@ export default function ActivityAssistantDialog(props) {
     selectScheduleOption,
     confirmActivityPlan,
     sendToTelegram,
-  } = useActivityAssistantConversation(props);
+  } = useActivityAssistantConversation({ ...props, closeOnEscape: presentation !== "page", clearTelegramOnReset: presentation !== "page", freeConversation: presentation === "page" });
   if (!open) return null;
   return (
     <div
-      className={`activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}${dailySummaryOpen ? " is-daily-summary-open" : ""}`}
+      id={presentation === "page" ? "ai-mode-workspace" : undefined}
+      className={presentation === "page" ? "activity-ai-page" : `activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}${dailySummaryOpen ? " is-daily-summary-open" : ""}`}
       role="presentation"
-      onMouseDown={onClose}
+      onMouseDown={presentation === "page" ? undefined : onClose}
     >
       <section
         className="activity-ai-assistant"
-        role="dialog"
-        aria-modal="true"
-        aria-label="คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม"
+        role={presentation === "page" ? "region" : "dialog"}
+        aria-modal={presentation === "page" ? undefined : "true"}
+        aria-label={presentation === "page" ? "AI Mode MR.Zettascale" : "คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม"}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="activity-ai-header">
           <div>
             <span>✦</span>
             <strong>MR.Zettascale</strong>
-            <small>ผู้ช่วยวางแผนกิจกรรม</small>
+            <small>{presentation === "page" ? "AI Mode · ผู้ช่วยส่วนตัว" : "ผู้ช่วยวางแผนกิจกรรม"}</small>
           </div>
           <div>
             <button type="button" onClick={reset} disabled={pending}>
-              เคลียร์แชท
+              {presentation === "page" ? "เริ่มแชทใหม่" : "เคลียร์แชท"}
             </button>
-            <button type="button" onClick={onClose} aria-label="ปิดแชต">
-              ×
+            <button type="button" onClick={onClose} aria-label={presentation === "page" ? "กลับโหมดก่อนหน้า" : "ปิดแชต"}>
+              {presentation === "page" ? "กลับ" : "×"}
             </button>
           </div>
         </header>
@@ -211,9 +218,11 @@ export default function ActivityAssistantDialog(props) {
             ใช้ {assistantInsight.title} เป็นบริบทเฉพาะ session นี้
           </p>
         )}
-        <main className="activity-ai-messages">
+        <div className="activity-ai-messages">
           {!guidedActivity && (
-            <ActivityAssistantCommandGroups
+            <details className="activity-ai-tools" open={presentation !== "page" ? true : undefined}>
+              <summary>เครื่องมือและคำสั่ง</summary>
+              <ActivityAssistantCommandGroups
               canUseGemini={canUseGemini}
               cooldownSeconds={cooldownSeconds}
               onDailySummary={onOpenDailySummary ? runDailySummary : null}
@@ -221,7 +230,8 @@ export default function ActivityAssistantDialog(props) {
               onSendKnowledge={sendKnowledge}
               pending={pending}
               rootQuestions={rootQuestions}
-            />
+              />
+            </details>
           )}
           {messages.map((message, index) => (
             <div
@@ -229,10 +239,13 @@ export default function ActivityAssistantDialog(props) {
               className="activity-ai-message-group"
             >
               <div
-                className={`activity-ai-message is-${message.role}${message.source === "ai" || message.source === "calendar" ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}
+                className={`activity-ai-message is-${message.role}${["ai", "free-ai", "calendar"].includes(message.source) ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}
               >
-                <span>{message.text}</span>
+                <span>{presentation === "page" && message.text === INITIAL_ASSISTANT_MESSAGE.text ? "สวัสดีครับ คุยเรื่องทั่วไปได้ในโหมดคุยอิสระ ถ้าต้องการดูตารางหรือสร้างกิจกรรม ใช้เครื่องมือด้านบนหรือสลับเป็นวางแผนกิจกรรมครับ" : message.text}</span>
               </div>
+              {presentation === "page" && message.role === "assistant" && index > 0 && (
+                <small className="activity-ai-turn-source">{["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป"}</small>
+              )}
               {message.followUpQuestions?.length > 0 && (
                 <div className={`activity-ai-answer-followups${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}`}>
                   {message.followUpQuestions.map((question) => (
@@ -289,7 +302,25 @@ export default function ActivityAssistantDialog(props) {
               )}
             </div>
           ))}
-          {telegramMessages.map((message) => (
+          {presentation === "page" && onSendTelegramMessage && (
+            <details className="activity-ai-telegram-archive">
+              <summary>ข้อความ Telegram · {telegramMessages.length}</summary>
+              <p>สำเนาข้อความจาก Telegram แยกจากบทสนทนา AI บนเว็บ</p>
+              {onClearTelegramMessages && telegramMessages.length > 0 && <button type="button" disabled={pending} onClick={async () => {
+                setTelegramArchiveError("");
+                try { await onClearTelegramMessages(); }
+                catch (requestError) { setTelegramArchiveError(requestError.message || "ล้างสำเนา Telegram ไม่สำเร็จ"); }
+              }}>ล้างสำเนา Telegram ในเว็บ</button>}
+              {telegramArchiveError && <p className="activity-ai-error" role="alert">{telegramArchiveError}</p>}
+              {telegramError && <p className="activity-ai-error">{telegramError}</p>}
+              {telegramMessages.map((message) => (
+                <div key={`telegram-${message.id}`} className="activity-ai-message-group">
+                  <div className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}><span>{message.text}</span></div>
+                </div>
+              ))}
+            </details>
+          )}
+          {presentation !== "page" && telegramMessages.map((message) => (
             <div
               key={`telegram-${message.id}`}
               className="activity-ai-message-group"
@@ -301,7 +332,7 @@ export default function ActivityAssistantDialog(props) {
               </div>
             </div>
           ))}
-          {telegramError && (
+          {presentation !== "page" && telegramError && (
             <p className="activity-ai-error">{telegramError}</p>
           )}
           {pending && (
@@ -314,7 +345,7 @@ export default function ActivityAssistantDialog(props) {
             </p>
           )}
           <div ref={bottomRef} />
-        </main>
+        </div>
         {error && <p className="activity-ai-error">{error}</p>}
         {!guidedActivity && (
           <div className="activity-ai-choice-strip activity-ai-create-shortcut">
@@ -364,6 +395,10 @@ export default function ActivityAssistantDialog(props) {
           </div>
         )}
         <form className="activity-ai-composer" onSubmit={send}>
+          {presentation === "page" && !guidedActivity && <div className="activity-ai-chat-style" role="group" aria-label="วิธีคุยกับ AI">
+            <button type="button" className={chatStyle === "free" ? "is-active" : ""} aria-pressed={chatStyle === "free"} onClick={() => setChatStyle("free")}>คุยอิสระ</button>
+            <button type="button" className={chatStyle === "planning" ? "is-active" : ""} aria-pressed={chatStyle === "planning"} onClick={() => setChatStyle("planning")}>วางแผนกิจกรรม</button>
+          </div>}
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -372,9 +407,12 @@ export default function ActivityAssistantDialog(props) {
                 ? canUseGemini
                   ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…"
                   : "เลือกขั้นตอนด้านบน หรือพิมพ์ชื่อกิจกรรม"
-                : "ทำงาน 08.30 พรุ่งนี้ 3 ชม. · หรือ พรุ่งนี้ว่างช่วงไหน?"
+                : presentation === "page" && chatStyle === "free"
+                  ? "คุยหรือถามเรื่องที่สนใจ… ใช้เครื่องมือด้านบนเมื่ออยากให้ช่วยดูตาราง"
+                  : "ทำงาน 08.30 พรุ่งนี้ 3 ชม. · หรือ พรุ่งนี้ว่างช่วงไหน?"
             }
             maxLength="1200"
+            aria-label="ข้อความถึง MR.Zettascale"
             autoFocus
           />
           <button

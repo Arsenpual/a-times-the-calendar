@@ -1,5 +1,6 @@
 const express = require("express");
 const { generateContent } = require("../gemini-api.js");
+const { buildZettascaleInstruction } = require("../lib/zettascale-persona.js");
 const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../calendar-question.js");
 
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions } = require("../skills/activity-creation");
@@ -15,6 +16,7 @@ function createActivityAssistantRouter({
   answerDeterministicCalendar = answerDeterministicCalendarQuestion,
   generateActivity,
   generateCalendarAnswer,
+  generateFreeChat,
   answerKnowledge = answerTimesQuestion
 } = {}) {
 const router = express.Router();
@@ -36,6 +38,34 @@ router.post("/product-knowledge", (req, res) => {
 // expressions cannot reference a function declared later in that same body.
 generateActivity ||= generateActivityWithGemini;
 generateCalendarAnswer ||= generateCalendarAnswerWithGemini;
+generateFreeChat ||= generateFreeChatWithGemini;
+
+router.post("/free-conversation", async (req, res) => {
+  let claim = null;
+  try {
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!text || text.length > 1200) return res.status(400).json({ error: "กรุณาระบุข้อความไม่เกิน 1200 ตัวอักษร" });
+    const knowledgeReply = answerKnowledge(text);
+    if (knowledgeReply) return res.json({ reply: knowledgeReply, source: "knowledge" });
+    const history = (Array.isArray(req.body?.history) ? req.body.history.slice(-16) : [])
+      .filter((turn) => ["user", "assistant"].includes(turn?.role) && typeof turn.text === "string")
+      .map((turn) => ({ role: turn.role, text: turn.text.trim().slice(0, 1200) }))
+      .filter((turn) => turn.text)
+      .slice(-16);
+    while (history[0]?.role === "assistant") history.shift();
+    claim = await claimChatUsage(req.userId);
+    if (claim.status !== "claimed") return res.status(claim.status === "not-allowed" ? 403 : 429).json({
+      error: claim.status === "not-allowed" ? "AI อยู่ระหว่างทดสอบสำหรับนักพัฒนา" : "ใช้ AI ครบโควต้าชั่วคราวแล้ว กรุณาลองใหม่ภายหลัง",
+      ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds } : {})
+    });
+    const reply = await generateFreeChat({ text, history });
+    if (typeof reply !== "string" || !reply.trim()) throw new Error("AI ไม่ได้ส่งคำตอบกลับมา");
+    return res.json({ reply: reply.trim().slice(0, 12000), source: "free-ai" });
+  } catch (error) {
+    if (claim?.status === "claimed") await releaseChatUsage(claim).catch(() => {});
+    return res.status(error.status || 502).json({ error: error.message });
+  }
+});
 
 router.post("/activity-validate", (req, res) => {
   try { res.json({ draft: validateDraft(req.body.draft, req.body.categories || []) }); }
@@ -375,6 +405,16 @@ async function generateCalendarAnswerWithGemini({ text, calendarContext, timeZon
       generationConfig: { temperature: 0.15, maxOutputTokens: 700 }
   });
   return textFromGemini(payload);
+}
+
+async function generateFreeChatWithGemini({ text, history }) {
+  const instruction = buildZettascaleInstruction("Answer general questions freely and clearly. This web conversation has no live news, weather, project-file, or Calendar tool attached. Use only the supplied conversation; do not claim to have checked current data or changed the user's account. For T.i.M.E.S. details that are not in context, say what you cannot verify. Reply in the user's language.");
+  const payload = await generateContent({
+    systemInstruction: { parts: [{ text: instruction }] },
+    contents: [...history.map((turn) => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })), { role: "user", parts: [{ text }] }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
+  });
+  return textFromGemini(payload).slice(0, 12000);
 }
 
 /**

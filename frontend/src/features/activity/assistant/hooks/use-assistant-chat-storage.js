@@ -23,7 +23,7 @@ export function loadSavedChat(userId) {
       ? saved.messages.slice(-120).filter((message) => ["user", "assistant"].includes(message?.role) && typeof message.text === "string").map((message) => ({
         role: message.role,
         text: message.text.slice(0, 1_200),
-        source: ["ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
+        source: ["ai", "free-ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
         commandTone: ["planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
       }))
       : [];

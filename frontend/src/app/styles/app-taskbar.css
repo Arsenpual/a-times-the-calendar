@@ -1,6 +1,27 @@
 /* Shared navigation frame: feature runtimes stay inside the existing main. */
 .app-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; }
 .app-workspace > .app-main { min-width: 0; min-height: 0; }
+.app--ai .app-main { padding: 0; }
+.activity-ai-page { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.activity-ai-page .activity-ai-assistant { flex: 1; width: 100%; height: auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.activity-ai-page .activity-ai-header { padding: 16px clamp(12px, 3vw, 32px); }
+.activity-ai-page .activity-ai-header button { min-width: 44px; min-height: 36px; font-size: 13px; }
+.activity-ai-page .activity-ai-messages { padding: 20px clamp(12px, 3vw, 32px); }
+.activity-ai-page .activity-ai-messages > * { max-width: 960px; margin-inline: auto; }
+.activity-ai-page .activity-ai-message { font-size: 14px; line-height: 1.7; padding: 12px 16px; overflow-wrap: anywhere; }
+.activity-ai-page .activity-ai-composer { padding: 12px clamp(12px, 3vw, 32px); }
+.activity-ai-page .activity-ai-composer textarea { min-height: 56px; font-size: 14px; }
+.activity-ai-tools { margin-bottom: 16px; }
+.activity-ai-tools > summary { color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 8px 0; }
+.activity-ai-page .activity-ai-turn-source { display: block; margin: -5px 0 12px 2px; color: var(--text-secondary); font-size: 11px; }
+.activity-ai-telegram-archive { max-width: 960px; margin: 24px auto 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-size: 12px; }
+.activity-ai-telegram-archive > summary { cursor: pointer; font-size: 13px; }
+.activity-ai-telegram-archive > p { line-height: 1.5; }
+.activity-ai-telegram-archive > button { margin: 4px 0 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-primary); cursor: pointer; }
+.activity-ai-telegram-archive .activity-ai-message { max-width: 90%; }
+.activity-ai-chat-style { grid-column: 1 / -1; display: flex; gap: 6px; }
+.activity-ai-chat-style button { align-self: center; min-height: 32px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); cursor: pointer; }
+.activity-ai-chat-style button.is-active { border-color: var(--today); background: color-mix(in srgb, var(--today) 12%, var(--bg)); color: var(--text-primary); }
 .app-taskbar { display: flex; flex-direction: column; flex: 0 0 88px; width: 88px; gap: 16px; padding: 16px 8px; overflow-y: auto; background: var(--bg-muted); }
 .taskbar-destinations { display: flex; flex-direction: column; gap: 8px; }
 .app-taskbar .taskbar-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 64px; padding: 4px; border: 0; border-radius: 16px; background: transparent; color: var(--text-secondary); font: 500 12px/1.4 inherit; font-family: inherit; font-size: 12px; cursor: pointer; }
