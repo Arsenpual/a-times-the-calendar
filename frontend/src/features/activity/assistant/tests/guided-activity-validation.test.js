@@ -10,5 +10,6 @@ test("guided activity accepts a complete draft and rejects invalid rail edits be
   assert.match(validateGuidedActivity({ ...valid, date: "2026-02-30" }), /วันที่/);
   assert.match(validateGuidedActivity({ ...valid, time: "25:00" }), /เวลาเริ่ม/);
   assert.match(validateGuidedActivity({ ...valid, durationMinutes: 0 }), /ระยะเวลา/);
-  assert.match(validateGuidedActivity({ ...valid, durationMinutes: 1441 }), /ระยะเวลา/);
+  assert.match(validateGuidedActivity({ ...valid, durationMinutes: 29 }), /30 ถึง 720/);
+  assert.match(validateGuidedActivity({ ...valid, durationMinutes: 721 }), /30 ถึง 720/);
 });

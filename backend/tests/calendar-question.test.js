@@ -1,6 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { answerDeterministicCalendarQuestion, calendarRangeForQuestion, isCalendarQuestion, isDeterministicCalendarQuestion } = require("../calendar-question.js");
+const { answerDeterministicCalendarQuestion, calendarRangeForQuestion, isCalendarQuestion, isDeterministicCalendarQuestion, needsCalendarReauth } = require("../calendar-question.js");
+
+test("Calendar 403 errors request reauth only for credential failures", () => {
+  assert.equal(needsCalendarReauth(401, null), true);
+  assert.equal(needsCalendarReauth(403, { error: { errors: [{ reason: "insufficientPermissions" }] } }), true);
+  assert.equal(needsCalendarReauth(403, { error: { errors: [{ reason: "rateLimitExceeded" }] } }), false);
+  assert.equal(needsCalendarReauth(403, { error: { errors: [{ reason: "accessNotConfigured" }] } }), false);
+});
 
 test("calendar questions detect common Thai planning intents", () => {
   assert.equal(isCalendarQuestion("พรุ่งนี้ว่างช่วงไหน?"), true);

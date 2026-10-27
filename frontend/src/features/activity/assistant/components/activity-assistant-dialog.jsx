@@ -33,6 +33,12 @@ const ACTIVITY_STEPS = [
   { node: "activity.duration", label: "ระยะเวลา" },
 ];
 
+const TOOL_RESULT_TITLES = {
+  calendar: "ผลการอ่านปฏิทิน",
+  scheduling: "ช่วงเวลาว่างที่ตรวจพบ",
+  planning: "ร่างแผนกิจกรรม",
+};
+
 function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
     <div className="activity-ai-command-grid">
@@ -149,6 +155,7 @@ export default function ActivityAssistantDialog(props) {
     telegramMessages = [],
     telegramError = "",
     onOpenDailySummary,
+    onReauthCalendar,
     onSendTelegramMessage,
     onClearTelegramMessages,
     assistantInsight,
@@ -158,12 +165,14 @@ export default function ActivityAssistantDialog(props) {
     pending,
     pendingSource,
     error,
+    calendarFailure,
     aiStatus,
     cooldownSeconds,
     cooldownLabel,
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    scheduleResolution,
     conversationNodeId,
     guidedConversationMode,
     input,
@@ -180,6 +189,7 @@ export default function ActivityAssistantDialog(props) {
     updateGuidedActivityField,
     retryGuidedActivityDraft,
     runDailySummary,
+    retryCalendarFailure,
     selectScheduleAlternative,
     selectScheduleOption,
     confirmActivityPlan,
@@ -279,12 +289,15 @@ export default function ActivityAssistantDialog(props) {
               className="activity-ai-message-group"
             >
               <div
-                className={`activity-ai-message is-${message.role}${["ai", "free-ai", "calendar"].includes(message.source) ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}`}
+                className={`activity-ai-message is-${message.role}${["ai", "free-ai", "calendar"].includes(message.source) ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}${presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] ? ` activity-ai-tool-result is-tool-${message.toolKind}` : ""}`}
+                role={presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] ? "region" : undefined}
+                aria-label={presentation === "page" && message.role === "assistant" ? TOOL_RESULT_TITLES[message.toolKind] : undefined}
               >
+                {presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] && <strong className="activity-ai-tool-result-title">{TOOL_RESULT_TITLES[message.toolKind]}{message.calendarRange?.label && <small>ช่วง {message.calendarRange.label}</small>}</strong>}
                 <span>{presentation === "page" && message.text === INITIAL_ASSISTANT_MESSAGE.text ? "สวัสดีครับ คุยเรื่องทั่วไปได้ในโหมดคุยอิสระ ถ้าต้องการดูตารางหรือสร้างกิจกรรม ใช้เครื่องมือด้านบนหรือสลับเป็นวางแผนกิจกรรมครับ" : message.text}</span>
               </div>
               {presentation === "page" && message.role === "assistant" && index > 0 && (
-                <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
+                <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
               )}
               {message.followUpQuestions?.length > 0 && (
                 <div className={`activity-ai-answer-followups${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}`}>
@@ -315,7 +328,7 @@ export default function ActivityAssistantDialog(props) {
                       disabled={pending || !message.scheduleResolution}
                     >
                       เลือก{" "}
-                      {formatScheduleRange(
+                      {formatScheduleOption(
                         alternative.startLocal,
                         alternative.endLocal,
                       )}
@@ -368,6 +381,14 @@ export default function ActivityAssistantDialog(props) {
             <p className="activity-ai-error">{telegramError}</p>
           )}
           {error && <p className="activity-ai-error activity-ai-chat-error" role="alert">{error}</p>}
+          {calendarFailure && <section className="activity-ai-calendar-failure" role="alert" aria-label="อ่าน Google Calendar ไม่สำเร็จ">
+            <strong>{calendarFailure.kind === "reauth" ? "ต้องเชื่อม Google Calendar อีกครั้ง" : "ยังอ่าน Google Calendar ไม่ได้"}</strong>
+            <p>{calendarFailure.kind === "reauth" ? "สิทธิ์การเชื่อมต่อใช้ไม่ได้แล้ว หลังยืนยันตัวตนให้ลองคำถามนี้อีกครั้ง" : "การอ่านข้อมูลล้มเหลวชั่วคราว ยังไม่มีข้อมูลตารางสำหรับคำถามนี้"}</p>
+            <div>
+              {calendarFailure.kind === "reauth" && onReauthCalendar && <button type="button" onClick={onReauthCalendar}>ยืนยันตัวตนกับ Google</button>}
+              <button type="button" onClick={retryCalendarFailure} disabled={pending}>ลองอีกครั้ง</button>
+            </div>
+          </section>}
           {pending && (
             <p
               className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}
@@ -486,11 +507,12 @@ export default function ActivityAssistantDialog(props) {
                 return <li key={step.node} aria-current={index === currentIndex ? "step" : undefined} className={index < currentIndex ? "is-done" : ""}><span>{index < currentIndex ? "✓" : index + 1}</span>{step.label}</li>;
               })}</ol>
               <p className="activity-ai-rail-note">ตอบคำถามในแชทให้ครบ แล้วตรวจร่างในฟอร์มก่อนบันทึก</p>
+              {scheduleResolution && <p className="activity-ai-rail-conflict">เวลาที่เลือกชนเกินจำนวนที่รองรับ เลือกช่วงเวลาแนะนำในแชทหรือแก้เวลาในแผงงาน</p>}
               <div className="activity-ai-rail-fields">
                 {guidedActivity.title !== undefined && <label>ชื่อ<input type="text" value={guidedActivity.title} maxLength="120" disabled={pending} onChange={(event) => updateGuidedActivityField("title", event.target.value)} /></label>}
                 {guidedActivity.date !== undefined && <label>วัน<input type="date" value={guidedActivity.date} disabled={pending} onChange={(event) => updateGuidedActivityField("date", event.target.value)} /></label>}
                 {guidedActivity.time !== undefined && <label>เวลา<input type="time" value={guidedActivity.time} disabled={pending} onChange={(event) => updateGuidedActivityField("time", event.target.value)} /></label>}
-                {guidedActivity.durationMinutes !== undefined && <label>ระยะเวลา (นาที)<input type="number" min="1" max="1440" value={guidedActivity.durationMinutes} disabled={pending} onChange={(event) => updateGuidedActivityField("durationMinutes", Number(event.target.value) || "")} /></label>}
+                {guidedActivity.durationMinutes !== undefined && <label>ระยะเวลา (นาที)<input type="number" min="30" max="720" value={guidedActivity.durationMinutes} disabled={pending} onChange={(event) => updateGuidedActivityField("durationMinutes", Number(event.target.value) || "")} /></label>}
               </div>
               {guidedActivity.durationMinutes !== undefined && <button type="button" className="activity-ai-rail-retry" onClick={retryGuidedActivityDraft} disabled={pending}>สร้างร่างเพื่อตรวจอีกครั้ง</button>}
               <button type="button" className="activity-ai-rail-cancel" onClick={() => selectQuickReply({ kind: "home", label: "ยกเลิกการสร้างกิจกรรม" })} disabled={pending}>ยกเลิกการสร้างกิจกรรม</button>

@@ -1,0 +1,41 @@
+<!doctype html><html lang="th"><meta charset="UTF-8"><div id="root"></div>
+<script type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import ActivityAssistant from '/src/features/activity/assistant/components/activity-assistant-dialog.jsx';
+import ActivityModal from '/src/features/activity/components/activity-modal.jsx';
+import '/src/index.css';
+
+const h = React.createElement;
+function Fixture() {
+  const [reviewDraft, setReviewDraft] = useState(null);
+  const [saveAttempts, setSaveAttempts] = useState(0);
+  const [saved, setSaved] = useState(0);
+  const [savedTitle, setSavedTitle] = useState('');
+  return h('div',{className:'app app--ai',style:{height:'100vh',display:'flex'}},
+    h('output',{'data-testid':'save-attempts',hidden:true},saveAttempts),
+    h('output',{'data-testid':'saved',hidden:true},saved),
+    h('output',{'data-testid':'saved-title',hidden:true},savedTitle),
+    h(ActivityAssistant,{
+      presentation:'page',open:true,onClose:()=>{},userId:'assistant-review-fixture',categories:[],activities:[],
+      createTemplateDraft:async(input)=>({ready:true,draft:{title:input.title,startLocal:`${input.date}T${input.time}`,endLocal:`${input.date}T10:00`,allDay:false,categoryName:'',tags:[],notes:''}}),
+      onOpenActivityForm:setReviewDraft,
+    }),
+    h(ActivityModal,{
+      key:reviewDraft?.startLocal || 'closed',open:Boolean(reviewDraft),initialDraft:reviewDraft,
+      defaultDate:reviewDraft ? new Date(reviewDraft.startLocal) : new Date(),
+      defaultEnd:reviewDraft ? new Date(reviewDraft.endLocal) : null,
+      initialActivity:null,activities:[],categories:[],activityCategoryMap:{},activityTagMap:{},
+      onCreateCategory:async()=>{},onDeleteCategory:async()=>{},onDelete:async()=>{},onOpenAssistant:()=>{},
+      onClose:()=>setReviewDraft(null),
+      onSave:async(payload)=>{
+        setSaveAttempts(value=>value+1);
+        if(window.testSaveShouldFail) throw new Error('ทดสอบบันทึก Calendar ไม่สำเร็จ');
+        setSavedTitle(payload.activityBody.summary);
+        setSaved(value=>value+1);
+      },
+    })
+  );
+}
+createRoot(document.getElementById('root')).render(h(Fixture));
+</script></html>

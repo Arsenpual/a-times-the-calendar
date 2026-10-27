@@ -16,7 +16,7 @@ export function validateGuidedActivity(values) {
   if (!time) return "กรุณาเลือกเวลาเริ่มให้ถูกต้อง";
 
   const duration = Number(values?.durationMinutes);
-  if (!Number.isInteger(duration) || duration < 1 || duration > 1440)
-    return "ระยะเวลาต้องอยู่ระหว่าง 1 ถึง 1,440 นาที";
+  if (!Number.isInteger(duration) || duration < 30 || duration > 720)
+    return "ระยะเวลาต้องอยู่ระหว่าง 30 ถึง 720 นาที";
   return "";
 }

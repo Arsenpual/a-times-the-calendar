@@ -25,6 +25,7 @@ export function loadSavedChat(userId) {
         text: message.text.slice(0, 1_200),
         source: ["ai", "free-ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
         sourceLabel: ["AI", "AI · ปฏิทิน", "ปฏิทิน · ช่วงว่าง", "วางแผนจากตาราง", "ปฏิทิน", "ร่างจากข้อความ", "ข้อมูล T.i.M.E.S."].includes(message.sourceLabel) ? message.sourceLabel : "",
+        toolKind: ["calendar", "scheduling", "planning"].includes(message.toolKind) ? message.toolKind : "",
         calendarRange: typeof message.calendarRange?.label === "string" && /^\d{4}-\d{2}-\d{2}( ถึง \d{4}-\d{2}-\d{2})?$/.test(message.calendarRange.label) ? { label: message.calendarRange.label } : null,
         commandTone: ["planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
       }))

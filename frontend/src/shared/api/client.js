@@ -89,7 +89,9 @@ export async function handleResponse(res, label) {
         throw error;
       }
     }
-    throw new Error(`[${label}] backend ตอบ error (${res.status}): ${body?.error || text || "(ไม่มีเนื้อหา)"}`);
+    const error = new Error(`[${label}] backend ตอบ error (${res.status}): ${body?.error || text || "(ไม่มีเนื้อหา)"}`);
+    if (typeof body?.code === "string") error.code = body.code;
+    throw error;
   }
   if (!text) {
     throw new Error(

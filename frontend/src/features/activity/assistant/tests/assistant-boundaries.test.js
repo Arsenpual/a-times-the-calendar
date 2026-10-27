@@ -44,6 +44,24 @@ test("chat restore isolates accounts and never adopts ownerless legacy history",
   } finally { globalThis.window = previous; }
 });
 
+test("chat restore keeps only supported tool card metadata", () => {
+  const previous = globalThis.window;
+  const storage = new Map([
+    [assistantChatStorageKey("alice"), JSON.stringify({ messages: [
+      { role: "assistant", text: "ตารางวันนี้: ไม่มีรายการ", source: "knowledge", toolKind: "calendar", calendarRange: { label: "2026-10-27" } },
+      { role: "assistant", text: "ข้อมูลอื่น", source: "knowledge", toolKind: "arbitrary", calendarRange: { label: "secret" } }
+    ] })]
+  ]);
+  globalThis.window = { localStorage: { getItem: key => storage.get(key) } };
+  try {
+    const [calendar, other] = loadSavedChat("alice").messages;
+    assert.equal(calendar.toolKind, "calendar");
+    assert.equal(calendar.calendarRange.label, "2026-10-27");
+    assert.equal(other.toolKind, "");
+    assert.equal(other.calendarRange, null);
+  } finally { globalThis.window = previous; }
+});
+
 test("preference learning observes supported corrections only", () => {
   const payload = {
     assistantProposal: { title: "ทำการบ้าน", startLocal: "2026-09-30T19:00", endLocal: "2026-09-30T20:00" },

@@ -25,7 +25,7 @@ import {
   collectUserTags,
 } from "../lib/activity-schedule-context.js";
 
-import { formatScheduleRange } from "../lib/schedule-format.js";
+import { formatScheduleOption, formatScheduleRange } from "../lib/schedule-format.js";
 import { assistantSourceLabel } from "../lib/assistant-source-label.js";
 import { validateGuidedActivity } from "../lib/guided-activity-validation.js";
 
@@ -58,6 +58,8 @@ export function useActivityAssistantConversation({
   freeConversation = false,
   openFormOnGuidedStart = true,
   createTemplateDraft = createActivityTemplateDraft,
+  continueFreeChat = continueFreeConversation,
+  continuePlanningChat = continueActivityAssistant,
   onClose,
   categories,
   activities = [],
@@ -83,6 +85,7 @@ export function useActivityAssistantConversation({
   const [pending, setPending] = useState(false);
   const [pendingSource, setPendingSource] = useState("");
   const [error, setError] = useState("");
+  const [calendarFailure, setCalendarFailure] = useState(null);
   const [aiStatus, setAiStatus] = useState(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [guidedActivity, setGuidedActivity] = useState(
@@ -98,17 +101,32 @@ export function useActivityAssistantConversation({
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
   const activeSessionRef = useRef({ open, userId, version: 0 });
+  const conversationEpochRef = useRef(0);
   useEffect(() => {
     const version = activeSessionRef.current.version + 1;
     activeSessionRef.current = { open, userId, version };
+    if (!open) {
+      setPending(false);
+      setPendingSource("");
+    }
     return () => { activeSessionRef.current = { open: false, userId: null, version: version + 1 }; };
   }, [open, userId]);
+  const isCurrentConversation = (version, epoch) =>
+    activeSessionRef.current.open &&
+    activeSessionRef.current.userId === userId &&
+    activeSessionRef.current.version === version &&
+    conversationEpochRef.current === epoch;
   const handledStartActivityCreationRequest = useRef(
     startActivityCreationRequest,
   );
   const handledStartDailySummaryRequest = useRef(startDailySummaryRequest);
   const runDailySummary = useCallback(async () => {
     if (!onOpenDailySummary || pending) return;
+    const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
+    const isCurrent = () =>
+      activeSessionRef.current.open && activeSessionRef.current.userId === userId &&
+      activeSessionRef.current.version === requestVersion && conversationEpochRef.current === requestEpoch;
     setMessages((current) => [
       ...current,
       { role: "user", text: "สรุปกิจกรรมวันนี้", source: "template", commandTone: "calendar" },
@@ -116,8 +134,10 @@ export function useActivityAssistantConversation({
     setPending(true);
     setPendingSource("template");
     setError("");
+    setCalendarFailure(null);
     try {
       const summary = await onOpenDailySummary();
+      if (!isCurrent()) return;
       setMessages((current) => [
         ...current,
         {
@@ -128,12 +148,17 @@ export function useActivityAssistantConversation({
         },
       ]);
     } catch (requestError) {
-      setError(requestError.message || "ไม่สามารถสรุปกิจกรรมวันนี้ได้");
+      if (isCurrent()) setCalendarFailure({
+        kind: requestError.code === "CALENDAR_REAUTH_REQUIRED" || /สิทธิ์|เชื่อม Google Calendar/.test(requestError.message || "") ? "reauth" : "unavailable",
+        requestKind: "daily-summary",
+      });
     } finally {
-      setPending(false);
-      setPendingSource("");
+      if (isCurrent()) {
+        setPending(false);
+        setPendingSource("");
+      }
     }
-  }, [onOpenDailySummary, pending]);
+  }, [onOpenDailySummary, pending, userId]);
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ block: "end" });
   }, [open, messages, pending, error]);
@@ -147,10 +172,12 @@ export function useActivityAssistantConversation({
   }, [open, onClose, closeOnEscape]);
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     getActivityAssistantStatus()
-      .then((result) => setAiStatus(result.aiChat))
-      .catch((requestError) => setError(requestError.message));
-  }, [open]);
+      .then((result) => { if (!cancelled) setAiStatus(result.aiChat); })
+      .catch((requestError) => { if (!cancelled) setError(requestError.message); });
+    return () => { cancelled = true; };
+  }, [open, userId]);
   useEffect(() => {
     if (open) onOpenTelegramChat?.();
   }, [open, onOpenTelegramChat]);
@@ -219,8 +246,12 @@ export function useActivityAssistantConversation({
     // One clear action owns every disposable transcript shown in this dialog.
     // Telegram's native app history is intentionally not touched; this clears
     // only the authenticated T.i.M.E.S. mirror and its notification cards.
+    conversationEpochRef.current += 1;
+    setPending(false);
+    setPendingSource("");
     setMessages([INITIAL_ASSISTANT_MESSAGE]);
     setError("");
+    setCalendarFailure(null);
     setInput("");
     setGuidedActivity(null);
     setConversationNodeId("home");
@@ -240,10 +271,26 @@ export function useActivityAssistantConversation({
   };
   const addMessages = (...newMessages) =>
     setMessages((current) => [...current, ...newMessages]);
+  const describeDraftForReview = (draft) =>
+    `ร่างกิจกรรม: ${draft.title}\n${draft.startLocal.slice(0, 10)} · ${formatScheduleRange(draft.startLocal, draft.endLocal)}${draft.endLocal.slice(0, 10) !== draft.startLocal.slice(0, 10) ? ` (สิ้นสุด ${draft.endLocal.slice(0, 10)})` : ""}\nตรวจรายละเอียดในฟอร์ม แล้วกดบันทึกเมื่อพร้อมครับ`;
+  const openDraftForReview = (draft, values = {}) => {
+    if (activityFormOpen) {
+      if (!onUpdateActivityForm) throw new Error("ไม่สามารถส่งร่างไปยังฟอร์มกิจกรรมได้");
+      onUpdateActivityForm({ values: { ...values, formDraft: draft }, changedField: "activityDraft" });
+    } else {
+      if (!onOpenActivityForm) throw new Error("ไม่สามารถเปิดฟอร์มตรวจร่างกิจกรรมได้");
+      onOpenActivityForm(draft);
+    }
+    setGuidedActivity(null);
+    setConversationNodeId("home");
+    setGuidedConversationMode("template");
+  };
   const updateGuidedActivityField = (field, value) => {
     if (!guidedActivity || pending || !["title", "date", "time", "durationMinutes"].includes(field)) return;
     const selected = { ...guidedActivity, [field]: value };
     setGuidedActivity(selected);
+    setScheduleResolution(null);
+    setError("");
     if (activityFormOpen) onUpdateActivityForm?.({ values: selected, changedField: field });
   };
   const finishGuidedActivity = async (selected) => {
@@ -256,6 +303,7 @@ export function useActivityAssistantConversation({
     setPendingSource("template");
     setError("");
     const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
     try {
       const result = await createTemplateDraft({
         title: selected.title,
@@ -272,12 +320,13 @@ export function useActivityAssistantConversation({
           selected.date,
         ),
       });
-      if (activeSessionRef.current.version !== requestVersion || activeSessionRef.current.userId !== userId) {
-        if (activeSessionRef.current.open && activeSessionRef.current.userId === userId)
+      if (!isCurrentConversation(requestVersion, requestEpoch)) {
+        if (conversationEpochRef.current === requestEpoch && activeSessionRef.current.open && activeSessionRef.current.userId === userId)
           setError("คำขอสร้างร่างก่อนหน้านี้หมดอายุ เลือกระยะเวลาอีกครั้งเพื่อลองใหม่");
         return;
       }
-      const activityDraft = result.draft;
+      const activityDraft = createActivityPopupHandoff(result)?.values.formDraft;
+      if (!activityDraft) throw new Error("ระบบสร้างร่างกิจกรรมไม่ครบ กรุณาลองอีกครั้ง");
       // A guided conversation can begin from the compact assistant without
       // an already-open ActivityPopup. Updating a closed form loses the
       // review surface, so open it with the completed draft in that case.
@@ -305,31 +354,21 @@ export function useActivityAssistantConversation({
         ]);
         return;
       }
-      if (activityFormOpen) {
-        if (!onUpdateActivityForm) throw new Error("ไม่สามารถส่งร่างไปยังฟอร์มกิจกรรมได้");
-        onUpdateActivityForm({
-          values: { ...selected, formDraft: activityDraft },
-          changedField: "activityDraft",
-        });
-      } else {
-        if (!onOpenActivityForm) throw new Error("ไม่สามารถเปิดฟอร์มตรวจร่างกิจกรรมได้");
-        onOpenActivityForm(activityDraft);
-      }
+      openDraftForReview(activityDraft, selected);
       addMessages({
         role: "assistant",
-        text: `ร่างกิจกรรม: ${activityDraft.title}\n${activityDraft.startLocal.slice(0, 10)} · ${formatScheduleRange(activityDraft.startLocal, activityDraft.endLocal)}${activityDraft.endLocal.slice(0, 10) !== activityDraft.startLocal.slice(0, 10) ? ` (สิ้นสุด ${activityDraft.endLocal.slice(0, 10)})` : ""}\nตรวจรายละเอียดในฟอร์ม แล้วกดบันทึกเมื่อพร้อมครับ`,
+        text: describeDraftForReview(activityDraft),
         source: "template",
         sourceLabel: "ร่างจากข้อความ",
       });
-      setGuidedActivity(null);
-      setConversationNodeId("home");
-      setGuidedConversationMode("template");
     } catch (requestError) {
-      if (activeSessionRef.current.version === requestVersion && activeSessionRef.current.open && activeSessionRef.current.userId === userId)
+      if (isCurrentConversation(requestVersion, requestEpoch))
         setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ");
     } finally {
-      setPending(false);
-      setPendingSource("");
+      if (isCurrentConversation(requestVersion, requestEpoch)) {
+        setPending(false);
+        setPendingSource("");
+      }
     }
   };
   const selectQuickReply = async (option) => {
@@ -337,6 +376,7 @@ export function useActivityAssistantConversation({
       const homeNode = getActivityAssistantConversationNode("home");
       setGuidedActivity(null);
       setConversationNodeId("home");
+      setScheduleResolution(null);
       addMessages(
         { role: "user", text: option.label, source: "template" },
         { role: "assistant", text: homeNode.prompt, source: "template" },
@@ -358,6 +398,7 @@ export function useActivityAssistantConversation({
       setError("");
       setGuidedActivity({});
       setConversationNodeId(option.next);
+      setScheduleResolution(null);
       setGuidedConversationMode("template");
       addMessages({
         role: "user",
@@ -407,12 +448,15 @@ export function useActivityAssistantConversation({
   const rootQuestions = getActivityAssistantRootQuestions();
   const sendKnowledge = async (text, commandTone = "knowledge") => {
     if (!text || pending) return;
+    const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
     setPending(true);
     setPendingSource("knowledge");
     setError("");
     setMessages((current) => [...current, { role: "user", text, source: "knowledge", commandTone }]);
     try {
       const result = await fetchProductKnowledge(text);
+      if (!isCurrentConversation(requestVersion, requestEpoch)) return;
       setMessages((current) => [...current, {
         role: "assistant",
         text: result.reply,
@@ -421,16 +465,21 @@ export function useActivityAssistantConversation({
         followUpQuestions: result.found ? getActivityAssistantKnowledgeFollowUps(text) : [],
       }]);
     } catch (requestError) {
-      setError(requestError.message || "โหลดคำตอบไม่สำเร็จ กรุณาลองอีกครั้ง");
+      if (isCurrentConversation(requestVersion, requestEpoch)) setError(requestError.message || "โหลดคำตอบไม่สำเร็จ กรุณาลองอีกครั้ง");
     } finally {
-      setPending(false);
-      setPendingSource("");
+      if (isCurrentConversation(requestVersion, requestEpoch)) {
+        setPending(false);
+        setPendingSource("");
+      }
     }
   };
   const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
     if (!text || pending || (cooldownSeconds > 0 && !suggestedText)) return;
+    const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
+    const isCurrentRequest = () => isCurrentConversation(requestVersion, requestEpoch);
     if (freeConversation && chatStyle === "free" && !suggestedText && !guidedActivity) {
       const history = messages.filter((message) => message.source === "free-ai" && ["user", "assistant"].includes(message.role)).slice(-16).map(({ role, text: turnText }) => ({ role, text: turnText }));
       setMessages((current) => [...current, { role: "user", text, source: "free-ai" }]);
@@ -439,16 +488,20 @@ export function useActivityAssistantConversation({
       setPendingSource("ai");
       setError("");
       try {
-        const result = await continueFreeConversation({ text, history });
+        const result = await continueFreeChat({ text, history });
+        if (!isCurrentRequest()) return;
         if (result.source === "knowledge") setMessages((current) => current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message));
         setMessages((current) => [...current, { role: "assistant", text: result.reply, source: result.source === "knowledge" ? "knowledge" : "free-ai" }]);
       } catch (requestError) {
+        if (!isCurrentRequest()) return;
         setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
         if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
       } finally {
-        setPending(false);
-        setPendingSource("");
-        getActivityAssistantStatus().then((result) => setAiStatus(result.aiChat)).catch(() => {});
+        if (isCurrentRequest()) {
+          setPending(false);
+          setPendingSource("");
+          getActivityAssistantStatus().then((result) => { if (isCurrentRequest()) setAiStatus(result.aiChat); }).catch(() => {});
+        }
       }
       return;
     }
@@ -492,6 +545,7 @@ export function useActivityAssistantConversation({
     setPending(true);
     setPendingSource(canUseGemini ? "ai" : "template");
     setError("");
+    setCalendarFailure(null);
     if (guidedActivity && canUseGemini) setGuidedConversationMode("ai");
     try {
       const history = messages.slice(1);
@@ -502,7 +556,7 @@ export function useActivityAssistantConversation({
         history.at(-1).text.trim() === text
       )
         history.pop();
-      const result = await continueActivityAssistant({
+      const result = await continuePlanningChat({
         text,
         history,
         referenceDate: toDateInputValue(new Date()),
@@ -519,6 +573,7 @@ export function useActivityAssistantConversation({
         guidedStep: immediateGuidedActivity ? immediateGuidedStep : "",
         guidedActivity: immediateGuidedActivity,
       });
+      if (!isCurrentRequest()) return;
       // A complete explicit request is parsed by the backend without Gemini.
       // Render it like other quota-free knowledge responses so this turn does
       // not inflate the local AI usage indicator either.
@@ -576,6 +631,7 @@ export function useActivityAssistantConversation({
             text: result.reply,
             source: responseSource,
             sourceLabel: assistantSourceLabel(result),
+            toolKind: result.calendarRange?.label ? "calendar" : ["scheduling", "planning"].includes(result.source) ? result.source : "",
             calendarRange: result.calendarRange?.label ? { label: result.calendarRange.label } : null,
             commandTone,
             scheduleOptions: result.scheduling?.options || [],
@@ -598,6 +654,7 @@ export function useActivityAssistantConversation({
       ) {
         await finishGuidedActivity(completedGuidedActivity);
       }
+      if (!isCurrentRequest()) return;
       if (result.ready) {
         const popupHandoff = createActivityPopupHandoff(result);
         if (!popupHandoff)
@@ -631,15 +688,22 @@ export function useActivityAssistantConversation({
         else onOpenActivityForm?.(popupHandoff.values.formDraft);
       }
     } catch (requestError) {
-      setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
+      if (!isCurrentRequest()) return;
+      if (["CALENDAR_REAUTH_REQUIRED", "CALENDAR_READ_FAILED"].includes(requestError.code)) {
+        setCalendarFailure({ kind: requestError.code === "CALENDAR_REAUTH_REQUIRED" ? "reauth" : "unavailable", requestKind: "chat", text, commandTone });
+      } else {
+        setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
+      }
       if (requestError.retryAfterSeconds)
         setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
     } finally {
-      setPending(false);
-      setPendingSource("");
-      getActivityAssistantStatus()
-        .then((result) => setAiStatus(result.aiChat))
-        .catch(() => {});
+      if (isCurrentRequest()) {
+        setPending(false);
+        setPendingSource("");
+        getActivityAssistantStatus()
+          .then((result) => { if (isCurrentRequest()) setAiStatus(result.aiChat); })
+          .catch(() => {});
+      }
     }
   };
   const sendToTelegram = async () => {
@@ -657,6 +721,13 @@ export function useActivityAssistantConversation({
       setPending(false);
       setPendingSource("");
     }
+  };
+  const retryCalendarFailure = () => {
+    if (!calendarFailure || pending) return;
+    const failed = calendarFailure;
+    setCalendarFailure(null);
+    if (failed.requestKind === "daily-summary") runDailySummary();
+    else send(null, failed.text, failed.commandTone);
   };
   const selectScheduleAlternative = (
     alternative,
@@ -688,28 +759,19 @@ export function useActivityAssistantConversation({
       );
       return;
     }
-    // Keep the whole proposed set alive. The person can return to this chat
-    // and choose another suggested slot until they finally save or cancel.
-    setScheduleResolution({ ...resolution, selected: alternative });
-    setMessages((current) => [
-      ...current,
-      {
-        role: "user",
-        text: `เลือกเวลา ${formatScheduleRange(alternative.startLocal, alternative.endLocal)}`,
-        source: "template",
-      },
-      {
-        role: "assistant",
-        text: "ปรับเวลาในฟอร์มให้แล้ว ตรวจสอบรายละเอียดและกดบันทึกได้เลยครับ",
-        source: "template",
-      },
-    ]);
-    if (activityFormOpen)
-      onUpdateActivityForm?.({
-        values: { formDraft },
-        changedField: "activityDraft",
-      });
-    else onOpenActivityForm?.(formDraft);
+    try {
+      openDraftForReview(formDraft);
+      // Each message keeps its resolution, so another offered slot remains
+      // selectable if the person returns after reviewing the form.
+      setScheduleResolution({ ...resolution, selected: alternative });
+      addMessages(
+        { role: "user", text: `เลือกเวลา ${formatScheduleOption(alternative.startLocal, alternative.endLocal)}`, source: "template" },
+        { role: "assistant", text: describeDraftForReview(formDraft), source: "template", sourceLabel: "ร่างจากข้อความ" },
+      );
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message || "เปิดร่างกิจกรรมไม่สำเร็จ");
+    }
   };
   const selectScheduleOption = (option) => {
     const formDraft = option?.draft;
@@ -719,12 +781,16 @@ export function useActivityAssistantConversation({
       setError("ตารางเปลี่ยนแล้ว ช่วงเวลานี้ชนเกิน 3 กิจกรรม กรุณาหาช่วงเวลาใหม่อีกครั้ง");
       return;
     }
-    addMessages(
-      { role: "user", text: `เลือกเวลา ${formatScheduleRange(formDraft.startLocal, formDraft.endLocal)}`, source: "template" },
-      { role: "assistant", text: "เปิดร่างกิจกรรมให้แล้ว ตรวจสอบรายละเอียดและกดบันทึกได้เลยครับ", source: "template" },
-    );
-    if (activityFormOpen) onUpdateActivityForm?.({ values: { formDraft }, changedField: "activityDraft" });
-    else onOpenActivityForm?.(formDraft);
+    try {
+      openDraftForReview(formDraft);
+      addMessages(
+        { role: "user", text: `เลือกเวลา ${formatScheduleRange(formDraft.startLocal, formDraft.endLocal)}`, source: "template" },
+        { role: "assistant", text: describeDraftForReview(formDraft), source: "template", sourceLabel: "ร่างจากข้อความ" },
+      );
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message || "เปิดร่างกิจกรรมไม่สำเร็จ");
+    }
   };
   const confirmActivityPlan = async (drafts) => {
     if (!onConfirmActivityPlan || pending || !Array.isArray(drafts) || drafts.length === 0) return false;
@@ -784,12 +850,14 @@ export function useActivityAssistantConversation({
     pending,
     pendingSource,
     error,
+    calendarFailure,
     aiStatus,
     cooldownSeconds,
     cooldownLabel,
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    scheduleResolution,
     conversationNodeId,
     guidedConversationMode,
     input,
@@ -804,6 +872,7 @@ export function useActivityAssistantConversation({
     updateGuidedActivityField,
     retryGuidedActivityDraft: () => finishGuidedActivity(guidedActivity),
     runDailySummary,
+    retryCalendarFailure,
     selectScheduleAlternative,
     selectScheduleOption,
     confirmActivityPlan,

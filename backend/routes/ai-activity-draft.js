@@ -426,6 +426,15 @@ router.post("/activity-conversation", async (req, res, next) => {
   let claim = null;
   try {
     const context = prepareContext(req.body);
+    const readCalendarContext = async () => {
+      try { return await readCalendarQuestion(req.userId, context); }
+      catch (error) {
+        if (error?.code === "CALENDAR_REAUTH_REQUIRED") throw error;
+        const readError = new Error("อ่าน Google Calendar ไม่สำเร็จชั่วคราว กรุณาลองอีกครั้ง");
+        readError.code = "CALENDAR_READ_FAILED";
+        throw readError;
+      }
+    };
     // Product FAQ answers are deterministic local lookups. They do not call
     // Gemini, so they never consume the person's AI quota.
     const knowledgeReply = answerKnowledge(context.text);
@@ -444,7 +453,7 @@ router.post("/activity-conversation", async (req, res, next) => {
     // event set.  This reads no more data than the AI branch, but never calls
     // Gemini and therefore does not consume the user's AI quota.
     if (isDeterministicCalendarQuestion(context.text)) {
-      const calendarContext = await readCalendarQuestion(req.userId, context);
+      const calendarContext = await readCalendarContext();
       const reply = answerDeterministicCalendar(context.text, calendarContext, context.timeZone);
       if (reply) return res.json({ reply, ready: false, draft: null, source: "deterministic", calendarRange: calendarContext.range });
     }
@@ -468,7 +477,7 @@ router.post("/activity-conversation", async (req, res, next) => {
           ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds, retryAfterAt: new Date(claim.resetAt).toISOString() } : {})
         });
       }
-      const calendarContext = await readCalendarQuestion(req.userId, context);
+      const calendarContext = await readCalendarContext();
       const reply = await generateCalendarAnswer({ text: context.text, calendarContext, timeZone: context.timeZone });
       return res.json({ reply, ready: false, draft: null, source: "calendar", calendarRange: calendarContext.range });
     }
@@ -494,6 +503,9 @@ router.post("/activity-conversation", async (req, res, next) => {
     if (claim?.status === "claimed") await releaseChatUsage(claim).catch(() => {});
     if (error?.code === "CALENDAR_REAUTH_REQUIRED") {
       return res.status(428).json({ code: error.code, error: error.message });
+    }
+    if (error?.code === "CALENDAR_READ_FAILED") {
+      return res.status(502).json({ code: error.code, error: error.message });
     }
     res.status(error.status || 502).json({ error: error.message });
   }

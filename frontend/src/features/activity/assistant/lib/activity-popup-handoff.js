@@ -4,5 +4,8 @@
 export function createActivityPopupHandoff(result) {
   const draft = result?.ready ? result.draft : null;
   if (!draft || typeof draft.title !== "string" || !draft.title.trim() || typeof draft.startLocal !== "string" || !draft.startLocal.trim() || typeof draft.endLocal !== "string" || !draft.endLocal.trim()) return null;
+  const start = new Date(draft.startLocal);
+  const end = new Date(draft.endLocal);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return null;
   return { values: { formDraft: draft }, changedField: "activityDraft" };
 }

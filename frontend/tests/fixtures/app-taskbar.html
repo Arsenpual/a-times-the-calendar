@@ -1,6 +1,6 @@
 <!doctype html><html lang="th"><meta charset="UTF-8"><div id="root"></div>
 <script type="module">
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AppHeader from '/src/app/components/app-header.jsx';
 import AppTaskbar from '/src/app/components/app-taskbar.jsx';
@@ -15,6 +15,9 @@ function Fixture() {
   const [action, setAction] = useState('');
   const [telegramMessages, setTelegramMessages] = useState([{id:'preview-1',direction:'incoming',text:'บันทึกสั้นจาก Telegram'}]);
   const [formDraft, setFormDraft] = useState(null);
+  const [reauthCount, setReauthCount] = useState(0);
+  const [activities, setActivities] = useState([]);
+  useEffect(()=>{window.setFixtureActivities=setActivities;return()=>{delete window.setFixtureActivities;};},[]);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const select = mode => { setMode(mode); setExpanded(false); };
   return h('div', {className: 'app app--'+mode},
@@ -24,10 +27,22 @@ function Fixture() {
       calendarAccessToken:'preview',cursorDate:new Date(),accountMenuOpen,setAccountMenuOpen,setSettingsOpen:()=>setAction('settings')}),
     h('div',{className:'app-workspace'},
       h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>{toggleAiMode();setAction('assistant');setExpanded(false);},unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
-      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),h('output',{'data-testid':'form-draft'},formDraft?.title || ''),
-        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities:[],userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,createTemplateDraft:async(input)=>{
+      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),h('output',{'data-testid':'form-draft'},formDraft?.title || ''),h('output',{'data-testid':'form-start'},formDraft?.startLocal || ''),h('output',{'data-testid':'activity-count'},activities.length),h('output',{'data-testid':'reauth-count'},reauthCount),
+        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities,userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,onReauthCalendar:()=>setReauthCount(v=>v+1),onOpenDailySummary:async()=>{if(window.testSummaryFailure) throw new Error('กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม');return {date:'2026-10-27',totalActivities:0};},
+        continueFreeChat:async()=>window.testFreeDeferred?new Promise(resolve=>{window.resolveFreeChat=()=>resolve({reply:'คำตอบจากแชทเก่า',source:'ai'});}):{reply:'คำตอบจากแชทใหม่',source:'ai'},
+        continuePlanningChat:async(input)=>{
+          if(window.testPlanningDeferred) return new Promise(resolve=>{window.resolvePlanningChat=()=>resolve({reply:'คำตอบวางแผนเก่า',source:'knowledge'});});
+          if(window.testCalendarFailure && input.text.includes('วันนี้มีอะไร')) throw Object.assign(new Error('อ่าน Calendar ไม่สำเร็จ'),{code:window.testCalendarFailure});
+          if(input.text.includes('วันนี้มีอะไร')) return {reply:'ตารางวันนี้:\n• 09:00–10:00 ประชุม',source:'deterministic',calendarRange:{label:'2026-10-27'}};
+          if(input.text.includes('ออกกำลังกาย')) return {reply:'ยังไม่พบช่วงเวลาว่างในช่วงที่ตรวจสอบ',source:'scheduling',scheduling:{title:'ออกกำลังกาย',durationMinutes:60,requestedDate:'2026-10-28',options:[]}};
+          return {reply:'คำตอบวางแผนใหม่',source:'knowledge'};
+        },
+        createTemplateDraft:async(input)=>{
           if(window.testDraftShouldFail) throw new Error('ทดสอบสร้างร่างไม่สำเร็จ');
-          return {draft:{title:input.title,startLocal:`${input.date}T${input.time}`,endLocal:`${input.date}T10:00`,allDay:false}};
+          if(window.testDraftInvalid) return {ready:false,draft:null};
+          const result={ready:true,draft:{title:input.title,startLocal:`${input.date}T${input.time}`,endLocal:`${input.date}T10:00`,allDay:false}};
+          if(window.testDraftDeferred) return new Promise(resolve=>{window.resolveTestDraft=()=>resolve(result);});
+          return result;
         }}))));
 }
 createRoot(document.getElementById('root')).render(h(Fixture));

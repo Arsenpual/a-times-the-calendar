@@ -27,6 +27,7 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-content .activity-ai-centered-questions > small { font-size: 11px; }
 .activity-ai-rail-content .activity-ai-centered-questions button { min-height: 28px; padding: 5px 8px; font-size: 12px; }
 .activity-ai-rail-note { margin: 0; color: var(--text-secondary); line-height: 1.6; }
+.activity-ai-rail-conflict { margin: 12px 0; padding: 9px 10px; border: 1px solid #f0ccc7; border-radius: 8px; background: #fff4f2; color: #8c332c; font-size: 12px; line-height: 1.5; }
 .activity-ai-rail-progress ol { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 14px; padding: 0; }
 .activity-ai-rail-progress li { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; color: var(--text-secondary); font-size: 11px; }
 .activity-ai-rail-progress li span { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: var(--hover); }
@@ -48,11 +49,20 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-page .activity-ai-messages { padding: 20px clamp(12px, 3vw, 32px); background: #ffffff; }
 .activity-ai-page .activity-ai-messages > * { max-width: 960px; margin-inline: auto; }
 .activity-ai-page .activity-ai-message { font-size: 14px; line-height: 1.7; padding: 12px 16px; overflow-wrap: anywhere; }
+.activity-ai-page .activity-ai-message.activity-ai-tool-result { --tool-accent: #3d73be; --tool-background: #f3f7fd; display: grid; gap: 10px; max-width: min(760px, 100%); border: 1px solid color-mix(in srgb, var(--tool-accent) 35%, #dce4ed); border-left: 3px solid var(--tool-accent); border-radius: 10px; background: var(--tool-background); color: #253346; white-space: pre-wrap; }
+.activity-ai-page .activity-ai-message.activity-ai-tool-result.is-tool-scheduling, .activity-ai-page .activity-ai-message.activity-ai-tool-result.is-tool-planning { --tool-accent: #bf4d83; --tool-background: #fff4f8; }
+.activity-ai-tool-result-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding-bottom: 8px; border-bottom: 1px solid #e8edf3; font-size: 13px; line-height: 1.4; }
+.activity-ai-tool-result-title small { color: #637184; font-size: 11px; font-weight: 400; }
 .activity-ai-page .activity-ai-message.is-assistant:not(.is-command-tone-planning):not(.is-command-tone-calendar):not(.is-command-tone-ai):not(.is-command-tone-knowledge):not(.is-ai-turn):not(.is-knowledge-turn) { background: #f6f9fc; }
 .activity-ai-page .activity-ai-message.is-user:not(.is-command-tone-planning):not(.is-command-tone-calendar):not(.is-command-tone-ai):not(.is-command-tone-knowledge):not(.is-ai-turn):not(.is-knowledge-turn) { border-color: #d3e4f9; background: #eaf3ff; color: #253346; }
 .activity-ai-guided-preview { display: grid; gap: 3px; width: fit-content; max-width: 100%; margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #f6f9fc; color: var(--text-primary); font-size: 12px; line-height: 1.5; }
 .activity-ai-guided-preview strong { margin-bottom: 3px; }
 .activity-ai-page .activity-ai-chat-error { width: fit-content; max-width: min(850px, 100%); margin: 12px 0; padding: 10px 12px; border: 1px solid #f0ccc7; border-radius: 9px; line-height: 1.5; }
+.activity-ai-calendar-failure { width: fit-content; max-width: min(760px, 100%); margin: 12px 0; padding: 12px 14px; border: 1px solid #e9b8ad; border-radius: 10px; background: #fff8f5; color: #753c34; font-size: 13px; line-height: 1.5; }
+.activity-ai-calendar-failure p { margin: 6px 0 12px; }
+.activity-ai-calendar-failure > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.activity-ai-calendar-failure button { min-height: 32px; padding: 5px 10px; border: 1px solid #d9a69d; border-radius: 7px; background: #ffffff; color: #753c34; font: inherit; cursor: pointer; }
+.activity-ai-calendar-failure button:disabled { opacity: .6; cursor: wait; }
 .activity-ai-page .activity-ai-composer { padding: 12px clamp(12px, 3vw, 32px); background: #ffffff; }
 .activity-ai-page .activity-ai-composer textarea { min-height: 56px; font-size: 14px; }
 .activity-ai-tools { margin-bottom: 16px; }

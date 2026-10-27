@@ -56,10 +56,17 @@ function calendarRangeForQuestion(text, referenceDate) {
   return { start, end, label };
 }
 
+function needsCalendarReauth(status, data) {
+  if (status === 401) return true;
+  if (status !== 403) return false;
+  const reasons = (data?.error?.errors || []).map((item) => item?.reason);
+  return data?.error?.status === "UNAUTHENTICATED" || reasons.some((reason) => ["authError", "insufficientPermissions", "invalidCredentials"].includes(reason));
+}
+
 async function googleJson(url, accessToken) {
   const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) });
   const data = await response.json().catch(() => null);
-  if (response.status === 401 || response.status === 403) {
+  if (needsCalendarReauth(response.status, data)) {
     const { CalendarReauthRequiredError } = require("./calendar-oauth.js");
     throw new CalendarReauthRequiredError();
   }
@@ -205,4 +212,4 @@ function answerDeterministicCalendarQuestion(text, context, timeZone = "Asia/Ban
   return `ตาราง ${context.range.label}:\n${formatEvents(context.events, timeZone)}`;
 }
 
-module.exports = { calendarRangeForQuestion, readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion };
+module.exports = { calendarRangeForQuestion, readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion, needsCalendarReauth };

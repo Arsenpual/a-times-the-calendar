@@ -30,6 +30,7 @@ const unitTests = [
 
 const browserTests = [
   "tests/app-taskbar-browser.mjs",
+  "tests/assistant-review-browser.mjs",
   "tests/assistant-cleanup-browser.mjs",
   "tests/activity-phase1-browser.mjs",
   "tests/activity-view-browser.mjs",

@@ -1,0 +1,54 @@
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('../',import.meta.url));
+const server = await createServer({root,server:{port:0},logLevel:'error'});
+await server.listen();
+const browser = await chromium.launch({channel:'chrome',headless:true});
+try {
+  const page = await browser.newPage({viewport:{width:1440,height:900}});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(server.resolvedUrls.local[0]+'tests/fixtures/assistant-review.html');
+  const ai = page.getByRole('region',{name:'AI Mode MR.Zettascale'});
+  await ai.waitFor();
+  await ai.getByRole('button',{name:'สร้างกิจกรรม',exact:true}).click();
+  await ai.getByRole('button',{name:'ประชุม',exact:true}).click();
+  await ai.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
+  await ai.getByRole('button',{name:'ช่วงเช้า · 09:00'}).click();
+  await ai.getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
+  const modal=page.locator('.modal-box');
+  await modal.waitFor();
+  assert.equal(await modal.getByLabel('ชื่อกิจกรรม').inputValue(),'ประชุม');
+  await modal.getByLabel('ชื่อกิจกรรม').fill('ประชุมแก้ไขก่อนบันทึก');
+  assert.equal(await page.getByTestId('save-attempts').textContent(),'0','opening an assistant draft does not save');
+  assert.equal(await page.getByTestId('saved').textContent(),'0');
+  await page.evaluate(()=>{window.testSaveShouldFail=true;});
+  await modal.getByRole('button',{name:'บันทึก',exact:true}).click();
+  await modal.getByText('ทดสอบบันทึก Calendar ไม่สำเร็จ').waitFor();
+  assert.equal(await page.getByTestId('save-attempts').textContent(),'1');
+  assert.equal(await page.getByTestId('saved').textContent(),'0','failed save leaves the Calendar unchanged');
+  assert.equal(await modal.isVisible(),true,'failed save keeps review open');
+  await page.evaluate(()=>{window.testSaveShouldFail=false;});
+  await modal.getByRole('button',{name:'บันทึก',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-testid="saved"]')?.textContent==='1');
+  assert.equal(await page.locator('.modal-box').count(),0,'successful save closes review');
+  assert.equal(await page.getByTestId('save-attempts').textContent(),'2');
+  assert.equal(await page.getByTestId('saved-title').textContent(),'ประชุมแก้ไขก่อนบันทึก');
+  await ai.getByRole('button',{name:'สร้างกิจกรรม',exact:true}).click();
+  await ai.getByRole('button',{name:'ประชุม',exact:true}).click();
+  await ai.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
+  await ai.getByRole('button',{name:'ช่วงเช้า · 09:00'}).click();
+  await ai.getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
+  await modal.waitFor();
+  await modal.getByRole('button',{name:'ยกเลิก',exact:true}).click();
+  assert.equal(await page.locator('.modal-box').count(),0);
+  assert.equal(await page.getByTestId('saved').textContent(),'1','cancelling review does not save');
+  assert.deepEqual(errors,[]);
+  console.log('PASS: AI draft opens the real ActivityModal, saves only on confirmation, and allows retry after failure');
+} finally {
+  await browser.close();
+  await server.close();
+}

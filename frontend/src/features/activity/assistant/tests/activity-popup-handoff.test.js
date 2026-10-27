@@ -11,4 +11,6 @@ test("incomplete or unready assistant output cannot reach ActivityPopup save flo
   assert.equal(createActivityPopupHandoff({ ready: false, draft: null }), null);
   assert.equal(createActivityPopupHandoff({ ready: true, draft: { title: "", startLocal: "2026-09-16T10:00", endLocal: "2026-09-16T11:00" } }), null);
   assert.equal(createActivityPopupHandoff({ ready: true, draft: { title: "ประชุม", startLocal: "", endLocal: "" } }), null);
+  assert.equal(createActivityPopupHandoff({ ready: true, draft: { title: "ประชุม", startLocal: "2026-09-16T11:00", endLocal: "2026-09-16T10:00" } }), null);
+  assert.equal(createActivityPopupHandoff({ ready: true, draft: { title: "ประชุม", startLocal: "not-a-date", endLocal: "2026-09-16T11:00" } }), null);
 });

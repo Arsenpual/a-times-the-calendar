@@ -694,6 +694,7 @@ export default function AccountApp({ auth }) {
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
         onConfirmActivityPlan={saveAssistantPlan}
         onOpenDailySummary={openAssistantDailySummary}
+        onReauthCalendar={handleReauthCalendar}
         assistantInsight={assistantInsight}
       />
       </main>

@@ -227,6 +227,21 @@ test("calendar question reads a bounded context and returns a Gemini answer with
   assert.equal(activityGenerations, 0);
 });
 
+test("Calendar read failures return distinct reauth and temporary error codes", async () => {
+  for (const [code, status] of [["CALENDAR_REAUTH_REQUIRED", 428], ["CALENDAR_READ_FAILED", 502]]) {
+    await withTestServer({
+      answerKnowledge: () => null,
+      readCalendarQuestion: async () => { const error = new Error("calendar unavailable"); error.code = code === "CALENDAR_READ_FAILED" ? "UPSTREAM_TIMEOUT" : code; throw error; },
+    }, async (baseUrl) => {
+      const response = await post(baseUrl, { text: "วันนี้มีอะไรบ้าง?" });
+      assert.equal(response.status, status);
+      const result = await response.json();
+      assert.equal(result.code, code);
+      assert.doesNotMatch(result.error, /UPSTREAM_TIMEOUT/);
+    });
+  }
+});
+
 test("a complete explicit activity request skips AI quota and opens a reviewable draft", async () => {
   let quotaCalls = 0;
   let geminiCalls = 0;
