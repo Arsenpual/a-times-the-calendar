@@ -46,6 +46,15 @@ try {
   await modal.getByRole('button',{name:'ยกเลิก',exact:true}).click();
   assert.equal(await page.locator('.modal-box').count(),0);
   assert.equal(await page.getByTestId('saved').textContent(),'1','cancelling review does not save');
+  const weatherTool=ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('region',{name:'อากาศกับกิจกรรม'});
+  await weatherTool.getByRole('textbox',{name:'สถานที่'}).fill('กรุงเทพฯ');
+  await weatherTool.getByRole('button',{name:'ดูอากาศและช่วงแนะนำ'}).click();
+  await ai.getByRole('button',{name:/ร่างกิจกรรม · 28 ต.ค./}).click();
+  await modal.waitFor();
+  assert.equal(await modal.getByLabel('ชื่อกิจกรรม').inputValue(),'กิจกรรมกลางแจ้ง');
+  assert.equal(await page.getByTestId('save-attempts').textContent(),'2','weather slot opens review without writing Calendar');
+  await modal.getByRole('button',{name:'ยกเลิก',exact:true}).click();
+  assert.equal(await page.getByTestId('saved').textContent(),'1');
   assert.deepEqual(errors,[]);
   console.log('PASS: AI draft opens the real ActivityModal, saves only on confirmation, and allows retry after failure');
 } finally {

@@ -9,7 +9,7 @@ import { useAppNavigation } from '/src/app/hooks/use-app-navigation.js';
 import '/src/features/reminder/styles/reminder-mode.css';
 import '/src/index.css';
 const h = React.createElement;
-function Fixture() {
+function Fixture({accountId}) {
   const {mode,setMode,toggleAiMode,closeAiMode} = useAppNavigation();
   const [expanded, setExpanded] = useState(false);
   const [action, setAction] = useState('');
@@ -28,13 +28,23 @@ function Fixture() {
     h('div',{className:'app-workspace'},
       h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>{toggleAiMode();setAction('assistant');setExpanded(false);},unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
       h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),h('output',{'data-testid':'form-draft'},formDraft?.title || ''),h('output',{'data-testid':'form-start'},formDraft?.startLocal || ''),h('output',{'data-testid':'activity-count'},activities.length),h('output',{'data-testid':'reauth-count'},reauthCount),
-        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities,userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,onReauthCalendar:()=>setReauthCount(v=>v+1),onOpenDailySummary:async()=>{if(window.testSummaryFailure) throw new Error('กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม');return {date:'2026-10-27',totalActivities:0};},
+        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities,userId:accountId,telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,onReauthCalendar:()=>setReauthCount(v=>v+1),onOpenDailySummary:async()=>{if(window.testSummaryFailure) throw new Error('กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม');return {date:'2026-10-27',totalActivities:0};},onConfirmActivityPlan:async(drafts)=>{window.savedPlanDrafts=drafts;window.planConfirmCalls=(window.planConfirmCalls||0)+1;return window.testPlanPartial?{created:[{id:'one',title:drafts[0].title}],failed:[{title:drafts[1].title,error:'Calendar unavailable'}],warnings:[]}:{created:drafts.map((draft,index)=>({id:String(index),title:draft.title})),failed:[],warnings:[]};},
         continueFreeChat:async()=>window.testFreeDeferred?new Promise(resolve=>{window.resolveFreeChat=()=>resolve({reply:'คำตอบจากแชทเก่า',source:'ai'});}):{reply:'คำตอบจากแชทใหม่',source:'ai'},
+        weatherPlanRequest:async(input)=>{
+          window.lastWeatherRequest=input;
+          if(window.testWeatherFailure) throw new Error('Weather API ไม่พร้อม');
+          const slots=window.testWeatherNoSlots?[]:[{start:'2026-10-28T02:00:00Z',end:'2026-10-28T03:00:00Z',at:'28 ต.ค. 09:00–10:00',score:88,reasons:['ฝน 10%']}];
+          return {source:'google-weather',location:input.location,weather:{asOf:'2026-10-27T01:00:00Z',timeZone:'Asia/Bangkok',current:{condition:'ฟ้าใส',temperatureC:27,rainPercent:10}},activity:'กิจกรรมกลางแจ้ง',day:input.day,durationHours:input.durationHours,recommendation:{text:slots.length?'แนะนำ 09:00':'ยังไม่มีช่วงที่ผ่านเกณฑ์',slots},aiAdvice:'',aiUsed:false,attribution:'Source: Includes weather data from Google'};
+        },
         continuePlanningChat:async(input)=>{
           if(window.testPlanningDeferred) return new Promise(resolve=>{window.resolvePlanningChat=()=>resolve({reply:'คำตอบวางแผนเก่า',source:'knowledge'});});
           if(window.testCalendarFailure && input.text.includes('วันนี้มีอะไร')) throw Object.assign(new Error('อ่าน Calendar ไม่สำเร็จ'),{code:window.testCalendarFailure});
           if(input.text.includes('วันนี้มีอะไร')) return {reply:'ตารางวันนี้:\n• 09:00–10:00 ประชุม',source:'deterministic',calendarRange:{label:'2026-10-27'}};
-          if(input.text.includes('ออกกำลังกาย')) return {reply:'ยังไม่พบช่วงเวลาว่างในช่วงที่ตรวจสอบ',source:'scheduling',scheduling:{title:'ออกกำลังกาย',durationMinutes:60,requestedDate:'2026-10-28',options:[]}};
+          if(input.text.includes('วางแผนพรุ่งนี้')) return {reply:'วางร่างกิจกรรมได้ 2 รายการ',source:'planning',planning:{drafts:[{title:'อ่านหนังสือ',startLocal:'2026-10-28T09:00',endLocal:'2026-10-28T10:00'},{title:'ออกกำลังกาย',startLocal:'2026-10-28T11:00',endLocal:'2026-10-28T11:30'}],unscheduled:[],requestedDate:'2026-10-28'}};
+          if(input.text.includes('ออกกำลังกาย')) {
+            const options=localStorage.getItem('times-test-schedule-options')?[{startLocal:'2026-10-28T09:00',endLocal:'2026-10-28T10:00',draft:{title:'ออกกำลังกาย',startLocal:'2026-10-28T09:00',endLocal:'2026-10-28T10:00',allDay:false}}]:[];
+            return {reply:options.length?'พบช่วงเวลาว่าง 1 ตัวเลือก เลือกเวลาที่สะดวก':'ยังไม่พบช่วงเวลาว่างในช่วงที่ตรวจสอบ',source:'scheduling',scheduling:{title:'ออกกำลังกาย',durationMinutes:60,requestedDate:'2026-10-28',options}};
+          }
           return {reply:'คำตอบวางแผนใหม่',source:'knowledge'};
         },
         createTemplateDraft:async(input)=>{
@@ -45,5 +55,10 @@ function Fixture() {
           return result;
         }}))));
 }
-createRoot(document.getElementById('root')).render(h(Fixture));
+function Root() {
+  const [accountId,setAccountId]=useState('fixture-ai-mode');
+  useEffect(()=>{window.setFixtureAccount=setAccountId;return()=>{delete window.setFixtureAccount;};},[]);
+  return h(Fixture,{key:accountId,accountId});
+}
+createRoot(document.getElementById('root')).render(h(Root));
 </script></html>

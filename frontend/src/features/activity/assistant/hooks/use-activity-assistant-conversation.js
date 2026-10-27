@@ -5,6 +5,7 @@ import {
   createActivityTemplateDraft,
   getActivityAssistantStatus,
   fetchProductKnowledge,
+  fetchWeatherPlan,
 } from "../api/activity-assistant-api.js";
 import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
 import {
@@ -60,6 +61,7 @@ export function useActivityAssistantConversation({
   createTemplateDraft = createActivityTemplateDraft,
   continueFreeChat = continueFreeConversation,
   continuePlanningChat = continueActivityAssistant,
+  weatherPlanRequest = fetchWeatherPlan,
   onClose,
   categories,
   activities = [],
@@ -632,6 +634,7 @@ export function useActivityAssistantConversation({
             source: responseSource,
             sourceLabel: assistantSourceLabel(result),
             toolKind: result.calendarRange?.label ? "calendar" : ["scheduling", "planning"].includes(result.source) ? result.source : "",
+            toolResultCount: result.source === "scheduling" ? result.scheduling?.options?.length || 0 : result.source === "planning" ? result.planning?.drafts?.length || 0 : 0,
             calendarRange: result.calendarRange?.label ? { label: result.calendarRange.label } : null,
             commandTone,
             scheduleOptions: result.scheduling?.options || [],
@@ -722,6 +725,74 @@ export function useActivityAssistantConversation({
       setPendingSource("");
     }
   };
+  const runWeatherPlan = async ({ location, activity, day, durationHours }) => {
+    if (pending || !location?.trim()) return;
+    const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
+    const isCurrent = () => isCurrentConversation(requestVersion, requestEpoch);
+    const dayLabel = day === "tomorrow" ? "พรุ่งนี้" : "วันนี้";
+    const question = `ดูอากาศ ${location.trim()} ${dayLabel} เพื่อ${activity === "exercise" ? "ออกกำลังกาย" : activity === "travel" ? "เดินทาง" : activity === "laundry" ? "ซักผ้า" : "ทำกิจกรรมกลางแจ้ง"} ${durationHours} ชั่วโมง`;
+    setMessages((current) => [...current, { role: "user", text: question, source: "template", commandTone: "calendar" }]);
+    setPending(true);
+    setPendingSource("weather");
+    setError("");
+    try {
+      const result = await weatherPlanRequest({ location: location.trim(), activity, day, durationHours });
+      if (!isCurrent()) return;
+      const slots = Array.isArray(result.recommendation?.slots) ? result.recommendation.slots : [];
+      const current = result.weather?.current || {};
+      const observed = `${current.condition || "ไม่ระบุ"} · ${current.temperatureC == null ? "ไม่ระบุอุณหภูมิ" : `${current.temperatureC}°C`} · โอกาสฝน ${current.rainPercent == null ? "ไม่ระบุ" : `${current.rainPercent}%`}`;
+      const reply = `${result.location} · ${dayLabel}\nตอนนี้ ${observed}\n${result.recommendation?.text || "ยังไม่มีช่วงแนะนำ"}${result.aiAdvice ? `\n\n🤖 ${result.aiAdvice}` : ""}\n\nข้อมูล ณ ${result.weather?.asOf || "ไม่ระบุ"} (${result.weather?.timeZone || "Asia/Bangkok"})\n${result.attribution || "Source: Includes weather data from Google"}`;
+      setMessages((currentMessages) => [
+        ...currentMessages.map((message, index) => index === currentMessages.length - 1 ? { ...message, source: result.aiUsed ? "ai" : "knowledge" } : message),
+        { role: "assistant", text: reply, source: result.aiUsed ? "ai" : "knowledge", sourceLabel: result.aiUsed ? "AI · Google Weather" : "Google Weather · เกณฑ์ T.i.M.E.S.", toolKind: "weather", toolResultCount: slots.length, commandTone: "calendar", weatherSlots: slots, weatherContext: { location: result.location, activity: result.activity, activityId: activity, day, durationHours, asOf: result.weather?.asOf, timeZone: result.weather?.timeZone } }
+      ]);
+    } catch (requestError) {
+      if (isCurrent()) setError(requestError.message || "ดึงข้อมูลอากาศไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      if (isCurrent()) {
+        setPending(false);
+        setPendingSource("");
+        getActivityAssistantStatus().then((result) => { if (isCurrent()) setAiStatus(result.aiChat); }).catch(() => {});
+      }
+    }
+  };
+  const selectWeatherSlot = (slot, context) => {
+    const start = new Date(slot?.start);
+    const end = new Date(slot?.end);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+      setError("ช่วงเวลาอากาศนี้ไม่ถูกต้อง กรุณาคำนวณใหม่");
+      return;
+    }
+    if (start.getTime() <= Date.now()) {
+      setError("ช่วงเวลานี้ผ่านไปแล้ว กรุณาดูอากาศและคำนวณช่วงใหม่");
+      return;
+    }
+    const localValue = (date) => `${toDateInputValue(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    const draft = {
+      title: context?.activity || "กิจกรรมกลางแจ้ง",
+      startLocal: localValue(start),
+      endLocal: localValue(end),
+      allDay: false,
+      categoryName: "",
+      tags: [],
+      notes: `ช่วงเวลาแนะนำจาก Google Weather สำหรับ ${context?.location || "สถานที่ที่เลือก"} · ข้อมูล ณ ${context?.asOf || "ไม่ระบุ"} (${context?.timeZone || "Asia/Bangkok"})\nตรวจสภาพอากาศอีกครั้งก่อนกิจกรรม`
+    };
+    const handoff = createActivityPopupHandoff({ ready: true, draft });
+    if (!handoff) { setError("ยังสร้างร่างจากช่วงเวลานี้ไม่ได้"); return; }
+    if (assessAssistantDraftOverlap(draft, activities, lockedActivities)?.status === "overlap-limit") {
+      setError("ช่วงเวลานี้ชนกับกิจกรรมในปฏิทินเกินจำนวนที่รองรับ เลือกช่วงอื่นหรือแก้ตารางก่อน");
+      return;
+    }
+    try {
+      openDraftForReview(draft);
+      addMessages(
+        { role: "user", text: `เลือกช่วงอากาศ ${slot.at || formatScheduleRange(draft.startLocal, draft.endLocal)}`, source: "template", commandTone: "calendar" },
+        { role: "assistant", text: describeDraftForReview(draft), source: "template", sourceLabel: "ร่างจากข้อความ", commandTone: "calendar" }
+      );
+      setError("");
+    } catch (requestError) { setError(requestError.message || "เปิดร่างกิจกรรมไม่สำเร็จ"); }
+  };
   const retryCalendarFailure = () => {
     if (!calendarFailure || pending) return;
     const failed = calendarFailure;
@@ -801,18 +872,21 @@ export function useActivityAssistantConversation({
       const result = await onConfirmActivityPlan(drafts);
       const created = result?.created || [];
       const failed = result?.failed || [];
+      const warnings = result?.warnings || [];
       setMessages((current) => [
         ...current,
         { role: "user", text: `ยืนยันสร้าง ${drafts.length} กิจกรรม`, source: "template" },
         {
           role: "assistant",
-          text: failed.length
-            ? `สร้างสำเร็จ ${created.length} รายการ และไม่สำเร็จ ${failed.length} รายการ: ${failed.map((item) => `“${item.title}”`).join(", ")}`
-            : `สร้างกิจกรรม ${created.length} รายการเรียบร้อยแล้วครับ`,
+          text: created.length + failed.length === 0
+            ? "ยังยืนยันผลการบันทึกไม่ได้ กรุณาตรวจ Google Calendar ก่อนเริ่มสร้างแผนใหม่ เพื่อป้องกันรายการซ้ำ"
+            : `${failed.length
+              ? `สร้างสำเร็จ ${created.length} รายการ และไม่สำเร็จ ${failed.length} รายการ: ${failed.map((item) => `“${item.title}”`).join(", ")}`
+              : `สร้างกิจกรรม ${created.length} รายการเรียบร้อยแล้วครับ`}${warnings.length ? `\nมี ${warnings.length} ขั้นตอนหลังบันทึกที่ไม่สำเร็จ กรุณาตรวจข้อมูลประกอบหรือลองโหลดตารางใหม่` : ""}${failed.length ? "\nกรุณาตรวจ Google Calendar ก่อนเริ่มสร้างแผนใหม่ เพื่อป้องกันรายการซ้ำ" : ""}`,
           source: "template"
         }
       ]);
-      return true;
+      return { created, failed, warnings };
     } catch (requestError) {
       setError(requestError.message || "สร้างแผนกิจกรรมไม่สำเร็จ");
       return false;
@@ -872,6 +946,8 @@ export function useActivityAssistantConversation({
     updateGuidedActivityField,
     retryGuidedActivityDraft: () => finishGuidedActivity(guidedActivity),
     runDailySummary,
+    runWeatherPlan,
+    selectWeatherSlot,
     retryCalendarFailure,
     selectScheduleAlternative,
     selectScheduleOption,

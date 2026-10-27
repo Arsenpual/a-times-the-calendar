@@ -24,8 +24,9 @@ export function loadSavedChat(userId) {
         role: message.role,
         text: message.text.slice(0, 1_200),
         source: ["ai", "free-ai", "calendar", "knowledge", "system"].includes(message.source) ? message.source : "template",
-        sourceLabel: ["AI", "AI · ปฏิทิน", "ปฏิทิน · ช่วงว่าง", "วางแผนจากตาราง", "ปฏิทิน", "ร่างจากข้อความ", "ข้อมูล T.i.M.E.S."].includes(message.sourceLabel) ? message.sourceLabel : "",
-        toolKind: ["calendar", "scheduling", "planning"].includes(message.toolKind) ? message.toolKind : "",
+        sourceLabel: ["AI", "AI · ปฏิทิน", "AI · Google Weather", "Google Weather · เกณฑ์ T.i.M.E.S.", "ปฏิทิน · ช่วงว่าง", "วางแผนจากตาราง", "ปฏิทิน", "ร่างจากข้อความ", "ข้อมูล T.i.M.E.S."].includes(message.sourceLabel) ? message.sourceLabel : "",
+        toolKind: ["calendar", "scheduling", "planning", "weather"].includes(message.toolKind) ? message.toolKind : "",
+        toolResultCount: Number.isInteger(message.toolResultCount) && message.toolResultCount >= 0 && message.toolResultCount <= 20 ? message.toolResultCount : 0,
         calendarRange: typeof message.calendarRange?.label === "string" && /^\d{4}-\d{2}-\d{2}( ถึง \d{4}-\d{2}-\d{2})?$/.test(message.calendarRange.label) ? { label: message.calendarRange.label } : null,
         commandTone: ["planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
       }))
@@ -52,7 +53,9 @@ export function usePersistAssistantChat({ userId, messages, conversationNodeId, 
     if (!key) return;
     try {
       window.localStorage.setItem(key, JSON.stringify({
-        messages: messages.slice(-120), conversationNodeId, guidedActivity, guidedConversationMode
+        messages: messages.slice(-120).map(({ role, text, source, sourceLabel, toolKind, toolResultCount, calendarRange, commandTone }) => ({
+          role, text: text.slice(0, 1_200), source, sourceLabel, toolKind, toolResultCount, calendarRange, commandTone
+        })), conversationNodeId, guidedActivity, guidedConversationMode
       }));
     } catch { /* Storage may be disabled or full; chat still works in memory. */ }
   }, [userId, messages, conversationNodeId, guidedActivity, guidedConversationMode]);

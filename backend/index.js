@@ -18,6 +18,7 @@ const telegramRouter = require("./routes/telegram.js");
 const { telegramFetch } = require("./lib/telegram-fetch.js");
 const announcementRouter = require("./routes/announcement.js");
 const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
+const { createAiWeatherPlanRouter } = require("./routes/ai-weather-plan.js");
 const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
 const { createDataLabExportRouter } = require("./routes/data-lab-export.js");
 const { firestoreQuotaExhaustedPayload } = require("./lib/firestore-quota.js");
@@ -160,6 +161,7 @@ const aiLimiter = rateLimit({
   }
 });
 app.use("/api/ai", requireAuth, aiLimiter, aiActivityDraftRouter);
+app.use("/api/ai", requireAuth, aiLimiter, createAiWeatherPlanRouter());
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
 // กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
 app.post("/api/telegram/webhook", telegramRouter.webhook);

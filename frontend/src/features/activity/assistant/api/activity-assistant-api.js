@@ -32,3 +32,10 @@ export async function createActivityTemplateDraft(input) {
     "POST /api/ai/activity-template-draft"
   );
 }
+
+export async function fetchWeatherPlan(input) {
+  return handleResponse(
+    await apiRequest("/api/ai/weather-plan", { method: "POST", body: JSON.stringify(input) }),
+    "POST /api/ai/weather-plan"
+  );
+}

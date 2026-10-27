@@ -6,6 +6,7 @@ import {
   CALENDAR_FACT_SUGGESTIONS,
 } from "../config/activity-assistant-conversation-tree.js";
 import { formatScheduleOption, formatScheduleRange } from "../lib/schedule-format.js";
+import { validatePlanDraft } from "../lib/validate-plan-draft.js";
 
 const PLANNING_COMMANDS = [
   { label: "หาเวลาออกกำลังกาย", text: "ช่วยหาเวลาว่างออกกำลังกาย 1 ชั่วโมงพรุ่งนี้" },
@@ -36,8 +37,27 @@ const ACTIVITY_STEPS = [
 const TOOL_RESULT_TITLES = {
   calendar: "ผลการอ่านปฏิทิน",
   scheduling: "ช่วงเวลาว่างที่ตรวจพบ",
-  planning: "ร่างแผนกิจกรรม",
+  planning: "ผลการวางแผน",
+  weather: "อากาศกับกิจกรรม",
 };
+
+function WeatherPlanningTool({ onRun, pending }) {
+  const [location, setLocation] = useState("");
+  const [activity, setActivity] = useState("outdoor");
+  const [day, setDay] = useState("today");
+  const [durationHours, setDurationHours] = useState(1);
+  return <section className="activity-ai-weather-tool" aria-label="อากาศกับกิจกรรม">
+    <h3>อากาศกับกิจกรรม</h3>
+    <p>ดูพยากรณ์และเลือกช่วงเวลา ก่อนเปิดร่างให้ตรวจ</p>
+    <form onSubmit={(event) => { event.preventDefault(); onRun({ location, activity, day, durationHours }); }}>
+      <label>สถานที่<input value={location} maxLength="120" onChange={(event) => setLocation(event.target.value)} placeholder="เช่น กรุงเทพฯ" /></label>
+      <label>กิจกรรม<select value={activity} onChange={(event) => setActivity(event.target.value)}><option value="outdoor">กลางแจ้ง</option><option value="exercise">ออกกำลัง</option><option value="travel">เดินทาง</option><option value="laundry">ซัก/ตากผ้า</option></select></label>
+      <label>วัน<select value={day} onChange={(event) => setDay(event.target.value)}><option value="today">วันนี้</option><option value="tomorrow">พรุ่งนี้</option></select></label>
+      <label>ระยะเวลา<select value={durationHours} onChange={(event) => setDurationHours(Number(event.target.value))}><option value="1">1 ชั่วโมง</option><option value="2">2 ชั่วโมง</option><option value="3">3 ชั่วโมง</option></select></label>
+      <button type="submit" disabled={pending || !location.trim()}>ดูอากาศและช่วงแนะนำ</button>
+    </form>
+  </section>;
+}
 
 function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
@@ -100,19 +120,26 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
   const [drafts, setDrafts] = useState(initialDrafts);
   const [selected, setSelected] = useState(() => new Set(initialDrafts.map((_, index) => index)));
   const [editing, setEditing] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [submissionState, setSubmissionState] = useState("idle");
+  const [submissionResult, setSubmissionResult] = useState(null);
+  const submitted = submissionState !== "idle";
   const updateDraft = (index, update) => setDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, ...update } : draft));
   const selectedDrafts = drafts.filter((_, index) => selected.has(index));
+  const hasInvalidSelection = selectedDrafts.some((draft) => validatePlanDraft(draft));
   const submitPlan = async () => {
-    if (submitted || selectedDrafts.length === 0) return;
-    setSubmitted(true);
-    const completed = await onConfirm(selectedDrafts);
-    if (!completed) setSubmitted(false);
+    if (submitted || selectedDrafts.length === 0 || hasInvalidSelection) return;
+    setSubmissionState("sending");
+    const result = await onConfirm(selectedDrafts);
+    if (!result) setSubmissionState("idle");
+    else {
+      setSubmissionResult(result);
+      setSubmissionState("done");
+    }
   };
   return (
     <section className="activity-ai-plan-preview" aria-label="ร่างแผนกิจกรรม">
       {drafts.map((draft, index) => (
-        <div className="activity-ai-plan-item" key={`${draft.title}-${draft.startLocal}-${index}`}>
+        <div className="activity-ai-plan-item" key={index}>
           <label>
             <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected((current) => {
               const next = new Set(current);
@@ -133,10 +160,11 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
               <input aria-label="เวลาสิ้นสุด" type="time" value={draft.endLocal.slice(11, 16)} onChange={(event) => updateDraft(index, { endLocal: replaceLocalDateTime(draft.endLocal, "time", event.target.value) })} />
             </div>
           )}
+          {selected.has(index) && validatePlanDraft(draft) && <p className="activity-ai-plan-error" role="alert">{validatePlanDraft(draft)}</p>}
         </div>
       ))}
-      <button type="button" className="btn btn-primary activity-ai-plan-confirm" onClick={submitPlan} disabled={pending || submitted || selectedDrafts.length === 0}>
-        {submitted ? "ส่งแผนแล้ว" : `สร้าง ${selectedDrafts.length} กิจกรรม`}
+      <button type="button" className="btn btn-primary activity-ai-plan-confirm" onClick={submitPlan} disabled={pending || submitted || selectedDrafts.length === 0 || hasInvalidSelection}>
+        {submissionState === "sending" ? "กำลังบันทึก…" : submissionState === "done" ? submissionResult?.failed?.length || submissionResult?.warnings?.length ? "ส่งแล้ว · ตรวจผลในแชท" : "ส่งแผนแล้ว" : `สร้าง ${selectedDrafts.length} กิจกรรม`}
       </button>
     </section>
   );
@@ -194,6 +222,8 @@ export default function ActivityAssistantDialog(props) {
     selectScheduleOption,
     confirmActivityPlan,
     sendToTelegram,
+    runWeatherPlan,
+    selectWeatherSlot,
   } = useActivityAssistantConversation({ ...props, closeOnEscape: presentation !== "page", clearTelegramOnReset: presentation !== "page", freeConversation: presentation === "page", openFormOnGuidedStart: presentation !== "page" });
   const toolCommands = <ActivityAssistantCommandGroups
     canUseGemini={canUseGemini}
@@ -350,9 +380,25 @@ export default function ActivityAssistantDialog(props) {
                   ))}
                 </div>
               )}
+              {message.weatherSlots?.length > 0 && <div className="activity-ai-weather-slots" aria-label="ช่วงเวลาที่อากาศผ่านเกณฑ์">
+                {message.weatherSlots.map((slot) => <button key={`${slot.start}-${slot.end}`} type="button" onClick={() => selectWeatherSlot(slot, message.weatherContext)} disabled={pending}>ร่างกิจกรรม · {slot.at} · {slot.score} คะแนน</button>)}
+              </div>}
+              {message.toolKind === "weather" && message.weatherContext?.activityId && <div className="activity-ai-weather-followup">
+                <button type="button" onClick={() => runWeatherPlan({ location: message.weatherContext.location, activity: message.weatherContext.activityId, day: message.weatherContext.day === "today" ? "tomorrow" : "today", durationHours: message.weatherContext.durationHours })} disabled={pending}>
+                  {message.weatherContext.day === "today" ? "พรุ่งนี้ที่เดิม" : "วันนี้ที่เดิม"}
+                </button>
+              </div>}
               {message.planDrafts?.length > 0 && (
                 <ActivityPlanPreview initialDrafts={message.planDrafts} pending={pending} onConfirm={confirmActivityPlan} />
               )}
+              {presentation === "page" && message.toolResultCount > 0 && (
+                (message.toolKind === "scheduling" && !message.scheduleOptions?.length) ||
+                (message.toolKind === "planning" && !message.planDrafts?.length) ||
+                (message.toolKind === "weather" && !message.weatherSlots?.length)
+              ) && <section className="activity-ai-expired-options" aria-label="ตัวเลือกหมดอายุ">
+                <p>{message.toolKind === "weather" ? "ช่วงแนะนำจากพยากรณ์ครั้งก่อนหมดอายุแล้ว" : "ตัวเลือกจากตารางครั้งก่อนหมดอายุแล้ว คำนวณใหม่เพื่อดูช่วงเวลาล่าสุด"}</p>
+                {message.toolKind === "weather" ? <p>เลือกสถานที่และกดดูอากาศอีกครั้งในแผงงาน</p> : messages[index - 1]?.role === "user" && <button type="button" onClick={() => send(null, messages[index - 1].text, message.commandTone || "planning")} disabled={pending}>คำนวณใหม่</button>}
+              </section>}
             </div>
           ))}
           {presentation === "page" && guidedActivity && Object.values(guidedActivity).some(Boolean) && (
@@ -393,7 +439,7 @@ export default function ActivityAssistantDialog(props) {
             <p
               className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}
             >
-              {pendingSource === "knowledge" ? "กำลังค้นหาคำตอบ…" : pendingSource === "ai"
+              {pendingSource === "weather" ? "กำลังดึงข้อมูลอากาศและหาช่วงเวลา…" : pendingSource === "knowledge" ? "กำลังค้นหาคำตอบ…" : pendingSource === "ai"
                 ? "กำลังให้ AI ช่วยคิดรายละเอียด…"
                 : "กำลังสร้างร่างกิจกรรม…"}
             </p>
@@ -519,6 +565,7 @@ export default function ActivityAssistantDialog(props) {
             </div> : <>
               <h2>เครื่องมือ</h2>
               {toolCommands}
+              <WeatherPlanningTool onRun={runWeatherPlan} pending={pending} />
             </>}
           </div>
           {renderTelegramArchive("rail")}

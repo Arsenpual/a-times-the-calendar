@@ -1,0 +1,52 @@
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+
+const server = await createServer({root:fileURLToPath(new URL('../',import.meta.url)),server:{port:0},logLevel:'error'});
+await server.listen();
+const browser = await chromium.launch({channel:'chrome',headless:true});
+try {
+  const page = await browser.newPage();
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  const openAi = async () => {
+    await page.locator('#app-navigation-toggle').click();
+    await page.getByRole('navigation',{name:'ฟีเจอร์หลัก'}).getByRole('button',{name:/เปิด AI Mode/}).click();
+    await page.getByRole('region',{name:'AI Mode MR.Zettascale'}).waitFor();
+  };
+  await page.goto(server.resolvedUrls.local[0]+'tests/fixtures/app-taskbar.html');
+  await page.locator('.app-title').waitFor();
+  await page.evaluate(()=>localStorage.setItem('times-test-schedule-options','1'));
+  await openAi();
+  let ai=page.getByRole('region',{name:'AI Mode MR.Zettascale'});
+  await ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
+  await ai.locator('.activity-ai-schedule-options button').first().waitFor();
+  const storageKey='times.activity-ai-assistant.chat.v2:fixture-ai-mode';
+  await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key)||'{}').messages?.some(message=>message.toolKind==='scheduling'&&message.toolResultCount===1),storageKey);
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key).includes('scheduleOptions'),storageKey),false,'actionable drafts are not persisted');
+  await page.reload();
+  await page.locator('.app-title').waitFor();
+  await openAi();
+  ai=page.getByRole('region',{name:'AI Mode MR.Zettascale'});
+  const expired=ai.getByRole('region',{name:'ตัวเลือกหมดอายุ'});
+  await expired.getByText(/ตัวเลือกจากตารางครั้งก่อนหมดอายุแล้ว/).waitFor();
+  assert.equal(await ai.locator('.activity-ai-schedule-options button').count(),0);
+  await expired.getByRole('button',{name:'คำนวณใหม่'}).click();
+  await ai.locator('.activity-ai-schedule-options button').first().waitFor();
+  await ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
+  await ai.locator('.activity-ai-plan-preview').waitFor();
+  await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key)||'{}').messages?.some(message=>message.toolKind==='planning'&&message.toolResultCount===2),storageKey);
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key).includes('planDrafts'),storageKey),false,'plan drafts are not persisted');
+  await page.reload();
+  await page.locator('.app-title').waitFor();
+  await openAi();
+  ai=page.getByRole('region',{name:'AI Mode MR.Zettascale'});
+  const expiredPlan=ai.getByRole('region',{name:'ตัวเลือกหมดอายุ'}).last();
+  await expiredPlan.getByRole('button',{name:'คำนวณใหม่'}).waitFor();
+  assert.equal(await ai.locator('.activity-ai-plan-preview').count(),0);
+  await expiredPlan.getByRole('button',{name:'คำนวณใหม่'}).click();
+  await ai.locator('.activity-ai-plan-preview').waitFor();
+  assert.deepEqual(errors,[]);
+  console.log('PASS: restored scheduling and planning results mark old choices expired and recompute without persisting drafts');
+} finally {await browser.close();await server.close();}

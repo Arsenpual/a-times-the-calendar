@@ -111,6 +111,35 @@ assert.deepEqual(planResult.created, [{ id: "plan-1", title: "อ่านหน
 assert.deepEqual(planResult.failed, [{ title: "ออกกำลังกาย", error: "Calendar temporarily unavailable" }]);
 assert.deepEqual(planCalls, ["reload", "refresh"]);
 
+let createdBeforePostSaveFailure = 0;
+const postSaveActions = createActivityCalendarActions({
+  ...common,
+  createActivity: async (_token, body) => { createdBeforePostSaveFailure += 1; return { id: "saved-on-google", ...body }; },
+  setActivityCategoryMap: () => { throw new Error("metadata state unavailable"); },
+  loadActivities: async () => { throw new Error("reload unavailable"); },
+  refreshTagSearchIfActive: () => {}
+});
+const postSaveResult = await postSaveActions.handleSaveActivityPlan([
+  { activityBody: { summary: "นัดที่บันทึกแล้ว", start: { dateTime: "2027-09-03T09:00:00Z" }, end: { dateTime: "2027-09-03T10:00:00Z" } }, categoryId: null, tags: [] }
+]);
+assert.equal(createdBeforePostSaveFailure, 1);
+assert.deepEqual(postSaveResult.created, [{ id: "saved-on-google", title: "นัดที่บันทึกแล้ว" }], "a later metadata or refresh failure must not mark a created event as failed");
+assert.deepEqual(postSaveResult.failed, []);
+assert.equal(postSaveResult.warnings.length, 2);
+
+let attemptedAfterExpiredAuth = 0;
+const expiredAuthActions = createActivityCalendarActions({
+  ...common,
+  createActivity: async () => { attemptedAfterExpiredAuth += 1; throw new Error("token expired"); },
+  isCalendarAuthExpiredError: () => true
+});
+const expiredAuthResult = await expiredAuthActions.handleSaveActivityPlan([
+  { activityBody: { summary: "รายการแรก", start: { dateTime: "2027-09-04T09:00:00Z" }, end: { dateTime: "2027-09-04T10:00:00Z" } }, categoryId: null, tags: [] },
+  { activityBody: { summary: "รายการที่สอง", start: { dateTime: "2027-09-04T10:00:00Z" }, end: { dateTime: "2027-09-04T11:00:00Z" } }, categoryId: null, tags: [] }
+]);
+assert.equal(attemptedAfterExpiredAuth, 1, "later plan items must not be sent after Calendar auth expires");
+assert.equal(expiredAuthResult.failed.length, 2, "unsent plan items must remain visible in the result");
+
 const calendarEvent = (id, start, end) => ({
   id,
   summary: id,

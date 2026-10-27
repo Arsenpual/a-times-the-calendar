@@ -125,21 +125,34 @@ export function createActivityCalendarActions({
 
     const created = [];
     const failed = [];
-    for (const item of items) {
+    const warnings = [];
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
       const title = item.activityBody?.summary || "(ไม่มีชื่อ)";
       try {
         const saved = await createActivity(calendarAccessToken, item.activityBody);
-        await persistCreatedActivityMetadata(saved, item.categoryId, item.tags);
         created.push({ id: saved?.id || "", title });
+        try {
+          await persistCreatedActivityMetadata(saved, item.categoryId, item.tags);
+        } catch (error) {
+          warnings.push({ title, error: error.message || "บันทึกข้อมูลประกอบไม่สำเร็จ" });
+        }
       } catch (error) {
         failed.push({ title, error: error.message || "ไม่สามารถสร้างกิจกรรมได้" });
         clearTokenIfExpired(error);
-        if (isCalendarAuthExpiredError(error)) break;
+        if (isCalendarAuthExpiredError(error)) {
+          for (const remaining of items.slice(index + 1)) {
+            failed.push({ title: remaining.activityBody?.summary || "(ไม่มีชื่อ)", error: "ยังไม่ส่งไป Calendar เพราะสิทธิ์หมดอายุ" });
+          }
+          break;
+        }
       }
     }
-    await loadActivities();
-    refreshTagSearchIfActive();
-    return { created, failed };
+    try { await loadActivities(); }
+    catch (error) { warnings.push({ title: "ตารางกิจกรรม", error: error.message || "โหลดข้อมูลล่าสุดไม่สำเร็จ" }); }
+    try { await refreshTagSearchIfActive(); }
+    catch (error) { warnings.push({ title: "ผลค้นหา", error: error.message || "รีเฟรชผลค้นหาไม่สำเร็จ" }); }
+    return { created, failed, warnings };
   };
 
   const handleSaveTimes = async (changes) => {

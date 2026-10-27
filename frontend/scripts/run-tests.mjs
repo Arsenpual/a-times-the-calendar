@@ -25,12 +25,15 @@ const unitTests = [
   "src/features/activity/assistant/tests/assistant-boundaries.test.js",
   "src/features/activity/assistant/tests/assistant-source-label.test.js",
   "src/features/activity/assistant/tests/guided-activity-validation.test.js",
+  "src/features/activity/assistant/tests/validate-plan-draft.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
 ];
 
 const browserTests = [
   "tests/app-taskbar-browser.mjs",
   "tests/assistant-review-browser.mjs",
+  "tests/assistant-tool-restore-browser.mjs",
+  "tests/assistant-weather-browser.mjs",
   "tests/assistant-cleanup-browser.mjs",
   "tests/activity-phase1-browser.mjs",
   "tests/activity-view-browser.mjs",

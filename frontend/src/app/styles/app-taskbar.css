@@ -26,6 +26,15 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-content .activity-ai-centered-questions { padding: 10px; }
 .activity-ai-rail-content .activity-ai-centered-questions > small { font-size: 11px; }
 .activity-ai-rail-content .activity-ai-centered-questions button { min-height: 28px; padding: 5px 8px; font-size: 12px; }
+.activity-ai-weather-tool { margin-top: 16px; padding: 12px; border: 1px solid #c9dcf2; border-radius: 10px; background: #f5f9fe; }
+.activity-ai-weather-tool h3 { margin: 0; font-size: 14px; }
+.activity-ai-weather-tool p { margin: 5px 0 12px; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.activity-ai-weather-tool form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.activity-ai-weather-tool label { display: grid; gap: 4px; min-width: 0; font-size: 11px; color: var(--text-secondary); }
+.activity-ai-weather-tool label:first-child, .activity-ai-weather-tool form > button { grid-column: 1 / -1; }
+.activity-ai-weather-tool input, .activity-ai-weather-tool select { width: 100%; min-width: 0; min-height: 32px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: #ffffff; color: var(--text-primary); font: inherit; font-size: 12px; }
+.activity-ai-weather-tool button { min-height: 34px; padding: 6px 8px; border: 1px solid #3d73be; border-radius: 7px; background: #eaf2fc; color: #28568f; font: inherit; font-size: 12px; cursor: pointer; }
+.activity-ai-weather-tool button:disabled { opacity: .55; cursor: wait; }
 .activity-ai-rail-note { margin: 0; color: var(--text-secondary); line-height: 1.6; }
 .activity-ai-rail-conflict { margin: 12px 0; padding: 9px 10px; border: 1px solid #f0ccc7; border-radius: 8px; background: #fff4f2; color: #8c332c; font-size: 12px; line-height: 1.5; }
 .activity-ai-rail-progress ol { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 14px; padding: 0; }
@@ -68,6 +77,16 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-tools { margin-bottom: 16px; }
 .activity-ai-tools > summary { color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 8px 0; }
 .activity-ai-page .activity-ai-turn-source { display: block; margin: -5px 0 12px 2px; color: var(--text-secondary); font-size: 11px; }
+.activity-ai-expired-options { width: fit-content; max-width: min(760px, 100%); margin: 4px 0 12px; padding: 10px 12px; border: 1px dashed #c9a5b8; border-radius: 8px; background: #fff9fc; color: #754c62; font-size: 12px; line-height: 1.5; }
+.activity-ai-expired-options p { margin: 0 0 8px; }
+.activity-ai-expired-options button { padding: 5px 9px; border: 1px solid #bf4d83; border-radius: 6px; background: #ffffff; color: #9a3567; font: inherit; cursor: pointer; }
+.activity-ai-expired-options button:disabled { opacity: .6; cursor: wait; }
+.activity-ai-weather-slots { display: grid; gap: 6px; width: fit-content; max-width: min(760px, 100%); margin: 4px 0 12px; }
+.activity-ai-weather-slots button { padding: 8px 10px; border: 1px solid #9bbce3; border-radius: 7px; background: #f3f7fd; color: #28568f; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.activity-ai-weather-slots button:disabled { opacity: .6; cursor: wait; }
+.activity-ai-weather-followup { margin: 0 0 10px; }
+.activity-ai-weather-followup button { padding: 5px 9px; border: 1px solid #c9dcf2; border-radius: 7px; background: #fff; color: #28568f; font: inherit; font-size: 12px; cursor: pointer; }
+.activity-ai-weather-followup button:disabled { opacity: .6; cursor: wait; }
 .activity-ai-telegram-archive { max-width: 960px; margin: 24px auto 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-size: 12px; }
 .activity-ai-page .activity-ai-telegram-archive.is-mobile { display: none; }
 .activity-ai-work-rail .activity-ai-telegram-archive { flex: none; max-height: 42%; overflow-y: auto; margin: 0; border-width: 1px 0 0; border-radius: 0; padding: 13px 16px; background: #ffffff; }
