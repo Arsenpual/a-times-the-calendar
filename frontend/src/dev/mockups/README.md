@@ -6,6 +6,8 @@
 
 รันด้วย `npm run dev` แล้วกด `Ctrl + Alt + W` บนหน้าหลักขณะที่ไม่ได้พิมพ์ในช่อง input/textarea หรือพื้นที่แก้ไขข้อความ จะเปิด preview ในหน้าต่างใหม่ กดปุ่ม Mockup เพื่อเลือกตัวอย่างที่มีอยู่
 
+กด `Ctrl + Alt + A` เพื่อเปิดตัวอย่าง AI Mode โดยตรง (นอกช่องพิมพ์เช่นกัน)
+
 เพิ่ม Activity mockup ด้วยชื่อ `activity-mode-<ชื่อ>-mockup.jsx` ในโฟลเดอร์นี้ โดย export default component ระบบ lazy `import.meta.glob` ใน `dev-mockups-entry.jsx` จะพบให้อัตโนมัติ และโหลดไฟล์เมื่อเปิดตัวอย่างนั้นเท่านั้น
 
 ## ขอบเขต production

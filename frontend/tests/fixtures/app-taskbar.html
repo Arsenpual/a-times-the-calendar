@@ -14,6 +14,7 @@ function Fixture() {
   const [expanded, setExpanded] = useState(false);
   const [action, setAction] = useState('');
   const [telegramMessages, setTelegramMessages] = useState([{id:'preview-1',direction:'incoming',text:'บันทึกสั้นจาก Telegram'}]);
+  const [formDraft, setFormDraft] = useState(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const select = mode => { setMode(mode); setExpanded(false); };
   return h('div', {className: 'app app--'+mode},
@@ -23,8 +24,11 @@ function Fixture() {
       calendarAccessToken:'preview',cursorDate:new Date(),accountMenuOpen,setAccountMenuOpen,setSettingsOpen:()=>setAction('settings')}),
     h('div',{className:'app-workspace'},
       h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>{toggleAiMode();setAction('assistant');setExpanded(false);},unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
-      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),
-        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities:[],userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([])}))));
+      h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),h('output',{'data-testid':'form-draft'},formDraft?.title || ''),
+        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities:[],userId:'fixture-ai-mode',telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,createTemplateDraft:async(input)=>{
+          if(window.testDraftShouldFail) throw new Error('ทดสอบสร้างร่างไม่สำเร็จ');
+          return {draft:{title:input.title,startLocal:`${input.date}T${input.time}`,endLocal:`${input.date}T10:00`,allDay:false}};
+        }}))));
 }
 createRoot(document.getElementById('root')).render(h(Fixture));
 </script></html>

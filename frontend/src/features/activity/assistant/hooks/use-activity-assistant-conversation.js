@@ -26,6 +26,8 @@ import {
 } from "../lib/activity-schedule-context.js";
 
 import { formatScheduleRange } from "../lib/schedule-format.js";
+import { assistantSourceLabel } from "../lib/assistant-source-label.js";
+import { validateGuidedActivity } from "../lib/guided-activity-validation.js";
 
 function toAssistantInsightContext(insight) {
   if (!insight || typeof insight.type !== "string") return null;
@@ -54,6 +56,8 @@ export function useActivityAssistantConversation({
   closeOnEscape = true,
   clearTelegramOnReset = true,
   freeConversation = false,
+  openFormOnGuidedStart = true,
+  createTemplateDraft = createActivityTemplateDraft,
   onClose,
   categories,
   activities = [],
@@ -93,6 +97,12 @@ export function useActivityAssistantConversation({
   const [scheduleResolution, setScheduleResolution] = useState(null);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
+  const activeSessionRef = useRef({ open, userId, version: 0 });
+  useEffect(() => {
+    const version = activeSessionRef.current.version + 1;
+    activeSessionRef.current = { open, userId, version };
+    return () => { activeSessionRef.current = { open: false, userId: null, version: version + 1 }; };
+  }, [open, userId]);
   const handledStartActivityCreationRequest = useRef(
     startActivityCreationRequest,
   );
@@ -126,7 +136,7 @@ export function useActivityAssistantConversation({
   }, [onOpenDailySummary, pending]);
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [open, messages, pending]);
+  }, [open, messages, pending, error]);
   useEffect(() => {
     if (!open || !closeOnEscape) return undefined;
     const onKeyDown = (event) => {
@@ -230,22 +240,24 @@ export function useActivityAssistantConversation({
   };
   const addMessages = (...newMessages) =>
     setMessages((current) => [...current, ...newMessages]);
+  const updateGuidedActivityField = (field, value) => {
+    if (!guidedActivity || pending || !["title", "date", "time", "durationMinutes"].includes(field)) return;
+    const selected = { ...guidedActivity, [field]: value };
+    setGuidedActivity(selected);
+    if (activityFormOpen) onUpdateActivityForm?.({ values: selected, changedField: field });
+  };
   const finishGuidedActivity = async (selected) => {
-    if (
-      !selected?.title ||
-      !selected.date ||
-      !selected.time ||
-      !selected.durationMinutes
-    )
+    const validationError = validateGuidedActivity(selected);
+    if (validationError) {
+      setError(validationError);
       return;
-    setGuidedActivity(null);
-    setConversationNodeId("home");
-    setGuidedConversationMode("template");
+    }
     setPending(true);
     setPendingSource("template");
     setError("");
+    const requestVersion = activeSessionRef.current.version;
     try {
-      const result = await createActivityTemplateDraft({
+      const result = await createTemplateDraft({
         title: selected.title,
         date: selected.date,
         time: selected.time,
@@ -260,6 +272,11 @@ export function useActivityAssistantConversation({
           selected.date,
         ),
       });
+      if (activeSessionRef.current.version !== requestVersion || activeSessionRef.current.userId !== userId) {
+        if (activeSessionRef.current.open && activeSessionRef.current.userId === userId)
+          setError("คำขอสร้างร่างก่อนหน้านี้หมดอายุ เลือกระยะเวลาอีกครั้งเพื่อลองใหม่");
+        return;
+      }
       const activityDraft = result.draft;
       // A guided conversation can begin from the compact assistant without
       // an already-open ActivityPopup. Updating a closed form loses the
@@ -288,14 +305,28 @@ export function useActivityAssistantConversation({
         ]);
         return;
       }
-      if (activityFormOpen)
-        onUpdateActivityForm?.({
+      if (activityFormOpen) {
+        if (!onUpdateActivityForm) throw new Error("ไม่สามารถส่งร่างไปยังฟอร์มกิจกรรมได้");
+        onUpdateActivityForm({
           values: { ...selected, formDraft: activityDraft },
           changedField: "activityDraft",
         });
-      else onOpenActivityForm?.(activityDraft);
+      } else {
+        if (!onOpenActivityForm) throw new Error("ไม่สามารถเปิดฟอร์มตรวจร่างกิจกรรมได้");
+        onOpenActivityForm(activityDraft);
+      }
+      addMessages({
+        role: "assistant",
+        text: `ร่างกิจกรรม: ${activityDraft.title}\n${activityDraft.startLocal.slice(0, 10)} · ${formatScheduleRange(activityDraft.startLocal, activityDraft.endLocal)}${activityDraft.endLocal.slice(0, 10) !== activityDraft.startLocal.slice(0, 10) ? ` (สิ้นสุด ${activityDraft.endLocal.slice(0, 10)})` : ""}\nตรวจรายละเอียดในฟอร์ม แล้วกดบันทึกเมื่อพร้อมครับ`,
+        source: "template",
+        sourceLabel: "ร่างจากข้อความ",
+      });
+      setGuidedActivity(null);
+      setConversationNodeId("home");
+      setGuidedConversationMode("template");
     } catch (requestError) {
-      setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ");
+      if (activeSessionRef.current.version === requestVersion && activeSessionRef.current.open && activeSessionRef.current.userId === userId)
+        setError(requestError.message || "สร้างร่างจากข้อความสำเร็จรูปไม่สำเร็จ");
     } finally {
       setPending(false);
       setPendingSource("");
@@ -338,7 +369,7 @@ export function useActivityAssistantConversation({
         text: nextNode.prompt,
         source: "template",
       });
-      openFullActivityForm({});
+      if (openFormOnGuidedStart) openFullActivityForm({});
       return;
     }
     const node = getActivityAssistantConversationNode(conversationNodeId);
@@ -354,6 +385,7 @@ export function useActivityAssistantConversation({
     addMessages({ role: "user", text: option.label, source: "template" });
     onUpdateActivityForm?.({ values: selected, changedField: node.field });
     if (option.complete) {
+      setGuidedActivity(selected);
       await finishGuidedActivity(selected);
       return;
     }
@@ -398,7 +430,7 @@ export function useActivityAssistantConversation({
   const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
-    if (!text || pending || cooldownSeconds > 0) return;
+    if (!text || pending || (cooldownSeconds > 0 && !suggestedText)) return;
     if (freeConversation && chatStyle === "free" && !suggestedText && !guidedActivity) {
       const history = messages.filter((message) => message.source === "free-ai" && ["user", "assistant"].includes(message.role)).slice(-16).map(({ role, text: turnText }) => ({ role, text: turnText }));
       setMessages((current) => [...current, { role: "user", text, source: "free-ai" }]);
@@ -543,6 +575,8 @@ export function useActivityAssistantConversation({
             role: "assistant",
             text: result.reply,
             source: responseSource,
+            sourceLabel: assistantSourceLabel(result),
+            calendarRange: result.calendarRange?.label ? { label: result.calendarRange.label } : null,
             commandTone,
             scheduleOptions: result.scheduling?.options || [],
             planDrafts: result.planning?.drafts || [],
@@ -756,6 +790,7 @@ export function useActivityAssistantConversation({
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    conversationNodeId,
     guidedConversationMode,
     input,
     setInput,
@@ -766,6 +801,8 @@ export function useActivityAssistantConversation({
     send,
     sendKnowledge,
     selectQuickReply,
+    updateGuidedActivityField,
+    retryGuidedActivityDraft: () => finishGuidedActivity(guidedActivity),
     runDailySummary,
     selectScheduleAlternative,
     selectScheduleOption,

@@ -30,12 +30,13 @@ export function useDevMockupShortcut() {
         || target?.isContentEditable
         || !event.ctrlKey
         || !event.altKey
-        || event.code !== "KeyW"
+        || !["KeyW", "KeyA"].includes(event.code)
       ) return;
 
       event.preventDefault();
       const url = new URL(window.location.href);
       url.searchParams.set("activity-mode-mockup", "1");
+      if (event.code === "KeyA") url.searchParams.set("mockup", "activity-mode-ai-workspace-mockup");
       window.open(
         url.toString(),
         "times-activity-mode-mockups",

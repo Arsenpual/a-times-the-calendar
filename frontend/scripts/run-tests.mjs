@@ -23,6 +23,8 @@ const unitTests = [
   "src/features/settings/lib/data-lab-insight-report.test.mjs",
   "src/features/activity/assistant/tests/activity-popup-handoff.test.js",
   "src/features/activity/assistant/tests/assistant-boundaries.test.js",
+  "src/features/activity/assistant/tests/assistant-source-label.test.js",
+  "src/features/activity/assistant/tests/guided-activity-validation.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
 ];
 

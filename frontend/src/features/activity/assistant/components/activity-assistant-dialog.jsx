@@ -26,6 +26,13 @@ const AI_COMMANDS = [
   { label: "วางแผนสัปดาห์หน้า", text: CALENDAR_AI_QUESTION_SUGGESTIONS[2] },
 ];
 
+const ACTIVITY_STEPS = [
+  { node: "activity.title", label: "ชื่อ" },
+  { node: "activity.date", label: "วัน" },
+  { node: "activity.time", label: "เวลา" },
+  { node: "activity.duration", label: "ระยะเวลา" },
+];
+
 function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
     <div className="activity-ai-command-grid">
@@ -33,7 +40,7 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
         <small>วางแผนกิจกรรม</small>
         <div>
         {PLANNING_COMMANDS.map((command) => (
-          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "planning")} disabled={pending || cooldownSeconds > 0}>
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "planning")} disabled={pending}>
             {command.label}
           </button>
         ))}
@@ -44,7 +51,7 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
         <div>
           {onDailySummary && <button type="button" onClick={onDailySummary} disabled={pending}>สรุปวันนี้</button>}
         {CALENDAR_COMMANDS.map((command) => (
-          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "calendar")} disabled={pending || cooldownSeconds > 0}>
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "calendar")} disabled={pending}>
             {command.label}
           </button>
         ))}
@@ -131,6 +138,8 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
 
 export default function ActivityAssistantDialog(props) {
   const [telegramArchiveError, setTelegramArchiveError] = useState("");
+  const [workRailOpen, setWorkRailOpen] = useState(true);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const {
     open,
     presentation = "dialog",
@@ -155,6 +164,7 @@ export default function ActivityAssistantDialog(props) {
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    conversationNodeId,
     guidedConversationMode,
     input,
     setInput,
@@ -167,12 +177,41 @@ export default function ActivityAssistantDialog(props) {
     send,
     sendKnowledge,
     selectQuickReply,
+    updateGuidedActivityField,
+    retryGuidedActivityDraft,
     runDailySummary,
     selectScheduleAlternative,
     selectScheduleOption,
     confirmActivityPlan,
     sendToTelegram,
-  } = useActivityAssistantConversation({ ...props, closeOnEscape: presentation !== "page", clearTelegramOnReset: presentation !== "page", freeConversation: presentation === "page" });
+  } = useActivityAssistantConversation({ ...props, closeOnEscape: presentation !== "page", clearTelegramOnReset: presentation !== "page", freeConversation: presentation === "page", openFormOnGuidedStart: presentation !== "page" });
+  const toolCommands = <ActivityAssistantCommandGroups
+    canUseGemini={canUseGemini}
+    cooldownSeconds={cooldownSeconds}
+    onDailySummary={onOpenDailySummary ? runDailySummary : null}
+    onSend={send}
+    onSendKnowledge={sendKnowledge}
+    pending={pending}
+    rootQuestions={rootQuestions}
+  />;
+  const renderTelegramArchive = (location) => onSendTelegramMessage && (
+    <details className={`activity-ai-telegram-archive is-${location}`}>
+      <summary>ข้อความ Telegram · {telegramMessages.length}</summary>
+      <p>สำเนาข้อความจาก Telegram แยกจากบทสนทนา AI บนเว็บ</p>
+      {onClearTelegramMessages && telegramMessages.length > 0 && <button type="button" disabled={pending} onClick={async () => {
+        setTelegramArchiveError("");
+        try { await onClearTelegramMessages(); }
+        catch (requestError) { setTelegramArchiveError(requestError.message || "ล้างสำเนา Telegram ไม่สำเร็จ"); }
+      }}>ล้างสำเนา Telegram ในเว็บ</button>}
+      {telegramArchiveError && <p className="activity-ai-error" role="alert">{telegramArchiveError}</p>}
+      {telegramError && <p className="activity-ai-error">{telegramError}</p>}
+      {telegramMessages.map((message) => (
+        <div key={`telegram-${message.id}`} className="activity-ai-message-group">
+          <div className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}><span>{message.text}</span></div>
+        </div>
+      ))}
+    </details>
+  );
   if (!open) return null;
   return (
     <div
@@ -192,17 +231,25 @@ export default function ActivityAssistantDialog(props) {
           <div>
             <span>✦</span>
             <strong>MR.Zettascale</strong>
-            <small>{presentation === "page" ? "AI Mode · ผู้ช่วยส่วนตัว" : "ผู้ช่วยวางแผนกิจกรรม"}</small>
+            <small>{presentation === "page" ? pending ? "กำลังตอบ…" : canUseGemini ? "พร้อมคุย · ใช้ AI" : "AI จำกัดสิทธิ์ · ใช้เครื่องมือที่ไม่เรียก AI ได้" : "ผู้ช่วยวางแผนกิจกรรม"}</small>
           </div>
           <div>
-            <button type="button" onClick={reset} disabled={pending}>
-              {presentation === "page" ? "เริ่มแชทใหม่" : "เคลียร์แชท"}
-            </button>
+            {presentation === "page" && <button type="button" className="activity-ai-rail-toggle" aria-expanded={workRailOpen} aria-controls="activity-ai-work-rail" onClick={() => setWorkRailOpen((current) => !current)}>{workRailOpen ? "ซ่อนแผงงาน" : "เปิดแผงงาน"}</button>}
+            {presentation === "page" ? <div className="activity-ai-reset-wrap">
+              <button type="button" onClick={() => setConfirmResetOpen((current) => !current)} aria-expanded={confirmResetOpen} disabled={pending}>แชท AI ใหม่</button>
+              {confirmResetOpen && <div className="activity-ai-reset-confirm" role="dialog" aria-label="ยืนยันเริ่มแชท AI ใหม่">
+                <strong>เริ่มแชท AI ใหม่?</strong>
+                <p>ล้างเฉพาะบทสนทนา AI บนเว็บ สำเนา Telegram ยังอยู่</p>
+                <div><button type="button" onClick={() => setConfirmResetOpen(false)}>ยกเลิก</button><button type="button" onClick={() => { reset(); setConfirmResetOpen(false); }}>เริ่มแชทใหม่</button></div>
+              </div>}
+            </div> : <button type="button" onClick={reset} disabled={pending}>เคลียร์แชท</button>}
             <button type="button" onClick={onClose} aria-label={presentation === "page" ? "กลับโหมดก่อนหน้า" : "ปิดแชต"}>
               {presentation === "page" ? "กลับ" : "×"}
             </button>
           </div>
         </header>
+        <div className="activity-ai-workspace-body">
+        <div className="activity-ai-chat-column">
         {canUseGemini && (
           <p className="activity-ai-quota">
             Developer preview · เหลือ{" "}
@@ -219,20 +266,13 @@ export default function ActivityAssistantDialog(props) {
           </p>
         )}
         <div className="activity-ai-messages">
-          {!guidedActivity && (
+          {!guidedActivity && presentation !== "page" && (
             <details className="activity-ai-tools" open={presentation !== "page" ? true : undefined}>
               <summary>เครื่องมือและคำสั่ง</summary>
-              <ActivityAssistantCommandGroups
-              canUseGemini={canUseGemini}
-              cooldownSeconds={cooldownSeconds}
-              onDailySummary={onOpenDailySummary ? runDailySummary : null}
-              onSend={send}
-              onSendKnowledge={sendKnowledge}
-              pending={pending}
-              rootQuestions={rootQuestions}
-              />
+              {toolCommands}
             </details>
           )}
+          {!guidedActivity && presentation === "page" && <details className="activity-ai-tools activity-ai-mobile-tools"><summary>เครื่องมือและคำสั่ง</summary>{toolCommands}</details>}
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
@@ -244,7 +284,7 @@ export default function ActivityAssistantDialog(props) {
                 <span>{presentation === "page" && message.text === INITIAL_ASSISTANT_MESSAGE.text ? "สวัสดีครับ คุยเรื่องทั่วไปได้ในโหมดคุยอิสระ ถ้าต้องการดูตารางหรือสร้างกิจกรรม ใช้เครื่องมือด้านบนหรือสลับเป็นวางแผนกิจกรรมครับ" : message.text}</span>
               </div>
               {presentation === "page" && message.role === "assistant" && index > 0 && (
-                <small className="activity-ai-turn-source">{["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป"}</small>
+                <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
               )}
               {message.followUpQuestions?.length > 0 && (
                 <div className={`activity-ai-answer-followups${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}`}>
@@ -302,24 +342,16 @@ export default function ActivityAssistantDialog(props) {
               )}
             </div>
           ))}
-          {presentation === "page" && onSendTelegramMessage && (
-            <details className="activity-ai-telegram-archive">
-              <summary>ข้อความ Telegram · {telegramMessages.length}</summary>
-              <p>สำเนาข้อความจาก Telegram แยกจากบทสนทนา AI บนเว็บ</p>
-              {onClearTelegramMessages && telegramMessages.length > 0 && <button type="button" disabled={pending} onClick={async () => {
-                setTelegramArchiveError("");
-                try { await onClearTelegramMessages(); }
-                catch (requestError) { setTelegramArchiveError(requestError.message || "ล้างสำเนา Telegram ไม่สำเร็จ"); }
-              }}>ล้างสำเนา Telegram ในเว็บ</button>}
-              {telegramArchiveError && <p className="activity-ai-error" role="alert">{telegramArchiveError}</p>}
-              {telegramError && <p className="activity-ai-error">{telegramError}</p>}
-              {telegramMessages.map((message) => (
-                <div key={`telegram-${message.id}`} className="activity-ai-message-group">
-                  <div className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}><span>{message.text}</span></div>
-                </div>
-              ))}
-            </details>
+          {presentation === "page" && guidedActivity && Object.values(guidedActivity).some(Boolean) && (
+            <section className="activity-ai-guided-preview" aria-label="ข้อมูลกิจกรรมที่กำลังกรอก">
+              <strong>ข้อมูลกิจกรรมที่กำลังกรอก</strong>
+              {guidedActivity.title && <span>ชื่อ: {guidedActivity.title}</span>}
+              {guidedActivity.date && <span>วัน: {guidedActivity.date}</span>}
+              {guidedActivity.time && <span>เวลา: {guidedActivity.time}</span>}
+              {guidedActivity.durationMinutes && <span>ระยะเวลา: {guidedActivity.durationMinutes} นาที</span>}
+            </section>
           )}
+          {presentation === "page" && renderTelegramArchive("mobile")}
           {presentation !== "page" && telegramMessages.map((message) => (
             <div
               key={`telegram-${message.id}`}
@@ -335,6 +367,7 @@ export default function ActivityAssistantDialog(props) {
           {presentation !== "page" && telegramError && (
             <p className="activity-ai-error">{telegramError}</p>
           )}
+          {error && <p className="activity-ai-error activity-ai-chat-error" role="alert">{error}</p>}
           {pending && (
             <p
               className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}
@@ -346,7 +379,6 @@ export default function ActivityAssistantDialog(props) {
           )}
           <div ref={bottomRef} />
         </div>
-        {error && <p className="activity-ai-error">{error}</p>}
         {!guidedActivity && (
           <div className="activity-ai-choice-strip activity-ai-create-shortcut">
             <div className="activity-ai-quick-replies">
@@ -372,7 +404,7 @@ export default function ActivityAssistantDialog(props) {
                   {reply.label}
                 </button>
               ))}
-              {onOpenDailySummary && (
+              {presentation !== "page" && onOpenDailySummary && (
                 <button
                   type="button"
                   onClick={runDailySummary}
@@ -381,7 +413,7 @@ export default function ActivityAssistantDialog(props) {
                   สรุปวันนี้
                 </button>
               )}
-              {CALENDAR_FACT_SUGGESTIONS.map((question) => (
+              {presentation !== "page" && CALENDAR_FACT_SUGGESTIONS.map((question) => (
                 <button
                   key={question}
                   type="button"
@@ -402,11 +434,17 @@ export default function ActivityAssistantDialog(props) {
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (presentation === "page" && event.key === "Enter" && !event.shiftKey && !event.nativeEvent?.isComposing && event.keyCode !== 229) {
+                event.preventDefault();
+                send(event);
+              }
+            }}
             placeholder={
               guidedActivity
                 ? canUseGemini
                   ? "พิมพ์เองเพื่อให้ AI ตอบต่อจากตัวเลือกด้านบน…"
-                  : "เลือกขั้นตอนด้านบน หรือพิมพ์ชื่อกิจกรรม"
+                  : conversationNodeId === "activity.title" ? "พิมพ์ชื่อกิจกรรม หรือเลือกตัวอย่างด้านบน" : "เลือกคำตอบด้านบน หรือแก้ข้อมูลในแผงงาน"
                 : presentation === "page" && chatStyle === "free"
                   ? "คุยหรือถามเรื่องที่สนใจ… ใช้เครื่องมือด้านบนเมื่ออยากให้ช่วยดูตาราง"
                   : "ทำงาน 08.30 พรุ่งนี้ 3 ชม. · หรือ พรุ่งนี้ว่างช่วงไหน?"
@@ -437,6 +475,33 @@ export default function ActivityAssistantDialog(props) {
             </button>
           )}
         </form>
+        </div>
+        {presentation === "page" && workRailOpen && <aside id="activity-ai-work-rail" className="activity-ai-work-rail" aria-label="แผงงาน AI">
+          <header className="activity-ai-rail-header"><strong>แผงงาน</strong><button type="button" onClick={() => setWorkRailOpen(false)} aria-label="ซ่อนแผงงาน">×</button></header>
+          <div className="activity-ai-rail-content">
+            {guidedActivity ? <div className="activity-ai-rail-progress">
+              <h2>สร้างกิจกรรม</h2>
+              <ol aria-label="ขั้นตอนสร้างกิจกรรม">{ACTIVITY_STEPS.map((step, index) => {
+                const currentIndex = ACTIVITY_STEPS.findIndex((item) => item.node === conversationNodeId);
+                return <li key={step.node} aria-current={index === currentIndex ? "step" : undefined} className={index < currentIndex ? "is-done" : ""}><span>{index < currentIndex ? "✓" : index + 1}</span>{step.label}</li>;
+              })}</ol>
+              <p className="activity-ai-rail-note">ตอบคำถามในแชทให้ครบ แล้วตรวจร่างในฟอร์มก่อนบันทึก</p>
+              <div className="activity-ai-rail-fields">
+                {guidedActivity.title !== undefined && <label>ชื่อ<input type="text" value={guidedActivity.title} maxLength="120" disabled={pending} onChange={(event) => updateGuidedActivityField("title", event.target.value)} /></label>}
+                {guidedActivity.date !== undefined && <label>วัน<input type="date" value={guidedActivity.date} disabled={pending} onChange={(event) => updateGuidedActivityField("date", event.target.value)} /></label>}
+                {guidedActivity.time !== undefined && <label>เวลา<input type="time" value={guidedActivity.time} disabled={pending} onChange={(event) => updateGuidedActivityField("time", event.target.value)} /></label>}
+                {guidedActivity.durationMinutes !== undefined && <label>ระยะเวลา (นาที)<input type="number" min="1" max="1440" value={guidedActivity.durationMinutes} disabled={pending} onChange={(event) => updateGuidedActivityField("durationMinutes", Number(event.target.value) || "")} /></label>}
+              </div>
+              {guidedActivity.durationMinutes !== undefined && <button type="button" className="activity-ai-rail-retry" onClick={retryGuidedActivityDraft} disabled={pending}>สร้างร่างเพื่อตรวจอีกครั้ง</button>}
+              <button type="button" className="activity-ai-rail-cancel" onClick={() => selectQuickReply({ kind: "home", label: "ยกเลิกการสร้างกิจกรรม" })} disabled={pending}>ยกเลิกการสร้างกิจกรรม</button>
+            </div> : <>
+              <h2>เครื่องมือ</h2>
+              {toolCommands}
+            </>}
+          </div>
+          {renderTelegramArchive("rail")}
+        </aside>}
+        </div>
       </section>
     </div>
   );
