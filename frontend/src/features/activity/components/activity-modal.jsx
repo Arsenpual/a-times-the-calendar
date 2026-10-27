@@ -510,6 +510,7 @@ export default function ActivityModal({
         assistantProposal: initialDraft?.assistantOrigin === "mr-zettascale"
           ? { title: initialDraft.title, startLocal: initialDraft.startLocal, endLocal: initialDraft.endLocal }
           : null,
+        weatherValidation: initialDraft?.weatherValidation || null,
         // Passed along so the caller can detect an edit-time conflict
         // (someone else changed the activity after we opened this form)
         // and warn about it — the save still goes through and overwrites.

@@ -29,6 +29,7 @@ import {
 import { formatScheduleOption, formatScheduleRange } from "../lib/schedule-format.js";
 import { assistantSourceLabel } from "../lib/assistant-source-label.js";
 import { validateGuidedActivity } from "../lib/guided-activity-validation.js";
+import { isWeatherSlotStillRecommended } from "../lib/weather-slot-validation.js";
 
 function toAssistantInsightContext(insight) {
   if (!insight || typeof insight.type !== "string") return null;
@@ -745,7 +746,7 @@ export function useActivityAssistantConversation({
       const reply = `${result.location} · ${dayLabel}\nตอนนี้ ${observed}\n${result.recommendation?.text || "ยังไม่มีช่วงแนะนำ"}${result.aiAdvice ? `\n\n🤖 ${result.aiAdvice}` : ""}\n\nข้อมูล ณ ${result.weather?.asOf || "ไม่ระบุ"} (${result.weather?.timeZone || "Asia/Bangkok"})\n${result.attribution || "Source: Includes weather data from Google"}`;
       setMessages((currentMessages) => [
         ...currentMessages.map((message, index) => index === currentMessages.length - 1 ? { ...message, source: result.aiUsed ? "ai" : "knowledge" } : message),
-        { role: "assistant", text: reply, source: result.aiUsed ? "ai" : "knowledge", sourceLabel: result.aiUsed ? "AI · Google Weather" : "Google Weather · เกณฑ์ T.i.M.E.S.", toolKind: "weather", toolResultCount: slots.length, commandTone: "calendar", weatherSlots: slots, weatherContext: { location: result.location, activity: result.activity, activityId: activity, day, durationHours, asOf: result.weather?.asOf, timeZone: result.weather?.timeZone } }
+        { role: "assistant", text: reply, source: result.aiUsed ? "ai" : "knowledge", sourceLabel: result.aiUsed ? "AI · Google Weather" : "Google Weather · เกณฑ์ T.i.M.E.S.", toolKind: "weather", toolResultCount: slots.length, commandTone: "calendar", weatherSlots: slots, weatherContext: { location: result.location, locationQuery: location.trim(), activity: result.activity, activityId: activity, day, durationHours, asOf: result.weather?.asOf, timeZone: result.weather?.timeZone } }
       ]);
     } catch (requestError) {
       if (isCurrent()) setError(requestError.message || "ดึงข้อมูลอากาศไม่สำเร็จ กรุณาลองอีกครั้ง");
@@ -757,7 +758,8 @@ export function useActivityAssistantConversation({
       }
     }
   };
-  const selectWeatherSlot = (slot, context) => {
+  const selectWeatherSlot = async (slot, context) => {
+    if (pending) return;
     const start = new Date(slot?.start);
     const end = new Date(slot?.end);
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
@@ -768,6 +770,30 @@ export function useActivityAssistantConversation({
       setError("ช่วงเวลานี้ผ่านไปแล้ว กรุณาดูอากาศและคำนวณช่วงใหม่");
       return;
     }
+    if (!context?.location || !context?.activityId || !context?.day || !context?.durationHours) {
+      setError("ข้อมูลพยากรณ์เดิมไม่ครบ กรุณาดูอากาศอีกครั้ง");
+      return;
+    }
+    const requestVersion = activeSessionRef.current.version;
+    const requestEpoch = conversationEpochRef.current;
+    const isCurrent = () => isCurrentConversation(requestVersion, requestEpoch);
+    setPending(true);
+    setPendingSource("weather");
+    setError("");
+    let latest;
+    try {
+      latest = await weatherPlanRequest({ location: context.locationQuery || context.location, activity: context.activityId, day: context.day, durationHours: context.durationHours, includeAdvice: false });
+    } catch (requestError) {
+      if (isCurrent()) setError(requestError.message || "ตรวจพยากรณ์ล่าสุดไม่สำเร็จ กรุณาลองอีกครั้ง");
+      return;
+    } finally {
+      if (isCurrent()) { setPending(false); setPendingSource(""); }
+    }
+    if (!isCurrent()) return;
+    if (start.getTime() <= Date.now() || latest.location !== context.location || !isWeatherSlotStillRecommended(slot, latest)) {
+      setError("พยากรณ์อากาศเปลี่ยนแล้ว ช่วงนี้ไม่ผ่านเกณฑ์เดิม กรุณาดูอากาศและเลือกช่วงใหม่");
+      return;
+    }
     const localValue = (date) => `${toDateInputValue(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
     const draft = {
       title: context?.activity || "กิจกรรมกลางแจ้ง",
@@ -776,7 +802,11 @@ export function useActivityAssistantConversation({
       allDay: false,
       categoryName: "",
       tags: [],
-      notes: `ช่วงเวลาแนะนำจาก Google Weather สำหรับ ${context?.location || "สถานที่ที่เลือก"} · ข้อมูล ณ ${context?.asOf || "ไม่ระบุ"} (${context?.timeZone || "Asia/Bangkok"})\nตรวจสภาพอากาศอีกครั้งก่อนกิจกรรม`
+      notes: `ช่วงเวลาแนะนำจาก Google Weather สำหรับ ${latest.location || context.location} · ข้อมูล ณ ${latest.weather?.asOf || "ไม่ระบุ"} (${latest.weather?.timeZone || context.timeZone || "Asia/Bangkok"})\nตรวจสภาพอากาศอีกครั้งก่อนกิจกรรม`,
+      weatherValidation: {
+        request: { location: context.locationQuery || context.location, activity: context.activityId, day: context.day, durationHours: context.durationHours },
+        slot
+      }
     };
     const handoff = createActivityPopupHandoff({ ready: true, draft });
     if (!handoff) { setError("ยังสร้างร่างจากช่วงเวลานี้ไม่ได้"); return; }

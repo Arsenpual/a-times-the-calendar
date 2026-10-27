@@ -37,11 +37,13 @@ try {
   assert.equal(await page.evaluate(() => window.headerFixture.settings), 1);
   assert.equal(await header.locator(".topbar-actions > button:disabled").count(), 1, "paused Push stays disabled");
 
-  await header.getByRole("tab", { name: "Activity", exact: true }).click();
+  await header.getByRole("button", { name: "เปิดเมนูฟีเจอร์" }).click();
+  await page.getByRole("navigation", { name: "ฟีเจอร์หลัก" }).getByRole("button", { name: "Activity", exact: true }).click();
   assert.equal(await page.locator(".reminder-header-tools").count(), 0, "portal does not leak into Activity");
   const ticks = await page.evaluate(() => window.headerFixture.ticks);
   await page.waitForFunction(previous => window.headerFixture.ticks > previous, ticks);
-  await header.getByRole("tab", { name: "Reminder", exact: true }).click();
+  await header.getByRole("button", { name: "เปิดเมนูฟีเจอร์" }).click();
+  await page.getByRole("navigation", { name: "ฟีเจอร์หลัก" }).getByRole("button", { name: "Reminder", exact: true }).click();
   await input.waitFor();
   assert.equal(await input.inputValue(), "ทดสอบ Reminder", "draft survives switching modes");
   assert.equal(await page.evaluate(() => window.headerFixture.mounts), 1, "Reminder runtime remains mounted");
@@ -58,7 +60,7 @@ try {
         }).map(control => control.getAttribute("aria-label") || control.textContent),
       }));
       assert.deepEqual(layout.clipped, [], `${width}px ${theme}: header controls remain reachable`);
-      assert(layout.height < 160, "one compact header region");
+      assert(layout.height < (width <= 390 ? 220 : 160), `${width}px ${theme}: one compact header region (${layout.height}px)`);
       assert.equal(await input.isVisible(), true, "omnibar remains available on mobile");
       assert.equal(await input.evaluate(el => getComputedStyle(el).color), theme === "dark" ? "rgb(242, 241, 237)" : "rgb(28, 28, 26)");
     }

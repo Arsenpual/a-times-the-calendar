@@ -27,7 +27,13 @@ try {
   await ai.getByRole('button',{name:'วันนี้ที่เดิม'}).click();
   await ai.locator('.activity-ai-messages').getByRole('region',{name:'อากาศกับกิจกรรม'}).nth(1).getByText(/ฟ้าใส/).waitFor();
   assert.deepEqual(await page.evaluate(()=>({day:window.lastWeatherRequest.day,location:window.lastWeatherRequest.location,activity:window.lastWeatherRequest.activity})),{day:'today',location:'กรุงเทพฯ',activity:'outdoor'});
-  await ai.getByRole('button',{name:/ร่างกิจกรรม · 28 ต.ค./}).last().click();
+  await page.evaluate(()=>{window.testWeatherChanged=true;});
+  await ai.getByRole('button',{name:/ร่างกิจกรรม · พรุ่งนี้/}).last().click();
+  await ai.getByText(/พยากรณ์อากาศเปลี่ยนแล้ว/).waitFor();
+  assert.equal(await page.getByTestId('form-draft').textContent(),'','changed forecast must not open a draft');
+  assert.equal(await page.evaluate(()=>window.lastWeatherRequest.includeAdvice),false,'recheck must skip AI advice');
+  await page.evaluate(()=>{window.testWeatherChanged=false;});
+  await ai.getByRole('button',{name:/ร่างกิจกรรม · พรุ่งนี้/}).last().click();
   assert.equal(await page.getByTestId('form-draft').textContent(),'กิจกรรมกลางแจ้ง');
   assert.ok(await page.getByTestId('form-start').textContent());
   await page.evaluate(()=>{window.testWeatherNoSlots=true;});

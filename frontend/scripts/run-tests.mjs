@@ -26,6 +26,7 @@ const unitTests = [
   "src/features/activity/assistant/tests/assistant-source-label.test.js",
   "src/features/activity/assistant/tests/guided-activity-validation.test.js",
   "src/features/activity/assistant/tests/validate-plan-draft.test.js",
+  "src/features/activity/assistant/tests/weather-slot-validation.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
 ];
 

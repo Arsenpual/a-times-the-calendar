@@ -33,7 +33,9 @@ function Fixture({accountId}) {
         weatherPlanRequest:async(input)=>{
           window.lastWeatherRequest=input;
           if(window.testWeatherFailure) throw new Error('Weather API ไม่พร้อม');
-          const slots=window.testWeatherNoSlots?[]:[{start:'2026-10-28T02:00:00Z',end:'2026-10-28T03:00:00Z',at:'28 ต.ค. 09:00–10:00',score:88,reasons:['ฝน 10%']}];
+          const weatherStart=new Date();weatherStart.setDate(weatherStart.getDate()+1);weatherStart.setHours(9,0,0,0);
+          const weatherEnd=new Date(weatherStart.getTime()+60*60*1000);
+          const slots=window.testWeatherNoSlots || (input.includeAdvice===false && window.testWeatherChanged)?[]:[{start:weatherStart.toISOString(),end:weatherEnd.toISOString(),at:'พรุ่งนี้ 09:00–10:00',score:88,reasons:['ฝน 10%']}];
           return {source:'google-weather',location:input.location,weather:{asOf:'2026-10-27T01:00:00Z',timeZone:'Asia/Bangkok',current:{condition:'ฟ้าใส',temperatureC:27,rainPercent:10}},activity:'กิจกรรมกลางแจ้ง',day:input.day,durationHours:input.durationHours,recommendation:{text:slots.length?'แนะนำ 09:00':'ยังไม่มีช่วงที่ผ่านเกณฑ์',slots},aiAdvice:'',aiUsed:false,attribution:'Source: Includes weather data from Google'};
         },
         continuePlanningChat:async(input)=>{

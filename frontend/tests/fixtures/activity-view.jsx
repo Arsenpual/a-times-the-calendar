@@ -13,6 +13,6 @@ function Fixture() {
   const closeDay = useCallback(() => setDayOpen(false), []);
   const view = useActivityView({ cursorDate, selectWeek, closeDay, userId });
   window.viewFixture = { view, cursorDate, dayOpen, getYearCycle, flushSync, userId, setUserId, navigation };
-  return <p>{view.activityHeaderTitle}</p>;
+  return <p>{view.activityHeaderTitle.date} {view.activityHeaderTitle.period}</p>;
 }
 createRoot(document.getElementById("root")).render(<Fixture />);

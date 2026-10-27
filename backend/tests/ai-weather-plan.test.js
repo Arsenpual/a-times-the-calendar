@@ -70,6 +70,22 @@ test("web weather plan asks AI only with the verified compact weather context", 
   });
 });
 
+test("weather recheck never claims AI quota", async () => {
+  let claims = 0;
+  await withServer({
+    find: async query => ({ name: query, latitude: 13.7, longitude: 100.5 }),
+    lookup: async () => weather,
+    claimUsage: async () => { claims += 1; return { status: "claimed" }; }
+  }, async baseUrl => {
+    const response = await post(baseUrl, { ...request, includeAdvice: false });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.aiUsed, false);
+    assert.equal(result.recommendation.slots.length, 2);
+  });
+  assert.equal(claims, 0);
+});
+
 test("invalid web weather request does not call Google", async () => {
   await withServer({ find: async () => { throw new Error("unexpected"); } }, async baseUrl => {
     const response = await post(baseUrl, { ...request, durationHours: 12 });

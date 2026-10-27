@@ -4,9 +4,12 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ActivityAssistant from '/src/features/activity/assistant/components/activity-assistant-dialog.jsx';
 import ActivityModal from '/src/features/activity/components/activity-modal.jsx';
+import { assertWeatherDraftCurrent } from '/src/features/activity/assistant/lib/weather-slot-validation.js';
 import '/src/index.css';
 
 const h = React.createElement;
+const weatherStart=new Date();weatherStart.setDate(weatherStart.getDate()+1);weatherStart.setHours(9,0,0,0);
+const weatherSlot = {start:weatherStart.toISOString(),end:new Date(weatherStart.getTime()+60*60*1000).toISOString(),at:'พรุ่งนี้ 09:00–10:00',score:88};
 function Fixture() {
   const [reviewDraft, setReviewDraft] = useState(null);
   const [saveAttempts, setSaveAttempts] = useState(0);
@@ -19,7 +22,7 @@ function Fixture() {
     h(ActivityAssistant,{
       presentation:'page',open:true,onClose:()=>{},userId:'assistant-review-fixture',categories:[],activities:[],
       createTemplateDraft:async(input)=>({ready:true,draft:{title:input.title,startLocal:`${input.date}T${input.time}`,endLocal:`${input.date}T10:00`,allDay:false,categoryName:'',tags:[],notes:''}}),
-      weatherPlanRequest:async(input)=>({source:'google-weather',location:input.location,weather:{asOf:'2026-10-27T01:00:00Z',timeZone:'Asia/Bangkok',current:{condition:'ฟ้าใส',temperatureC:27,rainPercent:10}},activity:'กิจกรรมกลางแจ้ง',recommendation:{text:'แนะนำ 09:00',slots:[{start:'2026-10-28T02:00:00Z',end:'2026-10-28T03:00:00Z',at:'28 ต.ค. 09:00–10:00',score:88}]},aiAdvice:'',aiUsed:false,attribution:'Source: Includes weather data from Google'}),
+      weatherPlanRequest:async(input)=>({source:'google-weather',location:input.location,weather:{asOf:'2026-10-27T01:00:00Z',timeZone:'Asia/Bangkok',current:{condition:'ฟ้าใส',temperatureC:27,rainPercent:10}},activity:'กิจกรรมกลางแจ้ง',recommendation:{text:'แนะนำ 09:00',slots:[weatherSlot]},aiAdvice:'',aiUsed:false,attribution:'Source: Includes weather data from Google'}),
       onOpenActivityForm:setReviewDraft,
     }),
     h(ActivityModal,{
@@ -31,6 +34,7 @@ function Fixture() {
       onClose:()=>setReviewDraft(null),
       onSave:async(payload)=>{
         setSaveAttempts(value=>value+1);
+        await assertWeatherDraftCurrent({validation:payload.weatherValidation,activityBody:payload.activityBody,fetchPlan:async()=>({recommendation:{slots:window.testWeatherChangedAtSave?[]:[weatherSlot]}})});
         if(window.testSaveShouldFail) throw new Error('ทดสอบบันทึก Calendar ไม่สำเร็จ');
         setSavedTitle(payload.activityBody.summary);
         setSaved(value=>value+1);

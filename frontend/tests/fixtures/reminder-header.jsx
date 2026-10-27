@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import AppHeader from "../../src/app/components/app-header.jsx";
+import AppTaskbar from "../../src/app/components/app-taskbar.jsx";
 import ReminderTopbar from "../../src/features/reminder/components/reminder-topbar.jsx";
 import { LanguageProvider, useLanguage } from "../../src/shared/i18n/i18n.jsx";
 import "../../src/features/reminder/styles/reminder-material.css";
@@ -34,15 +35,18 @@ function ReminderRuntime({ target, mode }) {
 
 function Fixture() {
   const [mode, setMode] = useState("reminder");
+  const [navigationExpanded, setNavigationExpanded] = useState(false);
   const [target, setTarget] = useState(null);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef(null);
   return <div className={`app app--${mode}`}>
-    <AppHeader firebaseUser={{ displayName: "Header preview" }} mode={mode} setMode={setMode}
+    <AppHeader firebaseUser={{ displayName: "Header preview" }} mode={mode}
+      navigationExpanded={navigationExpanded} onToggleNavigation={() => setNavigationExpanded(value => !value)}
       reminderHeaderRef={setTarget} accountMenuRef={menuRef} accountMenuOpen={menu} setAccountMenuOpen={setMenu}
       setSettingsOpen={() => { window.headerFixture.settings += 1; }} handleLogout={noop}
       goToday={noop} navigateDay={noop} navigateWeek={noop} weekSpineViewMode="week" setWeekSpineView={noop}
-      activityHeaderTitle="Activity" tagSearchTerms={[]} tagSearchDraft="" setTagSearchTerms={noop} setTagSearchDraft={noop} />
+      activityHeaderTitle={{ date: "28 ตุลาคม 2026", period: "สัปดาห์ที่ 44" }} tagSearchTerms={[]} tagSearchDraft="" setTagSearchTerms={noop} setTagSearchDraft={noop} />
+    <AppTaskbar mode={mode} expanded={navigationExpanded} onClose={() => setNavigationExpanded(false)} onSelectMode={nextMode => { setMode(nextMode); setNavigationExpanded(false); }} onOpenAssistant={noop} />
     <main className="app-main"><ReminderRuntime target={target} mode={mode} /></main>
   </div>;
 }

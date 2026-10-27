@@ -8,10 +8,10 @@ const { act } = Renderer;
 const cache = new Map();
 globalThis.localStorage = { getItem: k => cache.get(k) ?? null, setItem: (k,v) => cache.set(k,v) };
 globalThis.window = { localStorage: globalThis.localStorage, setInterval, clearInterval };
-let cloud = {}, calls = [], release, cloudRevision = 0;
+let cloud = {}, calls = [], release, cloudRevision = 0, holdSync = false, finishHeldSync;
 globalThis.syncTestApi = {
   fetchReminders: async () => structuredClone(cloud),
-  fetchReminderSync: async revision => revision === String(cloudRevision)
+  fetchReminderSync: async revision => holdSync ? new Promise(resolve => { finishHeldSync = resolve; }) : revision === String(cloudRevision)
     ? { notModified: true, revision, reminders: null }
     : { notModified: false, revision: String(cloudRevision), reminders: structuredClone(cloud) },
   saveReminder: async (id, fields) => {
@@ -70,4 +70,14 @@ await act(async () => view.update(React.createElement(App, { uid: 'b' })));
 assert.equal(store.reminders[0].title, 'cloud version');
 assert.equal(calls.length, priorCalls);
 await act(async () => view.unmount());
-console.log('PASS: cloud hydration, cache backup, explicit mutations, runtime isolation, ordered PUT/DELETE, remount and account change');
+holdSync = true;
+await act(async () => { view = Renderer.create(React.createElement(App, { uid: 'c' })); });
+await act(async () => store.updateReminders(rows => [...rows, { id: 'blocked', title: 'too early', enabled: true }]));
+assert.match(store.syncError, /ยังโหลดข้อมูล Reminder ไม่สำเร็จ/);
+assert.equal(calls.length, priorCalls, 'a blocked write never reaches the cloud');
+holdSync = false;
+await act(async () => finishHeldSync({ notModified: false, revision: String(cloudRevision), reminders: {} }));
+assert.equal(store.syncError, null, 'successful hydration clears the temporary warning');
+assert.deepEqual(store.reminders, []);
+await act(async () => view.unmount());
+console.log('PASS: cloud hydration, cache backup, explicit mutations, runtime isolation, ordered PUT/DELETE, remount, account change, and temporary warning recovery');

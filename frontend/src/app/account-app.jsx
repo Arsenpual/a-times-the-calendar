@@ -17,6 +17,8 @@ import AnnouncementTicker from "../features/announcements/components/announcemen
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
 import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
+import { assertWeatherDraftCurrent } from "../features/activity/assistant/lib/weather-slot-validation.js";
+import { fetchWeatherPlan } from "../features/activity/assistant/api/activity-assistant-api.js";
 import { fetchActivities } from "../features/calendar-connection/api/google-calendar.js";
 import { fetchDailySummary } from "../features/activity/api/summary.js";
 import ActivityAiAssistant from "../features/activity/assistant/components/activity-assistant-dialog.jsx";
@@ -343,6 +345,7 @@ export default function AccountApp({ auth }) {
     handleMoveActivityToDay
   } = mutations;
   const saveActivityWithAssistantLearning = useCallback(async (payload) => {
+    await assertWeatherDraftCurrent({ validation: payload.weatherValidation, activityBody: payload.activityBody, fetchPlan: fetchWeatherPlan });
     const saved = await handleSaveActivity(payload);
     const corrections = collectPreferenceCorrections(payload);
     // Preference learning is never allowed to make a Calendar save look as if

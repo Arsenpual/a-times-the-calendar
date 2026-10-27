@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRemindersSync } from "./use-reminders-sync.js";
 
+const INITIAL_LOAD_BLOCKED_MESSAGE = "ยังโหลดข้อมูล Reminder ไม่สำเร็จ กรุณารีเฟรชแล้วลองอีกครั้ง";
+
 function readCache(key, fallback) {
   try {
     const value = JSON.parse(localStorage.getItem(key));
@@ -32,6 +34,9 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
 
   useEffect(() => {
     if (remoteReminders === null) return;
+    // A due action may arrive while cloud hydration is pending. Once the
+    // cloud snapshot succeeds, that temporary guard warning is stale.
+    setSyncError(current => current === INITIAL_LOAD_BLOCKED_MESSAGE ? null : current);
     if (!ready.current) {
       // Keep a recoverable snapshot of legacy local-only records; never upload
       // them automatically, as they may be records deleted by another device.
@@ -57,7 +62,7 @@ export function useReminderStore({ firebaseUser, storageKey, defaultReminders, e
 
   const updateReminders = useCallback(update => {
     if (owner.current !== storageKey || (firebaseUser && !ready.current)) {
-      setSyncError("ยังโหลดข้อมูล Reminder ไม่สำเร็จ กรุณารีเฟรชแล้วลองอีกครั้ง");
+      setSyncError(INITIAL_LOAD_BLOCKED_MESSAGE);
       return;
     }
     const before = stateRef.current;

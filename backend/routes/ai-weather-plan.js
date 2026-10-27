@@ -69,15 +69,17 @@ function createAiWeatherPlanRouter({
     let aiAdvice = "";
     let aiUsed = false;
     let claim;
-    try {
-      claim = await claimUsage(req.userId);
-      if (claim.status === "claimed") {
-        aiAdvice = await generateAdvice({ location: location.name, weather, recommendation, day, activity: ACTIVITIES[activity].label });
-        aiUsed = Boolean(aiAdvice);
-        if (!aiUsed) await releaseUsage(claim).catch(() => {});
+    if (req.body?.includeAdvice !== false) {
+      try {
+        claim = await claimUsage(req.userId);
+        if (claim.status === "claimed") {
+          aiAdvice = await generateAdvice({ location: location.name, weather, recommendation, day, activity: ACTIVITIES[activity].label });
+          aiUsed = Boolean(aiAdvice);
+          if (!aiUsed) await releaseUsage(claim).catch(() => {});
+        }
+      } catch (error) {
+        if (claim?.status === "claimed") await releaseUsage(claim).catch(() => {});
       }
-    } catch (error) {
-      if (claim?.status === "claimed") await releaseUsage(claim).catch(() => {});
     }
     return res.json({
       source: "google-weather",
