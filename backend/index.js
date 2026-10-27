@@ -213,7 +213,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
   const webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com";
-  const retryDelaysMs = [3_000, 10_000, 30_000];
+  const retryDelaysMs = [3_000, 10_000, 30_000, 60_000, 300_000];
   const registerTelegramWebhook = (attempt = 0) => {
     telegramRouter.registerWebhook(webhookBaseUrl).catch((error) => {
       // Render can briefly lack outbound DNS/network readiness just after a
@@ -221,10 +221,12 @@ app.listen(PORT, () => {
       // require this initial webhook registration, so retry without a redeploy.
       const reason = error?.cause?.message || error?.message || String(error);
       console.error(`[telegram] ตั้ง webhook อัตโนมัติไม่สำเร็จ (ครั้งที่ ${attempt + 1}):`, reason);
-      if (attempt >= retryDelaysMs.length) return;
-      const delay = retryDelaysMs[attempt];
+      // Keep trying at most every five minutes. An outage lasting beyond the
+      // initial four attempts should recover without another Render deploy.
+      const delay = retryDelaysMs[Math.min(attempt, retryDelaysMs.length - 1)];
       console.log(`[telegram] จะลองตั้ง webhook ใหม่ใน ${delay / 1000} วินาที`);
-      setTimeout(() => registerTelegramWebhook(attempt + 1), delay);
+      const timer = setTimeout(() => registerTelegramWebhook(attempt + 1), delay);
+      timer.unref?.();
     });
   };
   registerTelegramWebhook();

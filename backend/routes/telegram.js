@@ -1434,12 +1434,19 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
     console.warn(`[telegram] ข้ามการตั้ง webhook และ Bot Command Menu: ไม่พบ ${missing.join(", ")}`);
     return;
   }
-  const identityResponse = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
-  const identity = await identityResponse.json().catch(() => ({}));
-  if (!identityResponse.ok || !identity.ok) {
-    throw new Error(`ตรวจ Telegram bot ไม่สำเร็จ: ${identity.description || identityResponse.status}`);
+  try {
+    const identityResponse = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
+    const identity = await identityResponse.json().catch(() => ({}));
+    if (!identityResponse.ok || !identity.ok) {
+      throw new Error(`ตรวจ Telegram bot ไม่สำเร็จ: ${identity.description || identityResponse.status}`);
+    }
+    console.log(`[telegram] ยืนยัน bot @${identity.result?.username || "unknown"} สำเร็จ`);
+  } catch (error) {
+    if (error.service !== "telegram" || error.operation !== "getMe") throw error;
+    // A connection timeout on this diagnostic call must not prevent an
+    // independent setWebhook attempt. Telegram still validates the token.
+    console.warn(`[telegram] ตรวจ bot ผ่าน getMe ไม่สำเร็จ; จะลอง setWebhook ต่อ: ${error.message}`);
   }
-  console.log(`[telegram] ยืนยัน bot @${identity.result?.username || "unknown"} สำเร็จ`);
   const response = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
