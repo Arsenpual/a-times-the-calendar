@@ -98,6 +98,16 @@
 .app-header .tag-search-input::placeholder { color: var(--text-secondary); opacity: 1; }
 
 .app-header .app-header-reminder-slot { flex: 1 1 320px; }
+.app-header--ai .app-header-ai-slot { flex: 1 1 430px; min-width: 0; }
+.app-header--ai .activity-ai-header { min-height: 48px; padding: 0; border: 0; gap: 16px; }
+.app-header--ai .activity-ai-header > div { gap: 8px; }
+.app-header--ai .activity-ai-header > div:last-child { flex-shrink: 0; }
+.app-header--ai .activity-ai-header strong { font-size: 15px; }
+.app-header--ai .activity-ai-header small { font-size: 11px; }
+.app-header--ai .activity-ai-header button { min-height: 36px; padding: 5px 10px; font-size: 13px; white-space: nowrap; }
+.app-header--ai .activity-ai-header button:last-child { width: auto; height: auto; font-size: 13px; }
+.app-header--ai .activity-ai-rail-toggle { border: 1px solid var(--border); border-radius: 8px; }
+.app-header--ai .activity-ai-reset-confirm button { min-height: 30px; }
 .app-header .app-header-reminder-slot .topbar-omnibar {
   min-height: 42px;
   padding: 10px 18px;
@@ -124,6 +134,9 @@ html.screen-reader-mode .app-header :is(button, input) { min-height: 42px; font-
   .app-header .tag-search-wrap { margin-right: auto; max-width: none; }
   .app-header--reminder .app-header-left,
   .app-header--reminder .app-header-right { flex: 0 1 auto; }
+  .app-header--ai .app-header-left,
+  .app-header--ai .app-header-right { flex: 0 1 auto; }
+  .app-header--ai .app-header-ai-slot { flex-basis: 100%; order: 3; }
 }
 @media (max-width: 760px) {
   .app-header--reminder { display: grid; grid-template-columns: minmax(0, 1fr) auto; }

@@ -1,6 +1,7 @@
-export default function AssistantHeader({ presentation, pending, canUseGemini, workRailOpen, setWorkRailOpen, confirmResetOpen, setConfirmResetOpen, reset, onClose }) {
+export default function AssistantHeader({ presentation, embedded = false, pending, canUseGemini, workRailOpen, setWorkRailOpen, confirmResetOpen, setConfirmResetOpen, reset, onClose }) {
+  const HeaderTag = embedded ? "div" : "header";
   return (
-  <header className="activity-ai-header">
+  <HeaderTag className="activity-ai-header">
     <div>
       <span>✦</span>
       <strong>MR.Zettascale</strong>
@@ -20,6 +21,6 @@ export default function AssistantHeader({ presentation, pending, canUseGemini, w
         {presentation === "page" ? "กลับ" : "×"}
       </button>
     </div>
-  </header>
+  </HeaderTag>
   );
 }

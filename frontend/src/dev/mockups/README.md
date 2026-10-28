@@ -8,6 +8,8 @@
 
 กด `Ctrl + Alt + A` เพื่อเปิดตัวอย่าง AI Mode โดยตรง (นอกช่องพิมพ์เช่นกัน)
 
+กด `Ctrl + Alt + 7` เพื่อเปิดตัวอย่าง Focus 7 วันโดยตรง หรือเลือก `seven day focus` จากรายการ Mockup ตัวอย่างนี้แสดงไฟล์ HTML ต้นฉบับในกรอบแยก เพื่อรักษารูปแบบและการโต้ตอบของต้นฉบับ
+
 เพิ่ม Activity mockup ด้วยชื่อ `activity-mode-<ชื่อ>-mockup.jsx` ในโฟลเดอร์นี้ โดย export default component ระบบ lazy `import.meta.glob` ใน `dev-mockups-entry.jsx` จะพบให้อัตโนมัติ และโหลดไฟล์เมื่อเปิดตัวอย่างนั้นเท่านั้น
 
 ## ขอบเขต production

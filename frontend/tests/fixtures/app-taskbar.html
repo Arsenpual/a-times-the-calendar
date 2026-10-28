@@ -19,16 +19,17 @@ function Fixture({accountId}) {
   const [activities, setActivities] = useState([]);
   useEffect(()=>{window.setFixtureActivities=setActivities;return()=>{delete window.setFixtureActivities;};},[]);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [aiHeaderTarget, setAiHeaderTarget] = useState(null);
   const select = mode => { setMode(mode); setExpanded(false); };
   return h('div', {className: 'app app--'+mode},
-    h(AppHeader, {firebaseUser: {displayName:'Preview'}, mode, navigationExpanded:expanded,
+    h(AppHeader, {firebaseUser: {displayName:'Preview'}, mode, aiHeaderRef:setAiHeaderTarget, navigationExpanded:expanded,
       onToggleNavigation:()=>setExpanded(v=>!v), activityHeaderTitle:{date:'18 ตุลาคม 2026',period:'สัปดาห์ที่ 43/53 ของปี'},
       weekSpineViewMode:'week',setWeekSpineView:()=>{},tagSearchTerms:[],tagSearchDraft:'',setTagSearchDraft:()=>{},
       calendarAccessToken:'preview',cursorDate:new Date(),accountMenuOpen,setAccountMenuOpen,setSettingsOpen:()=>setAction('settings')}),
     h('div',{className:'app-workspace'},
       h(AppTaskbar,{mode,expanded,onClose:()=>setExpanded(false),onSelectMode:select,onOpenAssistant:()=>{toggleAiMode();setAction('assistant');setExpanded(false);},unreadCount:3,onSyncGoogleCalendar:()=>setAction('sync'),googleCalendarSyncing:action==='sync'}),
       h('main',{className:'app-main'},h('output',{'data-testid':'mode'},mode),h('output',{'data-testid':'action'},action),h('output',{'data-testid':'form-draft'},formDraft?.title || ''),h('output',{'data-testid':'form-start'},formDraft?.startLocal || ''),h('output',{'data-testid':'activity-count'},activities.length),h('output',{'data-testid':'reauth-count'},reauthCount),
-        h(ActivityAssistant,{presentation:'page',open:mode==='ai',onClose:closeAiMode,categories:[],activities,userId:accountId,telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,onReauthCalendar:()=>setReauthCount(v=>v+1),onOpenDailySummary:async()=>{if(window.testSummaryFailure) throw new Error('กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม');return {date:'2026-10-27',totalActivities:0};},onConfirmActivityPlan:async(drafts)=>{window.savedPlanDrafts=drafts;window.planConfirmCalls=(window.planConfirmCalls||0)+1;return window.testPlanPartial?{created:[{id:'one',title:drafts[0].title}],failed:[{title:drafts[1].title,error:'Calendar unavailable'}],warnings:[]}:{created:drafts.map((draft,index)=>({id:String(index),title:draft.title})),failed:[],warnings:[]};},
+        h(ActivityAssistant,{presentation:'page',headerTarget:aiHeaderTarget,open:mode==='ai',onClose:closeAiMode,categories:[],activities,userId:accountId,telegramMessages,onSendTelegramMessage:async()=>{},onClearTelegramMessages:async()=>setTelegramMessages([]),onOpenActivityForm:setFormDraft,onReauthCalendar:()=>setReauthCount(v=>v+1),onOpenDailySummary:async()=>{if(window.testSummaryFailure) throw new Error('กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม');return {date:'2026-10-27',totalActivities:0};},onConfirmActivityPlan:async(drafts)=>{window.savedPlanDrafts=drafts;window.planConfirmCalls=(window.planConfirmCalls||0)+1;return window.testPlanPartial?{created:[{id:'one',title:drafts[0].title}],failed:[{title:drafts[1].title,error:'Calendar unavailable'}],warnings:[]}:{created:drafts.map((draft,index)=>({id:String(index),title:draft.title})),failed:[],warnings:[]};},
         continueFreeChat:async()=>window.testFreeDeferred?new Promise(resolve=>{window.resolveFreeChat=()=>resolve({reply:'คำตอบจากแชทเก่า',source:'ai'});}):{reply:'คำตอบจากแชทใหม่',source:'ai'},
         weatherPlanRequest:async(input)=>{
           window.lastWeatherRequest=input;

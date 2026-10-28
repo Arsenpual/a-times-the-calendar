@@ -1,5 +1,6 @@
 import { useActivityAssistantConversation } from "../hooks/use-activity-assistant-conversation.js";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CALENDAR_AI_QUESTION_SUGGESTIONS,
   CALENDAR_FACT_SUGGESTIONS,
@@ -114,6 +115,7 @@ export default function ActivityAssistantDialog(props) {
   const {
     open,
     presentation = "dialog",
+    headerTarget,
     onClose,
     activityFormOpen = false,
     dailySummaryOpen = false,
@@ -190,7 +192,10 @@ export default function ActivityAssistantDialog(props) {
     </details>
   );
   if (!open) return null;
+  const assistantHeader = <AssistantHeader presentation={presentation} embedded={presentation === "page" && Boolean(headerTarget)} pending={pending} canUseGemini={canUseGemini} workRailOpen={workRailOpen} setWorkRailOpen={setWorkRailOpen} confirmResetOpen={confirmResetOpen} setConfirmResetOpen={setConfirmResetOpen} reset={reset} onClose={onClose} />;
   return (
+    <>
+      {presentation === "page" && headerTarget && createPortal(assistantHeader, headerTarget)}
     <div
       id={presentation === "page" ? "ai-mode-workspace" : undefined}
       className={presentation === "page" ? "activity-ai-page" : `activity-ai-backdrop${activityFormOpen ? " is-activity-form-open" : ""}${dailySummaryOpen ? " is-daily-summary-open" : ""}`}
@@ -204,7 +209,7 @@ export default function ActivityAssistantDialog(props) {
         aria-label={presentation === "page" ? "AI Mode MR.Zettascale" : "คุยกับ MR.Zettascale เพื่อสร้างกิจกรรม"}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <AssistantHeader presentation={presentation} pending={pending} canUseGemini={canUseGemini} workRailOpen={workRailOpen} setWorkRailOpen={setWorkRailOpen} confirmResetOpen={confirmResetOpen} setConfirmResetOpen={setConfirmResetOpen} reset={reset} onClose={onClose} />
+        {(presentation !== "page" || headerTarget === undefined) && assistantHeader}
         <div className="activity-ai-workspace-body">
         <div className="activity-ai-chat-column">
         {canUseGemini && (
@@ -276,5 +281,6 @@ export default function ActivityAssistantDialog(props) {
         </div>
       </section>
     </div>
+    </>
   );
 }

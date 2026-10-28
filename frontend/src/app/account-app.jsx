@@ -75,6 +75,7 @@ const PRIVACY_POLICY_URL = `${import.meta.env.BASE_URL}privacy.html`;
 // changes. Mode switches keep this boundary mounted so reminder timers continue.
 export default function AccountApp({ auth }) {
   const [reminderHeaderTarget, setReminderHeaderTarget] = useState(null);
+  const [aiHeaderTarget, setAiHeaderTarget] = useState(null);
   const firestoreQuota = useFirestoreQuotaStatus();
   const handleTestFirestoreQuota = useCallback(() => {
     if (firestoreQuota) {
@@ -427,6 +428,7 @@ export default function AccountApp({ auth }) {
         onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
         firebaseUser={firebaseUser}
         reminderHeaderRef={setReminderHeaderTarget}
+        aiHeaderRef={setAiHeaderTarget}
         mode={mode}
         setMode={setMode}
         goToday={goToday}
@@ -667,6 +669,7 @@ export default function AccountApp({ auth }) {
         )}
       <ActivityAiAssistant
         presentation="page"
+        headerTarget={aiHeaderTarget}
         open={activityAssistantOpen}
         activityFormOpen={modalOpen}
         dailySummaryOpen={assistantDailySummary.open}
