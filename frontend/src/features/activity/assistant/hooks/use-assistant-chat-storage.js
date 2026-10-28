@@ -28,7 +28,7 @@ export function loadSavedChat(userId) {
         toolKind: ["calendar", "scheduling", "planning", "weather"].includes(message.toolKind) ? message.toolKind : "",
         toolResultCount: Number.isInteger(message.toolResultCount) && message.toolResultCount >= 0 && message.toolResultCount <= 20 ? message.toolResultCount : 0,
         calendarRange: typeof message.calendarRange?.label === "string" && /^\d{4}-\d{2}-\d{2}( ถึง \d{4}-\d{2}-\d{2})?$/.test(message.calendarRange.label) ? { label: message.calendarRange.label } : null,
-        commandTone: ["planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
+        commandTone: ["create", "planning", "calendar", "ai", "knowledge"].includes(message.commandTone) ? message.commandTone : ""
       }))
       : [];
     return {

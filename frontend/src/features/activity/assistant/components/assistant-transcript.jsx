@@ -71,6 +71,7 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
 export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
   <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
+    {!guidedActivity && <section className="activity-ai-chat-commands" aria-label="คำสั่งสำเร็จรูปในแชท">{toolCommands}</section>}
     {messages.map((message, index) => (
       <div
         key={`${message.role}-${index}`}
@@ -79,7 +80,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
         {presentation === "page" && message.role === "assistant" && (
           <div className="activity-ai-message-meta">
             <strong>MR.Zettascale</strong>
-            <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
+            {message.commandTone && <small className={`activity-ai-turn-source is-${message.commandTone}`}>{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>}
           </div>
         )}
         <div
@@ -197,7 +198,6 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
       </p>
     )}
     <div ref={bottomRef} />
-    {!guidedActivity && <section className="activity-ai-chat-commands" aria-label="คำสั่งสำเร็จรูปในแชท">{toolCommands}</section>}
   </div>
   );
 }

@@ -46,7 +46,8 @@ try {
   assert.equal(await aiTools.locator('.activity-ai-header').count(),1,'AI controls live in the shared header');
   assert.equal(await ai.locator('.activity-ai-header').count(),0,'chat no longer spends height on a second header');
   const transcript = ai.getByRole('log',{name:'บทสนทนา'});
-  assert.match(await transcript.locator('.activity-ai-message-meta').first().textContent(), /MR\.Zettascale.*คำตอบสำเร็จรูป/);
+  assert.match(await transcript.locator('.activity-ai-message-meta').first().textContent(), /MR\.Zettascale/);
+  assert.equal(await transcript.locator('.activity-ai-message-meta').first().locator('.activity-ai-turn-source').count(),0,'greeting has no preset command badge');
   assert.equal(await transcript.locator('.activity-ai-message-group').first().evaluate(el=>getComputedStyle(el).maxWidth),'850px');
   await page.setViewportSize({width:1440,height:900});
   const workRail = ai.getByRole('complementary',{name:'แผงงาน AI'});
@@ -65,8 +66,8 @@ try {
       }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`AI ${theme}/${width} overflow`);
       assert.equal(await ai.evaluate(el=>getComputedStyle(el).position),'static');
-      assert.equal(await ai.locator('textarea').isVisible(),true);
-      const bounds = await ai.locator('textarea').boundingBox();
+      assert.equal(await ai.getByRole('textbox',{name:'ข้อความถึง MR.Zettascale'}).isVisible(),true);
+      const bounds = await ai.getByRole('textbox',{name:'ข้อความถึง MR.Zettascale'}).boundingBox();
       assert.ok(bounds.y + bounds.height <= 900,'composer stays in the viewport');
       const sendBounds = await ai.getByRole('button',{name:'ส่ง',exact:true}).boundingBox();
       assert.ok(sendBounds.y + sendBounds.height <= 900,'send action stays in the viewport');
@@ -75,6 +76,7 @@ try {
   }
   assert.equal(await page.getByRole('dialog').count(),0,'AI is a workspace, not a modal');
   const chatCommands = ai.locator('.activity-ai-messages .activity-ai-chat-commands');
+  assert.equal(await ai.locator('.activity-ai-messages').evaluate(el => el.firstElementChild?.classList.contains('activity-ai-chat-commands')),true,'preset commands appear before the first chat message');
   assert.equal(await chatCommands.isVisible(),true,'colored preset commands are visible in chat');
   for (const category of ['คำสั่งสร้างกิจกรรม','คำสั่งวางแผน','คำสั่งดูตาราง','คำสั่ง AI','คำถามทั่วไป']) {
     assert.equal(await chatCommands.getByRole('region',{name:category}).isVisible(),true,`${category} is available in chat`);
@@ -108,6 +110,13 @@ try {
   await aiTools.getByRole('dialog',{name:'ยืนยันเริ่มแชท AI ใหม่'}).getByRole('button',{name:'เริ่มแชทใหม่'}).click();
   await telegramArchive.locator('summary').click();
   assert.equal(await telegramArchive.getByText('บันทึกสั้นจาก Telegram').isVisible(),true,'clearing AI chat keeps Telegram messages');
+  await telegramArchive.getByRole('textbox',{name:'ข้อความถึง Telegram'}).fill('ข้อความแยกจาก AI');
+  await telegramArchive.getByRole('button',{name:'ส่ง Telegram'}).click();
+  assert.equal(await page.evaluate(()=>window.sentTelegramText),'ข้อความแยกจาก AI');
+  assert.equal(await telegramArchive.getByRole('textbox',{name:'ข้อความถึง Telegram'}).inputValue(),'');
+  await telegramArchive.locator('summary').click();
+  assert.equal(await telegramArchive.getByRole('textbox',{name:'ข้อความถึง Telegram'}).isVisible(),false);
+  await telegramArchive.locator('summary').click();
   await telegramArchive.getByRole('button',{name:'ล้างสำเนา Telegram ในเว็บ'}).click();
   assert.equal(await telegramArchive.getByText('บันทึกสั้นจาก Telegram').count(),0);
   await page.evaluate(()=>{window.testFreeDeferred=true;});
@@ -146,6 +155,7 @@ try {
   assert.match(await calendarResult.innerText(),/ช่วง 2026-10-27/);
   assert.equal(await calendarResult.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(243, 247, 253)');
   assert.equal(await ai.locator('.activity-ai-turn-source').last().textContent(),'ปฏิทิน');
+  assert.equal(await ai.locator('.activity-ai-turn-source').last().evaluate(el=>el.classList.contains('is-calendar')),true,'calendar command uses its category color');
   await chatCommands.getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
   const emptySchedule = ai.getByRole('region',{name:'ช่วงเวลาว่างที่ตรวจพบ'});
   await emptySchedule.getByText(/ยังไม่พบช่วงเวลาว่าง/).waitFor();
@@ -209,6 +219,10 @@ try {
   await input.fill('ช่วยอธิบายวิธีเลือกเวลา');
   await input.press('Enter');
   await page.waitForFunction(count=>document.querySelectorAll('.activity-ai-message-group').length===count+2,messagesBeforeRail);
+  assert.deepEqual(await page.evaluate(()=>window.lastFreeChatInput.orangeContext),{
+    mode:'activity-management',task:'create',currentStep:'activity.date',
+    activity:{title:'',date:'',time:'',durationMinutes:60}
+  },'asking AI from the orange work rail sends only the active activity snapshot');
   const messagesAfterHelp = await ai.locator('.activity-ai-message-group').count();
   await workRail.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
   assert.equal(await steps.locator('li.is-done').count(),2);

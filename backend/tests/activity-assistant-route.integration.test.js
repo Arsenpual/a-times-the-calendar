@@ -73,6 +73,38 @@ test("free web conversation uses shared quota, bounded history, and never reads 
   assert.deepEqual(calls, [["quota", "integration-user"], ["chat", { text: "สวัสดี", history: [{ role: "user", text: "ขอบคุณ" }, { role: "assistant", text: "ยินดีครับ" }] }]]);
 });
 
+test("free web conversation receives a bounded Activity Management snapshot only when supplied", async () => {
+  let received;
+  await withTestServer({
+    answerKnowledge: () => null,
+    claimChatUsage: async () => ({ status: "claimed" }),
+    generateFreeChat: async (input) => { received = input; return "ช่วยตั้งชื่อได้ครับ"; }
+  }, async (baseUrl) => {
+    const response = await postFree(baseUrl, {
+      text: "ช่วยตั้งชื่อหน่อย",
+      history: [],
+      orangeContext: {
+        mode: "activity-management",
+        task: "create",
+        currentStep: "activity.title",
+        activity: { title: "", date: "2026-10-28", time: "09:00", durationMinutes: 60, ignored: "do not pass" },
+        ignored: "do not pass"
+      }
+    });
+    assert.equal(response.status, 200);
+  });
+  assert.deepEqual(received, {
+    text: "ช่วยตั้งชื่อหน่อย",
+    history: [],
+    orangeContext: {
+      mode: "activity-management",
+      task: "create",
+      currentStep: "activity.title",
+      activity: { title: "", date: "2026-10-28", time: "09:00", durationMinutes: 60 }
+    }
+  });
+});
+
 test("free web conversation keeps developer gate and quota-free product answers", async () => {
   let claims = 0;
   await withTestServer({

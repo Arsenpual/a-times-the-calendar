@@ -15,6 +15,7 @@ export async function continueActivityAssistant(input) {
   );
 }
 
+/** `orangeContext` is an optional, bounded snapshot from Activity Management mode. */
 export async function continueFreeConversation(input) {
   return handleResponse(
     await apiRequest("/api/ai/free-conversation", { method: "POST", body: JSON.stringify(input) }),

@@ -501,6 +501,7 @@ export function useActivityAssistantConversation({
         role: "assistant",
         text: nextNode.prompt,
         source: "template",
+        commandTone: "create",
       });
       if (openFormOnGuidedStart) openFullActivityForm({});
       return;
@@ -531,6 +532,7 @@ export function useActivityAssistantConversation({
       role: "assistant",
       text: nextNode.prompt,
       source: "template",
+      commandTone: "create",
     });
   };
   const conversationNode =
@@ -581,7 +583,20 @@ export function useActivityAssistantConversation({
       setPendingSource("ai");
       setError("");
       try {
-        const result = await continueFreeChat({ text, history });
+        const orangeContext = railMode && guidedActivity
+          ? {
+              mode: "activity-management",
+              task: "create",
+              currentStep: conversationNodeId,
+              activity: {
+                title: guidedActivity.title || "",
+                date: guidedActivity.date || "",
+                time: guidedActivity.time || "",
+                durationMinutes: guidedActivity.durationMinutes || 0,
+              },
+            }
+          : null;
+        const result = await continueFreeChat({ text, history, ...(orangeContext ? { orangeContext } : {}) });
         if (!isCurrentRequest()) return;
         if (result.source === "knowledge") setMessages((current) => current.map((message, index) => index === current.length - 1 ? { ...message, source: "knowledge" } : message));
         setMessages((current) => [...current, { role: "assistant", text: result.reply, source: result.source === "knowledge" ? "knowledge" : "free-ai" }]);
@@ -614,7 +629,7 @@ export function useActivityAssistantConversation({
       onUpdateActivityForm?.({ values: selected, changedField: "date" });
       addMessages(
         { role: "user", text, source: "template" },
-        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" },
+        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template", commandTone: "create" },
       );
       return;
     }
@@ -633,7 +648,7 @@ export function useActivityAssistantConversation({
       onUpdateActivityForm?.({ values: selected, changedField: "title" });
       addMessages(
         { role: "user", text, source: "template" },
-        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" },
+        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template", commandTone: "create" },
       );
       return;
     }

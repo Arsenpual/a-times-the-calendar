@@ -40,6 +40,22 @@ generateActivity ||= generateActivityWithGemini;
 generateCalendarAnswer ||= generateCalendarAnswerWithGemini;
 generateFreeChat ||= generateFreeChatWithGemini;
 
+function prepareOrangeContext(value) {
+  if (!value || typeof value !== "object" || value.mode !== "activity-management") return null;
+  const activity = value.activity && typeof value.activity === "object" ? value.activity : {};
+  return {
+    mode: "activity-management",
+    task: value.task === "create" ? "create" : "",
+    currentStep: typeof value.currentStep === "string" ? value.currentStep.slice(0, 80) : "",
+    activity: {
+      title: typeof activity.title === "string" ? activity.title.slice(0, 120) : "",
+      date: typeof activity.date === "string" ? activity.date.slice(0, 10) : "",
+      time: typeof activity.time === "string" ? activity.time.slice(0, 5) : "",
+      durationMinutes: Number.isInteger(activity.durationMinutes) ? activity.durationMinutes : 0
+    }
+  };
+}
+
 router.post("/free-conversation", async (req, res) => {
   let claim = null;
   try {
@@ -58,7 +74,8 @@ router.post("/free-conversation", async (req, res) => {
       error: claim.status === "not-allowed" ? "AI อยู่ระหว่างทดสอบสำหรับนักพัฒนา" : "ใช้ AI ครบโควต้าชั่วคราวแล้ว กรุณาลองใหม่ภายหลัง",
       ...(claim.retryAfterSeconds ? { retryAfterSeconds: claim.retryAfterSeconds } : {})
     });
-    const reply = await generateFreeChat({ text, history });
+    const orangeContext = prepareOrangeContext(req.body?.orangeContext);
+    const reply = await generateFreeChat({ text, history, ...(orangeContext ? { orangeContext } : {}) });
     if (typeof reply !== "string" || !reply.trim()) throw new Error("AI ไม่ได้ส่งคำตอบกลับมา");
     return res.json({ reply: reply.trim().slice(0, 12000), source: "free-ai" });
   } catch (error) {
@@ -412,11 +429,14 @@ async function generateCalendarAnswerWithGemini({ text, calendarContext, timeZon
   return textFromGemini(payload);
 }
 
-async function generateFreeChatWithGemini({ text, history }) {
-  const instruction = buildZettascaleInstruction("Answer general questions freely and clearly. This web conversation has no live news, weather, project-file, or Calendar tool attached. Use only the supplied conversation; do not claim to have checked current data or changed the user's account. For T.i.M.E.S. details that are not in context, say what you cannot verify. Reply in the user's language.");
+async function generateFreeChatWithGemini({ text, history, orangeContext = null }) {
+  const orangeInstruction = orangeContext
+    ? "The person is in T.i.M.E.S. Activity Management mode. They are creating one activity in the work panel. Use only the supplied activity snapshot to answer a direct request for help, such as suggesting a title, explaining a field, or checking whether the stated details sound coherent. Do not state that you changed, saved, moved, deleted, or filled any activity. The work panel remains the place where the person applies changes."
+    : "";
+  const instruction = buildZettascaleInstruction(`Answer general questions freely and clearly. This web conversation has no live news, weather, project-file, or Calendar tool attached. Use only the supplied conversation; do not claim to have checked current data or changed the user's account. For T.i.M.E.S. details that are not in context, say what you cannot verify. ${orangeInstruction} Reply in the user's language.`);
   const payload = await generateContent({
     systemInstruction: { parts: [{ text: instruction }] },
-    contents: [...history.map((turn) => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })), { role: "user", parts: [{ text }] }],
+    contents: [...history.map((turn) => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })), { role: "user", parts: [{ text: orangeContext ? JSON.stringify({ message: text, orangeContext }) : text }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
   });
   return textFromGemini(payload).slice(0, 12000);

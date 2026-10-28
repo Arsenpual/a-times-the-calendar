@@ -30,7 +30,7 @@ export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, rai
   const disabled = pending || railSaving;
 
   return (
-    <aside id="activity-ai-work-rail" className="activity-ai-work-rail" aria-label="แผงงาน AI">
+    <aside id="activity-ai-work-rail" className={`activity-ai-work-rail${hasGuidedActivity ? " is-creating-activity" : ""}`} aria-label="แผงงาน AI">
       <header className="activity-ai-rail-header"><strong>แผงงาน</strong><button type="button" onClick={() => setWorkRailOpen(false)} aria-label="ซ่อนแผงงาน">×</button></header>
       <div className="activity-ai-rail-content">
         {hasGuidedActivity ? <div className="activity-ai-rail-progress">

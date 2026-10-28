@@ -94,6 +94,8 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onCreat
 
 export default function ActivityAssistantDialog(props) {
   const [telegramArchiveError, setTelegramArchiveError] = useState("");
+  const [telegramInput, setTelegramInput] = useState("");
+  const [telegramSending, setTelegramSending] = useState(false);
   const [workRailOpen, setWorkRailOpen] = useState(true);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const {
@@ -164,7 +166,7 @@ export default function ActivityAssistantDialog(props) {
   />;
   const renderTelegramArchive = (location) => onSendTelegramMessage && (
     <details className={`activity-ai-telegram-archive is-${location}`}>
-      <summary>ข้อความ Telegram · {telegramMessages.length}</summary>
+      <summary>เปิด / ปิดแชท Telegram · {telegramMessages.length}</summary>
       <p>สำเนาข้อความจาก Telegram แยกจากบทสนทนา AI บนเว็บ</p>
       {onClearTelegramMessages && telegramMessages.length > 0 && <button type="button" disabled={pending} onClick={async () => {
         setTelegramArchiveError("");
@@ -178,6 +180,19 @@ export default function ActivityAssistantDialog(props) {
           <div className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}><span>{message.text}</span></div>
         </div>
       ))}
+      {location === "rail" && <form className="activity-ai-telegram-composer" onSubmit={async (event) => {
+        event.preventDefault();
+        const text = telegramInput.trim();
+        if (!text || telegramSending) return;
+        setTelegramSending(true);
+        setTelegramArchiveError("");
+        try { await onSendTelegramMessage(text); setTelegramInput(""); }
+        catch (requestError) { setTelegramArchiveError(requestError.message || "ส่งข้อความไป Telegram ไม่สำเร็จ"); }
+        finally { setTelegramSending(false); }
+      }}>
+        <textarea aria-label="ข้อความถึง Telegram" value={telegramInput} onChange={(event) => setTelegramInput(event.target.value)} maxLength={1200} placeholder="เขียนข้อความถึง Telegram…" />
+        <button type="submit" disabled={telegramSending || !telegramInput.trim()}>{telegramSending ? "กำลังส่ง…" : "ส่ง Telegram"}</button>
+      </form>}
     </details>
   );
   if (!open) return null;
@@ -255,7 +270,7 @@ export default function ActivityAssistantDialog(props) {
             </div>
           </div>
         )}
-        <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={onSendTelegramMessage} sendToTelegram={sendToTelegram} />
+        <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={presentation === "page" ? null : onSendTelegramMessage} sendToTelegram={sendToTelegram} />
         </div>
         {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
         </div>
