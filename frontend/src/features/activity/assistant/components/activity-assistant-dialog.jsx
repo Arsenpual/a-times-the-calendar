@@ -30,8 +30,8 @@ const AI_COMMANDS = [
 ];
 
 const ACTIVITY_STEPS = [
-  { node: "activity.title", label: "ชื่อ" },
   { node: "activity.date", label: "วัน" },
+  { node: "activity.title", label: "ชื่อ" },
   { node: "activity.time", label: "เวลา" },
   { node: "activity.duration", label: "ระยะเวลา" },
 ];
@@ -231,7 +231,7 @@ export default function ActivityAssistantDialog(props) {
         {!guidedActivity && (
           <div className="activity-ai-choice-strip activity-ai-create-shortcut">
             <div className="activity-ai-quick-replies">
-              <button type="button" onClick={() => selectQuickReply({ kind: "start", next: "activity.title" })} disabled={pending}>
+              <button type="button" onClick={() => selectQuickReply({ kind: "start", next: "activity.date" })} disabled={pending}>
                 สร้างกิจกรรม
               </button>
             </div>

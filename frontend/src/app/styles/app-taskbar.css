@@ -52,9 +52,15 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-cancel:hover:not(:disabled) { background: var(--hover); }
 .activity-ai-rail-cancel:disabled { opacity: .5; cursor: wait; }
 .activity-ai-mobile-tools { display: none; }
-.activity-ai-page .activity-ai-messages { padding: 20px clamp(12px, 3vw, 32px); background: #ffffff; }
-.activity-ai-page .activity-ai-messages > * { max-width: 960px; margin-inline: auto; }
-.activity-ai-page .activity-ai-message { font-size: 14px; line-height: 1.7; padding: 12px 16px; overflow-wrap: anywhere; }
+.activity-ai-page .activity-ai-messages { padding: 24px; background: #ffffff; }
+.activity-ai-page .activity-ai-messages > * { max-width: 850px; margin-inline: auto; }
+.activity-ai-page .activity-ai-message-group { position: relative; margin-bottom: 18px; }
+.activity-ai-page .activity-ai-message-group.is-assistant-turn { padding-left: 40px; }
+.activity-ai-page .activity-ai-message-group.is-assistant-turn::before { content: "Z"; position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #315f9b; color: #ffffff; font-size: 13px; font-weight: 700; }
+.activity-ai-page .activity-ai-message-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; margin-bottom: 5px; font-size: 12px; }
+.activity-ai-page .activity-ai-message-meta strong { font-weight: 700; }
+.activity-ai-page .activity-ai-message { max-width: min(760px, 88%); margin-bottom: 0; border-radius: 13px; font-size: 14px; line-height: 1.7; padding: 12px 15px; overflow-wrap: anywhere; }
+.activity-ai-page .activity-ai-message.is-user { max-width: min(680px, 78%); border-radius: 13px; }
 .activity-ai-page .activity-ai-message.activity-ai-tool-result { --tool-accent: #3d73be; --tool-background: #f3f7fd; display: grid; gap: 10px; max-width: min(760px, 100%); border: 1px solid color-mix(in srgb, var(--tool-accent) 35%, #dce4ed); border-left: 3px solid var(--tool-accent); border-radius: 10px; background: var(--tool-background); color: #253346; white-space: pre-wrap; }
 .activity-ai-page .activity-ai-message.activity-ai-tool-result.is-tool-scheduling, .activity-ai-page .activity-ai-message.activity-ai-tool-result.is-tool-planning { --tool-accent: #bf4d83; --tool-background: #fff4f8; }
 .activity-ai-tool-result-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding-bottom: 8px; border-bottom: 1px solid #e8edf3; font-size: 13px; line-height: 1.4; }
@@ -73,7 +79,11 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-page .activity-ai-composer textarea { min-height: 56px; font-size: 14px; }
 .activity-ai-tools { margin-bottom: 16px; }
 .activity-ai-tools > summary { color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 8px 0; }
-.activity-ai-page .activity-ai-turn-source { display: block; margin: -5px 0 12px 2px; color: var(--text-secondary); font-size: 11px; }
+.activity-ai-page .activity-ai-turn-source { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 0; padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 11px; font-weight: 400; }
+.activity-ai-page .activity-ai-turn-source::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: #d99043; }
+.activity-ai-page .activity-ai-message-meta:has(+ .is-ai-turn) .activity-ai-turn-source::before { background: #8c6bd4; }
+.activity-ai-page .activity-ai-message-meta:has(+ .is-knowledge-turn) .activity-ai-turn-source::before { background: #3d9b83; }
+.activity-ai-page .activity-ai-message-meta:has(+ .is-tool-calendar) .activity-ai-turn-source::before { background: #467ac4; }
 .activity-ai-expired-options { width: fit-content; max-width: min(760px, 100%); margin: 4px 0 12px; padding: 10px 12px; border: 1px dashed #c9a5b8; border-radius: 8px; background: #fff9fc; color: #754c62; font-size: 12px; line-height: 1.5; }
 .activity-ai-expired-options p { margin: 0 0 8px; }
 .activity-ai-expired-options button { padding: 5px 9px; border: 1px solid #bf4d83; border-radius: 6px; background: #ffffff; color: #9a3567; font: inherit; cursor: pointer; }

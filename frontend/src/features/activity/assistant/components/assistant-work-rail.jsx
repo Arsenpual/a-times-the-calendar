@@ -12,8 +12,8 @@ export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, con
               <p className="activity-ai-rail-note">ตอบคำถามในแชทให้ครบ แล้วตรวจร่างในฟอร์มก่อนบันทึก</p>
               {scheduleResolution && <p className="activity-ai-rail-conflict">เวลาที่เลือกชนเกินจำนวนที่รองรับ เลือกช่วงเวลาแนะนำในแชทหรือแก้เวลาในแผงงาน</p>}
               <div className="activity-ai-rail-fields">
+                {(conversationNodeId === "activity.date" || guidedActivity.date !== undefined) && <label>วัน<input type="date" value={guidedActivity.date || ""} disabled={pending} onChange={(event) => conversationNodeId === "activity.date" ? event.target.value && selectQuickReply({ label: event.target.value, value: event.target.value, next: "activity.title" }) : updateGuidedActivityField("date", event.target.value)} /></label>}
                 {guidedActivity.title !== undefined && <label>ชื่อ<input type="text" value={guidedActivity.title} maxLength="120" disabled={pending} onChange={(event) => updateGuidedActivityField("title", event.target.value)} /></label>}
-                {guidedActivity.date !== undefined && <label>วัน<input type="date" value={guidedActivity.date} disabled={pending} onChange={(event) => updateGuidedActivityField("date", event.target.value)} /></label>}
                 {guidedActivity.time !== undefined && <label>เวลา<input type="time" value={guidedActivity.time} disabled={pending} onChange={(event) => updateGuidedActivityField("time", event.target.value)} /></label>}
                 {guidedActivity.durationMinutes !== undefined && <label>ระยะเวลา (นาที)<input type="number" min="30" max="720" value={guidedActivity.durationMinutes} disabled={pending} onChange={(event) => updateGuidedActivityField("durationMinutes", Number(event.target.value) || "")} /></label>}
               </div>

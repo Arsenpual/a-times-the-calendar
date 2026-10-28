@@ -70,7 +70,7 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
 
 export default function AssistantTranscript({ presentation, guidedActivity, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, selectWeatherSlot, runWeatherPlan, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
-  <div className="activity-ai-messages">
+  <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
     {!guidedActivity && presentation !== "page" && (
       <details className="activity-ai-tools" open={presentation !== "page" ? true : undefined}>
         <summary>เครื่องมือและคำสั่ง</summary>
@@ -81,8 +81,14 @@ export default function AssistantTranscript({ presentation, guidedActivity, tool
     {messages.map((message, index) => (
       <div
         key={`${message.role}-${index}`}
-        className="activity-ai-message-group"
+        className={`activity-ai-message-group${presentation === "page" && message.role === "assistant" ? " is-assistant-turn" : ""}`}
       >
+        {presentation === "page" && message.role === "assistant" && (
+          <div className="activity-ai-message-meta">
+            <strong>MR.Zettascale</strong>
+            <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
+          </div>
+        )}
         <div
           className={`activity-ai-message is-${message.role}${["ai", "free-ai", "calendar"].includes(message.source) ? " is-ai-turn" : ""}${message.source === "knowledge" ? " is-knowledge-turn" : ""}${message.source === "template" ? " is-system-turn" : ""}${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}${message.followUpQuestions?.length > 0 ? " has-followups" : ""}${presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] ? ` activity-ai-tool-result is-tool-${message.toolKind}` : ""}`}
           role={presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] ? "region" : undefined}
@@ -91,9 +97,6 @@ export default function AssistantTranscript({ presentation, guidedActivity, tool
           {presentation === "page" && message.role === "assistant" && TOOL_RESULT_TITLES[message.toolKind] && <strong className="activity-ai-tool-result-title">{TOOL_RESULT_TITLES[message.toolKind]}{message.calendarRange?.label && <small>ช่วง {message.calendarRange.label}</small>}</strong>}
           <span>{presentation === "page" && message.text === INITIAL_ASSISTANT_MESSAGE.text ? "สวัสดีครับ คุยเรื่องทั่วไปได้ในโหมดคุยอิสระ ถ้าต้องการดูตารางหรือสร้างกิจกรรม ใช้เครื่องมือด้านบนหรือสลับเป็นวางแผนกิจกรรมครับ" : message.text}</span>
         </div>
-        {presentation === "page" && message.role === "assistant" && index > 0 && (
-          <small className="activity-ai-turn-source">{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>
-        )}
         {message.followUpQuestions?.length > 0 && (
           <div className={`activity-ai-answer-followups${message.commandTone ? ` is-command-tone-${message.commandTone}` : ""}`}>
             {message.followUpQuestions.map((question) => (
@@ -169,8 +172,8 @@ export default function AssistantTranscript({ presentation, guidedActivity, tool
     {presentation === "page" && guidedActivity && Object.values(guidedActivity).some(Boolean) && (
       <section className="activity-ai-guided-preview" aria-label="ข้อมูลกิจกรรมที่กำลังกรอก">
         <strong>ข้อมูลกิจกรรมที่กำลังกรอก</strong>
-        {guidedActivity.title && <span>ชื่อ: {guidedActivity.title}</span>}
         {guidedActivity.date && <span>วัน: {guidedActivity.date}</span>}
+        {guidedActivity.title && <span>ชื่อ: {guidedActivity.title}</span>}
         {guidedActivity.time && <span>เวลา: {guidedActivity.time}</span>}
         {guidedActivity.durationMinutes && <span>ระยะเวลา: {guidedActivity.durationMinutes} นาที</span>}
       </section>

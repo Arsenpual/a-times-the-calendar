@@ -348,7 +348,12 @@ router.post("/activity-template-draft", async (req, res) => {
     if (claim.status === "claimed") {
       try {
         const result = finishResult(await generateActivity(context), context);
-        if (result.ready) return res.json({ ...result, schedule: assessDraftSchedule(result.draft, context.scheduleContext), summarySource: "system-ai" });
+        if (result.ready) {
+          // The guided title is the person's chosen label, even when AI
+          // suggests a more familiar name while enriching the draft.
+          result.draft.title = title.trim();
+          return res.json({ ...result, schedule: assessDraftSchedule(result.draft, context.scheduleContext), summarySource: "system-ai" });
+        }
       } catch (error) {
         await releaseDraftUsage(claim).catch(() => {});
         claim = null;

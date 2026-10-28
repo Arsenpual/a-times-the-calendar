@@ -5,7 +5,7 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   home: {
     prompt: "อยากให้ผมช่วยเรื่องไหนครับ?",
     options: [
-      { id: "create-activity", label: "สร้างกิจกรรม", kind: "start", next: "activity.title" },
+      { id: "create-activity", label: "สร้างกิจกรรม", kind: "start", next: "activity.date" },
       { id: "about-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times", available: false },
       { id: "about-assistant", label: "MR.Zettascale ทำอะไรได้บ้าง", kind: "branch", next: "about-assistant", available: false }
     ]
@@ -24,7 +24,7 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   "about-times.activity": {
     prompt: "Activity Mode คือพื้นที่วางตารางจริงบน Week Spine: คุณเห็นกิจกรรมตามวันและเวลา เพิ่ม แก้ไข ลากย้าย ปรับช่วงเวลา ทำสำเนา ล็อกกิจกรรม และใช้หมวดหมู่กับ Tag เพื่ออ่านตารางได้ง่ายขึ้น มุมมองมีทั้งรายสัปดาห์และ Cycle 4 สัปดาห์ พร้อมสรุปกิจกรรมตามช่วงที่เลือกครับ",
     options: [
-      { id: "activity-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.title" },
+      { id: "activity-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.date" },
       { id: "activity-calendar", label: "ดู Google Calendar", kind: "branch", next: "about-times.calendar" },
       { id: "activity-data", label: "ดูข้อมูลและการซิงก์", kind: "branch", next: "about-times.data" },
       { id: "activity-home", label: "กลับหน้าหลัก", kind: "home" }
@@ -67,32 +67,32 @@ export const ACTIVITY_ASSISTANT_CONVERSATION_TREE = {
   "about-assistant": {
     prompt: "MR.Zettascale ช่วยสร้างกิจกรรมจากข้อความหรือข้อความสำเร็จรูป จัดร่างชื่อ วัน เวลา ระยะเวลา Tag และหมวดหมู่ให้ตรวจสอบก่อนบันทึกครับ",
     options: [
-      { id: "assistant-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.title" },
+      { id: "assistant-create", label: "เริ่มสร้างกิจกรรม", kind: "start", next: "activity.date" },
       { id: "assistant-times", label: "T.i.M.E.S. คืออะไร", kind: "branch", next: "about-times" },
       { id: "assistant-home", label: "กลับหน้าหลัก", kind: "home" }
     ]
   },
   "activity.title": {
     field: "title",
-    prompt: "กิจกรรมนี้ชื่ออะไรครับ? เลือกจากตัวอย่าง หรือพิมพ์รายละเอียดเองให้ AI ช่วยต่อได้เลย",
+    prompt: "กิจกรรมนี้ชื่ออะไรครับ? เลือกตัวอย่างหรือพิมพ์ชื่อเองได้เลย ผมจะใช้ชื่อนั้นตามที่พิมพ์ครับ",
     options: [
-      { id: "exercise", label: "ออกกำลังกาย", value: "ออกกำลังกาย", next: "activity.date" },
-      { id: "dinner", label: "นัดทานมื้อเย็น", value: "นัดทานมื้อเย็น", next: "activity.date" },
-      { id: "reading", label: "อ่านหนังสือ", value: "อ่านหนังสือ", next: "activity.date" },
-      { id: "homework", label: "ทำการบ้าน", value: "ทำการบ้าน", next: "activity.date" },
-      { id: "meeting", label: "ประชุม", value: "ประชุม", next: "activity.date" },
-      { id: "sleep", label: "เข้านอน", value: "เข้านอน", next: "activity.date" }
+      { id: "exercise", label: "ออกกำลังกาย", value: "ออกกำลังกาย", next: "activity.time" },
+      { id: "dinner", label: "นัดทานมื้อเย็น", value: "นัดทานมื้อเย็น", next: "activity.time" },
+      { id: "reading", label: "อ่านหนังสือ", value: "อ่านหนังสือ", next: "activity.time" },
+      { id: "homework", label: "ทำการบ้าน", value: "ทำการบ้าน", next: "activity.time" },
+      { id: "meeting", label: "ประชุม", value: "ประชุม", next: "activity.time" },
+      { id: "sleep", label: "เข้านอน", value: "เข้านอน", next: "activity.time" }
     ]
   },
   "activity.date": {
     field: "date",
-    prompt: "ต้องการทำกิจกรรมวันไหนครับ?",
+    prompt: "ต้องการเริ่มกิจกรรมวันไหนครับ? เลือกวันที่ด้านล่างหรือในแผงงานได้เลย",
     options: [
-      { id: "today", label: "วันนี้", dateOffset: 0, next: "activity.time" },
-      { id: "tomorrow", label: "พรุ่งนี้", dateOffset: 1, next: "activity.time" },
-      { id: "day-after-tomorrow", label: "มะรืนนี้", dateOffset: 2, next: "activity.time" },
-      { id: "three-days", label: "อีก 3 วัน", dateOffset: 3, next: "activity.time" },
-      { id: "next-week", label: "สัปดาห์หน้า", dateOffset: 7, next: "activity.time" }
+      { id: "today", label: "วันนี้", dateOffset: 0, next: "activity.title" },
+      { id: "tomorrow", label: "พรุ่งนี้", dateOffset: 1, next: "activity.title" },
+      { id: "day-after-tomorrow", label: "มะรืนนี้", dateOffset: 2, next: "activity.title" },
+      { id: "three-days", label: "อีก 3 วัน", dateOffset: 3, next: "activity.title" },
+      { id: "next-week", label: "สัปดาห์หน้า", dateOffset: 7, next: "activity.title" }
     ]
   },
   "activity.time": {

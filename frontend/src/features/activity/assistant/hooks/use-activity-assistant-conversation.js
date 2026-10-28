@@ -52,6 +52,25 @@ function describeScheduleConflict(schedule) {
   return `ช่วงเวลาที่ร่างไว้มีงานซ้อนกันเกิน 3 รายการ${labels.length ? `: ${labels.join(", ")}${suffix}` : ""}\nเลือกช่วงเวลาใกล้เคียงด้านล่าง หรือแก้ไขเวลาเองในฟอร์มได้ครับ`;
 }
 
+function resolveGuidedDateInput(text, today = new Date()) {
+  const value = text.trim();
+  const offsets = { "วันนี้": 0, "พรุ่งนี้": 1, "มะรืน": 2, "มะรืนนี้": 2, "สัปดาห์หน้า": 7 };
+  const daysFromNow = /^อีก\s*(\d{1,2})\s*วัน$/.exec(value);
+  const offset = offsets[value] ?? (daysFromNow ? Number(daysFromNow[1]) : null);
+  if (Number.isInteger(offset) && offset >= 0 && offset <= 31) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + offset);
+    return toDateInputValue(date);
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? value : "";
+}
+
 export function useActivityAssistantConversation({
   userId,
   open,
@@ -197,17 +216,17 @@ export function useActivityAssistantConversation({
     )
       return;
     handledStartActivityCreationRequest.current = startActivityCreationRequest;
-    const titleNode = getActivityAssistantConversationNode("activity.title");
+    const dateNode = getActivityAssistantConversationNode("activity.date");
 
     setError("");
     setInput("");
     setGuidedActivity({});
-    setConversationNodeId("activity.title");
+    setConversationNodeId("activity.date");
     setGuidedConversationMode("template");
     setMessages((current) => [
       ...current,
       { role: "user", text: "สร้างกิจกรรม", source: "template" },
-      { role: "assistant", text: titleNode.prompt, source: "template" },
+      { role: "assistant", text: dateNode.prompt, source: "template" },
     ]);
   }, [open, startActivityCreationRequest]);
   // The left-side Summary button triggers this same conversation flow, so
@@ -433,9 +452,10 @@ export function useActivityAssistantConversation({
       await finishGuidedActivity(selected);
       return;
     }
-    const nextNode = getActivityAssistantConversationNode(option.next);
+    const nextNodeId = node.field === "date" && selected.title ? "activity.time" : node.field === "title" && !selected.date ? "activity.date" : option.next;
+    const nextNode = getActivityAssistantConversationNode(nextNodeId);
     setGuidedActivity(selected);
-    setConversationNodeId(option.next);
+    setConversationNodeId(nextNodeId);
     setGuidedConversationMode("template");
     addMessages({
       role: "assistant",
@@ -479,7 +499,7 @@ export function useActivityAssistantConversation({
   const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
-    if (!text || pending || (cooldownSeconds > 0 && !suggestedText)) return;
+    if (!text || pending || (cooldownSeconds > 0 && !suggestedText && !guidedActivity)) return;
     const requestVersion = activeSessionRef.current.version;
     const requestEpoch = conversationEpochRef.current;
     const isCurrentRequest = () => isCurrentConversation(requestVersion, requestEpoch);
@@ -508,40 +528,47 @@ export function useActivityAssistantConversation({
       }
       return;
     }
-    const directTitleReply =
-      guidedActivity &&
-      conversationNodeId === "activity.title" &&
-      !suggestedText;
-    if (directTitleReply && !canUseGemini) {
-      const selected = { ...guidedActivity, title: text };
+    if (guidedActivity && conversationNodeId === "activity.date" && !suggestedText) {
+      const date = resolveGuidedDateInput(text);
+      if (!date) {
+        setError("เลือกวันที่ด้านบนหรือในแผงงาน หรือพิมพ์วันที่แบบ YYYY-MM-DD ครับ");
+        return;
+      }
+      const selected = { ...guidedActivity, date };
+      const nextNodeId = selected.title ? "activity.time" : "activity.title";
       setGuidedActivity(selected);
-      setConversationNodeId("activity.date");
+      setConversationNodeId(nextNodeId);
+      setInput("");
+      setError("");
+      setGuidedConversationMode("template");
+      onUpdateActivityForm?.({ values: selected, changedField: "date" });
+      addMessages(
+        { role: "user", text, source: "template" },
+        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" },
+      );
+      return;
+    }
+    if (guidedActivity && conversationNodeId === "activity.title" && !suggestedText) {
+      if (text.length > 120) {
+        setError("ชื่อกิจกรรมต้องไม่เกิน 120 ตัวอักษรครับ");
+        return;
+      }
+      const selected = { ...guidedActivity, title: text };
+      const nextNodeId = selected.date ? "activity.time" : "activity.date";
+      setGuidedActivity(selected);
+      setConversationNodeId(nextNodeId);
       setInput("");
       setError("");
       setGuidedConversationMode("template");
       onUpdateActivityForm?.({ values: selected, changedField: "title" });
       addMessages(
         { role: "user", text, source: "template" },
-        {
-          role: "assistant",
-          text: getActivityAssistantConversationNode("activity.date").prompt,
-          source: "template",
-        },
+        { role: "assistant", text: getActivityAssistantConversationNode(nextNodeId).prompt, source: "template" },
       );
       return;
     }
-    // A typed reply to the black title question is already authoritative user
-    // data. Save it before the network round trip so it cannot be lost.
-    const immediateGuidedActivity = directTitleReply
-      ? { ...guidedActivity, title: text }
-      : guidedActivity;
-    const immediateGuidedStep = directTitleReply
-      ? "activity.date"
-      : conversationNodeId;
-    if (directTitleReply) {
-      setGuidedActivity(immediateGuidedActivity);
-      setConversationNodeId("activity.date");
-    }
+    const immediateGuidedActivity = guidedActivity;
+    const immediateGuidedStep = conversationNodeId;
     const nextMessages = [...messages, { role: "user", text, source: "ai", commandTone }];
     setMessages(nextMessages);
     setInput("");
