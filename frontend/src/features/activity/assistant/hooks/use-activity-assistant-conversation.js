@@ -119,6 +119,9 @@ export function useActivityAssistantConversation({
   const [guidedConversationMode, setGuidedConversationMode] = useState(
     initialChat.guidedConversationMode,
   );
+  const [railMode, setRailMode] = useState(initialChat.railMode);
+  const [railSaving, setRailSaving] = useState(false);
+  const railSaveInFlightRef = useRef(false);
   const [scheduleResolution, setScheduleResolution] = useState(null);
   const [now, setNow] = useState(Date.now());
   const bottomRef = useRef(null);
@@ -221,6 +224,7 @@ export function useActivityAssistantConversation({
     setError("");
     setInput("");
     setGuidedActivity({});
+    setRailMode(false);
     setConversationNodeId("activity.date");
     setGuidedConversationMode("template");
     setMessages((current) => [
@@ -251,6 +255,7 @@ export function useActivityAssistantConversation({
     conversationNodeId,
     guidedActivity,
     guidedConversationMode,
+    railMode,
     userId,
   });
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
@@ -276,6 +281,7 @@ export function useActivityAssistantConversation({
     setCalendarFailure(null);
     setInput("");
     setGuidedActivity(null);
+    setRailMode(false);
     setConversationNodeId("home");
     setGuidedConversationMode("template");
     setScheduleResolution(null);
@@ -304,6 +310,7 @@ export function useActivityAssistantConversation({
       onOpenActivityForm(draft);
     }
     setGuidedActivity(null);
+    setRailMode(false);
     setConversationNodeId("home");
     setGuidedConversationMode("template");
   };
@@ -314,6 +321,69 @@ export function useActivityAssistantConversation({
     setScheduleResolution(null);
     setError("");
     if (activityFormOpen) onUpdateActivityForm?.({ values: selected, changedField: field });
+  };
+  const startGuidedActivityFromRail = () => {
+    if (pending || railSaving) return;
+    setError("");
+    setInput("");
+    setScheduleResolution(null);
+    setGuidedActivity({});
+    setConversationNodeId("activity.date");
+    setGuidedConversationMode("template");
+    setRailMode(true);
+  };
+  const advanceGuidedStepFromRail = (nextNode) => {
+    if (guidedActivity && !pending) setConversationNodeId(nextNode);
+  };
+  const cancelGuidedActivityFromRail = () => {
+    if (pending || railSaving) return;
+    setGuidedActivity(null);
+    setConversationNodeId("home");
+    setGuidedConversationMode("template");
+    setScheduleResolution(null);
+    setRailMode(false);
+    setError("");
+  };
+  const saveGuidedActivityFromRail = async () => {
+    if (!guidedActivity || pending || railSaving || railSaveInFlightRef.current) return;
+    const validationError = validateGuidedActivity(guidedActivity);
+    if (validationError) { setError(validationError); return; }
+    if (!onConfirmActivityPlan) { setError("ยังบันทึกกิจกรรมจากแผงงานไม่ได้"); return; }
+    const requestEpoch = conversationEpochRef.current;
+    const selected = { ...guidedActivity };
+    const start = new Date(`${selected.date}T${selected.time}`);
+    const end = new Date(start.getTime() + Number(selected.durationMinutes) * 60_000);
+    const localEnd = `${toDateInputValue(end)}T${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+    const draft = { title: selected.title.trim(), startLocal: `${selected.date}T${selected.time}`, endLocal: localEnd, allDay: false, categoryName: "", tags: [], notes: "" };
+    railSaveInFlightRef.current = true;
+    setRailSaving(true);
+    setPending(true);
+    setPendingSource("rail-save");
+    setError("");
+    try {
+      const result = await onConfirmActivityPlan([draft]);
+      if (conversationEpochRef.current !== requestEpoch || activeSessionRef.current.userId !== userId) return;
+      if (result?.created?.length !== 1) {
+        setError(result?.failed?.[0]?.error || "ยังยืนยันผลการบันทึกไม่ได้ กรุณาตรวจ Google Calendar ก่อนลองอีกครั้ง");
+        return;
+      }
+      setGuidedActivity(null);
+      setConversationNodeId("home");
+      setGuidedConversationMode("template");
+      setScheduleResolution(null);
+      setRailMode(false);
+      addMessages({ role: "assistant", text: `สร้างกิจกรรม “${draft.title}” วันที่ ${selected.date} เวลา ${selected.time} น. เรียบร้อยแล้วครับ${result.warnings?.length ? "\nมีข้อมูลประกอบบางส่วนที่บันทึกไม่สำเร็จ กรุณาตรวจรายละเอียดใน Calendar" : ""}`, source: "template" });
+    } catch (requestError) {
+      if (conversationEpochRef.current === requestEpoch && activeSessionRef.current.userId === userId)
+        setError(requestError.message || "บันทึกกิจกรรมไม่สำเร็จ");
+    } finally {
+      railSaveInFlightRef.current = false;
+      if (activeSessionRef.current.userId === userId) {
+        setRailSaving(false);
+        setPending(false);
+        setPendingSource("");
+      }
+    }
   };
   const finishGuidedActivity = async (selected) => {
     const validationError = validateGuidedActivity(selected);
@@ -397,6 +467,7 @@ export function useActivityAssistantConversation({
     if (option.kind === "home") {
       const homeNode = getActivityAssistantConversationNode("home");
       setGuidedActivity(null);
+      setRailMode(false);
       setConversationNodeId("home");
       setScheduleResolution(null);
       addMessages(
@@ -408,6 +479,7 @@ export function useActivityAssistantConversation({
     if (option.kind === "branch") {
       const nextNode = getActivityAssistantConversationNode(option.next);
       setGuidedActivity(null);
+      setRailMode(false);
       setConversationNodeId(option.next);
       addMessages(
         { role: "user", text: option.label, source: "template" },
@@ -419,6 +491,7 @@ export function useActivityAssistantConversation({
       const nextNode = getActivityAssistantConversationNode(option.next);
       setError("");
       setGuidedActivity({});
+      setRailMode(false);
       setConversationNodeId(option.next);
       setScheduleResolution(null);
       setGuidedConversationMode("template");
@@ -499,11 +572,11 @@ export function useActivityAssistantConversation({
   const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
-    if (!text || pending || (cooldownSeconds > 0 && !suggestedText && !guidedActivity)) return;
+    if (!text || pending || (cooldownSeconds > 0 && !suggestedText && (!guidedActivity || railMode))) return;
     const requestVersion = activeSessionRef.current.version;
     const requestEpoch = conversationEpochRef.current;
     const isCurrentRequest = () => isCurrentConversation(requestVersion, requestEpoch);
-    if (freeConversation && chatStyle === "free" && !suggestedText && !guidedActivity) {
+    if (!suggestedText && (railMode || (freeConversation && chatStyle === "free" && !guidedActivity))) {
       const history = messages.filter((message) => message.source === "free-ai" && ["user", "assistant"].includes(message.role)).slice(-16).map(({ role, text: turnText }) => ({ role, text: turnText }));
       setMessages((current) => [...current, { role: "user", text, source: "free-ai" }]);
       setInput("");
@@ -988,6 +1061,8 @@ export function useActivityAssistantConversation({
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    railMode,
+    railSaving,
     scheduleResolution,
     conversationNodeId,
     guidedConversationMode,
@@ -1001,6 +1076,10 @@ export function useActivityAssistantConversation({
     sendKnowledge,
     selectQuickReply,
     updateGuidedActivityField,
+    startGuidedActivityFromRail,
+    advanceGuidedStepFromRail,
+    cancelGuidedActivityFromRail,
+    saveGuidedActivityFromRail,
     retryGuidedActivityDraft: () => finishGuidedActivity(guidedActivity),
     runDailySummary,
     runWeatherPlan,

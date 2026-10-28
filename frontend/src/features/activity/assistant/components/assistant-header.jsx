@@ -1,11 +1,11 @@
-export default function AssistantHeader({ presentation, embedded = false, pending, canUseGemini, workRailOpen, setWorkRailOpen, confirmResetOpen, setConfirmResetOpen, reset, onClose }) {
+export default function AssistantHeader({ presentation, embedded = false, pending, saving = false, canUseGemini, workRailOpen, setWorkRailOpen, confirmResetOpen, setConfirmResetOpen, reset, onClose }) {
   const HeaderTag = embedded ? "div" : "header";
   return (
   <HeaderTag className="activity-ai-header">
     <div>
       <span>✦</span>
       <strong>MR.Zettascale</strong>
-      <small>{presentation === "page" ? pending ? "กำลังตอบ…" : canUseGemini ? "พร้อมคุย · ใช้ AI" : "AI จำกัดสิทธิ์ · ใช้เครื่องมือที่ไม่เรียก AI ได้" : "ผู้ช่วยวางแผนกิจกรรม"}</small>
+      <small>{presentation === "page" ? saving ? "กำลังบันทึกกิจกรรม…" : pending ? "กำลังตอบ…" : canUseGemini ? "พร้อมคุย · ใช้ AI" : "AI จำกัดสิทธิ์ · ใช้เครื่องมือที่ไม่เรียก AI ได้" : "ผู้ช่วยวางแผนกิจกรรม"}</small>
     </div>
     <div>
       {presentation === "page" && <button type="button" className="activity-ai-rail-toggle" aria-expanded={workRailOpen} aria-controls="activity-ai-work-rail" onClick={() => setWorkRailOpen((current) => !current)}>{workRailOpen ? "ซ่อนแผงงาน" : "เปิดแผงงาน"}</button>}

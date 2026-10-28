@@ -1,4 +1,4 @@
-export default function AssistantComposer({ presentation, guidedActivity, chatStyle, setChatStyle, input, setInput, send, canUseGemini, conversationNodeId, cooldownSeconds, cooldownLabel, pending, onSendTelegramMessage, sendToTelegram }) {
+export default function AssistantComposer({ presentation, guidedActivity, railMode = false, chatStyle, setChatStyle, input, setInput, send, canUseGemini, conversationNodeId, cooldownSeconds, cooldownLabel, pending, onSendTelegramMessage, sendToTelegram }) {
   return (
   <form className="activity-ai-composer" onSubmit={send}>
     {presentation === "page" && !guidedActivity && <div className="activity-ai-chat-style" role="group" aria-label="วิธีคุยกับ AI">
@@ -15,7 +15,9 @@ export default function AssistantComposer({ presentation, guidedActivity, chatSt
         }
       }}
       placeholder={
-        guidedActivity
+        railMode
+          ? "ถาม MR.Zettascale เมื่อต้องการความช่วยเหลือระหว่างกรอกข้อมูล…"
+        : guidedActivity
           ? conversationNodeId === "activity.date"
             ? "พิมพ์ วันนี้, พรุ่งนี้ หรือ YYYY-MM-DD หรือเลือกวันที่ด้านบน"
             : conversationNodeId === "activity.title"
@@ -34,9 +36,13 @@ export default function AssistantComposer({ presentation, guidedActivity, chatSt
     <button
       type="submit"
       className="btn btn-primary"
-      disabled={pending || !input.trim() || (cooldownSeconds > 0 && !guidedActivity)}
+      disabled={pending || !input.trim() || (cooldownSeconds > 0 && (!guidedActivity || railMode))}
     >
-      {guidedActivity && ["activity.date", "activity.title"].includes(conversationNodeId)
+      {railMode && cooldownSeconds > 0
+        ? `รอ ${cooldownLabel}`
+        : railMode
+          ? "ถาม AI"
+        : guidedActivity && ["activity.date", "activity.title"].includes(conversationNodeId)
         ? "ถัดไป"
         : cooldownSeconds > 0
         ? `รอ ${cooldownLabel}`

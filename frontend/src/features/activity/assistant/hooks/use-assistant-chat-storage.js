@@ -11,7 +11,7 @@ export function assistantChatStorageKey(userId) {
 }
 
 function emptyChat() {
-  return { messages: [INITIAL_ASSISTANT_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template" };
+  return { messages: [INITIAL_ASSISTANT_MESSAGE], conversationNodeId: "home", guidedActivity: null, guidedConversationMode: "template", railMode: false };
 }
 
 export function loadSavedChat(userId) {
@@ -37,7 +37,8 @@ export function loadSavedChat(userId) {
       messages: messages.length ? messages : [INITIAL_ASSISTANT_MESSAGE],
       conversationNodeId: typeof saved?.conversationNodeId === "string" ? saved.conversationNodeId : "home",
       guidedActivity: saved?.guidedActivity && typeof saved.guidedActivity === "object" ? saved.guidedActivity : null,
-      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template"
+      guidedConversationMode: saved?.guidedConversationMode === "ai" ? "ai" : "template",
+      railMode: saved?.railMode === true && Boolean(saved?.guidedActivity && typeof saved.guidedActivity === "object")
     };
   } catch { return emptyChat(); }
 }
@@ -47,7 +48,7 @@ export function useInitialAssistantChat(userId) {
   return initialChat;
 }
 
-export function usePersistAssistantChat({ userId, messages, conversationNodeId, guidedActivity, guidedConversationMode }) {
+export function usePersistAssistantChat({ userId, messages, conversationNodeId, guidedActivity, guidedConversationMode, railMode }) {
   useEffect(() => {
     const key = assistantChatStorageKey(userId);
     if (!key) return;
@@ -55,8 +56,8 @@ export function usePersistAssistantChat({ userId, messages, conversationNodeId, 
       window.localStorage.setItem(key, JSON.stringify({
         messages: messages.slice(-120).map(({ role, text, source, sourceLabel, toolKind, toolResultCount, calendarRange, commandTone }) => ({
           role, text: text.slice(0, 1_200), source, sourceLabel, toolKind, toolResultCount, calendarRange, commandTone
-        })), conversationNodeId, guidedActivity, guidedConversationMode
+        })), conversationNodeId, guidedActivity, guidedConversationMode, railMode
       }));
     } catch { /* Storage may be disabled or full; chat still works in memory. */ }
-  }, [userId, messages, conversationNodeId, guidedActivity, guidedConversationMode]);
+  }, [userId, messages, conversationNodeId, guidedActivity, guidedConversationMode, railMode]);
 }

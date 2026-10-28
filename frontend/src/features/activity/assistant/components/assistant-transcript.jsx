@@ -68,7 +68,7 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
   );
 }
 
-export default function AssistantTranscript({ presentation, guidedActivity, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, selectWeatherSlot, runWeatherPlan, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
+export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, selectWeatherSlot, runWeatherPlan, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
   <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
     {!guidedActivity && presentation !== "page" && (
@@ -169,7 +169,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, tool
         </section>}
       </div>
     ))}
-    {presentation === "page" && guidedActivity && Object.values(guidedActivity).some(Boolean) && (
+    {presentation === "page" && guidedActivity && !railMode && Object.values(guidedActivity).some(Boolean) && (
       <section className="activity-ai-guided-preview" aria-label="ข้อมูลกิจกรรมที่กำลังกรอก">
         <strong>ข้อมูลกิจกรรมที่กำลังกรอก</strong>
         {guidedActivity.date && <span>วัน: {guidedActivity.date}</span>}
@@ -203,7 +203,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, tool
         <button type="button" onClick={retryCalendarFailure} disabled={pending}>ลองอีกครั้ง</button>
       </div>
     </section>}
-    {pending && (
+    {pending && pendingSource !== "rail-save" && (
       <p
         className={`activity-ai-message is-assistant is-thinking${pendingSource === "ai" ? " is-ai-turn" : ""}`}
       >

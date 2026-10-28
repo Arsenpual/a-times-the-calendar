@@ -15,10 +15,10 @@ try {
   const ai = page.getByRole('region',{name:'AI Mode MR.Zettascale'});
   await ai.waitFor();
   await ai.getByRole('button',{name:'สร้างกิจกรรม',exact:true}).click();
-  await ai.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
+  await ai.getByLabel('คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว').getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
   await ai.getByRole('button',{name:'ประชุม',exact:true}).click();
   await ai.getByRole('button',{name:'ช่วงเช้า · 09:00'}).click();
-  await ai.getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
+  await ai.getByLabel('คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว').getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
   const modal=page.locator('.modal-box');
   await modal.waitFor();
   assert.equal(await modal.getByLabel('ชื่อกิจกรรม').inputValue(),'ประชุม');
@@ -38,10 +38,10 @@ try {
   assert.equal(await page.getByTestId('save-attempts').textContent(),'2');
   assert.equal(await page.getByTestId('saved-title').textContent(),'ประชุมแก้ไขก่อนบันทึก');
   await ai.getByRole('button',{name:'สร้างกิจกรรม',exact:true}).click();
-  await ai.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
+  await ai.getByLabel('คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว').getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
   await ai.getByRole('button',{name:'ประชุม',exact:true}).click();
   await ai.getByRole('button',{name:'ช่วงเช้า · 09:00'}).click();
-  await ai.getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
+  await ai.getByLabel('คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว').getByRole('button',{name:'1 ชั่วโมง',exact:true}).click();
   await modal.waitFor();
   await modal.getByRole('button',{name:'ยกเลิก',exact:true}).click();
   assert.equal(await page.locator('.modal-box').count(),0);

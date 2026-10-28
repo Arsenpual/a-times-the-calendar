@@ -30,10 +30,10 @@ const AI_COMMANDS = [
 ];
 
 const ACTIVITY_STEPS = [
-  { node: "activity.date", label: "วัน" },
-  { node: "activity.title", label: "ชื่อ" },
-  { node: "activity.time", label: "เวลา" },
-  { node: "activity.duration", label: "ระยะเวลา" },
+  { node: "activity.date", field: "date", label: "วัน" },
+  { node: "activity.title", field: "title", label: "ชื่อ" },
+  { node: "activity.time", field: "time", label: "เวลา" },
+  { node: "activity.duration", field: "durationMinutes", label: "ระยะเวลา" },
 ];
 
 
@@ -139,6 +139,8 @@ export default function ActivityAssistantDialog(props) {
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    railMode,
+    railSaving,
     scheduleResolution,
     conversationNodeId,
     guidedConversationMode,
@@ -154,6 +156,10 @@ export default function ActivityAssistantDialog(props) {
     sendKnowledge,
     selectQuickReply,
     updateGuidedActivityField,
+    startGuidedActivityFromRail,
+    advanceGuidedStepFromRail,
+    cancelGuidedActivityFromRail,
+    saveGuidedActivityFromRail,
     retryGuidedActivityDraft,
     runDailySummary,
     retryCalendarFailure,
@@ -192,7 +198,7 @@ export default function ActivityAssistantDialog(props) {
     </details>
   );
   if (!open) return null;
-  const assistantHeader = <AssistantHeader presentation={presentation} embedded={presentation === "page" && Boolean(headerTarget)} pending={pending} canUseGemini={canUseGemini} workRailOpen={workRailOpen} setWorkRailOpen={setWorkRailOpen} confirmResetOpen={confirmResetOpen} setConfirmResetOpen={setConfirmResetOpen} reset={reset} onClose={onClose} />;
+  const assistantHeader = <AssistantHeader presentation={presentation} embedded={presentation === "page" && Boolean(headerTarget)} pending={pending || railSaving} saving={railSaving} canUseGemini={canUseGemini} workRailOpen={workRailOpen} setWorkRailOpen={setWorkRailOpen} confirmResetOpen={confirmResetOpen} setConfirmResetOpen={setConfirmResetOpen} reset={reset} onClose={onClose} />;
   return (
     <>
       {presentation === "page" && headerTarget && createPortal(assistantHeader, headerTarget)}
@@ -227,7 +233,7 @@ export default function ActivityAssistantDialog(props) {
             ใช้ {assistantInsight.title} เป็นบริบทเฉพาะ session นี้
           </p>
         )}
-        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} selectWeatherSlot={selectWeatherSlot} runWeatherPlan={runWeatherPlan} confirmActivityPlan={confirmActivityPlan} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
+        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} selectWeatherSlot={selectWeatherSlot} runWeatherPlan={runWeatherPlan} confirmActivityPlan={confirmActivityPlan} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
         {!guidedActivity && (
           <div className="activity-ai-choice-strip activity-ai-create-shortcut">
             <div className="activity-ai-quick-replies">
@@ -237,7 +243,7 @@ export default function ActivityAssistantDialog(props) {
             </div>
           </div>
         )}
-        {guidedActivity && guidedConversationMode === "template" && (
+        {guidedActivity && !railMode && guidedConversationMode === "template" && (
           <div
             className="activity-ai-choice-strip"
             aria-label="คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว"
@@ -275,9 +281,9 @@ export default function ActivityAssistantDialog(props) {
             </div>
           </div>
         )}
-        <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={onSendTelegramMessage} sendToTelegram={sendToTelegram} />
+        <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={onSendTelegramMessage} sendToTelegram={sendToTelegram} />
         </div>
-        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} retryGuidedActivityDraft={retryGuidedActivityDraft} selectQuickReply={selectQuickReply} toolCommands={toolCommands} weatherTool={<WeatherPlanningTool onRun={runWeatherPlan} pending={pending} />} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
+        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} toolCommands={toolCommands} weatherTool={<WeatherPlanningTool onRun={runWeatherPlan} pending={pending} />} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
         </div>
       </section>
     </div>

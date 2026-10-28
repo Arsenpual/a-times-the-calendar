@@ -10,7 +10,7 @@
 | คำถามสำเร็จรูป | `POST /api/ai/product-knowledge` หรือข้อความ template ใน hook | ไม่ใช้ Gemini quota; ใช้ได้แม้บัญชีไม่มีสิทธิ์ AI |
 | ดูตาราง / หาเวลาว่าง | เครื่องมือ Calendar และการจัดช่วงเวลาจาก backend เดิม | แสดงช่วงข้อมูลที่อ่านได้จริง; ติดป้าย `ปฏิทิน` ถ้าไม่ได้เรียก AI |
 | สรุปวันนี้ | `onOpenDailySummary` และ `buildDailySummaryChat` | เป็นการจัดรูปแบบข้อมูลจริงที่อ่านได้; ไม่ติดป้าย AI เมื่อไม่ได้เรียก AI |
-| สร้างกิจกรรม | guided flow, `createActivityPopupHandoff`, `ActivityModal` | ร่างต้องครบและผ่าน validation; ผู้ใช้ตรวจในฟอร์มและกดบันทึกเองก่อนเขียน Calendar |
+| สร้างกิจกรรม | guided flow ในแชท, แผงงานด้านขวา, `ActivityModal`, `onConfirmActivityPlan` | แชทยังเปิดร่างให้ตรวจในฟอร์ม; แผงงานกรอกวัน ชื่อ เวลา ระยะเวลาทีละขั้นและบันทึกตรงได้เมื่อครบทั้งสี่ขั้น โดยใช้กฎตรวจเวลาซ้อนและการบันทึก Calendar เดิม |
 | แผนหลายกิจกรรม | `ActivityPlanPreview` และ `onConfirmActivityPlan` | เลือก/แก้ร่างและยืนยันชุดก่อนส่งบันทึก; ห้ามคัดลอก `findSlots` จำลองจาก mockup |
 | ข้อความ Telegram | `useTelegramWebChat` ผ่าน props ของหน้า AI | สำเนาแยกจากบทสนทนา AI; ปุ่มเริ่มแชทใหม่ล้างเฉพาะ AI, การล้างสำเนา Telegram เป็นอีก action |
 | โควต้า/สิทธิ์ | `GET /api/ai/activity-assistant-status` | แยก `ไม่มีสิทธิ์`, `ใช้ครบโควต้า`, `ปิดโดยระบบ` จากเครื่องมือที่ไม่ใช้ AI |
