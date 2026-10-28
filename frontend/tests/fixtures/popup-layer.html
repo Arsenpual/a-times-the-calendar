@@ -1,0 +1,20 @@
+<!doctype html><html lang="th"><meta charset="UTF-8"><div id="root"></div>
+<script type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { PopupLayerProvider, PopupLayerItem } from '/src/shared/ui/popup-layer.jsx';
+import '/src/index.css';
+const h = React.createElement;
+function Fixture() {
+  const [visible, setVisible] = useState(true);
+  const [version, setVersion] = useState(0);
+  return h(PopupLayerProvider, null,
+    h('button', {onClick:()=>setVersion(v=>v+1)}, 'อัปเดตหน้า'),
+    h('button', {onClick:()=>setVisible(v=>!v)}, 'สลับแจ้งเตือน'),
+    visible && h(PopupLayerItem, {id:'first', region:'top-right',priority:1}, h('div',{className:'error-banner'},'แจ้งเตือนแรก ',version,h('button',{onClick:()=>setVersion(v=>v+1)},'ลองอีกครั้ง'))),
+    h(PopupLayerItem,{id:'second',region:'top-right'},h('div',{className:'error-banner'},'แจ้งเตือนที่สอง')),
+    h(PopupLayerItem,{id:'left',region:'top-left'},h('div',{className:'error-banner'},'แจ้งเตือนซ้าย')),
+    h(PopupLayerItem,{id:'other',region:'bottom-right'},h('div',{className:'loading-banner'},'กำลังโหลด')));
+}
+createRoot(document.getElementById('root')).render(h(React.StrictMode,null,h(Fixture)));
+</script></html>

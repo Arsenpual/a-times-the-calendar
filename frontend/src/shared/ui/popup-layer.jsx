@@ -5,7 +5,7 @@ const PopupLayerContext = createContext(null);
 const POPUP_REGIONS = ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"];
 const DEFAULT_VISIBLE_ITEMS = 4;
 
-function PopupRegion({ name, items }) {
+function PopupRegion({ name, items, dismiss }) {
   const [expanded, setExpanded] = useState(false);
   const orderedItems = [...items].sort((a, b) => b.priority - a.priority || a.order - b.order);
   const visibleItems = expanded ? orderedItems : orderedItems.slice(0, DEFAULT_VISIBLE_ITEMS);
@@ -23,6 +23,11 @@ function PopupRegion({ name, items }) {
             data-popup-priority={item.priority}
           >
             {item.content}
+            {(name === "top-right" || name === "top-left") && (
+              <button type="button" className="popup-layer__close" onClick={() => dismiss(item.id)} aria-label="ปิดข้อความแจ้งเตือน" title="ปิด">
+                <span aria-hidden="true">×</span>
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -43,8 +48,10 @@ function PopupRegion({ name, items }) {
 export function PopupLayerProvider({ children }) {
   const [items, setItems] = useState([]);
   const nextOrder = useRef(0);
+  const dismissedIds = useRef(new Set());
 
   const publish = useCallback((entry) => {
+    if (dismissedIds.current.has(entry.id)) return;
     setItems((current) => {
       const existing = current.find((item) => item.id === entry.id);
       const next = { ...entry, order: existing?.order ?? nextOrder.current++ };
@@ -55,6 +62,12 @@ export function PopupLayerProvider({ children }) {
   }, []);
 
   const remove = useCallback((id) => {
+    dismissedIds.current.delete(id);
+    setItems((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const dismiss = useCallback((id) => {
+    dismissedIds.current.add(id);
     setItems((current) => current.filter((item) => item.id !== id));
   }, []);
 
@@ -66,7 +79,7 @@ export function PopupLayerProvider({ children }) {
       {typeof document !== "undefined" && createPortal(
         <div className="popup-layer" aria-live="polite" aria-relevant="additions removals">
           {POPUP_REGIONS.map((region) => (
-            <PopupRegion key={region} name={region} items={items.filter((item) => item.region === region)} />
+            <PopupRegion key={region} name={region} items={items.filter((item) => item.region === region)} dismiss={dismiss} />
           ))}
         </div>,
         document.body
@@ -81,8 +94,12 @@ export function PopupLayerItem({ id, region = "top-right", priority = 0, classNa
   useEffect(() => {
     if (!layer || !id) return undefined;
     layer.publish({ id, region, priority, className, content: children });
-    return () => layer.remove(id);
   }, [layer, id, region, priority, className, children]);
+
+  useEffect(() => {
+    if (!layer || !id) return undefined;
+    return () => layer.remove(id);
+  }, [layer, id]);
 
   // Isolated component previews/tests may render a feature without the app
   // provider. Keep the message visible in-place instead of silently dropping

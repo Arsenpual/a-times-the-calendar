@@ -31,6 +31,7 @@ const unitTests = [
 ];
 
 const browserTests = [
+  "tests/popup-layer-browser.mjs",
   "tests/app-taskbar-browser.mjs",
   "tests/assistant-review-browser.mjs",
   "tests/assistant-tool-restore-browser.mjs",

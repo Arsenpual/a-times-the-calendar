@@ -35,11 +35,37 @@
 }
 
 .popup-layer__item {
+  position: relative;
   width: 100%;
   flex: 0 0 auto;
   pointer-events: auto;
   animation: popup-layer-enter 180ms ease-out both;
 }
+
+.popup-layer__region:is(.popup-layer__region--top-right, .popup-layer__region--top-left) .popup-layer__item > :not(.popup-layer__close) {
+  padding-right: 50px;
+}
+
+.popup-layer__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.popup-layer__close:hover { background: var(--hover); }
+.popup-layer__close:focus-visible { outline: 2px solid var(--portal-focus); outline-offset: 2px; }
 
 .reminder-popup-surface {
   --g-red-light: color-mix(in srgb, #ea4335 14%, var(--bg));
