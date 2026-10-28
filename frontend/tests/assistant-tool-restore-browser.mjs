@@ -20,7 +20,7 @@ try {
   await page.evaluate(()=>localStorage.setItem('times-test-schedule-options','1'));
   await openAi();
   let ai=page.getByRole('region',{name:'AI Mode MR.Zettascale'});
-  await ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
+  await ai.locator('.activity-ai-messages').getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
   await ai.locator('.activity-ai-schedule-options button').first().waitFor();
   const storageKey='times.activity-ai-assistant.chat.v2:fixture-ai-mode';
   await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key)||'{}').messages?.some(message=>message.toolKind==='scheduling'&&message.toolResultCount===1),storageKey);
@@ -34,7 +34,7 @@ try {
   assert.equal(await ai.locator('.activity-ai-schedule-options button').count(),0);
   await expired.getByRole('button',{name:'คำนวณใหม่'}).click();
   await ai.locator('.activity-ai-schedule-options button').first().waitFor();
-  await ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
+  await ai.locator('.activity-ai-messages').getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
   await ai.locator('.activity-ai-plan-preview').waitFor();
   await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key)||'{}').messages?.some(message=>message.toolKind==='planning'&&message.toolResultCount===2),storageKey);
   assert.equal(await page.evaluate(key=>localStorage.getItem(key).includes('planDrafts'),storageKey),false,'plan drafts are not persisted');

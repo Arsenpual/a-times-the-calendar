@@ -74,7 +74,13 @@ try {
     }
   }
   assert.equal(await page.getByRole('dialog').count(),0,'AI is a workspace, not a modal');
-  assert.equal(await ai.locator('.activity-ai-tools').getAttribute('open'),null);
+  const chatCommands = ai.locator('.activity-ai-messages .activity-ai-chat-commands');
+  assert.equal(await chatCommands.isVisible(),true,'colored preset commands are visible in chat');
+  for (const category of ['คำสั่งสร้างกิจกรรม','คำสั่งวางแผน','คำสั่งดูตาราง','คำสั่ง AI','คำถามทั่วไป']) {
+    assert.equal(await chatCommands.getByRole('region',{name:category}).isVisible(),true,`${category} is available in chat`);
+  }
+  assert.equal(await chatCommands.getByRole('region',{name:'คำสั่ง AI'}).getByRole('button',{name:'จัดตารางวันนี้'}).isDisabled(),true,'AI commands respect access status');
+  assert.equal(await workRail.locator('.activity-ai-command-grid').count(),0,'preset commands are not duplicated in the work rail');
   await page.setViewportSize({width:1440,height:900});
   const input = ai.getByRole('textbox',{name:'ข้อความถึง MR.Zettascale'});
   const chatStyle = ai.getByRole('group',{name:'วิธีคุยกับ AI'});
@@ -134,19 +140,19 @@ try {
   await input.press('Enter');
   await ai.getByText('คำตอบวางแผนใหม่').waitFor();
   assert.equal(await ai.getByText('คำตอบวางแผนเก่า').count(),0,'late planning reply must not enter a new chat');
-  await workRail.getByRole('button',{name:'วันนี้มีอะไร'}).click();
+  await chatCommands.getByRole('button',{name:'วันนี้มีอะไร'}).click();
   const calendarResult = ai.getByRole('region',{name:'ผลการอ่านปฏิทิน'});
   await calendarResult.getByText('ตารางวันนี้:',{exact:false}).waitFor();
   assert.match(await calendarResult.innerText(),/ช่วง 2026-10-27/);
   assert.equal(await calendarResult.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(243, 247, 253)');
   assert.equal(await ai.locator('.activity-ai-turn-source').last().textContent(),'ปฏิทิน');
-  await workRail.getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
+  await chatCommands.getByRole('button',{name:'หาเวลาออกกำลังกาย'}).click();
   const emptySchedule = ai.getByRole('region',{name:'ช่วงเวลาว่างที่ตรวจพบ'});
   await emptySchedule.getByText(/ยังไม่พบช่วงเวลาว่าง/).waitFor();
   assert.equal(await emptySchedule.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 244, 248)');
   assert.equal(await ai.locator('.activity-ai-schedule-options').count(),0,'empty scheduling result must not offer invented slots');
   await page.evaluate(()=>{window.testCalendarFailure='CALENDAR_READ_FAILED';});
-  await workRail.getByRole('button',{name:'วันนี้มีอะไร'}).click();
+  await chatCommands.getByRole('button',{name:'วันนี้มีอะไร'}).click();
   const calendarFailure = ai.getByRole('alert',{name:'อ่าน Google Calendar ไม่สำเร็จ'});
   await calendarFailure.getByText(/การอ่านข้อมูลล้มเหลวชั่วคราว/).waitFor();
   assert.equal(await ai.getByRole('region',{name:'ผลการอ่านปฏิทิน'}).count(),1,'failed read must not look like an empty calendar');
@@ -155,19 +161,19 @@ try {
   await page.waitForFunction(()=>document.querySelectorAll('[aria-label="ผลการอ่านปฏิทิน"]').length===2);
   assert.equal(await calendarFailure.count(),0);
   await page.evaluate(()=>{window.testCalendarFailure='CALENDAR_REAUTH_REQUIRED';});
-  await workRail.getByRole('button',{name:'วันนี้มีอะไร'}).click();
+  await chatCommands.getByRole('button',{name:'วันนี้มีอะไร'}).click();
   await calendarFailure.getByText(/ต้องเชื่อม Google Calendar อีกครั้ง/).waitFor();
   await calendarFailure.getByRole('button',{name:'ยืนยันตัวตนกับ Google'}).click();
   assert.equal(await page.getByTestId('reauth-count').textContent(),'1');
   await page.evaluate(()=>{window.testCalendarFailure=null;});
   await page.evaluate(()=>{window.testSummaryFailure=true;});
-  await workRail.getByRole('button',{name:'สรุปวันนี้'}).click();
+  await chatCommands.getByRole('button',{name:'สรุปวันนี้'}).click();
   await calendarFailure.getByText(/ต้องเชื่อม Google Calendar อีกครั้ง/).waitFor();
   await page.evaluate(()=>{window.testSummaryFailure=false;});
   await calendarFailure.getByRole('button',{name:'ลองอีกครั้ง'}).click();
   await ai.getByText(/วันนี้ยังไม่มีกิจกรรมที่วางแผนไว้/).waitFor();
   assert.equal(await calendarFailure.count(),0);
-  await workRail.getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
+  await chatCommands.getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
   const planPreview = ai.getByRole('region',{name:'ร่างแผนกิจกรรม'});
   await planPreview.getByRole('button',{name:'สร้าง 2 กิจกรรม'}).waitFor();
   await planPreview.getByRole('button',{name:'แก้ไข'}).first().click();
@@ -182,7 +188,7 @@ try {
   await planPreview.getByRole('button',{name:'สร้าง 2 กิจกรรม'}).click();
   assert.deepEqual(await page.evaluate(()=>window.savedPlanDrafts?.map(draft=>draft.title)),['อ่านหนังสือสอบ','ออกกำลังกาย']);
   await page.evaluate(()=>{window.testPlanPartial=true;});
-  await workRail.getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
+  await chatCommands.getByRole('button',{name:'วางแผนพรุ่งนี้'}).click();
   const partialPlan = ai.getByRole('region',{name:'ร่างแผนกิจกรรม'}).last();
   await partialPlan.getByRole('button',{name:'สร้าง 2 กิจกรรม'}).click();
   await ai.getByText(/สร้างสำเร็จ 1 รายการ และไม่สำเร็จ 1 รายการ/).waitFor();

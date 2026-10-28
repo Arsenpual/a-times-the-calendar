@@ -8,7 +8,7 @@ function nextDate(offset) {
   return toDateInputValue(date);
 }
 
-export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, railMode, railSaving, conversationNodeId, scheduleResolution, pending, updateGuidedActivityField, advanceGuidedStepFromRail, startGuidedActivityFromRail, cancelGuidedActivityFromRail, saveGuidedActivityFromRail, retryGuidedActivityDraft, toolCommands, weatherTool, renderTelegramArchive, activitySteps }) {
+export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, railMode, railSaving, conversationNodeId, scheduleResolution, pending, updateGuidedActivityField, advanceGuidedStepFromRail, startGuidedActivityFromRail, cancelGuidedActivityFromRail, saveGuidedActivityFromRail, retryGuidedActivityDraft, renderTelegramArchive, activitySteps }) {
   const [chosenStep, setChosenStep] = useState(null);
   const hasGuidedActivity = Boolean(guidedActivity);
   useEffect(() => { setChosenStep(null); }, [conversationNodeId, hasGuidedActivity]);
@@ -80,8 +80,6 @@ export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, rai
         </div> : <>
           <h2>เครื่องมือ</h2>
           <button type="button" className="activity-ai-rail-create" onClick={startGuidedActivityFromRail} disabled={disabled}>+ สร้างกิจกรรมในแผงงาน</button>
-          {toolCommands}
-          {weatherTool}
         </>}
       </div>
       {renderTelegramArchive("rail")}

@@ -37,27 +37,13 @@ const ACTIVITY_STEPS = [
 ];
 
 
-function WeatherPlanningTool({ onRun, pending }) {
-  const [location, setLocation] = useState("");
-  const [activity, setActivity] = useState("outdoor");
-  const [day, setDay] = useState("today");
-  const [durationHours, setDurationHours] = useState(1);
-  return <section className="activity-ai-weather-tool" aria-label="อากาศกับกิจกรรม">
-    <h3>อากาศกับกิจกรรม</h3>
-    <p>ดูพยากรณ์และเลือกช่วงเวลา ก่อนเปิดร่างให้ตรวจ</p>
-    <form onSubmit={(event) => { event.preventDefault(); onRun({ location, activity, day, durationHours }); }}>
-      <label>สถานที่<input value={location} maxLength="120" onChange={(event) => setLocation(event.target.value)} placeholder="เช่น กรุงเทพฯ" /></label>
-      <label>กิจกรรม<select value={activity} onChange={(event) => setActivity(event.target.value)}><option value="outdoor">กลางแจ้ง</option><option value="exercise">ออกกำลัง</option><option value="travel">เดินทาง</option><option value="laundry">ซัก/ตากผ้า</option></select></label>
-      <label>วัน<select value={day} onChange={(event) => setDay(event.target.value)}><option value="today">วันนี้</option><option value="tomorrow">พรุ่งนี้</option></select></label>
-      <label>ระยะเวลา<select value={durationHours} onChange={(event) => setDurationHours(Number(event.target.value))}><option value="1">1 ชั่วโมง</option><option value="2">2 ชั่วโมง</option><option value="3">3 ชั่วโมง</option></select></label>
-      <button type="submit" disabled={pending || !location.trim()}>ดูอากาศและช่วงแนะนำ</button>
-    </form>
-  </section>;
-}
-
-function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
+function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onCreateActivity, onDailySummary, onSend, onSendKnowledge, pending, rootQuestions }) {
   return (
     <div className="activity-ai-command-grid">
+      <section className="activity-ai-centered-questions activity-ai-create-questions" aria-label="คำสั่งสร้างกิจกรรม">
+        <small>สร้างกิจกรรม</small>
+        <div><button type="button" onClick={onCreateActivity} disabled={pending}>สร้างกิจกรรม</button></div>
+      </section>
       <section className="activity-ai-centered-questions activity-ai-planning-questions" aria-label="คำสั่งวางแผน">
         <small>วางแผนกิจกรรม</small>
         <div>
@@ -79,18 +65,16 @@ function ActivityAssistantCommandGroups({ canUseGemini, cooldownSeconds, onDaily
         ))}
         </div>
       </section>
-      {canUseGemini && (
-        <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="คำสั่ง AI">
-          <small>ทดลอง AI สำหรับนักพัฒนา · ใช้ AI quota 1 ครั้ง</small>
-          <div>
-          {AI_COMMANDS.map((command) => (
-            <button key={command.label} type="button" onClick={() => onSend(null, command.text, "ai")} disabled={pending || cooldownSeconds > 0}>
-              {command.label}
-            </button>
-          ))}
-          </div>
-        </section>
-      )}
+      <section className="activity-ai-centered-questions activity-ai-calendar-questions" aria-label="คำสั่ง AI">
+        <small>{canUseGemini ? "ทดลอง AI สำหรับนักพัฒนา · ใช้ AI quota 1 ครั้ง" : "ทดลอง AI สำหรับนักพัฒนา · ต้องมีสิทธิ์ AI"}</small>
+        <div>
+        {AI_COMMANDS.map((command) => (
+          <button key={command.label} type="button" onClick={() => onSend(null, command.text, "ai")} disabled={pending || !canUseGemini || cooldownSeconds > 0}>
+            {command.label}
+          </button>
+        ))}
+        </div>
+      </section>
       {rootQuestions.length > 0 && (
         <section className="activity-ai-centered-questions activity-ai-knowledge-questions" aria-label="คำถามทั่วไป">
           <small>คำถามทั่วไป · ไม่ใช้ข้อมูลส่วนตัว · ไม่ใช้ AI quota</small>
@@ -167,8 +151,6 @@ export default function ActivityAssistantDialog(props) {
     selectScheduleOption,
     confirmActivityPlan,
     sendToTelegram,
-    runWeatherPlan,
-    selectWeatherSlot,
   } = useActivityAssistantConversation({ ...props, closeOnEscape: presentation !== "page", clearTelegramOnReset: presentation !== "page", freeConversation: presentation === "page", openFormOnGuidedStart: presentation !== "page" });
   const toolCommands = <ActivityAssistantCommandGroups
     canUseGemini={canUseGemini}
@@ -176,6 +158,7 @@ export default function ActivityAssistantDialog(props) {
     onDailySummary={onOpenDailySummary ? runDailySummary : null}
     onSend={send}
     onSendKnowledge={sendKnowledge}
+    onCreateActivity={() => selectQuickReply({ kind: "start", next: "activity.date" })}
     pending={pending}
     rootQuestions={rootQuestions}
   />;
@@ -233,16 +216,7 @@ export default function ActivityAssistantDialog(props) {
             ใช้ {assistantInsight.title} เป็นบริบทเฉพาะ session นี้
           </p>
         )}
-        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} selectWeatherSlot={selectWeatherSlot} runWeatherPlan={runWeatherPlan} confirmActivityPlan={confirmActivityPlan} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
-        {!guidedActivity && (
-          <div className="activity-ai-choice-strip activity-ai-create-shortcut">
-            <div className="activity-ai-quick-replies">
-              <button type="button" onClick={() => selectQuickReply({ kind: "start", next: "activity.date" })} disabled={pending}>
-                สร้างกิจกรรม
-              </button>
-            </div>
-          </div>
-        )}
+        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} confirmActivityPlan={confirmActivityPlan} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
         {guidedActivity && !railMode && guidedConversationMode === "template" && (
           <div
             className="activity-ai-choice-strip"
@@ -283,7 +257,7 @@ export default function ActivityAssistantDialog(props) {
         )}
         <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={onSendTelegramMessage} sendToTelegram={sendToTelegram} />
         </div>
-        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} toolCommands={toolCommands} weatherTool={<WeatherPlanningTool onRun={runWeatherPlan} pending={pending} />} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
+        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
         </div>
       </section>
     </div>

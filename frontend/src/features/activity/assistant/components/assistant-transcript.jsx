@@ -68,16 +68,9 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
   );
 }
 
-export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, selectWeatherSlot, runWeatherPlan, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
+export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
   <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
-    {!guidedActivity && presentation !== "page" && (
-      <details className="activity-ai-tools" open={presentation !== "page" ? true : undefined}>
-        <summary>เครื่องมือและคำสั่ง</summary>
-        {toolCommands}
-      </details>
-    )}
-    {!guidedActivity && presentation === "page" && <details className="activity-ai-tools activity-ai-mobile-tools"><summary>เครื่องมือและคำสั่ง</summary>{toolCommands}</details>}
     {messages.map((message, index) => (
       <div
         key={`${message.role}-${index}`}
@@ -148,24 +141,15 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
             ))}
           </div>
         )}
-        {message.weatherSlots?.length > 0 && <div className="activity-ai-weather-slots" aria-label="ช่วงเวลาที่อากาศผ่านเกณฑ์">
-          {message.weatherSlots.map((slot) => <button key={`${slot.start}-${slot.end}`} type="button" onClick={() => selectWeatherSlot(slot, message.weatherContext)} disabled={pending}>ร่างกิจกรรม · {slot.at} · {slot.score} คะแนน</button>)}
-        </div>}
-        {message.toolKind === "weather" && message.weatherContext?.activityId && <div className="activity-ai-weather-followup">
-          <button type="button" onClick={() => runWeatherPlan({ location: message.weatherContext.location, activity: message.weatherContext.activityId, day: message.weatherContext.day === "today" ? "tomorrow" : "today", durationHours: message.weatherContext.durationHours })} disabled={pending}>
-            {message.weatherContext.day === "today" ? "พรุ่งนี้ที่เดิม" : "วันนี้ที่เดิม"}
-          </button>
-        </div>}
         {message.planDrafts?.length > 0 && (
           <ActivityPlanPreview initialDrafts={message.planDrafts} pending={pending} onConfirm={confirmActivityPlan} />
         )}
         {presentation === "page" && message.toolResultCount > 0 && (
           (message.toolKind === "scheduling" && !message.scheduleOptions?.length) ||
-          (message.toolKind === "planning" && !message.planDrafts?.length) ||
-          (message.toolKind === "weather" && !message.weatherSlots?.length)
+          (message.toolKind === "planning" && !message.planDrafts?.length)
         ) && <section className="activity-ai-expired-options" aria-label="ตัวเลือกหมดอายุ">
-          <p>{message.toolKind === "weather" ? "ช่วงแนะนำจากพยากรณ์ครั้งก่อนหมดอายุแล้ว" : "ตัวเลือกจากตารางครั้งก่อนหมดอายุแล้ว คำนวณใหม่เพื่อดูช่วงเวลาล่าสุด"}</p>
-          {message.toolKind === "weather" ? <p>เลือกสถานที่และกดดูอากาศอีกครั้งในแผงงาน</p> : messages[index - 1]?.role === "user" && <button type="button" onClick={() => send(null, messages[index - 1].text, message.commandTone || "planning")} disabled={pending}>คำนวณใหม่</button>}
+          <p>ตัวเลือกจากตารางครั้งก่อนหมดอายุแล้ว คำนวณใหม่เพื่อดูช่วงเวลาล่าสุด</p>
+          {messages[index - 1]?.role === "user" && <button type="button" onClick={() => send(null, messages[index - 1].text, message.commandTone || "planning")} disabled={pending}>คำนวณใหม่</button>}
         </section>}
       </div>
     ))}
@@ -213,6 +197,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
       </p>
     )}
     <div ref={bottomRef} />
+    {!guidedActivity && <section className="activity-ai-chat-commands" aria-label="คำสั่งสำเร็จรูปในแชท">{toolCommands}</section>}
   </div>
   );
 }

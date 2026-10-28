@@ -46,23 +46,9 @@ try {
   await modal.getByRole('button',{name:'ยกเลิก',exact:true}).click();
   assert.equal(await page.locator('.modal-box').count(),0);
   assert.equal(await page.getByTestId('saved').textContent(),'1','cancelling review does not save');
-  const weatherTool=ai.getByRole('complementary',{name:'แผงงาน AI'}).getByRole('region',{name:'อากาศกับกิจกรรม'});
-  await weatherTool.getByRole('textbox',{name:'สถานที่'}).fill('กรุงเทพฯ');
-  await weatherTool.getByRole('button',{name:'ดูอากาศและช่วงแนะนำ'}).click();
-  await ai.getByRole('button',{name:/ร่างกิจกรรม · พรุ่งนี้/}).click();
-  await modal.waitFor();
-  assert.equal(await modal.getByLabel('ชื่อกิจกรรม').inputValue(),'กิจกรรมกลางแจ้ง');
-  assert.equal(await page.getByTestId('save-attempts').textContent(),'2','weather slot opens review without writing Calendar');
-  await page.evaluate(()=>{window.testWeatherChangedAtSave=true;});
-  await modal.getByRole('button',{name:'บันทึก',exact:true}).click();
-  await modal.getByText(/พยากรณ์อากาศเปลี่ยนแล้ว/).waitFor();
-  assert.equal(await page.getByTestId('saved').textContent(),'1','changed forecast blocks Calendar save');
-  await page.evaluate(()=>{window.testWeatherChangedAtSave=false;});
-  await modal.getByRole('button',{name:'บันทึก',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[data-testid="saved"]')?.textContent==='2');
-  assert.equal(await page.locator('.modal-box').count(),0);
+  assert.equal(await ai.locator('.activity-ai-weather-tool').count(),0,'weather planning tool stays removed after ActivityModal closes');
   assert.deepEqual(errors,[]);
-  console.log('PASS: AI and weather drafts reach ActivityModal; changed weather blocks save until rechecked');
+  console.log('PASS: guided activity drafts reach ActivityModal; failed save remains open and cancel does not save');
 } finally {
   await browser.close();
   await server.close();
