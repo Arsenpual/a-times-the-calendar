@@ -39,7 +39,7 @@ function Fixture({accountId}) {
           const slots=window.testWeatherNoSlots || (input.includeAdvice===false && window.testWeatherChanged)?[]:[{start:weatherStart.toISOString(),end:weatherEnd.toISOString(),at:'พรุ่งนี้ 09:00–10:00',score:88,reasons:['ฝน 10%']}];
           return {source:'google-weather',location:input.location,weather:{asOf:'2026-10-27T01:00:00Z',timeZone:'Asia/Bangkok',current:{condition:'ฟ้าใส',temperatureC:27,rainPercent:10}},activity:'กิจกรรมกลางแจ้ง',day:input.day,durationHours:input.durationHours,recommendation:{text:slots.length?'แนะนำ 09:00':'ยังไม่มีช่วงที่ผ่านเกณฑ์',slots},aiAdvice:'',aiUsed:false,attribution:'Source: Includes weather data from Google'};
         },
-        continuePlanningChat:async(input)=>{
+        continuePlanningChat:async(input)=>{window.lastPlanningInput=input;
           if(window.testPlanningDeferred) return new Promise(resolve=>{window.resolvePlanningChat=()=>resolve({reply:'คำตอบวางแผนเก่า',source:'knowledge'});});
           if(window.testCalendarFailure && input.text.includes('วันนี้มีอะไร')) throw Object.assign(new Error('อ่าน Calendar ไม่สำเร็จ'),{code:window.testCalendarFailure});
           if(input.text.includes('วันนี้มีอะไร')) return {reply:'ตารางวันนี้:\n• 09:00–10:00 ประชุม',source:'deterministic',calendarRange:{label:'2026-10-27'}};
@@ -48,6 +48,7 @@ function Fixture({accountId}) {
             const options=localStorage.getItem('times-test-schedule-options')?[{startLocal:'2026-10-28T09:00',endLocal:'2026-10-28T10:00',draft:{title:'ออกกำลังกาย',startLocal:'2026-10-28T09:00',endLocal:'2026-10-28T10:00',allDay:false}}]:[];
             return {reply:options.length?'พบช่วงเวลาว่าง 1 ตัวเลือก เลือกเวลาที่สะดวก':'ยังไม่พบช่วงเวลาว่างในช่วงที่ตรวจสอบ',source:'scheduling',scheduling:{title:'ออกกำลังกาย',durationMinutes:60,requestedDate:'2026-10-28',options}};
           }
+          if(input.text.includes('ช่วยเสนอชื่อ')) return {reply:'ผมเสนอชื่อกิจกรรมนี้ให้ครับ',source:'ai',collected:{title:'ประชุมวางแผนทีม'}};
           return {reply:'คำตอบวางแผนใหม่',source:'knowledge'};
         },
         createTemplateDraft:async(input)=>{

@@ -102,6 +102,9 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-page .activity-ai-turn-source.is-calendar::before { background: #3d73be; }
 .activity-ai-page .activity-ai-turn-source.is-ai::before { background: #8b5cf6; }
 .activity-ai-page .activity-ai-turn-source.is-knowledge::before { background: #3f8d75; }
+.activity-ai-activity-suggestion { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; width: fit-content; max-width: min(760px, 100%); margin: 5px 0 12px 40px; padding: 8px 10px; border: 1px solid #efc89f; border-radius: 8px; background: #fffaf5; color: #754213; font-size: 12px; line-height: 1.4; }
+.activity-ai-activity-suggestion button { padding: 5px 9px; border: 1px solid #df9a54; border-radius: 6px; background: #fff0df; color: #8b4f16; font: inherit; cursor: pointer; }
+.activity-ai-activity-suggestion button:disabled { opacity: .55; cursor: wait; }
 .activity-ai-expired-options { width: fit-content; max-width: min(760px, 100%); margin: 4px 0 12px; padding: 10px 12px; border: 1px dashed #c9a5b8; border-radius: 8px; background: #fff9fc; color: #754c62; font-size: 12px; line-height: 1.5; }
 .activity-ai-expired-options p { margin: 0 0 8px; }
 .activity-ai-expired-options button { padding: 5px 9px; border: 1px solid #bf4d83; border-radius: 6px; background: #ffffff; color: #9a3567; font: inherit; cursor: pointer; }

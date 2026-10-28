@@ -568,6 +568,17 @@ export function useActivityAssistantConversation({
       }
     }
   };
+  const applyActivitySuggestion = (suggestion) => {
+    if (!railMode || !guidedActivity || pending || !suggestion || typeof suggestion !== "object") return;
+    const selected = { ...guidedActivity };
+    if (typeof suggestion.title === "string" && suggestion.title.trim() && suggestion.title.length <= 120) selected.title = suggestion.title.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(suggestion.date || "")) selected.date = suggestion.date;
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(suggestion.time || "")) selected.time = suggestion.time;
+    if (Number.isInteger(suggestion.durationMinutes) && suggestion.durationMinutes >= 30 && suggestion.durationMinutes <= 720) selected.durationMinutes = suggestion.durationMinutes;
+    setGuidedActivity(selected);
+    setScheduleResolution(null);
+    setError("");
+  };
   const send = async (event, suggestedText = "", commandTone = "") => {
     event?.preventDefault();
     const text = (suggestedText || input).trim();
@@ -575,7 +586,55 @@ export function useActivityAssistantConversation({
     const requestVersion = activeSessionRef.current.version;
     const requestEpoch = conversationEpochRef.current;
     const isCurrentRequest = () => isCurrentConversation(requestVersion, requestEpoch);
-    if (!suggestedText && (railMode || (freeConversation && chatStyle === "free" && !guidedActivity))) {
+    if (!suggestedText && railMode && guidedActivity) {
+      const history = messages.filter((message) => ["user", "assistant"].includes(message.role)).slice(-10).map(({ role, text: turnText }) => ({ role, text: turnText }));
+      setMessages((current) => [...current, { role: "user", text, source: "ai", commandTone: "create" }]);
+      setInput("");
+      setPending(true);
+      setPendingSource("ai");
+      setError("");
+      try {
+        const result = await continuePlanningChat({
+          text,
+          history,
+          referenceDate: toDateInputValue(new Date()),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          categories: categories.map((category) => category.name),
+          userTags: collectUserTags(activityTagMap),
+          assistantPreferences,
+          insightContext: toAssistantInsightContext(assistantInsight),
+          scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, toDateInputValue(new Date())),
+          guidedStep: conversationNodeId,
+          guidedActivity,
+        });
+        if (!isCurrentRequest()) return;
+        const collected = result.collected || {};
+        const activitySuggestion = {
+          ...(typeof collected.title === "string" && collected.title.trim() ? { title: collected.title.trim() } : {}),
+          ...(/^\d{4}-\d{2}-\d{2}$/.test(collected.date || "") ? { date: collected.date } : {}),
+          ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(collected.time || "") ? { time: collected.time } : {}),
+          ...(Number.isInteger(collected.durationMinutes) && collected.durationMinutes >= 30 && collected.durationMinutes <= 720 ? { durationMinutes: collected.durationMinutes } : {}),
+        };
+        const responseSource = result.source === "knowledge" ? "knowledge" : "ai";
+        setMessages((current) => [
+          ...current.map((message, index) => index === current.length - 1 && responseSource !== "ai" ? { ...message, source: responseSource } : message),
+          { role: "assistant", text: result.reply, source: responseSource, sourceLabel: assistantSourceLabel(result), commandTone: "create", activitySuggestion: Object.keys(activitySuggestion).length ? activitySuggestion : null },
+        ]);
+      } catch (requestError) {
+        if (isCurrentRequest()) {
+          setError(requestError.message || "MR.Zettascale ยังตอบไม่ได้ในขณะนี้");
+          if (requestError.retryAfterSeconds) setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
+        }
+      } finally {
+        if (isCurrentRequest()) {
+          setPending(false);
+          setPendingSource("");
+          getActivityAssistantStatus().then((result) => { if (isCurrentRequest()) setAiStatus(result.aiChat); }).catch(() => {});
+        }
+      }
+      return;
+    }
+    if (!suggestedText && (freeConversation && chatStyle === "free" && !guidedActivity)) {
       const history = messages.filter((message) => message.source === "free-ai" && ["user", "assistant"].includes(message.role)).slice(-16).map(({ role, text: turnText }) => ({ role, text: turnText }));
       setMessages((current) => [...current, { role: "user", text, source: "free-ai" }]);
       setInput("");
@@ -996,6 +1055,7 @@ export function useActivityAssistantConversation({
     cancelGuidedActivityFromRail,
     saveGuidedActivityFromRail,
     retryGuidedActivityDraft: () => finishGuidedActivity(guidedActivity),
+    applyActivitySuggestion,
     runDailySummary,
     retryCalendarFailure,
     selectScheduleAlternative,

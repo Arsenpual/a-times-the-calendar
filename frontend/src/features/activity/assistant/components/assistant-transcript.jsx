@@ -68,7 +68,11 @@ function ActivityPlanPreview({ initialDrafts, pending, onConfirm }) {
   );
 }
 
-export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, confirmActivityPlan, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
+function describeActivitySuggestion(suggestion) {
+  return [suggestion.title, suggestion.date, suggestion.time, suggestion.durationMinutes ? `${suggestion.durationMinutes} นาที` : ""].filter(Boolean).join(" · ");
+}
+
+export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, confirmActivityPlan, applyActivitySuggestion, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
   <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
     {!guidedActivity && <section className="activity-ai-chat-commands" aria-label="คำสั่งสำเร็จรูปในแชท">{toolCommands}</section>}
@@ -105,6 +109,10 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
             ))}
           </div>
         )}
+        {message.activitySuggestion && railMode && <div className="activity-ai-activity-suggestion" aria-label="คำแนะนำสำหรับกิจกรรม">
+          <span>{describeActivitySuggestion(message.activitySuggestion)}</span>
+          <button type="button" onClick={() => applyActivitySuggestion(message.activitySuggestion)} disabled={pending}>ใช้คำแนะนำนี้</button>
+        </div>}
         {message.scheduleAlternatives?.length > 0 && (
           <div className="activity-ai-schedule-options">
             {message.scheduleAlternatives.map((alternative) => (

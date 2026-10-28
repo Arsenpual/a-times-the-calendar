@@ -147,6 +147,7 @@ export default function ActivityAssistantDialog(props) {
     cancelGuidedActivityFromRail,
     saveGuidedActivityFromRail,
     retryGuidedActivityDraft,
+    applyActivitySuggestion,
     runDailySummary,
     retryCalendarFailure,
     selectScheduleAlternative,
@@ -231,7 +232,7 @@ export default function ActivityAssistantDialog(props) {
             ใช้ {assistantInsight.title} เป็นบริบทเฉพาะ session นี้
           </p>
         )}
-        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} confirmActivityPlan={confirmActivityPlan} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
+        <AssistantTranscript presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} toolCommands={toolCommands} messages={messages} sendKnowledge={sendKnowledge} pending={pending} selectScheduleAlternative={selectScheduleAlternative} selectScheduleOption={selectScheduleOption} confirmActivityPlan={confirmActivityPlan} applyActivitySuggestion={applyActivitySuggestion} send={send} renderTelegramArchive={renderTelegramArchive} telegramMessages={telegramMessages} telegramError={telegramError} error={error} calendarFailure={calendarFailure} onReauthCalendar={onReauthCalendar} retryCalendarFailure={retryCalendarFailure} pendingSource={pendingSource} bottomRef={bottomRef} />
         {guidedActivity && !railMode && guidedConversationMode === "template" && (
           <div
             className="activity-ai-choice-strip"

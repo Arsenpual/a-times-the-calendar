@@ -219,13 +219,24 @@ try {
   await input.fill('ช่วยอธิบายวิธีเลือกเวลา');
   await input.press('Enter');
   await page.waitForFunction(count=>document.querySelectorAll('.activity-ai-message-group').length===count+2,messagesBeforeRail);
-  assert.deepEqual(await page.evaluate(()=>window.lastFreeChatInput.orangeContext),{
-    mode:'activity-management',task:'create',currentStep:'activity.date',
-    activity:{title:'',date:'',time:'',durationMinutes:60}
+  assert.deepEqual(await page.evaluate(()=>({guidedStep:window.lastPlanningInput.guidedStep,guidedActivity:window.lastPlanningInput.guidedActivity})),{
+    guidedStep:'activity.date',guidedActivity:{durationMinutes:60}
   },'asking AI from the orange work rail sends only the active activity snapshot');
+  const beforeSuggestion = await ai.locator('.activity-ai-message-group').count();
+  await input.fill('ช่วยเสนอชื่อกิจกรรม');
+  await page.waitForFunction(()=>!document.querySelector('.activity-ai-composer button[type="submit"]')?.disabled);
+  await input.press('Enter');
+  await page.waitForFunction(count=>document.querySelectorAll('.activity-ai-message-group').length===count+2,beforeSuggestion);
+  const suggestion = ai.locator('.activity-ai-activity-suggestion');
+  await suggestion.getByText('ประชุมวางแผนทีม').waitFor();
+  assert.equal(await workRail.getByRole('textbox',{name:'ชื่อกิจกรรม'}).count(),0,'AI suggestions do not change the panel by themselves');
+  await suggestion.getByRole('button',{name:'ใช้คำแนะนำนี้'}).click();
+  await steps.getByRole('button',{name:'เลือกขั้นตอนชื่อ'}).click();
+  assert.equal(await workRail.getByRole('textbox',{name:'ชื่อกิจกรรม'}).inputValue(),'ประชุมวางแผนทีม','the person chooses when an AI suggestion updates the panel');
+  await steps.getByRole('button',{name:'เลือกขั้นตอนวัน'}).click();
   const messagesAfterHelp = await ai.locator('.activity-ai-message-group').count();
   await workRail.getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
-  assert.equal(await steps.locator('li.is-done').count(),2);
+  assert.equal(await steps.locator('li.is-done').count(),3);
   await workRail.getByRole('textbox',{name:'ชื่อกิจกรรม'}).fill('XQ-77 ฟ้าสีม่วง');
   await workRail.getByRole('button',{name:'ถัดไป · เวลา'}).click();
   await workRail.getByLabel('เวลาเริ่ม').fill('09:00');
@@ -237,7 +248,9 @@ try {
   assert.equal(await ai.locator('.activity-ai-message-group').count(),messagesAfterHelp,'rail edits stay out of the chat');
   await page.screenshot({path:join(tmpdir(),'times-ai-rail-guided-1440.png')});
   await page.evaluate(()=>{window.testRailSaveFailure=true;});
-  await workRail.getByRole('button',{name:'บันทึกกิจกรรม'}).click();
+  const railSave = workRail.getByRole('button',{name:'บันทึกกิจกรรม'});
+  assert.equal(await railSave.isDisabled(),false,'completed values enable direct save');
+  await railSave.click();
   await ai.getByRole('alert').getByText('Calendar unavailable').waitFor();
   assert.equal(await steps.locator('li.is-done').count(),4,'failed save keeps the completed rail');
   assert.equal(await ai.locator('.activity-ai-message-group').count(),messagesAfterHelp,'failed save does not claim success in chat');
