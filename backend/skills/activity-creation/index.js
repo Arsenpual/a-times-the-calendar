@@ -68,6 +68,7 @@ function prepareContext(body) {
   if (history.at(-1)?.role === 'user' && history.at(-1).text === text) history.pop();
   const categories = (Array.isArray(body.categories) ? body.categories : []).slice(0, 50).map(name => bounded(name, 200, 'หมวดหมู่'));
   const guidedStep = typeof body.guidedStep === 'string' ? body.guidedStep.slice(0, 80) : '';
+  const guidedTask = body.guidedTask === 'edit' ? 'edit' : 'create';
   const guidedActivity = body.guidedActivity && typeof body.guidedActivity === 'object' ? {
     title: typeof body.guidedActivity.title === 'string' ? body.guidedActivity.title.slice(0, 200) : '',
     date: typeof body.guidedActivity.date === 'string' ? body.guidedActivity.date.slice(0, 10) : '',
@@ -86,7 +87,7 @@ function prepareContext(body) {
   };
   const assistantPreferences = normalizeAssistantPreferences(body.assistantPreferences);
   const insightContext = normalizeInsightContext(body.insightContext);
-  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedActivity, assistantPreferences, insightContext };
+  return { text, referenceDate, timeZone, history, categories, userTags, scheduleContext, guidedStep, guidedTask, guidedActivity, assistantPreferences, insightContext };
 }
 function finishResult(raw, context) {
   if (!raw || typeof raw.ready !== 'boolean' || !raw.draft) fail('AI ส่งข้อมูลไม่ครบ');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isGuidedActivityFieldComplete } from "../lib/guided-activity-validation.js";
-import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
+import { activityDate, formatTime, toDateInputValue } from "../../../../shared/lib/date-utils.js";
 
 function nextDate(offset) {
   const date = new Date();
@@ -8,14 +8,40 @@ function nextDate(offset) {
   return toDateInputValue(date);
 }
 
-export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, railMode, railSaving, conversationNodeId, scheduleResolution, pending, updateGuidedActivityField, advanceGuidedStepFromRail, startGuidedActivityFromRail, cancelGuidedActivityFromRail, saveGuidedActivityFromRail, retryGuidedActivityDraft, renderTelegramArchive, activitySteps }) {
+function upcomingActivities(activities) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (Array.isArray(activities) ? activities : [])
+    .map((activity) => ({ activity, start: activityDate(activity?.start) }))
+    .filter(({ start }) => start && start >= today)
+    .sort((left, right) => left.start - right.start)
+    .slice(0, 5);
+}
+
+function activityWhen({ activity, start }) {
+  const isAllDay = Boolean(activity?.start?.date && !activity?.start?.dateTime);
+  const date = start.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+  return `${date} · ${isAllDay ? "ทั้งวัน" : formatTime(start)}`;
+}
+
+function requiresFullActivityEditor(activity) {
+  return Boolean(
+    activity?.recurringEventId ||
+    (Array.isArray(activity?.recurrence) && activity.recurrence.length > 0) ||
+    (activity?.start?.date && !activity?.start?.dateTime)
+  );
+}
+
+export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, editingActivity, railMode, railSaving, conversationNodeId, scheduleResolution, pending, updateGuidedActivityField, advanceGuidedStepFromRail, startGuidedActivityFromRail, startGuidedActivityEditFromRail, deleteGuidedActivityFromRail, cancelGuidedActivityFromRail, saveGuidedActivityFromRail, retryGuidedActivityDraft, renderTelegramArchive, activitySteps, activities, onOpenExistingActivity }) {
   const [chosenStep, setChosenStep] = useState(null);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const hasGuidedActivity = Boolean(guidedActivity);
-  useEffect(() => { setChosenStep(null); }, [conversationNodeId, hasGuidedActivity]);
+  useEffect(() => { setChosenStep(null); setDeleteConfirmationOpen(false); }, [conversationNodeId, hasGuidedActivity]);
   const currentIndex = Math.max(0, activitySteps.findIndex((step) => step.node === (chosenStep || conversationNodeId)));
   const currentStep = activitySteps[currentIndex];
   const complete = activitySteps.map((step) => isGuidedActivityFieldComplete(step.field, guidedActivity?.[step.field]));
   const allComplete = complete.every(Boolean);
+  const upcoming = upcomingActivities(activities);
   const chooseStep = (index) => {
     if (pending || railSaving) return;
     setChosenStep(activitySteps[index].node);
@@ -34,7 +60,7 @@ export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, rai
       <header className="activity-ai-rail-header"><strong>แผงงาน</strong><button type="button" onClick={() => setWorkRailOpen(false)} aria-label="ซ่อนแผงงาน">×</button></header>
       <div className="activity-ai-rail-content">
         {hasGuidedActivity ? <div className="activity-ai-rail-progress">
-          <h2>สร้างกิจกรรม</h2>
+          <h2>{editingActivity ? "แก้ไขกิจกรรม" : "สร้างกิจกรรม"}</h2>
           <ol aria-label="ขั้นตอนสร้างกิจกรรม">{activitySteps.map((step, index) => (
             <li key={step.node} aria-current={index === currentIndex ? "step" : undefined} className={complete[index] ? "is-done" : ""}>
               <button type="button" aria-label={`เลือกขั้นตอน${step.label}`} onClick={() => chooseStep(index)} disabled={disabled}>
@@ -69,17 +95,31 @@ export default function AssistantWorkRail({ setWorkRailOpen, guidedActivity, rai
               <input id="activity-ai-rail-duration" type="number" min="30" max="720" step="1" value={guidedActivity.durationMinutes ?? ""} disabled={disabled} onChange={(event) => changeField("durationMinutes", event.target.value === "" ? "" : Number(event.target.value))} />
             </>}
           </div>
-          {currentIndex < activitySteps.length - 1 ? (
+          {currentIndex < activitySteps.length - 1 && (
             <button type="button" className="activity-ai-rail-next" onClick={() => chooseStep(currentIndex + 1)} disabled={disabled || !complete[currentIndex]}>ถัดไป · {activitySteps[currentIndex + 1].label}</button>
-          ) : <>
-            {allComplete && <div className="activity-ai-rail-summary"><strong>พร้อมบันทึก</strong><span>{guidedActivity.title}</span><span>{guidedActivity.date} · {guidedActivity.time} · {guidedActivity.durationMinutes} นาที</span></div>}
-            <button type="button" className="activity-ai-rail-save" onClick={saveGuidedActivityFromRail} disabled={disabled || !allComplete}>{railSaving ? "กำลังบันทึก…" : "บันทึกกิจกรรม"}</button>
-            {!railMode && guidedActivity.durationMinutes !== undefined && <button type="button" className="activity-ai-rail-retry" onClick={retryGuidedActivityDraft} disabled={disabled}>สร้างร่างเพื่อตรวจอีกครั้ง</button>}
+          )}
+          {allComplete && <>
+            <section className="activity-ai-rail-summary" aria-label="สรุปกิจกรรมก่อนบันทึก"><strong>พร้อมบันทึก</strong><span>{guidedActivity.title}</span><span>{guidedActivity.date} · {guidedActivity.time} · {guidedActivity.durationMinutes} นาที</span></section>
+            <button type="button" className="activity-ai-rail-save" onClick={saveGuidedActivityFromRail} disabled={disabled || !allComplete}>{railSaving ? "กำลังบันทึก…" : editingActivity ? "บันทึกการแก้ไข" : "บันทึกกิจกรรม"}</button>
           </>}
-          <button type="button" className="activity-ai-rail-cancel" onClick={cancelGuidedActivityFromRail} disabled={disabled}>ยกเลิกการสร้างกิจกรรม</button>
+          {!railMode && currentIndex === activitySteps.length - 1 && guidedActivity.durationMinutes !== undefined && <button type="button" className="activity-ai-rail-retry" onClick={retryGuidedActivityDraft} disabled={disabled}>สร้างร่างเพื่อตรวจอีกครั้ง</button>}
+          {editingActivity && (deleteConfirmationOpen ? <div className="activity-ai-rail-delete-confirm" role="alert"><span>ลบ “{guidedActivity.title || "กิจกรรมนี้"}” ใช่ไหม</span><div><button type="button" onClick={() => setDeleteConfirmationOpen(false)} disabled={disabled}>ยกเลิก</button><button type="button" onClick={deleteGuidedActivityFromRail} disabled={disabled}>ยืนยันการลบ</button></div></div> : <button type="button" className="activity-ai-rail-delete" onClick={() => setDeleteConfirmationOpen(true)} disabled={disabled}>ลบกิจกรรม…</button>)}
+          <button type="button" className="activity-ai-rail-cancel" onClick={cancelGuidedActivityFromRail} disabled={disabled}>{editingActivity ? "ยกเลิกการแก้ไข" : "ยกเลิกการสร้างกิจกรรม"}</button>
         </div> : <>
           <h2>เครื่องมือ</h2>
           <button type="button" className="activity-ai-rail-create" onClick={startGuidedActivityFromRail} disabled={disabled}>+ สร้างกิจกรรมในแผงงาน</button>
+          <section className="activity-ai-rail-activities" aria-label="กิจกรรมที่กำลังจะถึง">
+            <h2>กิจกรรมที่กำลังจะถึง</h2>
+            {upcoming.length > 0 ? <ul>{upcoming.map(({ activity, start }) => {
+              const requiresFullEditor = requiresFullActivityEditor(activity);
+              return <li key={activity.id}>
+                <button type="button" onClick={() => requiresFullEditor ? onOpenExistingActivity?.(activity) : startGuidedActivityEditFromRail(activity)} disabled={disabled} aria-label={`${requiresFullEditor ? "เปิด" : "แก้ไข"} ${activity.summary || "กิจกรรมไม่มีชื่อ"}`}>
+                  <strong>{activity.summary || "กิจกรรมไม่มีชื่อ"}</strong>
+                  <span>{activityWhen({ activity, start })}{activity.recurringEventId || activity.recurrence?.length ? " · ทำซ้ำ" : activity.start?.date && !activity.start?.dateTime ? " · ทั้งวัน" : ""}</span>
+                </button>
+              </li>
+            })}</ul> : <p className="activity-ai-rail-note">ยังไม่มีกิจกรรมในตารางช่วงถัดไป</p>}
+          </section>
         </>}
       </div>
       {renderTelegramArchive("rail")}

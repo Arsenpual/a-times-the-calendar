@@ -6,7 +6,7 @@ import {
   getActivityAssistantStatus,
   fetchProductKnowledge,
 } from "../api/activity-assistant-api.js";
-import { toDateInputValue } from "../../../../shared/lib/date-utils.js";
+import { activityDate, toDateInputValue, toTimeInputValue } from "../../../../shared/lib/date-utils.js";
 import {
   getActivityAssistantConversationNode,
   getActivityAssistantKnowledgeFollowUps,
@@ -92,6 +92,8 @@ export function useActivityAssistantConversation({
   onOpenActivityForm,
   onUpdateActivityForm,
   onConfirmActivityPlan,
+  onUpdateActivityFromRail,
+  onDeleteActivityFromRail,
   onOpenDailySummary,
   activityFormOpen = false,
   startActivityCreationRequest = 0,
@@ -117,6 +119,7 @@ export function useActivityAssistantConversation({
     initialChat.guidedConversationMode,
   );
   const [railMode, setRailMode] = useState(initialChat.railMode);
+  const [editingActivity, setEditingActivity] = useState(null);
   const [railSaving, setRailSaving] = useState(false);
   const railSaveInFlightRef = useRef(false);
   const [scheduleResolution, setScheduleResolution] = useState(null);
@@ -221,6 +224,7 @@ export function useActivityAssistantConversation({
     setError("");
     setInput("");
     setGuidedActivity({});
+    setEditingActivity(null);
     setRailMode(false);
     setConversationNodeId("activity.date");
     setGuidedConversationMode("template");
@@ -278,6 +282,7 @@ export function useActivityAssistantConversation({
     setCalendarFailure(null);
     setInput("");
     setGuidedActivity(null);
+    setEditingActivity(null);
     setRailMode(false);
     setConversationNodeId("home");
     setGuidedConversationMode("template");
@@ -307,6 +312,7 @@ export function useActivityAssistantConversation({
       onOpenActivityForm(draft);
     }
     setGuidedActivity(null);
+    setEditingActivity(null);
     setRailMode(false);
     setConversationNodeId("home");
     setGuidedConversationMode("template");
@@ -325,9 +331,60 @@ export function useActivityAssistantConversation({
     setInput("");
     setScheduleResolution(null);
     setGuidedActivity({});
+    setEditingActivity(null);
     setConversationNodeId("activity.date");
     setGuidedConversationMode("template");
     setRailMode(true);
+  };
+  const startGuidedActivityEditFromRail = (activity) => {
+    if (!activity || pending || railSaving) return;
+    const start = activityDate(activity.start);
+    const end = activityDate(activity.end);
+    const durationMinutes = start && end ? Math.round((end.getTime() - start.getTime()) / 60_000) : 0;
+    if (!start || !Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 720 || Boolean(activity.start?.date && !activity.start?.dateTime)) {
+      setError("กิจกรรมนี้แก้ไขจากแผงงานไม่ได้ กรุณาเปิดฟอร์มกิจกรรม");
+      return;
+    }
+    setError("");
+    setInput("");
+    setScheduleResolution(null);
+    setGuidedActivity({ date: toDateInputValue(start), title: activity.summary || "", time: toTimeInputValue(start), durationMinutes });
+    setEditingActivity({ id: activity.id, updated: activity.updated });
+    setConversationNodeId("activity.date");
+    setGuidedConversationMode("template");
+    setRailMode(true);
+  };
+  const deleteGuidedActivityFromRail = async () => {
+    if (!editingActivity || pending || railSaving) return;
+    if (!onDeleteActivityFromRail) { setError("ยังลบกิจกรรมจากแผงงานไม่ได้"); return; }
+    const requestEpoch = conversationEpochRef.current;
+    const title = guidedActivity?.title || "กิจกรรมนี้";
+    railSaveInFlightRef.current = true;
+    setRailSaving(true);
+    setPending(true);
+    setPendingSource("rail-delete");
+    setError("");
+    try {
+      await onDeleteActivityFromRail(editingActivity.id);
+      if (conversationEpochRef.current !== requestEpoch || activeSessionRef.current.userId !== userId) return;
+      setGuidedActivity(null);
+      setEditingActivity(null);
+      setConversationNodeId("home");
+      setGuidedConversationMode("template");
+      setScheduleResolution(null);
+      setRailMode(false);
+      addMessages({ role: "assistant", text: `ลบกิจกรรม “${title}” เรียบร้อยแล้วครับ`, source: "template" });
+    } catch (requestError) {
+      if (conversationEpochRef.current === requestEpoch && activeSessionRef.current.userId === userId)
+        setError(requestError.message || "ลบกิจกรรมไม่สำเร็จ");
+    } finally {
+      railSaveInFlightRef.current = false;
+      if (activeSessionRef.current.userId === userId) {
+        setRailSaving(false);
+        setPending(false);
+        setPendingSource("");
+      }
+    }
   };
   const advanceGuidedStepFromRail = (nextNode) => {
     if (guidedActivity && !pending) setConversationNodeId(nextNode);
@@ -335,6 +392,7 @@ export function useActivityAssistantConversation({
   const cancelGuidedActivityFromRail = () => {
     if (pending || railSaving) return;
     setGuidedActivity(null);
+    setEditingActivity(null);
     setConversationNodeId("home");
     setGuidedConversationMode("template");
     setScheduleResolution(null);
@@ -345,7 +403,7 @@ export function useActivityAssistantConversation({
     if (!guidedActivity || pending || railSaving || railSaveInFlightRef.current) return;
     const validationError = validateGuidedActivity(guidedActivity);
     if (validationError) { setError(validationError); return; }
-    if (!onConfirmActivityPlan) { setError("ยังบันทึกกิจกรรมจากแผงงานไม่ได้"); return; }
+    if (editingActivity ? !onUpdateActivityFromRail : !onConfirmActivityPlan) { setError("ยังบันทึกกิจกรรมจากแผงงานไม่ได้"); return; }
     const requestEpoch = conversationEpochRef.current;
     const selected = { ...guidedActivity };
     const start = new Date(`${selected.date}T${selected.time}`);
@@ -358,18 +416,22 @@ export function useActivityAssistantConversation({
     setPendingSource("rail-save");
     setError("");
     try {
-      const result = await onConfirmActivityPlan([draft]);
+      const result = editingActivity
+        ? await onUpdateActivityFromRail({ ...editingActivity, draft })
+        : await onConfirmActivityPlan([draft]);
       if (conversationEpochRef.current !== requestEpoch || activeSessionRef.current.userId !== userId) return;
-      if (result?.created?.length !== 1) {
+      if (!editingActivity && result?.created?.length !== 1) {
         setError(result?.failed?.[0]?.error || "ยังยืนยันผลการบันทึกไม่ได้ กรุณาตรวจ Google Calendar ก่อนลองอีกครั้ง");
         return;
       }
       setGuidedActivity(null);
+      const savedEditingActivity = editingActivity;
+      setEditingActivity(null);
       setConversationNodeId("home");
       setGuidedConversationMode("template");
       setScheduleResolution(null);
       setRailMode(false);
-      addMessages({ role: "assistant", text: `สร้างกิจกรรม “${draft.title}” วันที่ ${selected.date} เวลา ${selected.time} น. เรียบร้อยแล้วครับ${result.warnings?.length ? "\nมีข้อมูลประกอบบางส่วนที่บันทึกไม่สำเร็จ กรุณาตรวจรายละเอียดใน Calendar" : ""}`, source: "template" });
+      addMessages({ role: "assistant", text: `${savedEditingActivity ? "แก้ไข" : "สร้าง"}กิจกรรม “${draft.title}” วันที่ ${selected.date} เวลา ${selected.time} น. เรียบร้อยแล้วครับ${result?.warnings?.length ? "\nมีข้อมูลประกอบบางส่วนที่บันทึกไม่สำเร็จ กรุณาตรวจรายละเอียดใน Calendar" : ""}`, source: "template" });
     } catch (requestError) {
       if (conversationEpochRef.current === requestEpoch && activeSessionRef.current.userId === userId)
         setError(requestError.message || "บันทึกกิจกรรมไม่สำเร็จ");
@@ -605,6 +667,7 @@ export function useActivityAssistantConversation({
           insightContext: toAssistantInsightContext(assistantInsight),
           scheduleContext: buildAssistantScheduleContext(activities, lockedActivities, toDateInputValue(new Date())),
           guidedStep: conversationNodeId,
+          guidedTask: editingActivity ? "edit" : "create",
           guidedActivity,
         });
         if (!isCurrentRequest()) return;
@@ -1035,6 +1098,7 @@ export function useActivityAssistantConversation({
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    editingActivity,
     railMode,
     railSaving,
     scheduleResolution,
@@ -1051,6 +1115,8 @@ export function useActivityAssistantConversation({
     selectQuickReply,
     updateGuidedActivityField,
     startGuidedActivityFromRail,
+    startGuidedActivityEditFromRail,
+    deleteGuidedActivityFromRail,
     advanceGuidedStepFromRail,
     cancelGuidedActivityFromRail,
     saveGuidedActivityFromRail,

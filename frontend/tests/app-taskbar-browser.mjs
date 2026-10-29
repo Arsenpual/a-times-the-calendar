@@ -219,8 +219,8 @@ try {
   await input.fill('ช่วยอธิบายวิธีเลือกเวลา');
   await input.press('Enter');
   await page.waitForFunction(count=>document.querySelectorAll('.activity-ai-message-group').length===count+2,messagesBeforeRail);
-  assert.deepEqual(await page.evaluate(()=>({guidedStep:window.lastPlanningInput.guidedStep,guidedActivity:window.lastPlanningInput.guidedActivity})),{
-    guidedStep:'activity.date',guidedActivity:{durationMinutes:60}
+  assert.deepEqual(await page.evaluate(()=>({guidedStep:window.lastPlanningInput.guidedStep,guidedTask:window.lastPlanningInput.guidedTask,guidedActivity:window.lastPlanningInput.guidedActivity})),{
+    guidedStep:'activity.date',guidedTask:'create',guidedActivity:{durationMinutes:60}
   },'asking AI from the orange work rail sends only the active activity snapshot');
   const beforeSuggestion = await ai.locator('.activity-ai-message-group').count();
   await input.fill('ช่วยเสนอชื่อกิจกรรม');
@@ -244,6 +244,8 @@ try {
   assert.equal(await steps.locator('li.is-done').count(),4,'all four fields must be valid before saving');
   await steps.getByRole('button',{name:'เลือกขั้นตอนชื่อ'}).click();
   assert.equal(await workRail.getByRole('textbox',{name:'ชื่อกิจกรรม'}).inputValue(),'XQ-77 ฟ้าสีม่วง');
+  await workRail.getByRole('region',{name:'สรุปกิจกรรมก่อนบันทึก'}).waitFor();
+  assert.equal(await workRail.getByRole('button',{name:'บันทึกกิจกรรม'}).isVisible(),true,'the completed activity can be reviewed and saved from any selected step');
   await steps.getByRole('button',{name:'เลือกขั้นตอนระยะเวลา'}).click();
   assert.equal(await ai.locator('.activity-ai-message-group').count(),messagesAfterHelp,'rail edits stay out of the chat');
   await page.screenshot({path:join(tmpdir(),'times-ai-rail-guided-1440.png')});
@@ -338,6 +340,39 @@ try {
   assert.match(await ai.locator('.activity-ai-messages').innerText(),/ร่างกิจกรรม: ประชุมชนเวลา/);
   await page.evaluate(()=>window.setFixtureActivities([]));
   await page.waitForFunction(()=>document.querySelector('[data-testid="activity-count"]')?.textContent==='0');
+  const managerStart = new Date();
+  managerStart.setDate(managerStart.getDate() + 1);
+  managerStart.setHours(13, 30, 0, 0);
+  const managerEnd = new Date(managerStart.getTime() + 60 * 60 * 1000);
+  await page.evaluate(({ start, end }) => window.setFixtureActivities([{ id: 'rail-manage-1', summary: 'ตรวจรายงานประจำสัปดาห์', start: { dateTime: start }, end: { dateTime: end } }]), { start: managerStart.toISOString(), end: managerEnd.toISOString() });
+  await workRail.getByRole('button',{name:'แก้ไข ตรวจรายงานประจำสัปดาห์'}).waitFor();
+  await workRail.getByRole('button',{name:'แก้ไข ตรวจรายงานประจำสัปดาห์'}).click();
+  await workRail.getByRole('heading',{name:'แก้ไขกิจกรรม'}).waitFor();
+  assert.equal(await workRail.getByLabel('วันที่เริ่มกิจกรรม').inputValue(),managerStart.toISOString().slice(0,10),'the orange work rail loads an existing activity into editable fields');
+  const messagesBeforeEditHelp = await ai.locator('.activity-ai-message-group').count();
+  await input.fill('ช่วยแนะนำว่าควรเลื่อนเวลาไหม');
+  await page.waitForFunction(()=>!document.querySelector('.activity-ai-composer button[type="submit"]')?.disabled);
+  await input.press('Enter');
+  await page.waitForFunction(count=>document.querySelectorAll('.activity-ai-message-group').length===count+2,messagesBeforeEditHelp);
+  assert.equal(await page.evaluate(()=>window.lastPlanningInput.guidedTask),'edit','AI receives an explicit edit context for an existing activity in the orange work rail');
+  await workRail.getByRole('button',{name:'เลือกขั้นตอนชื่อ'}).click();
+  await workRail.getByRole('textbox',{name:'ชื่อกิจกรรม'}).fill('ตรวจรายงานฉบับแก้ไข');
+  await workRail.getByRole('button',{name:'บันทึกการแก้ไข'}).click();
+  await ai.getByText(/แก้ไขกิจกรรม “ตรวจรายงานฉบับแก้ไข”.*เรียบร้อยแล้วครับ/).waitFor();
+  assert.deepEqual(await page.evaluate(()=>({id:window.updatedActivityFromRail.id,title:window.updatedActivityFromRail.draft.title})),{id:'rail-manage-1',title:'ตรวจรายงานฉบับแก้ไข'},'the rail sends the selected activity identity and reviewed values for a direct update');
+  await page.evaluate(({ start, end }) => window.setFixtureActivities([{ id: 'rail-recurring-1', summary: 'ประชุมทีมประจำสัปดาห์', recurrence: ['RRULE:FREQ=WEEKLY'], start: { dateTime: start }, end: { dateTime: end } }]), { start: managerStart.toISOString(), end: managerEnd.toISOString() });
+  await workRail.getByRole('button',{name:'เปิด ประชุมทีมประจำสัปดาห์'}).click();
+  assert.equal(await page.evaluate(()=>window.openedActivityId),'rail-recurring-1','a recurring-series master opens the full activity editor instead of the compact rail editor');
+  await page.evaluate(()=>window.setFixtureActivities([{ id: 'rail-all-day-1', summary: 'วันหยุด', start: { date: managerStart.toISOString().slice(0,10) }, end: { date: managerEnd.toISOString().slice(0,10) } }]));
+  await workRail.getByRole('button',{name:'เปิด วันหยุด'}).click();
+  assert.equal(await page.evaluate(()=>window.openedActivityId),'rail-all-day-1','all-day activities open the full activity editor instead of the compact rail editor');
+  await page.evaluate(({ start, end }) => window.setFixtureActivities([{ id: 'rail-manage-1', summary: 'ตรวจรายงานประจำสัปดาห์', start: { dateTime: start }, end: { dateTime: end } }]), { start: managerStart.toISOString(), end: managerEnd.toISOString() });
+  await workRail.getByRole('button',{name:'แก้ไข ตรวจรายงานประจำสัปดาห์'}).click();
+  await workRail.getByRole('button',{name:'ลบกิจกรรม…'}).click();
+  await workRail.getByRole('alert').getByRole('button',{name:'ยืนยันการลบ'}).click();
+  await ai.getByText(/ลบกิจกรรม “ตรวจรายงานประจำสัปดาห์”.*เรียบร้อยแล้วครับ/).waitFor();
+  assert.equal(await page.evaluate(()=>window.deletedActivityId),'rail-manage-1','deletion requires an explicit in-rail confirmation before calling the activity delete handler');
+  await page.evaluate(()=>window.setFixtureActivities([]));
   await ai.getByRole('button',{name:'สร้างกิจกรรม',exact:true}).click();
   await ai.getByLabel('คำสั่งสร้างกิจกรรมและข้อมูลส่วนตัว').getByRole('button',{name:'พรุ่งนี้',exact:true}).click();
   await ai.getByRole('button',{name:'ประชุม',exact:true}).click();

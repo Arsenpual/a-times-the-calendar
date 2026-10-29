@@ -45,6 +45,14 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-suggestions button:hover:not(:disabled) { border-color: var(--today); background: var(--blue-tint); }
 .activity-ai-rail-next, .activity-ai-rail-save, .activity-ai-rail-create { width: 100%; min-height: 38px; margin-top: 14px; padding: 8px 10px; border: 1px solid var(--today); border-radius: 8px; background: var(--blue-tint); color: var(--blue-dark); font: inherit; font-size: 12px; cursor: pointer; }
 .activity-ai-rail-create { margin: 0 0 16px; text-align: left; }
+.activity-ai-rail-activities { margin-top: 8px; }
+.activity-ai-rail-activities h2 { margin-bottom: 8px; }
+.activity-ai-rail-activities ul { display: grid; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.activity-ai-rail-activities button { display: grid; width: 100%; gap: 3px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: #ffffff; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.activity-ai-rail-activities button:hover:not(:disabled) { border-color: #df9a54; background: #fff8f0; }
+.activity-ai-rail-activities button:disabled { opacity: .55; cursor: not-allowed; }
+.activity-ai-rail-activities strong, .activity-ai-rail-activities span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-ai-rail-activities span { color: var(--text-secondary); font-size: 12px; }
 .activity-ai-rail-save { background: var(--today); color: #ffffff; }
 .activity-ai-rail-next:disabled, .activity-ai-rail-save:disabled, .activity-ai-rail-create:disabled, .activity-ai-rail-suggestions button:disabled { opacity: .5; cursor: not-allowed; }
 .activity-ai-rail-summary { display: grid; gap: 4px; margin-top: 14px; padding: 10px; border: 1px solid #b8dfcb; border-radius: 8px; background: #f1faf5; color: #245b42; font-size: 12px; overflow-wrap: anywhere; }
@@ -53,6 +61,11 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-cancel { margin-top: 18px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: #ffffff; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .activity-ai-rail-cancel:hover:not(:disabled) { background: var(--hover); }
 .activity-ai-rail-cancel:disabled { opacity: .5; cursor: wait; }
+.activity-ai-rail-delete { width: 100%; margin-top: 14px; padding: 8px 10px; border: 1px solid #e8b8b2; border-radius: 8px; background: #fff7f6; color: #a4423a; font: inherit; font-size: 12px; cursor: pointer; }
+.activity-ai-rail-delete-confirm { display: grid; gap: 9px; margin-top: 14px; padding: 10px; border: 1px solid #e8b8b2; border-radius: 8px; background: #fff7f6; color: #8c332c; font-size: 12px; line-height: 1.45; }
+.activity-ai-rail-delete-confirm > div { display: flex; justify-content: flex-end; gap: 7px; }
+.activity-ai-rail-delete-confirm button { min-height: 30px; padding: 5px 8px; border: 1px solid #d7a5a0; border-radius: 6px; background: #ffffff; color: #75413c; font: inherit; font-size: 12px; cursor: pointer; }
+.activity-ai-rail-delete-confirm button:last-child { border-color: #a4423a; background: #a4423a; color: #ffffff; }
 .activity-ai-work-rail.is-creating-activity { background: #fffaf5; border-left-color: #efc89f; }
 .is-creating-activity .activity-ai-rail-header { background: #fff4e7; border-bottom-color: #efc89f; color: #8b4f16; }
 .is-creating-activity .activity-ai-rail-progress h2 { color: #8b4f16; }

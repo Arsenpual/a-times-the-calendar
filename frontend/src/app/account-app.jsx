@@ -16,6 +16,7 @@ import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
+import { normalizeActivityId } from "../shared/lib/id-utils.js";
 import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
 import { assertWeatherDraftCurrent } from "../features/activity/assistant/lib/weather-slot-validation.js";
 import { fetchWeatherPlan } from "../features/activity/assistant/api/activity-assistant-api.js";
@@ -354,6 +355,25 @@ export default function AccountApp({ auth }) {
     if (corrections.length) assistantPreferences.recordCorrections(corrections).catch(() => {});
     return saved;
   }, [assistantPreferences, handleSaveActivity]);
+  const saveAssistantRailEdit = useCallback(async ({ id, updated, draft }) => {
+    const start = new Date(draft?.startLocal || "");
+    const end = new Date(draft?.endLocal || "");
+    if (!id || !draft?.title?.trim() || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+      throw new Error("ข้อมูลกิจกรรมที่แก้ไขไม่ถูกต้อง");
+    }
+    const normalizedId = normalizeActivityId(id);
+    return handleSaveActivity({
+      existingId: id,
+      knownUpdated: updated,
+      categoryId: activityCategoryMap[normalizedId] || null,
+      tags: activityTagMap[normalizedId] || [],
+      activityBody: {
+        summary: draft.title.trim(),
+        start: { dateTime: start.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        end: { dateTime: end.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+      }
+    });
+  }, [activityCategoryMap, activityTagMap, handleSaveActivity]);
   const saveAssistantPlan = useCallback(async (drafts) => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const items = drafts.map((draft) => {
@@ -699,6 +719,9 @@ export default function AccountApp({ auth }) {
         }}
         onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
         onConfirmActivityPlan={saveAssistantPlan}
+        onUpdateActivityFromRail={saveAssistantRailEdit}
+        onDeleteActivityFromRail={handleDeleteActivity}
+        onEditActivity={openEditActivity}
         onOpenDailySummary={openAssistantDailySummary}
         onReauthCalendar={handleReauthCalendar}
         assistantInsight={assistantInsight}

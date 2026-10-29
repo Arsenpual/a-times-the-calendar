@@ -178,6 +178,10 @@ test('current text is removed when it is duplicated as newest history', () => {
   const ctx = prepareContext({ text: 'เข้านอน 23.00', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', history: [{ role: 'user', text: 'เข้านอน 23.00' }] });
   assert.deepEqual(ctx.history, []);
 });
+test('guided task accepts only the bounded edit mode', () => {
+  assert.equal(prepareContext({ text: 'ย้ายเป็นพรุ่งนี้', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', categories: [], history: [], guidedTask: 'edit' }).guidedTask, 'edit');
+  assert.equal(prepareContext({ text: 'ย้ายเป็นพรุ่งนี้', referenceDate: '2026-09-14', timeZone: 'Asia/Bangkok', categories: [], history: [], guidedTask: 'delete' }).guidedTask, 'create');
+});
 test('incomplete AI result rejected', () => assert.throws(() => finishResult({}, context())));
 test('a usable Gemini draft receives a local summary when reply is empty', () => {
   const result = finishResult({

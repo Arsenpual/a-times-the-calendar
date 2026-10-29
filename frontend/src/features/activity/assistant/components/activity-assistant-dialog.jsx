@@ -125,6 +125,7 @@ export default function ActivityAssistantDialog(props) {
     canUseGemini,
     aiRequestCount,
     guidedActivity,
+    editingActivity,
     railMode,
     railSaving,
     scheduleResolution,
@@ -143,6 +144,8 @@ export default function ActivityAssistantDialog(props) {
     selectQuickReply,
     updateGuidedActivityField,
     startGuidedActivityFromRail,
+    startGuidedActivityEditFromRail,
+    deleteGuidedActivityFromRail,
     advanceGuidedStepFromRail,
     cancelGuidedActivityFromRail,
     saveGuidedActivityFromRail,
@@ -273,7 +276,7 @@ export default function ActivityAssistantDialog(props) {
         )}
         <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={presentation === "page" ? null : onSendTelegramMessage} sendToTelegram={sendToTelegram} />
         </div>
-        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} />}
+        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} editingActivity={editingActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} startGuidedActivityEditFromRail={startGuidedActivityEditFromRail} deleteGuidedActivityFromRail={deleteGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} activities={props.activities} onOpenExistingActivity={props.onEditActivity} />}
         </div>
       </section>
     </div>
