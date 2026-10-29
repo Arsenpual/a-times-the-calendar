@@ -1257,7 +1257,11 @@ async function registerBotCommands() {
   for (const scope of [undefined, { type: "all_private_chats" }]) {
     await setCommandsForScope(scope);
   }
+}
 
+async function cleanupLegacyBotCommands() {
+  const marker = db.collection("server-jobs").doc("telegram-menu-cleanup-v1");
+  if ((await marker.get()).data()?.completed) return;
   // Older releases registered chat-scoped commands before attempting an
   // invalid private-chat chat_member scope. Those successful writes survive
   // deployments and take precedence over all_private_chats. Remove the legacy
@@ -1281,6 +1285,7 @@ async function registerBotCommands() {
     if (chats.size < 100) break;
     cursor = chats.docs[chats.docs.length - 1];
   }
+  await marker.set({ completed: true, completedAt: Date.now() }, { merge: true });
 }
 
 router.get("/status", async (req, res, next) => {
@@ -1448,6 +1453,8 @@ router.post("/notify", async (req, res, next) => {
 
 let priorityNewsTimer = null;
 module.exports = router;
+module.exports.registerBotCommands = registerBotCommands;
+module.exports.cleanupLegacyBotCommands = cleanupLegacyBotCommands;
 module.exports.startPriorityNewsWatcher = function startPriorityNewsWatcher() {
   if (priorityNewsTimer) return;
   let running = false;
@@ -1477,7 +1484,7 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   if (missing.length) {
     // Deliberately report only variable names—never token or secret values.
     console.warn(`[telegram] ข้ามการตั้ง webhook และ Bot Command Menu: ไม่พบ ${missing.join(", ")}`);
-    return;
+    return false;
   }
   try {
     const identityResponse = await telegramFetch(`${BOT_API}/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
@@ -1500,8 +1507,7 @@ module.exports.registerWebhook = async function registerWebhook(baseUrl) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(`ตั้ง Telegram webhook ไม่สำเร็จ: ${data.description || response.status}`);
   console.log(`[telegram] ตั้ง webhook สำเร็จ: ${baseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
-  await registerBotCommands();
-  console.log("[telegram] ตั้ง Bot Command Menu สำเร็จ");
+  return true;
 };
 
 module.exports.webhook = async function telegramWebhook(req, res, next) {

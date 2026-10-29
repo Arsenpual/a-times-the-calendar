@@ -6,7 +6,9 @@ const vm = require("node:vm");
 function menuHarness(ids, failDeletion = false) {
   const menus = new Map(ids.map(id => [`chat:${id}`, [{ command: "times" }, { command: "features" }]]));
   let reads = 0;
+  let marker = {};
   const db = { collection(name) {
+    if (name === "server-jobs") return { doc: () => ({ get: async () => ({ data: () => marker }), set: async data => { marker = data; } }) };
     assert.equal(name, "telegram-chat-owners");
     let offset = 0;
     let limit;
@@ -29,7 +31,7 @@ function menuHarness(ids, failDeletion = false) {
   const start = source.indexOf("async function registerBotCommands()");
   const end = source.indexOf('\nrouter.get("/status"', start);
   assert.ok(start >= 0 && end > start);
-  const register = vm.runInNewContext(source.slice(start, end) + "\nregisterBotCommands", {
+  const tasks = vm.runInNewContext(source.slice(start, end) + "\n({ registerBotCommands, cleanupLegacyBotCommands })", {
     db, BOT_API: "https://api.telegram.org", BOT_MENU_COMMANDS, requiredEnv: () => "test-token",
     telegramFetch: async (url, options) => {
       const body = JSON.parse(options.body);
@@ -42,7 +44,8 @@ function menuHarness(ids, failDeletion = false) {
       return { ok: true, json: async () => ({ ok: true }) };
     }
   });
-  return { register, menus, reads: () => reads };
+  const register = async () => { await tasks.registerBotCommands(); await tasks.cleanupLegacyBotCommands(); };
+  return { register, ...tasks, menus, reads: () => reads };
 }
 
 test("legacy chat menu is removed so the current command menu becomes effective", async () => {
@@ -87,10 +90,21 @@ test("legacy cleanup reaches chats beyond the first page", async () => {
   await harness.register();
   assert.equal(harness.reads(), 3);
   assert.equal(harness.menus.size, 2);
+  await harness.register();
+  assert.equal(harness.reads(), 3, "completed cleanup never scans owners again");
 });
 
-test("failed cleanup propagates to the existing startup retry handler", async () => {
+test("failed cleanup propagates to its own retry task and leaves migration incomplete", async () => {
   const harness = menuHarness(["123"], true);
   await assert.rejects(harness.register(), /429/);
   assert.equal(harness.menus.has("chat:123"), true);
+  await assert.rejects(harness.cleanupLegacyBotCommands(), /429/);
+  assert.equal(harness.reads(), 2);
+});
+
+test("registering the current menu does not access Firestore", async () => {
+  const harness = menuHarness(["123"]);
+  await harness.registerBotCommands();
+  assert.equal(harness.reads(), 0);
+  assert.equal(harness.menus.has("default"), true);
 });
