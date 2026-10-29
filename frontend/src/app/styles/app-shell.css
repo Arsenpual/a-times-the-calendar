@@ -482,7 +482,8 @@
 
 .firestore-quota-banner__header small {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .firestore-quota-banner__icon {
@@ -538,6 +539,19 @@
   font-weight: 600;
 }
 
+.firestore-quota-banner__reset-time {
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.firestore-quota-banner__status-item > small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .firestore-quota-banner__meter {
   height: 5px;
   overflow: hidden;
@@ -556,8 +570,8 @@
 .firestore-quota-banner > p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 @media (max-width: 560px) {
