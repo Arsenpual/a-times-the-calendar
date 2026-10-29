@@ -109,7 +109,7 @@ export function createActivityCalendarActions({
 
   const handleSaveActivityPlan = async (items) => {
     if (!calendarAccessToken) throw new Error("กรุณาเชื่อม Google Calendar ก่อนสร้างแผน");
-    if (!Array.isArray(items) || items.length < 1 || items.length > 5) throw new Error("แผนต้องมีกิจกรรมระหว่าง 1 ถึง 5 รายการ");
+    if (!Array.isArray(items) || items.length < 1 || items.length > 28) throw new Error("แผนต้องมีกิจกรรมระหว่าง 1 ถึง 28 รายการ");
     const plannedEntries = items.map((item, index) => ({
       id: `plan-${index}`,
       start: new Date(item?.activityBody?.start?.dateTime || ""),

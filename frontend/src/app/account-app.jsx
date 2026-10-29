@@ -705,8 +705,10 @@ export default function AccountApp({ auth }) {
         activityTagMap={activityTagMap}
         assistantPreferences={assistantPreferences.values}
         telegramMessages={telegramChat.messages}
+        telegramUnreadCount={telegramChat.unreadCount}
         telegramError={telegramChat.error}
         onOpenTelegramChat={telegramChat.openChat}
+        onMarkTelegramRead={telegramChat.markTelegramChatRead}
         onSendTelegramMessage={telegramChat.sendChatMessage}
         onClearTelegramMessages={telegramChat.clearChatMessages}
         lockedActivities={lockedActivities}

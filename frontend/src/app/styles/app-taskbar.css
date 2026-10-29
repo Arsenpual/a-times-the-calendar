@@ -18,7 +18,12 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-page .activity-ai-reset-confirm button { min-width: 0; min-height: 30px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; }
 .activity-ai-work-rail { display: flex; flex: 0 0 328px; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--border); background: #fbfcfe; }
 .activity-ai-rail-header { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.activity-ai-rail-header > div { display: flex; align-items: center; gap: 4px; }
 .activity-ai-rail-header button { min-width: 32px; min-height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 20px; cursor: pointer; }
+.activity-ai-rail-header .activity-ai-rail-telegram-toggle { position: relative; display: grid; place-items: center; padding: 6px; color: #229ed9; }
+.activity-ai-rail-telegram-toggle svg { width: 18px; height: 18px; fill: currentColor; }
+.activity-ai-rail-telegram-toggle:hover, .activity-ai-rail-telegram-toggle.is-active { background: #e8f5fc; color: #1687c1; }
+.activity-ai-rail-telegram-unread { position: absolute; top: -4px; right: -5px; min-width: 16px; padding: 1px 4px; border: 2px solid #fbfcfe; border-radius: 999px; background: #d93025; color: #ffffff; font-size: 9px; font-weight: 700; line-height: 14px; text-align: center; }
 .activity-ai-rail-content { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
 .activity-ai-rail-content h2 { margin: 0 0 12px; font-size: 16px; }
 .activity-ai-rail-note { margin: 0; color: var(--text-secondary); line-height: 1.6; }
@@ -43,6 +48,21 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-rail-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
 .activity-ai-rail-suggestions button { min-height: 30px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; background: #ffffff; color: var(--text-primary); font: inherit; font-size: 12px; cursor: pointer; }
 .activity-ai-rail-suggestions button:hover:not(:disabled) { border-color: var(--today); background: var(--blue-tint); }
+.activity-ai-mini-calendar { display: grid; gap: 7px; margin-top: 12px; padding: 10px; border: 1px solid #efc89f; border-radius: 10px; background: #fffaf5; }
+.activity-ai-mini-calendar > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #8b4f16; font-size: 12px; }
+.activity-ai-mini-calendar small { color: var(--text-secondary); font-size: 10px; }
+.activity-ai-mini-calendar-controls { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text-secondary); font-size: 11px; }
+.activity-ai-mini-calendar-controls input { width: 142px; padding: 5px 6px; border: 1px solid #efc89f; border-radius: 6px; background: #ffffff; color: var(--text-primary); font: inherit; font-size: 11px; }
+.activity-ai-mini-calendar-weekdays, .activity-ai-mini-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center; }
+.activity-ai-mini-calendar-weekdays span { color: var(--text-secondary); font-size: 10px; }
+.activity-ai-mini-calendar-days button { aspect-ratio: 1; min-width: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-primary); font: inherit; font-size: 11px; cursor: pointer; }
+.activity-ai-mini-calendar-days button:hover:not(:disabled) { background: #fff0df; }
+.activity-ai-mini-calendar-days button[aria-pressed="true"] { background: #df7f29; color: #ffffff; font-weight: 700; }
+.activity-ai-mini-calendar-days button.is-today { box-shadow: inset 0 0 0 2px #df7f29; color: #9b5515; font-weight: 700; }
+.activity-ai-mini-calendar-days button.is-today[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #ffffff; color: #ffffff; }
+.activity-ai-mini-calendar p { margin: 1px 0 0; color: #8b4f16; font-size: 11px; line-height: 1.45; }
+.activity-ai-mini-calendar-clear { justify-self: start; padding: 3px 0; border: 0; background: transparent; color: #a45d1c; font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.activity-ai-mini-calendar-clear:disabled { opacity: .55; cursor: not-allowed; }
 .activity-ai-rail-next, .activity-ai-rail-save, .activity-ai-rail-create { width: 100%; min-height: 38px; margin-top: 14px; padding: 8px 10px; border: 1px solid var(--today); border-radius: 8px; background: var(--blue-tint); color: var(--blue-dark); font: inherit; font-size: 12px; cursor: pointer; }
 .activity-ai-rail-create { margin: 0 0 16px; text-align: left; }
 .activity-ai-rail-activities { margin-top: 8px; }
@@ -125,6 +145,15 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-telegram-archive { max-width: 960px; margin: 24px auto 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-size: 12px; }
 .activity-ai-page .activity-ai-telegram-archive.is-mobile { display: none; }
 .activity-ai-work-rail .activity-ai-telegram-archive { flex: none; max-height: 42%; overflow-y: auto; margin: 0; border-width: 1px 0 0; border-radius: 0; padding: 13px 16px; background: #ffffff; }
+.activity-ai-rail-content.is-telegram-open { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.activity-ai-rail-content .activity-ai-telegram-archive.is-rail-full { display: block; flex: 1; min-height: 0; max-height: none; margin: 0; padding: 16px; border: 0; overflow-y: auto; }
+.activity-ai-telegram-archive.is-rail-full > summary { display: none; }
+.activity-ai-telegram-archive.is-rail-full > p { flex: none; margin-top: 0; }
+.activity-ai-telegram-archive.is-rail-full .activity-ai-message-group { display: flex; width: 100%; margin-bottom: 9px; }
+.activity-ai-telegram-archive.is-rail-full .activity-ai-message-group.is-telegram-user { justify-content: flex-end; }
+.activity-ai-telegram-archive.is-rail-full .activity-ai-message-group.is-telegram-system { justify-content: flex-start; }
+.activity-ai-telegram-archive.is-rail-full .activity-ai-message-group .activity-ai-message { margin-inline: 0; }
+.activity-ai-telegram-archive.is-rail-full .activity-ai-telegram-composer { position: sticky; bottom: -16px; margin: 16px -16px -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: #ffffff; }
 .activity-ai-telegram-archive > summary { cursor: pointer; font-size: 13px; }
 .activity-ai-telegram-archive > p { line-height: 1.5; }
 .activity-ai-telegram-archive > button { margin: 4px 0 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-primary); cursor: pointer; }

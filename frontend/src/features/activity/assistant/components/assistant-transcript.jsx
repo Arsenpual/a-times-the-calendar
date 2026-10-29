@@ -175,7 +175,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
     {presentation !== "page" && telegramMessages.map((message) => (
       <div
         key={`telegram-${message.id}`}
-        className="activity-ai-message-group"
+        className={`activity-ai-message-group is-telegram-${message.direction === "incoming" ? "user" : "system"}`}
       >
         <div
           className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}

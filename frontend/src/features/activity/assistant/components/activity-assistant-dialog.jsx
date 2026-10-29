@@ -106,10 +106,12 @@ export default function ActivityAssistantDialog(props) {
     activityFormOpen = false,
     dailySummaryOpen = false,
     telegramMessages = [],
+    telegramUnreadCount = 0,
     telegramError = "",
     onOpenDailySummary,
     onReauthCalendar,
     onSendTelegramMessage,
+    onMarkTelegramRead,
     onClearTelegramMessages,
     assistantInsight,
   } = props;
@@ -169,7 +171,7 @@ export default function ActivityAssistantDialog(props) {
     rootQuestions={rootQuestions}
   />;
   const renderTelegramArchive = (location) => onSendTelegramMessage && (
-    <details className={`activity-ai-telegram-archive is-${location}`}>
+    <details className={`activity-ai-telegram-archive is-${location}`} open={location === "rail-full" ? true : undefined}>
       <summary>เปิด / ปิดแชท Telegram · {telegramMessages.length}</summary>
       <p>สำเนาข้อความจาก Telegram แยกจากบทสนทนา AI บนเว็บ</p>
       {onClearTelegramMessages && telegramMessages.length > 0 && <button type="button" disabled={pending} onClick={async () => {
@@ -180,11 +182,11 @@ export default function ActivityAssistantDialog(props) {
       {telegramArchiveError && <p className="activity-ai-error" role="alert">{telegramArchiveError}</p>}
       {telegramError && <p className="activity-ai-error">{telegramError}</p>}
       {telegramMessages.map((message) => (
-        <div key={`telegram-${message.id}`} className="activity-ai-message-group">
+        <div key={`telegram-${message.id}`} className={`activity-ai-message-group is-telegram-${message.direction === "incoming" ? "user" : "system"}`}>
           <div className={`activity-ai-message is-${message.direction === "incoming" ? "user" : "assistant"} is-telegram-turn${message.direction !== "incoming" ? " is-system-turn" : ""}${message.kind === "notification" ? " is-telegram-notification" : ""}`}><span>{message.text}</span></div>
         </div>
       ))}
-      {location === "rail" && <form className="activity-ai-telegram-composer" onSubmit={async (event) => {
+      {(location === "rail" || location === "rail-full") && <form className="activity-ai-telegram-composer" onSubmit={async (event) => {
         event.preventDefault();
         const text = telegramInput.trim();
         if (!text || telegramSending) return;
@@ -276,7 +278,7 @@ export default function ActivityAssistantDialog(props) {
         )}
         <AssistantComposer presentation={presentation} guidedActivity={guidedActivity} railMode={railMode} chatStyle={chatStyle} setChatStyle={setChatStyle} input={input} setInput={setInput} send={send} canUseGemini={canUseGemini} conversationNodeId={conversationNodeId} cooldownSeconds={cooldownSeconds} cooldownLabel={cooldownLabel} pending={pending} onSendTelegramMessage={presentation === "page" ? null : onSendTelegramMessage} sendToTelegram={sendToTelegram} />
         </div>
-        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} editingActivity={editingActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} startGuidedActivityEditFromRail={startGuidedActivityEditFromRail} deleteGuidedActivityFromRail={deleteGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} activities={props.activities} onOpenExistingActivity={props.onEditActivity} />}
+        {presentation === "page" && workRailOpen && <AssistantWorkRail setWorkRailOpen={setWorkRailOpen} guidedActivity={guidedActivity} editingActivity={editingActivity} railMode={railMode} railSaving={railSaving} conversationNodeId={conversationNodeId} scheduleResolution={scheduleResolution} pending={pending} updateGuidedActivityField={updateGuidedActivityField} advanceGuidedStepFromRail={advanceGuidedStepFromRail} startGuidedActivityFromRail={startGuidedActivityFromRail} startGuidedActivityEditFromRail={startGuidedActivityEditFromRail} deleteGuidedActivityFromRail={deleteGuidedActivityFromRail} cancelGuidedActivityFromRail={cancelGuidedActivityFromRail} saveGuidedActivityFromRail={saveGuidedActivityFromRail} retryGuidedActivityDraft={retryGuidedActivityDraft} renderTelegramArchive={renderTelegramArchive} activitySteps={ACTIVITY_STEPS} activities={props.activities} onOpenExistingActivity={props.onEditActivity} telegramUnreadCount={telegramUnreadCount} onMarkTelegramRead={onMarkTelegramRead} />}
         </div>
       </section>
     </div>

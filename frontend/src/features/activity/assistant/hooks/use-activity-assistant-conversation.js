@@ -399,17 +399,23 @@ export function useActivityAssistantConversation({
     setRailMode(false);
     setError("");
   };
-  const saveGuidedActivityFromRail = async () => {
+  const saveGuidedActivityFromRail = async (repeatDates = []) => {
     if (!guidedActivity || pending || railSaving || railSaveInFlightRef.current) return;
     const validationError = validateGuidedActivity(guidedActivity);
     if (validationError) { setError(validationError); return; }
     if (editingActivity ? !onUpdateActivityFromRail : !onConfirmActivityPlan) { setError("ยังบันทึกกิจกรรมจากแผงงานไม่ได้"); return; }
     const requestEpoch = conversationEpochRef.current;
     const selected = { ...guidedActivity };
-    const start = new Date(`${selected.date}T${selected.time}`);
-    const end = new Date(start.getTime() + Number(selected.durationMinutes) * 60_000);
-    const localEnd = `${toDateInputValue(end)}T${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-    const draft = { title: selected.title.trim(), startLocal: `${selected.date}T${selected.time}`, endLocal: localEnd, allDay: false, categoryName: "", tags: [], notes: "" };
+    const selectedDates = [...new Set(Array.isArray(repeatDates) ? repeatDates : [])]
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+    const dates = editingActivity ? [selected.date] : (selectedDates.length ? selectedDates : [selected.date]);
+    if (dates.length > 28) { setError("เลือกวันซ้ำได้สูงสุด 28 วันต่อครั้ง"); return; }
+    const drafts = dates.map((date) => {
+      const selectedStart = new Date(`${date}T${selected.time}`);
+      const selectedEnd = new Date(selectedStart.getTime() + Number(selected.durationMinutes) * 60_000);
+      const selectedLocalEnd = `${toDateInputValue(selectedEnd)}T${String(selectedEnd.getHours()).padStart(2, "0")}:${String(selectedEnd.getMinutes()).padStart(2, "0")}`;
+      return { title: selected.title.trim(), startLocal: `${date}T${selected.time}`, endLocal: selectedLocalEnd, allDay: false, categoryName: "", tags: [], notes: "" };
+    });
     railSaveInFlightRef.current = true;
     setRailSaving(true);
     setPending(true);
@@ -417,10 +423,10 @@ export function useActivityAssistantConversation({
     setError("");
     try {
       const result = editingActivity
-        ? await onUpdateActivityFromRail({ ...editingActivity, draft })
-        : await onConfirmActivityPlan([draft]);
+        ? await onUpdateActivityFromRail({ ...editingActivity, draft: drafts[0] })
+        : await onConfirmActivityPlan(drafts);
       if (conversationEpochRef.current !== requestEpoch || activeSessionRef.current.userId !== userId) return;
-      if (!editingActivity && result?.created?.length !== 1) {
+      if (!editingActivity && result?.created?.length !== drafts.length) {
         setError(result?.failed?.[0]?.error || "ยังยืนยันผลการบันทึกไม่ได้ กรุณาตรวจ Google Calendar ก่อนลองอีกครั้ง");
         return;
       }
@@ -431,7 +437,7 @@ export function useActivityAssistantConversation({
       setGuidedConversationMode("template");
       setScheduleResolution(null);
       setRailMode(false);
-      addMessages({ role: "assistant", text: `${savedEditingActivity ? "แก้ไข" : "สร้าง"}กิจกรรม “${draft.title}” วันที่ ${selected.date} เวลา ${selected.time} น. เรียบร้อยแล้วครับ${result?.warnings?.length ? "\nมีข้อมูลประกอบบางส่วนที่บันทึกไม่สำเร็จ กรุณาตรวจรายละเอียดใน Calendar" : ""}`, source: "template" });
+      addMessages({ role: "assistant", text: `${savedEditingActivity ? "แก้ไข" : "สร้าง"}กิจกรรม “${drafts[0].title}” ${savedEditingActivity || drafts.length === 1 ? `วันที่ ${selected.date}` : `จำนวน ${drafts.length} วัน`} เวลา ${selected.time} น. เรียบร้อยแล้วครับ${result?.warnings?.length ? "\nมีข้อมูลประกอบบางส่วนที่บันทึกไม่สำเร็จ กรุณาตรวจรายละเอียดใน Calendar" : ""}`, source: "template" });
     } catch (requestError) {
       if (conversationEpochRef.current === requestEpoch && activeSessionRef.current.userId === userId)
         setError(requestError.message || "บันทึกกิจกรรมไม่สำเร็จ");
