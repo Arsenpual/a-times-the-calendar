@@ -4,7 +4,8 @@ import { fetchReminders, fetchReminderSync, saveReminder, deleteReminderRemote }
 // The due clock uses the already-loaded schedule every second. Cross-device
 // sync polls one revision document; a full collection read happens only when
 // that revision changes.
-const REMINDER_SYNC_INTERVAL_MS = 15_000;
+const REMINDER_SYNC_INTERVAL_MS = 60_000;
+const BACKGROUND_SYNC_INTERVAL_MS = 5 * 60_000;
 
 // Explicit mutations only. Serialize each ID so an earlier PUT cannot finish
 // after DELETE and recreate a document. A failed request is exposed to the UI.
@@ -21,6 +22,7 @@ export function useRemindersSync({ firebaseUser }) {
     let revision = "";
     let inFlight = false;
     let retryAfterUntil = 0;
+    let lastCheckedAt = 0;
     setLoaded({ uid, data: null });
     setLoadError(null);
     if (!uid) return () => { cancelled = true; };
@@ -28,8 +30,10 @@ export function useRemindersSync({ firebaseUser }) {
     // The API remains the only data boundary. Revision polling lets a
     // dedicated notification screen (for example the Raspberry Pi) see edits
     // quickly without repeatedly reading every reminder document.
-    const refresh = async () => {
-      if (inFlight || Date.now() < retryAfterUntil) return;
+    const refresh = async (force = false) => {
+      const interval = globalThis.document?.visibilityState === "hidden" ? BACKGROUND_SYNC_INTERVAL_MS : REMINDER_SYNC_INTERVAL_MS;
+      if (cancelled || inFlight || Date.now() < retryAfterUntil || (!force && Date.now() - lastCheckedAt < interval)) return;
+      lastCheckedAt = Date.now();
       try {
         inFlight = true;
         const result = await fetchReminderSync(revision);
@@ -53,9 +57,15 @@ export function useRemindersSync({ firebaseUser }) {
         inFlight = false;
       }
     };
-    refresh();
+    refresh(true);
     const pollId = window.setInterval(refresh, REMINDER_SYNC_INTERVAL_MS);
-    return () => { cancelled = true; window.clearInterval(pollId); };
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(true); };
+    globalThis.document?.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
+      globalThis.document?.removeEventListener("visibilitychange", onVisible);
+    };
   }, [uid]);
 
   const enqueue = useCallback((id, action) => {

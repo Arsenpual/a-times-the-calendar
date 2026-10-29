@@ -5,6 +5,15 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "nextDueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reminders",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
         { "fieldPath": "nextDueAt", "order": "ASCENDING" }
       ]
     },

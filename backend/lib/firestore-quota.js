@@ -41,13 +41,14 @@ function nextFirestoreQuotaReset(now = new Date()) {
   return pacificMidnightToUtc(nextDay.getUTCFullYear(), nextDay.getUTCMonth() + 1, nextDay.getUTCDate());
 }
 
-function firestoreQuotaExhaustedPayload(now = new Date()) {
+function firestoreQuotaExhaustedPayload() {
   return {
-    metric: "documentReads",
-    remaining: 0,
-    dailyLimit: FIRESTORE_FREE_DAILY_READ_LIMIT,
-    resetsAt: nextFirestoreQuotaReset(now).toISOString(),
-    resetTimeZone: PACIFIC_TIME_ZONE
+    // RESOURCE_EXHAUSTED does not identify the metric, plan, remaining
+    // balance or reset time. Never present a free-tier estimate as usage.
+    metric: null,
+    remaining: null,
+    dailyLimit: null,
+    resetsAt: null
   };
 }
 

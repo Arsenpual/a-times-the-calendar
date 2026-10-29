@@ -308,6 +308,11 @@ async function repairLegacyActivityCategoryMappings(userId) {
   if (activityCategoryRepairPromises.has(userId)) return activityCategoryRepairPromises.get(userId);
 
   const repair = (async () => {
+    const marker = userDoc(userId);
+    if ((await marker.get()).data()?.activityCategoryRepairVersion >= 1) {
+      repairedActivityCategoryUsers.add(userId);
+      return;
+    }
     const legacy = userDoc(userId).collection("activityCategories");
     const destination = activityCategoriesCol(userId);
     const [legacySnapshot, destinationSnapshot] = await Promise.all([legacy.get(), destination.get()]);
@@ -322,6 +327,9 @@ async function repairLegacyActivityCategoryMappings(userId) {
       await batch.commit();
     }
 
+    // Persist only after every batch succeeds so a restart can resume a
+    // partial repair, but never needs to scan completed accounts again.
+    await marker.set({ activityCategoryRepairVersion: 1 }, { merge: true });
     repairedActivityCategoryUsers.add(userId);
     if (missing.length > 0) console.log(`[firestore-db] user ${userId}: กู้ ${missing.length} mapping หมวดหมู่ของกิจกรรมเก่า`);
   })();

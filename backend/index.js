@@ -95,17 +95,16 @@ app.get("/api/health", (req, res) => {
 // tab back into Firestore cannot succeed and only floods Render logs. Keep a
 // short in-memory circuit open, serve the same structured 503 directly, then
 // probe Firestore again at most once every five minutes. The frontend still
-// receives the actual daily reset estimate and pauses its reminder poll until
-// that time.
+// retries after the short cooldown; resource exhaustion need not be daily.
 const FIRESTORE_QUOTA_PROBE_INTERVAL_MS = 5 * 60 * 1000;
 let firestoreQuotaCircuit = null;
 
 function sendFirestoreQuotaUnavailable(res, quota) {
-  const retryAfterSeconds = Math.max(60, Math.ceil((new Date(quota.resetsAt).getTime() - Date.now()) / 1000));
+  const retryAfterSeconds = Math.max(1, Math.ceil(((firestoreQuotaCircuit?.probeAfter || Date.now() + FIRESTORE_QUOTA_PROBE_INTERVAL_MS) - Date.now()) / 1000));
   res.set("Retry-After", String(retryAfterSeconds));
   return res.status(503).json({
     code: "FIRESTORE_QUOTA_EXHAUSTED",
-    error: "โควต้า Firestore หมดชั่วคราว กรุณารอให้โควต้ารีเซ็ตหรือเปิดใช้ Billing แล้วลองใหม่",
+    error: "บริการข้อมูลถูกจำกัดชั่วคราว ระบบจะลองเชื่อมต่อใหม่หลังพักคำขอ",
     retryAfterSeconds,
     quota
   });

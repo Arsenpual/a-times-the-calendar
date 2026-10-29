@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { db, telegramAuthDoc, telegramLinkDoc, telegramMessagesCol, telegramChatOwnerDoc, announcementDoc } = require("../firestore-db.js");
 const { normalizeAnnouncementConfig } = require("../announcement-config.js");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
@@ -501,9 +501,10 @@ async function saveChatMessage(userId, { direction, text, telegramMessageId = nu
     // no readAt is supplied.
     if (readAt !== undefined) data.readAt = readAt;
     transaction.set(messageRef, data, { merge: true });
-    if (!existing.exists && direction === "outgoing" && !readAt) {
-      transaction.set(telegramAuthDoc(userId), { unreadCount: FieldValue.increment(1) }, { merge: true });
-    }
+    transaction.set(telegramAuthDoc(userId), {
+      chatRevision: crypto.randomUUID(),
+      ...(!existing.exists && direction === "outgoing" && !readAt ? { unreadCount: FieldValue.increment(1) } : {})
+    }, { merge: true });
   });
 }
 
@@ -959,16 +960,18 @@ async function syncPriorityNewsSubscription(userId, priorityTopic) {
   return ref;
 }
 
-async function checkPriorityNewsSubscription(subscriptionRef) {
-  const before = (await subscriptionRef.get()).data();
+async function checkPriorityNewsSubscription(subscriptionRef, before) {
   if (!before?.userId || !before?.chatId || !before?.topic) return;
   const items = await searchGoogleNews(before.topic, { limit: PRIORITY_NEWS_RESULT_LIMIT, period: "1d" });
+  const previousKeys = new Set(before.seenItemKeys || []);
+  if (!items.some(item => !previousKeys.has(googleNewsItemKey(item)))) return;
   const freshItems = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(subscriptionRef);
     const current = snapshot.data();
     if (!current?.userId || current.topic !== before.topic) return [];
     const seen = new Set(Array.isArray(current.seenItemKeys) ? current.seenItemKeys : []);
     const fresh = items.filter(item => !seen.has(googleNewsItemKey(item)));
+    if (!fresh.length) return [];
     const allKeys = [...items.map(googleNewsItemKey), ...seen].slice(0, 100);
     transaction.set(subscriptionRef, { seenItemKeys: allKeys, lastCheckedAt: Date.now() }, { merge: true });
     return fresh;
@@ -993,13 +996,33 @@ async function checkPriorityNewsSubscription(subscriptionRef) {
 }
 
 async function runPriorityNewsChecks() {
-  const subscriptions = await db.collection(PRIORITY_NEWS_SUBSCRIPTIONS).limit(100).get();
-  for (const subscription of subscriptions.docs) {
-    try {
-      await checkPriorityNewsSubscription(subscription.ref);
-    } catch (error) {
-      console.error(`[telegram] priority news check failed for ${subscription.id}:`, error.message);
+  // Empty installations should not create a periodic lease write at all.
+  const anySubscription = await db.collection(PRIORITY_NEWS_SUBSCRIPTIONS).limit(1).get();
+  if (anySubscription.empty) return;
+  // One scan per interval across backend instances. The lease expires after
+  // a crash; local single-flight below also prevents overlapping slow scans.
+  const lease = db.collection("server-jobs").doc("priority-news");
+  const claimed = await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(lease);
+    if ((snapshot.data()?.nextRunAt || 0) > Date.now()) return false;
+    transaction.set(lease, { nextRunAt: Date.now() + PRIORITY_NEWS_POLL_MS });
+    return true;
+  });
+  if (!claimed) return;
+  let cursor;
+  while (true) {
+    let query = db.collection(PRIORITY_NEWS_SUBSCRIPTIONS).orderBy(FieldPath.documentId()).limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const subscriptions = await query.get();
+    for (const subscription of subscriptions.docs) {
+      try {
+        await checkPriorityNewsSubscription(subscription.ref, subscription.data());
+      } catch (error) {
+        console.error(`[telegram] priority news check failed for ${subscription.id}:`, error.message);
+      }
     }
+    if (subscriptions.size < 100) break;
+    cursor = subscriptions.docs.at(-1);
   }
 }
 
@@ -1263,7 +1286,13 @@ async function registerBotCommands() {
 router.get("/status", async (req, res, next) => {
   try {
     const data = (await telegramAuthDoc(req.userId).get()).data();
-    if (data?.chatId) await telegramChatOwnerDoc(data.chatId).set({ userId: req.userId, updatedAt: Date.now() }, { merge: true });
+    // Repair legacy chat ownership once, not on every status request.
+    if (data?.chatId && data.chatOwnerIndexedFor !== String(data.chatId)) {
+      const batch = db.batch();
+      batch.set(telegramChatOwnerDoc(data.chatId), { userId: req.userId, updatedAt: Date.now() }, { merge: true });
+      batch.set(telegramAuthDoc(req.userId), { chatOwnerIndexedFor: String(data.chatId) }, { merge: true });
+      await batch.commit();
+    }
     res.json({ connected: Boolean(data?.chatId), username: process.env.TELEGRAM_BOT_USERNAME || null });
   } catch (error) { next(error); }
 });
@@ -1272,11 +1301,15 @@ router.get("/messages", async (req, res, next) => {
   try {
     const requestedLimit = Number.parseInt(req.query.limit, 10);
     const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 30)) : 30;
+    const auth = (await telegramAuthDoc(req.userId).get()).data();
+    const revision = `${auth?.chatRevision || "initial"}:${limit}`;
+    res.set("Cache-Control", "no-store");
+    if (req.query.revision === revision) return res.status(304).end();
     const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(limit).get();
     const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).reverse();
     // A person's own messages are never unread. Only bot replies and sent
     // notifications wait for acknowledgement in the web chat.
-    res.json({ messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
+    res.json({ revision, messages, unreadCount: messages.filter((message) => message.direction === "outgoing" && !message.readAt).length });
   } catch (error) { next(error); }
 });
 
@@ -1292,16 +1325,18 @@ router.post("/messages/read", async (req, res, next) => {
     // Use the same newest-message window as GET /messages instead of a
     // compound Firestore query, so opening the chat never depends on a new
     // composite index being deployed.
-    const snapshot = await telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(30).get();
-    const batch = db.batch();
-    const unread = snapshot.docs.filter((doc) => doc.data().direction === "outgoing" && !doc.data().readAt);
-    unread.forEach((doc) => batch.update(doc.ref, { readAt: Date.now() }));
-    if (unread.length) {
-      const auth = await telegramAuthDoc(req.userId).get();
+    await db.runTransaction(async transaction => {
+      const authRef = telegramAuthDoc(req.userId);
+      const auth = await transaction.get(authRef);
+      // Undefined counters on legacy accounts still need the first scan.
+      if (auth.data()?.unreadCount === 0) return;
+      const snapshot = await transaction.get(telegramMessagesCol(req.userId).orderBy("createdAt", "desc").limit(30));
+      const unread = snapshot.docs.filter(doc => doc.data().direction === "outgoing" && !doc.data().readAt);
+      if (!unread.length) return;
+      unread.forEach(doc => transaction.update(doc.ref, { readAt: Date.now() }));
       const remainingUnread = Math.max(0, Number(auth.data()?.unreadCount || 0) - unread.length);
-      batch.set(telegramAuthDoc(req.userId), { unreadCount: remainingUnread }, { merge: true });
-      await batch.commit();
-    }
+      transaction.set(authRef, { unreadCount: remainingUnread, chatRevision: crypto.randomUUID() }, { merge: true });
+    });
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
@@ -1341,7 +1376,7 @@ router.delete("/messages", async (req, res, next) => {
       await batch.commit();
       removed += snapshot.size;
     }
-    await telegramAuthDoc(req.userId).set({ unreadCount: 0, chatClearedAt: Date.now() }, { merge: true });
+    await telegramAuthDoc(req.userId).set({ unreadCount: 0, chatClearedAt: Date.now(), chatRevision: crypto.randomUUID() }, { merge: true });
     res.json({ ok: true, removed });
   } catch (error) { next(error); }
 });
@@ -1415,7 +1450,17 @@ let priorityNewsTimer = null;
 module.exports = router;
 module.exports.startPriorityNewsWatcher = function startPriorityNewsWatcher() {
   if (priorityNewsTimer) return;
-  const run = () => runPriorityNewsChecks().catch(error => console.error("[telegram] priority news watcher failed:", error.message));
+  let running = false;
+  let retryAt = 0;
+  const run = async () => {
+    if (running || Date.now() < retryAt) return;
+    running = true;
+    try { await runPriorityNewsChecks(); }
+    catch (error) {
+      retryAt = Date.now() + Math.max(PRIORITY_NEWS_POLL_MS, 5 * 60_000);
+      console.error("[telegram] priority news watcher failed:", error.message);
+    } finally { running = false; }
+  };
   const initial = setTimeout(run, 15_000);
   initial.unref?.();
   priorityNewsTimer = setInterval(run, PRIORITY_NEWS_POLL_MS);
@@ -1749,8 +1794,8 @@ module.exports.webhook = async function telegramWebhook(req, res, next) {
     const ref = telegramLinkDoc(match[1]);
     const link = (await ref.get()).data();
     if (!link || link.expiresAt < Date.now()) return res.sendStatus(200);
-    await telegramAuthDoc(link.userId).set({ chatId: String(chatId), connectedAt: new Date().toISOString() }, { merge: true });
     await telegramChatOwnerDoc(chatId).set({ userId: link.userId, updatedAt: Date.now() }, { merge: true });
+    await telegramAuthDoc(link.userId).set({ chatId: String(chatId), chatOwnerIndexedFor: String(chatId), connectedAt: new Date().toISOString() }, { merge: true });
     await ref.delete();
     if (text) await saveChatMessage(link.userId, { direction: "incoming", text, telegramMessageId: message.message_id, readAt: Date.now() });
     await sendChatReply(link.userId, chatId, "✅ เชื่อม MR.Zettascale กับ T.i.M.E.S. สำเร็จแล้ว", { reply_markup: CUSTOM_COMMAND_KEYBOARD });

@@ -13,6 +13,7 @@ const unitTests = [
   "tests/loading-performance.test.mjs",
   "tests/reminder-phase2.test.mjs",
   "tests/reminder-sync.test.mjs",
+  "tests/quota-polling.test.mjs",
   "src/features/activity/lib/activity-modal-logic.test.mjs",
   "src/features/activity/lib/activity-mutation-logic.test.mjs",
   "src/features/activity/lib/activity-popup-logic.test.mjs",

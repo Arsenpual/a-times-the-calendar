@@ -9,6 +9,7 @@ for (const folder of ['functions']) {
     const groups = [];
     const reads = [];
     const updates = [];
+    const revisions = [];
     const deletes = [];
     let handler;
     const document = (path) => ({
@@ -16,6 +17,7 @@ for (const folder of ['functions']) {
       data: () => ({ title: 'Due', type: 'once-at', enabled: true, nextDueAt: 1 })
     });
     const reference = (path) => ({
+      path,
       collection: (name) => reference(`${path}/${name}`),
       doc: (id) => reference(`${path}/${id}`),
       get: async () => {
@@ -48,6 +50,7 @@ for (const folder of ['functions']) {
       },
       batch: () => ({
         update: (ref) => updates.push(ref.path),
+        set: (ref, data) => revisions.push({ path: ref.path, data }),
         commit: async () => {}
       })
     };
@@ -60,6 +63,7 @@ for (const folder of ['functions']) {
     };
     const context = {
       require: (name) => {
+        if (name === 'node:crypto') return require(name);
         if (name === 'firebase-admin') return admin;
         if (name === 'firebase-functions/v2/scheduler') return { onSchedule: (_, fn) => { handler = fn; return fn; } };
         if (name === 'firebase-functions/v2') return { setGlobalOptions() {} };
@@ -79,11 +83,19 @@ for (const folder of ['functions']) {
     assert.ok(deletes.length >= 2);
     assert.ok(deletes.every(path => /^users\/(alice|bob)\/modes\/reminder-mode\/fcmTokens\/device-token$/.test(path)));
     assert.equal(updates.length, 3);
+    assert.equal(revisions.length, 2);
+    assert.ok(revisions.every(item => item.path.endsWith('/modes/reminder-mode') && item.data.syncRevision));
     assert.ok(updates.every(path => path.includes('/modes/')));
     const indexes = JSON.parse(readFileSync(join(__dirname, '..', 'firestore.indexes.json'), 'utf8')).indexes;
     for (const { name, filters } of groups) {
       assert.equal(filters[0][0], 'enabled');
       assert.equal(filters[1][0], 'nextDueAt');
+      if (name === 'reminders') {
+        assert.equal(filters[2][0], 'type');
+        assert.ok(!filters[2][2].includes('interval'));
+        assert.ok(indexes.some(index => index.collectionGroup === name && index.queryScope === 'COLLECTION_GROUP'
+          && index.fields.map(field => field.fieldPath).join(',') === 'enabled,type,nextDueAt'));
+      }
       assert.ok(indexes.some(index => index.collectionGroup === name && index.queryScope === 'COLLECTION_GROUP'
         && index.fields[0].fieldPath === 'enabled' && index.fields[1].fieldPath === 'nextDueAt'));
     }

@@ -1,6 +1,7 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const { randomUUID } = require("node:crypto");
 
 
 admin.initializeApp();
@@ -43,12 +44,15 @@ exports.checkDueReminders = onSchedule("every 1 minutes", async () => {
     .collectionGroup("reminders")
     .where("enabled", "==", true)
     .where("nextDueAt", "<=", now)
+    // Interval/routine/stopwatch are local clocks, not push schedules.
+    .where("type", "in", ["weekly", "once-at", "countdown", "event-anchored"])
+    .where("nextDueAt", ">", 0)
     .get();
 
   console.log(`[checkDueReminders] พบ reminder enabled=true ทั้งหมด ${snapshot.size} รายการ ทุก user รวมกัน`);
 
   const activities = await db.collectionGroup("activity-notifications")
-    .where("enabled", "==", true).where("nextDueAt", "<=", now).get();
+    .where("enabled", "==", true).where("nextDueAt", "<=", now).where("nextDueAt", ">", 0).get();
 
   const dueDocsGroupedByUser = new Map(); // userId -> [{ ref, data }]
 
@@ -96,6 +100,15 @@ async function processUserDueReminders(userId, dueReminders, now, {
 
   let batch = db.batch();
   let pendingWrites = 0;
+  let reminderChanged = false;
+  const commit = async () => {
+    if (reminderChanged) batch.set(db.collection("users").doc(userId)
+      .collection("modes").doc("reminder-mode"), { syncRevision: randomUUID() }, { merge: true });
+    await batch.commit();
+    batch = db.batch();
+    pendingWrites = 0;
+    reminderChanged = false;
+  };
 
   for (const { ref, data: reminder } of dueReminders) {
     if (tokens.length > 0) {
@@ -154,12 +167,11 @@ async function processUserDueReminders(userId, dueReminders, now, {
       updates.nextDueAt = null;
     }
     batch.update(ref, updates);
+    if (ref.path.includes("/reminder-mode/reminders/")) reminderChanged = true;
     if (++pendingWrites === 450) {
-      await batch.commit();
-      batch = db.batch();
-      pendingWrites = 0;
+      await commit();
     }
   }
 
-  if (pendingWrites) await batch.commit();
+  if (pendingWrites) await commit();
 }

@@ -76,7 +76,7 @@ export async function handleResponse(res, label) {
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = null; }
     if (body?.code === "FIRESTORE_QUOTA_EXHAUSTED") {
-      setFirestoreQuotaStatus(body.quota || { remaining: 0, dailyLimit: 50_000, resetsAt: null });
+      setFirestoreQuotaStatus(body.quota || { remaining: null, dailyLimit: null, resetsAt: null });
     }
     if (res.status === 429 || res.status === 503) {
       const seconds = Number(body?.retryAfterSeconds || res.headers.get("retry-after"));

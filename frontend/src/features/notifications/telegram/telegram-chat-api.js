@@ -1,7 +1,9 @@
 import { apiRequest, handleResponse } from "../../../shared/api/client.js";
 
-export async function getTelegramChat(limit = 30) {
-  return handleResponse(await apiRequest(`/api/telegram/messages?limit=${limit}`, { cache: "no-store" }), "GET /api/telegram/messages");
+export async function getTelegramChat(limit = 30, revision = "") {
+  const response = await apiRequest(`/api/telegram/messages?limit=${limit}&revision=${encodeURIComponent(revision)}`, { cache: "no-store" });
+  if (response.status === 304) return { notModified: true };
+  return handleResponse(response, "GET /api/telegram/messages");
 }
 
 export async function getTelegramChatSummary() {
