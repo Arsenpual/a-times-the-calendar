@@ -126,7 +126,8 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .activity-ai-page .activity-ai-composer textarea { min-height: 56px; font-size: 14px; }
 .activity-ai-page .activity-ai-turn-source { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 0; padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 11px; font-weight: 400; }
 .activity-ai-page .activity-ai-turn-source::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: #d99043; }
-.activity-ai-page .activity-ai-turn-source.is-create { border-color: #df9a54; background: #fff4e7; color: #8b4f16; }
+.activity-ai-page .activity-ai-turn-source.is-create { border-color: #8b5cf6; background: #f5f1ff; color: #6044a5; }
+.activity-ai-page .activity-ai-turn-source.is-create::before { background: #8b5cf6; }
 .activity-ai-page .activity-ai-turn-source.is-planning { border-color: #d85a93; background: #fff4f8; color: #963662; }
 .activity-ai-page .activity-ai-turn-source.is-calendar { border-color: #3d73be; background: #f3f7fd; color: #28568f; }
 .activity-ai-page .activity-ai-turn-source.is-ai { border-color: #8b5cf6; background: #f5f1ff; color: #6044a5; }

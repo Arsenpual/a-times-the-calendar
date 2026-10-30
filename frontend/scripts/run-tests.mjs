@@ -39,6 +39,7 @@ const browserTests = [
   "tests/assistant-weather-browser.mjs",
   "tests/assistant-cleanup-browser.mjs",
   "tests/activity-phase1-browser.mjs",
+  "tests/activity-summary-hero-browser.mjs",
   "tests/activity-view-browser.mjs",
   "tests/app-navigation-browser.mjs",
   "tests/dev-mockups-browser.mjs",

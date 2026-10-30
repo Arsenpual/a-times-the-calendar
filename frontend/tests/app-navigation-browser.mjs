@@ -20,7 +20,6 @@ try {
   await page.evaluate(() => {
     localStorage.removeItem("times-summary-panel-glass");
     localStorage.setItem("times-weekly-summary-glass", "true");
-    localStorage.setItem("times-week-spine-hours-per-cell", "invalid");
   });
   await page.reload();
   await page.waitForFunction(() => Boolean(window.fixture));
@@ -31,13 +30,10 @@ try {
     const arrow = () => document.dispatchEvent(new KeyboardEvent("keydown", {key:"ArrowRight", bubbles:true}));
     check(f().app.mode === "activity" && !f().app.settingsOpen, "defaults");
     check(f().preferences.summaryPanelGlassEnabled === true, "legacy glass preference");
-    check(f().preferences.weekSpineHoursPerCell === 2, "invalid grid defaults to two hours");
     run(() => {
       f().preferences.setSummaryPanelGlassEnabled(false);
-      f().preferences.setWeekSpineHoursPerCell(4);
     });
     check(localStorage.getItem("times-summary-panel-glass") === "false", "glass persisted");
-    check(localStorage.getItem("times-week-spine-hours-per-cell") === "4", "grid persisted");
     run(() => f().nav.selectWeek(new Date(2026, 8, 6)));
     const start = f().nav.cursorDate.getTime();
     run(arrow);
@@ -68,15 +64,8 @@ try {
     color: window.fixture.preferences.reminderTimelineColors.nowIndicator,
     mode: window.fixture.app.mode,
     settings: window.fixture.app.settingsOpen,
-    glass: window.fixture.preferences.summaryPanelGlassEnabled,
-    grid: window.fixture.preferences.weekSpineHoursPerCell
-  })), {theme:"dark",color:"#123456",mode:"activity",settings:false,glass:false,grid:4});
-  await page.evaluate(() => {
-    window.fixture.flushSync(() => window.fixture.preferences.setWeekSpineHoursPerCell(1));
-  });
-  await page.reload();
-  await page.waitForFunction(() => Boolean(window.fixture));
-  assert.equal(await page.evaluate(() => window.fixture.preferences.weekSpineHoursPerCell), 1);
+    glass: window.fixture.preferences.summaryPanelGlassEnabled
+  })), {theme:"dark",color:"#123456",mode:"activity",settings:false,glass:false});
   await page.addInitScript(() => {
     Storage.prototype.getItem = () => { throw new Error("Storage disabled"); };
     Storage.prototype.setItem = () => { throw new Error("Storage disabled"); };
@@ -84,19 +73,16 @@ try {
   await page.reload();
   await page.waitForFunction(() => Boolean(window.fixture));
   assert.deepEqual(await page.evaluate(() => ({
-    glass: window.fixture.preferences.summaryPanelGlassEnabled,
-    grid: window.fixture.preferences.weekSpineHoursPerCell
-  })), {glass:false,grid:2});
+    glass: window.fixture.preferences.summaryPanelGlassEnabled
+  })), {glass:false});
   await page.evaluate(() => window.fixture.flushSync(() => {
     window.fixture.preferences.setSummaryPanelGlassEnabled(true);
-    window.fixture.preferences.setWeekSpineHoursPerCell(4);
   }));
   assert.deepEqual(await page.evaluate(() => ({
-    glass: window.fixture.preferences.summaryPanelGlassEnabled,
-    grid: window.fixture.preferences.weekSpineHoursPerCell
-  })), {glass:true,grid:4});
+    glass: window.fixture.preferences.summaryPanelGlassEnabled
+  })), {glass:true});
   assert.deepEqual(errors, []);
-  console.log("PASS: mode shortcuts, theme/color/glass/grid persistence, legacy migration, invalid values and unavailable storage");
+  console.log("PASS: mode shortcuts, theme/color/glass persistence, legacy migration and unavailable storage");
 
 } finally {
   await browser.close();

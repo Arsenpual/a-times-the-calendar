@@ -34,10 +34,7 @@ async function drag(title, hours, resize = false, targetIndex = 0) {
 try {
   await page.goto(origin + 'tests/fixtures/activity-phase1.html');
   await block('Activity A').waitFor();
-  await page.getByRole('button', { name: 'เปิด timeline แบบเต็มหน้าจอ' }).click();
-  await page.locator('.is-fullscreen').waitFor();
-  await page.waitForTimeout(550); // Wait for the product's 500ms animation.
-  assert.equal(await page.locator('.week-spine-week-name').count(), 0);
+  assert.equal(await page.locator('.week-spine-fullscreen-btn').count(), 0);
   assert.equal(await page.locator('.week-spine-hours > span').count(), 25);
   await drag('Activity A', 1);
   assert.match(await pendingCount(), /1 รายการ/);
@@ -64,7 +61,7 @@ try {
   const nextTrack = await page.locator('.week-spine-track').nth(1).boundingBox();
   await page.mouse.click(nextTrack.x + 30, nextTrack.y + nextTrack.height / 2);
   await page.waitForFunction(() => window.phase1.calls.filter(c => c.type === 'copy').length === 1);
-  console.log('PASS browser: fullscreen, drag/resize, history, copy placement and cancel');
+  console.log('PASS browser: inline drag/resize, history, copy placement and cancel');
   await block('Activity A').click({ button: 'right' });
   await page.getByText('เลือกรายการ', { exact: true }).click();
   await block('Activity B').click();
@@ -95,14 +92,14 @@ try {
   await page.evaluate(() => window.phase1.set({ viewMode: 'four-weeks' }));
   await page.locator('.week-spine-overview-week').first().waitFor();
   await page.locator('.week-spine-overview-fullscreen-btn').first().click();
-  await page.locator('.is-fullscreen').waitFor();
-  await page.waitForTimeout(550);
-  await page.getByRole('button', { name: 'ออกจากเต็มหน้าจอ' }).click();
+  await page.locator('.week-spine-track').first().waitFor();
+  assert.equal(await page.locator('.is-fullscreen').count(), 0);
+  await page.evaluate(() => window.phase1.set({ viewMode: 'four-weeks' }));
   await page.locator('.week-spine-overview-week').first().waitFor();
   await page.locator('.week-spine-overview-week').first().dblclick({ position: { x: 5, y: 5 } });
   await page.locator('.week-spine-track').first().waitFor();
   assert.equal(await page.locator('.is-fullscreen').count(), 0);
   await page.screenshot({ path: join(tmpdir(), 'times-activity-phase1.png'), fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('PASS browser: move/resize, undo/redo, multi-selection, copy placement/Esc, fullscreen, cycle return, cycle double-click; no uncaught errors');
+  console.log('PASS browser: move/resize, undo/redo, multi-selection, copy placement/Esc and Cycle navigation; no uncaught errors');
 } finally { await browser.close(); await server.close(); }

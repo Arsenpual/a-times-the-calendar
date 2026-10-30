@@ -17,6 +17,12 @@ body { -webkit-font-smoothing: antialiased; }
   background-size: 40px 40px;
 }
 
+/* Activity uses the full workspace for its summary and calendar. */
+.app--activity .app-main {
+  padding: 0;
+  background-image: none;
+}
+
 /* Crisp, framed navigation; active tabs read as a doorway rather than a pill. */
 .app-header {
   background: var(--bg-muted);

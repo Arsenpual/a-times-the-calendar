@@ -1,5 +1,86 @@
 /* Weekly summary panel */
 
+.activity-dashboard.has-summary-hero { grid-template-columns: minmax(0, 1fr); --bg: #f4f6fa; --bg-muted: #fff; --text-primary: #0f1a2e; --text-secondary: #566174; --border: #e3e8f0; --hover: #eef2fa; --today: #2d4fe8; }
+.activity-dashboard.has-summary-hero .activity-summary-hero,
+.activity-dashboard.has-summary-hero .week-spine,
+.activity-dashboard.has-summary-hero .summary-column { grid-column: 1 / -1; }
+.activity-dashboard.has-summary-hero .summary-column:not(.has-selected-day):not(.is-assistant-daily-summary) { display: none; }
+.activity-dashboard.has-summary-hero .activity-summary-hero { order: -3; }
+.activity-dashboard.has-summary-hero .week-spine { order: -2; }
+.activity-dashboard.has-summary-hero .summary-column { order: -1; }
+.activity-dashboard.has-summary-hero .week-spine-now-line { position: absolute; z-index: 15; left: 0; right: 0; border-top: 2px solid var(--today); pointer-events: none; }
+.activity-dashboard.has-summary-hero .week-spine-now-line::before { position: absolute; top: -5px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--today); content: ""; }
+.activity-dashboard.has-summary-hero .activity-summary-hero-bars button:disabled { opacity: .35; cursor: default; }
+.activity-dashboard.has-summary-hero .week-spine-day { grid-template-rows: 17px 30px 16px 1fr; gap: 0; text-align: left; background: #fff; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-weekend { background: #fafbfd; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-today { background: #f6f8ff; }
+.activity-dashboard.has-summary-hero .week-spine-day-label { overflow: hidden; padding-left: 6px; border-left: 1px solid #e3e8f0; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.activity-dashboard.has-summary-hero .week-spine-day-label-full { display: inline; }
+.activity-dashboard.has-summary-hero .week-spine-day-label-short { display: none; }
+.activity-dashboard.has-summary-hero .week-spine-day strong { justify-content: flex-start; align-items: center; gap: 3px; min-width: 0; overflow: hidden; padding-left: 3px; border-left: 1px solid #e3e8f0; font-size: 17px; }
+.activity-dashboard.has-summary-hero .week-spine-day strong span { min-width: 27px; height: 27px; border-radius: 50%; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-today strong span { background: #2d4fe8; color: #fff; }
+.activity-dashboard.has-summary-hero .week-spine-day-month { display: inline; overflow: hidden; color: #566174; font-size: 10px; font-weight: 400; white-space: nowrap; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-selected:not(.is-today) strong span { color: #2d4fe8; background: #e8eeff; }
+.activity-dashboard.has-summary-hero .week-spine-hours { margin-top: 67px; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) { direction: ltr; overflow: scroll; height: min(75dvh, 900px); scrollbar-width: thin; scrollbar-color: #aeb9ca transparent; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface::-webkit-scrollbar { width: 6px; height: 6px; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface::-webkit-scrollbar-track,
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface::-webkit-scrollbar-corner { background: transparent; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface::-webkit-scrollbar-thumb { border-radius: 999px; background: #aeb9ca; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-grid-wrap { direction: ltr; width: calc(140% - 20.8px); min-width: 0; grid-template-columns: 42px minmax(0, 1fr); overflow: visible; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-days { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; }
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-hours,
+.activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-track { height: 1440px; }
+.activity-dashboard.has-summary-hero .week-spine-day-meta { overflow: hidden; padding-left: 6px; border-left: 1px solid #e3e8f0; color: var(--text-secondary); font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.activity-dashboard.has-summary-hero .week-spine-track { box-sizing: border-box; border: 0; border-left: 1px solid #e3e8f0; border-bottom: 1px solid #e3e8f0; border-radius: 0; background-color: #fff; background-image: linear-gradient(to bottom, #e3e8f0 1px, transparent 1px), linear-gradient(to bottom, transparent calc(50% - .5px), #f0f3f8 calc(50% - .5px), #f0f3f8 calc(50% + .5px), transparent calc(50% + .5px)); background-size: 100% calc(100% / var(--week-spine-hour-cell-count)); }
+.activity-dashboard.has-summary-hero .week-spine-day.is-weekend .week-spine-track { background-color: #fafbfd; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-today .week-spine-track { background-color: #f6f8ff; box-shadow: none; }
+.activity-dashboard.has-summary-hero .week-spine-day.is-selected .week-spine-track { border: 0; border-left: 1px solid #e3e8f0; border-bottom: 1px solid #e3e8f0; box-shadow: inset 0 0 0 1px #a9bef7; }
+.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: size; background: color-mix(in srgb, var(--block-color, currentColor) 18%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
+.activity-dashboard.has-summary-hero .week-spine-block-time { display: none; }
+@container (min-height: 30px) { .activity-dashboard.has-summary-hero .week-spine-block-time { display: block; } }
+.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-title,
+.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-time { color: var(--text-primary); text-shadow: none; }
+.activity-summary-hero { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(220px, 1fr); gap: 32px; padding: 28px 24px; border: 1px solid #0f1a2e; border-radius: 16px; background: #0f1a2e; color: #f2f5fb; }
+.activity-summary-hero h2, .activity-summary-hero h3, .activity-summary-hero p { margin: 0; }
+.activity-summary-hero h2 { font-size: 22px; }
+.activity-summary-hero h3 { font-size: 13px; color: #aeb9d0; }
+.activity-summary-hero-main { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }
+.activity-summary-hero-main p { color: #aeb9d0; font-size: 13px; }
+.activity-summary-hero .week-spine-week-glance-demo { height: auto; margin: 12px 0 0; padding: 0; border: 0; white-space: normal; }
+.activity-summary-hero .week-spine-week-name { padding: 6px 10px; border: 1px solid #394966; border-radius: 8px; background: #1b2942; color: #dce5ff; font-size: 13px; line-height: 1.4; }
+.activity-summary-hero .week-spine-week-name:hover,
+.activity-summary-hero .week-spine-week-name:focus-visible,
+.activity-summary-hero .week-spine-week-name.is-editing { border-color: #9db4ff; color: #fff; outline: 2px solid #9db4ff; outline-offset: 2px; }
+.activity-summary-hero-stats { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.activity-summary-hero-stats div { display: flex; flex-direction: column; }
+.activity-summary-hero-stats strong { font-size: clamp(30px, 3vw, 52px); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.activity-summary-hero-stats strong.is-accent { color: #9db4ff; }
+.activity-summary-hero-stats span { margin-top: 6px; color: #aeb9d0; font-size: 12px; }
+.activity-summary-hero-categories { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.activity-summary-hero-stack { display: flex; gap: 2px; height: 18px; overflow: hidden; border-radius: 9px; background: #26334f; }
+.activity-summary-hero-stack span { min-width: 0; }
+.activity-summary-hero-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
+.activity-summary-hero-legend > div { display: flex; align-items: center; gap: 6px; min-width: 0; padding-bottom: 5px; border-bottom: 1px solid #26334f; font-size: 12px; }
+.activity-summary-hero-legend i { flex: none; width: 9px; height: 9px; border-radius: 2px; }
+.activity-summary-hero-legend span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-summary-hero-legend small { color: #aeb9d0; white-space: nowrap; }
+.activity-summary-hero-legend b { white-space: nowrap; }
+.activity-summary-hero-legend p { color: #aeb9d0; font-size: 12px; }
+.activity-summary-hero-days { display: flex; flex-direction: column; justify-content: space-between; gap: 15px; }
+.activity-summary-hero-days h3 { display: flex; justify-content: space-between; gap: 8px; }
+.activity-summary-hero-days h3 small { font-size: 11px; font-weight: 400; }
+.activity-summary-hero-bars { display: flex; align-items: end; gap: 6px; min-height: 125px; }
+.activity-summary-hero-bars button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: end; gap: 4px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.activity-summary-hero-bars button:hover i, .activity-summary-hero-bars button:focus-visible i { background: #9db4ff; }
+.activity-summary-hero-bars button:focus-visible { outline: 2px solid #9db4ff; outline-offset: 4px; border-radius: 3px; }
+.activity-summary-hero-bars span, .activity-summary-hero-bars small { color: #aeb9d0; font-size: 11px; }
+.activity-summary-hero-bars i { display: block; width: min(100%, 32px); border-radius: 4px 4px 0 0; background: #7f91bb; }
+@media (max-width: 1050px) { .activity-summary-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }.activity-summary-hero-days { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .activity-summary-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; }.activity-summary-hero-days { grid-column: 1; }.activity-summary-hero-legend { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .activity-dashboard.has-summary-hero .week-spine-day-label-full { display: none; }.activity-dashboard.has-summary-hero .week-spine-day-label-short { display: inline; } }
+
 .summary-panel {
   background: var(--bg-muted);
   border: 1px solid var(--border);

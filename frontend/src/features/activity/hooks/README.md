@@ -39,7 +39,6 @@ Cycle anchor, summary panel mode และ fullscreen request/return
 | ชื่อสัปดาห์และ inline editor | `use-week-names.js` |
 | ข้อมูล Cycle / loading / error | `use-cycle-activities.js` |
 | วันที่เลือก, popup, warning, hover | `use-week-spine-ui-state.js` |
-| Fullscreen / animation / cleanup | `use-week-spine-fullscreen.js` |
 | รายการที่เลือกและปุ่มลัดลบ | `use-week-spine-selection.js` |
 | Pointer state และเส้นวัด/แสงตอบสนอง | `use-week-spine-drag-state.js` |
 | Drag / resize / copy placement | `use-week-spine-drag-controller.js` |

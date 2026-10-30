@@ -72,6 +72,11 @@ function describeActivitySuggestion(suggestion) {
   return [suggestion.title, suggestion.date, suggestion.time, suggestion.durationMinutes ? `${suggestion.durationMinutes} นาที` : ""].filter(Boolean).join(" · ");
 }
 
+function getTurnSourceLabel(message) {
+  if (message.commandTone === "create") return "AI ตอบ · สร้างกิจกรรม";
+  return message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป");
+}
+
 export default function AssistantTranscript({ presentation, guidedActivity, railMode = false, toolCommands, messages, sendKnowledge, pending, selectScheduleAlternative, selectScheduleOption, confirmActivityPlan, applyActivitySuggestion, send, renderTelegramArchive, telegramMessages, telegramError, error, calendarFailure, onReauthCalendar, retryCalendarFailure, pendingSource, bottomRef }) {
   return (
   <div className="activity-ai-messages" role={presentation === "page" ? "log" : undefined} aria-label={presentation === "page" ? "บทสนทนา" : undefined} aria-live={presentation === "page" ? "polite" : undefined}>
@@ -84,7 +89,7 @@ export default function AssistantTranscript({ presentation, guidedActivity, rail
         {presentation === "page" && message.role === "assistant" && (
           <div className="activity-ai-message-meta">
             <strong>MR.Zettascale</strong>
-            {message.commandTone && <small className={`activity-ai-turn-source is-${message.commandTone}`}>{message.sourceLabel || (["ai", "free-ai"].includes(message.source) ? "AI" : message.source === "calendar" ? "AI · ปฏิทิน" : message.source === "knowledge" ? "ข้อมูลและกฎในเว็บ" : "คำตอบสำเร็จรูป")}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>}
+            {message.commandTone && <small className={`activity-ai-turn-source is-${message.commandTone}`}>{getTurnSourceLabel(message)}{message.calendarRange?.label && !message.toolKind ? ` · ช่วง ${message.calendarRange.label}` : ""}</small>}
           </div>
         )}
         <div

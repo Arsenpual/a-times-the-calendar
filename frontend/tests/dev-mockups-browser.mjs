@@ -39,6 +39,16 @@ try {
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit7", ctrlKey: true, altKey: true, bubbles: true }));
   });
   assert.equal(new URL(await page.evaluate(() => window.mockupShortcutUrl)).searchParams.get("mockup"), "activity-mode-seven-day-focus-mockup");
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", ctrlKey: true, altKey: true, bubbles: true }));
+  });
+  const summaryHeroUrl = await page.evaluate(() => window.mockupShortcutUrl);
+  assert.equal(new URL(summaryHeroUrl).searchParams.get("mockup"), "activity-mode-summary-hero-mockup");
+  await page.goto(summaryHeroUrl);
+  const summaryFrame = page.frameLocator('iframe[title="ตัวอย่าง Summary Hero"]');
+  await summaryFrame.getByRole("heading", { name: "สรุป 7 วัน", exact: true }).waitFor();
+  await page.locator(".mockup-preview-toggle").click();
+  assert.equal(await page.locator(".mockup-preview-picker select").inputValue(), "activity-mode-summary-hero-mockup");
   assert.deepEqual(errors, []);
   console.log("PASS: dev-only mockup route, picker discovery and lazy component load");
 } finally {

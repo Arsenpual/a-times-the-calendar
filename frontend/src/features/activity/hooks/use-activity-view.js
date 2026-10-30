@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { formatWeekLabel, getYearCycle, getYearWeekRange } from "../../../shared/lib/date-utils.js";
 
 function formatCycleLabel(date) {
@@ -16,18 +16,13 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
   // This deliberately stays separate from cursorDate. In Cycle view, users
   // may inspect any of its four weeks without moving the visible Cycle.
   const [cycleAnchorDate, setCycleAnchorDate] = useState(() => new Date());
-  const [weekSpineFullscreenRequest, setWeekSpineFullscreenRequest] = useState(0);
   const [summaryPanelMode, setSummaryPanelMode] = useState("week");
-  const cycleViewToRestoreRef = useRef(null);
-  // Reset before rendering children so a new account cannot consume an old
-  // fullscreen request. React retries this component before committing children.
+  // Reset account-scoped view state before rendering children.
   if (ownerId !== userId) {
     setOwnerId(userId);
     setWeekSpineViewMode("week");
     setCycleAnchorDate(new Date());
-    setWeekSpineFullscreenRequest(0);
     setSummaryPanelMode("week");
-    cycleViewToRestoreRef.current = null;
   }
   const setWeekSpineView = useCallback((nextView) => {
     if (nextView === "four-weeks") {
@@ -48,24 +43,15 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
     setCycleAnchorDate(nextCycle.start);
   }, [cycleAnchorDate]);
   const openCycleWeekEditor = useCallback((date, range = null) => {
-    cycleViewToRestoreRef.current = new Date(cycleAnchorDate);
     selectWeek(date, range);
+    setSummaryPanelMode("week");
     setWeekSpineViewMode("week");
-    setWeekSpineFullscreenRequest((request) => request + 1);
-  }, [cycleAnchorDate, selectWeek]);
+  }, [selectWeek]);
   const openCycleWeekView = useCallback((date, range = null) => {
     selectWeek(date, range);
     setSummaryPanelMode("week");
     setWeekSpineViewMode("week");
   }, [selectWeek]);
-  const handleTimelineFullscreenChange = useCallback((isFullscreen) => {
-    if (isFullscreen || !cycleViewToRestoreRef.current) return;
-    const cycleAnchor = cycleViewToRestoreRef.current;
-    cycleViewToRestoreRef.current = null;
-    setCycleAnchorDate(cycleAnchor);
-    setSummaryPanelMode("cycle");
-    setWeekSpineViewMode("four-weeks");
-  }, []);
   const selectCycleWeek = useCallback((date) => {
     selectWeek(date);
     setSummaryPanelMode("week");
@@ -88,5 +74,5 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
     date: headerDate.toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }),
     period: headerLabel.slice(headerLabel.indexOf(weekSpineViewMode === "four-weeks" ? "cycle ที่" : "สัปดาห์ที่")),
   };
-  return { weekSpineViewMode, cycleAnchorDate, weekSpineFullscreenRequest, summaryPanelMode, setWeekSpineView, navigateCycle, openCycleWeekEditor, openCycleWeekView, handleTimelineFullscreenChange, selectCycleWeek, focusCycleSummary, focusWeeklySummary, activityHeaderTitle };
+  return { weekSpineViewMode, cycleAnchorDate, summaryPanelMode, setWeekSpineView, navigateCycle, openCycleWeekEditor, openCycleWeekView, selectCycleWeek, focusCycleSummary, focusWeeklySummary, activityHeaderTitle };
 }

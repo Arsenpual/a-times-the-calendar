@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 
-const WEEK_SPINE_HOURS_PER_CELL_KEY = "times-week-spine-hours-per-cell";
 const SUMMARY_PANEL_GLASS_KEY = "times-summary-panel-glass";
 
 const THEME_STORAGE_KEY = "theme";
@@ -32,22 +31,6 @@ export function useDisplayPreferences() {
       return false;
     }
   });
-  const [weekSpineHoursPerCell, setWeekSpineHoursPerCell] = useState(() => {
-    try {
-      const savedValue = Number(window.localStorage.getItem(WEEK_SPINE_HOURS_PER_CELL_KEY));
-      return [1, 2, 4].includes(savedValue) ? savedValue : 2;
-    } catch {
-      return 2;
-    }
-  });
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(WEEK_SPINE_HOURS_PER_CELL_KEY, String(weekSpineHoursPerCell));
-    } catch {
-      // The default grid remains available when local storage is unavailable.
-    }
-  }, [weekSpineHoursPerCell]);
-
   useEffect(() => {
     try {
       window.localStorage.setItem(SUMMARY_PANEL_GLASS_KEY, String(summaryPanelGlassEnabled));
@@ -99,7 +82,6 @@ export function useDisplayPreferences() {
 
   return {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
-    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled,
-    weekSpineHoursPerCell, setWeekSpineHoursPerCell
+    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   };
 }

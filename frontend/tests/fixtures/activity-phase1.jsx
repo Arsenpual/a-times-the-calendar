@@ -10,6 +10,7 @@ const initial = [{ ...timed('Activity A', 0, 9), recurringEventId: 'series-a' },
 window.phase1 = { calls: [], cycleActivities: initial, archive: [], set: null };
 function Fixture() {
   const [activities, setActivities] = useState(initial);
+  window.phase1.setActivities = setActivities;
   const [options, setOptions] = useState({ viewMode: 'week', anchorDate: day, userId: 'test-a', fullscreenRequestId: 0 });
   const returnToCycle = useRef(false);
   window.phase1.set = patch => setOptions(current => ({ ...current, ...patch }));
@@ -21,8 +22,9 @@ function Fixture() {
   }, []);
   const record = (type, value) => window.phase1.calls.push({ type, value });
   return <LanguageProvider><main style={{ padding: 20 }}>
-    <ActivityModeWeekSpine {...options} activities={activities} categories={[]} activityCategoryMap={{}} activityTagMap={{}} lockedActivities={{ Locked: true }} calendarAccessToken="test-token" hoursPerCell={2}
+    <ActivityModeWeekSpine {...options} activities={activities} categories={[]} activityCategoryMap={{}} activityTagMap={{}} lockedActivities={{ Locked: true }} calendarAccessToken="test-token"
       onTimelineFullscreenChange={fullscreenChanged}
+      onSelectDay={date => record('select-day', date.toISOString())}
       cycleData={{ activities, loading: false, error: "" }}
       onSelectOverviewWeek={date => setOptions(current => ({ ...current, anchorDate: date }))}
       onOpenOverviewWeekView={date => setOptions(current => ({ ...current, anchorDate: date, viewMode: 'week' }))}

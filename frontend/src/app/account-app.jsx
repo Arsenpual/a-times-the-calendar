@@ -138,8 +138,7 @@ export default function AccountApp({ auth }) {
   const [navigationExpanded, setNavigationExpanded] = useState(false);
   const {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
-    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled,
-    weekSpineHoursPerCell, setWeekSpineHoursPerCell
+    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   } = useDisplayPreferences();
   const nav = useWeekNavigation({ mode, userId: firebaseUser?.uid ?? null });
   const {
@@ -157,13 +156,11 @@ export default function AccountApp({ auth }) {
   const {
     weekSpineViewMode,
     cycleAnchorDate,
-    weekSpineFullscreenRequest,
     summaryPanelMode,
     setWeekSpineView,
     navigateCycle,
     openCycleWeekEditor,
     openCycleWeekView,
-    handleTimelineFullscreenChange,
     selectCycleWeek,
     focusCycleSummary,
     focusWeeklySummary,
@@ -565,8 +562,8 @@ export default function AccountApp({ auth }) {
             )}
 
             {firebaseUser && (
-              <div ref={activityDashboardRef} className={`dashboard activity-dashboard${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
-                <div className={`summary-column${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`}>
+              <div ref={activityDashboardRef} className={`dashboard activity-dashboard${weekSpineViewMode === "week" && !isSearchingTags ? " has-summary-hero" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
+                <div className={`summary-column${expandedDate ? " has-selected-day" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`}>
                   <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
                     <div className="flip-face flip-face-summary">
                       {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
@@ -623,6 +620,7 @@ export default function AccountApp({ auth }) {
                     activities={visibleActivities}
                     categories={categories}
                     activityCategoryMap={displayedActivityCategoryMap}
+                    activitiesLoading={loading}
                     activityTagMap={activityTagMap}
                     onAddActivity={openAddActivity}
                     onSelectDay={openDay}
@@ -652,15 +650,9 @@ export default function AccountApp({ auth }) {
                     onOpenArchiveDraft={(item, warning = "") => openAddActivity(item.start ? new Date(item.start) : new Date(cursorDate), { preserveTime: Boolean(item.start), end: item.end || null, title: item.title, warning, missingFields: [!item.start && "start", !item.end && "end"].filter(Boolean) })}
                     onEditArchivedActivity={openEditActivityById}
                     userId={firebaseUser.uid}
-                    tokenNearingExpiry={tokenNearingExpiry}
-                    onReauthCalendar={handleReauthCalendar}
-                    hoursPerCell={weekSpineHoursPerCell}
-                    onHoursPerCellChange={setWeekSpineHoursPerCell}
                     viewMode={weekSpineViewMode}
                     weekRangeOverride={weekRangeOverride}
                     cycleStartDate={cycleAnchorDate}
-                    fullscreenRequestId={weekSpineFullscreenRequest}
-                    onTimelineFullscreenChange={handleTimelineFullscreenChange}
                     onSelectOverviewWeek={selectCycleWeek}
                     onSelectOverviewDay={focusDate}
                     onNavigateCycle={navigateCycle}
