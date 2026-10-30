@@ -135,7 +135,7 @@ export default function AccountApp({ auth }) {
   }, [error, setError, setAuthError]);
 
   const { mode, setMode, closeAiMode, toggleAiMode, settingsOpen, setSettingsOpen } = useAppNavigation();
-  const [navigationExpanded, setNavigationExpanded] = useState(false);
+  const [navigationExpanded, setNavigationExpanded] = useState(() => window.matchMedia("(min-width: 761px)").matches);
   const {
     theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
@@ -438,9 +438,9 @@ export default function AccountApp({ auth }) {
 
   useActivityTelegramNotifications({ firebaseUser, activities, archivedActivityIds });
 
-  return (
-    <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
-      <AppHeader
+  const headerInSummary = mode === "activity" && weekSpineViewMode === "week" && !isSearchingTags;
+  const appHeader = (
+    <AppHeader
         navigationExpanded={navigationExpanded}
         onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
         firebaseUser={firebaseUser}
@@ -471,6 +471,11 @@ export default function AccountApp({ auth }) {
         setSettingsOpen={setSettingsOpen}
         handleLogout={handleLogout}
       />
+  );
+
+  return (
+    <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
+      {!headerInSummary && appHeader}
 
       {firebaseUser && <AnnouncementTicker message={announcement.message} config={announcement.config} />}
 
@@ -616,6 +621,7 @@ export default function AccountApp({ auth }) {
                   />
                 ) : (
                   <ActivityModeWeekSpine
+                    summaryHeader={headerInSummary ? appHeader : null}
                     anchorDate={cursorDate}
                     activities={visibleActivities}
                     categories={categories}

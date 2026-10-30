@@ -5,7 +5,7 @@ import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
 const hours = (minutes) => (minutes / 60).toLocaleString("th-TH", { maximumFractionDigits: 1 });
 
-export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, activities, categories, activityCategoryMap, onSelectDay, weekName, loading = false }) {
+export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, activities, categories, activityCategoryMap, onSelectDay, weekName, header, loading = false }) {
   const data = useMemo(() => {
     const daily = days.map((date) => ({ date, minutes: 0, count: 0 }));
     const byCategory = new Map();
@@ -47,9 +47,10 @@ export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, ac
   const topCategory = data.categories[0];
   const dateLabel = `${visibleStart.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} – ${visibleEnd.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}`;
 
-  if (loading) return <section className="activity-summary-hero" aria-label="สรุป 7 วัน" aria-busy="true"><div className="activity-summary-hero-main"><div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p>{weekName}</div><p role="status">กำลังโหลดกิจกรรม…</p></div></section>;
+  if (loading) return <section className="activity-summary-hero" aria-label="สรุป 7 วัน" aria-busy="true">{header && <div className="activity-summary-hero-header">{header}</div>}<div className="activity-summary-hero-main"><div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p>{weekName}</div><p role="status">กำลังโหลดกิจกรรม…</p></div></section>;
 
   return <section className="activity-summary-hero" aria-label="สรุป 7 วัน">
+    {header && <div className="activity-summary-hero-header">{header}</div>}
     <div className="activity-summary-hero-main">
       <div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p>{weekName}</div>
       <div className="activity-summary-hero-stats">

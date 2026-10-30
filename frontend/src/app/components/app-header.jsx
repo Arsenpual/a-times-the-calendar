@@ -36,7 +36,7 @@ export default function AppHeader({
 {firebaseUser && (
         <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}${mode === "ai" ? " app-header--ai" : ""}`}>
           <div className="app-header-left">
-            <button id="app-navigation-toggle" className="btn-icon app-navigation-toggle" type="button" onClick={onToggleNavigation} aria-label={navigationExpanded ? "ย่อเมนูฟีเจอร์" : "เปิดเมนูฟีเจอร์"} aria-expanded={Boolean(navigationExpanded)} aria-controls="app-taskbar">
+            <button id="app-navigation-toggle" className="btn-icon app-navigation-toggle" type="button" onClick={onToggleNavigation} aria-label={navigationExpanded ? "ซ่อนเมนูฟีเจอร์" : "เปิดเมนูฟีเจอร์"} aria-expanded={Boolean(navigationExpanded)} aria-controls="app-taskbar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             <BrandWordmark className="app-logo" />

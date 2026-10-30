@@ -13,7 +13,7 @@ try {
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(server.resolvedUrls.local[0]+'tests/fixtures/app-taskbar.html');
-  await page.locator('.app-title').waitFor();
+  await page.locator('#app-navigation-toggle').waitFor();
   const toggle=page.locator('#app-navigation-toggle');
   const nav=page.getByRole('navigation',{name:'ฟีเจอร์หลัก'});
   for(const theme of ['light','dark']) {
@@ -22,7 +22,7 @@ try {
       await page.setViewportSize({width,height:900});
       for(const expanded of [false,true]) {
         if((await toggle.getAttribute('aria-expanded')==='true')!==expanded) await toggle.click();
-        assert.equal(await nav.isVisible(),width>760||expanded);
+        assert.equal(await nav.isVisible(),expanded);
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${theme}/${width}/${expanded} overflow`);
       }
       if([1440,390].includes(width)) await page.screenshot({path:join(tmpdir(),`times-taskbar-${theme}-${width}.png`)});
