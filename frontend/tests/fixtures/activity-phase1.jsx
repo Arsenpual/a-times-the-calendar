@@ -1,3 +1,4 @@
+import { applyTimeDraft } from "../../src/features/activity/lib/planner-time-draft.js";
 import React, { useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LanguageProvider } from '../../src/shared/i18n/i18n.jsx';
@@ -29,8 +30,8 @@ function Fixture() {
       onSelectOverviewWeek={date => setOptions(current => ({ ...current, anchorDate: date }))}
       onOpenOverviewWeekView={date => setOptions(current => ({ ...current, anchorDate: date, viewMode: 'week' }))}
       onOpenOverviewWeekEditor={date => { returnToCycle.current = true; setOptions(current => ({ ...current, anchorDate: date, viewMode: 'week', fullscreenRequestId: current.fullscreenRequestId + 1 })); }}
-      onSaveTimes={async changes => { record('save', changes); if (window.phase1.holdSave) await new Promise(resolve => { window.phase1.releaseSave = resolve; }); setActivities(current => current.map(item => { const change = changes.find(c => c.id === item.id); return change ? { ...item, start: { dateTime: change.start.toISOString() }, end: { dateTime: change.end.toISOString() } } : item; })); return true; }}
-      onEditActivity={item => record('edit', item.id)} onAddActivity={date => record('add', date)}
+      onSaveTimes={async changes => { record('save', changes); if (window.phase1.failSave) return false; if (window.phase1.holdSave) await new Promise(resolve => { window.phase1.releaseSave = resolve; }); setActivities(current => current.map(item => { const change = changes.find(c => c.id === item.id); return applyTimeDraft(item, change); })); return true; }}
+      onEditActivity={item => record('edit', item.id)} onAddActivity={(date, options) => { record('add', date); window.phase1.lastAddOptions = options; }}
       onDuplicateActivity={async (item, dates) => { record('copy', { id: item.id, ...dates }); return { id: 'copied' }; }}
       onDeleteActivity={async id => { record('delete', id); setActivities(current => current.filter(item => item.id !== id)); return true; }}
       onMoveActivityToDay={async (id, date) => { record('move-day', { id, date }); return true; }}

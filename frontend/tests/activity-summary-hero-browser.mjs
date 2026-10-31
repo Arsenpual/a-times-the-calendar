@@ -50,12 +50,31 @@ try {
       end: { dateTime: new Date(2026, 8, 7, 9, 5 + index * 30).toISOString() },
     })),
   ]));
-  await page.waitForFunction(() => document.querySelectorAll('.week-spine-block').length === 16);
+  await page.waitForFunction(() => document.querySelectorAll('.week-spine-block').length === 5);
   const cards = await page.locator('.week-spine-block').evaluateAll(elements => elements.map(el => {
     const rect = el.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height, width: rect.width };
   }));
   assert.ok(cards.every(card => card.height === 60 && Math.abs(card.width - cards[0].width) < 1));
-  assert.equal(cards[0].top, cards[1].top, 'activities should start side by side');
+  assert.ok(cards.every(card => card.top === cards[0].top), 'all five cards must stay on one row');
+  assert.equal(await page.locator('.week-spine-list-more').textContent(), '+11');
+  assert.equal(await page.locator('.week-spine-activity-list').nth(1).locator('.week-spine-list-add').count(), 0);
+  await page.locator('.week-spine-list-more').click();
+  await page.waitForFunction(() => document.querySelectorAll('.week-spine-block').length === 16);
+  assert.equal(await page.locator('.week-spine-list-more').getAttribute('aria-expanded'), 'true');
+  const expandedCards = await page.locator('.week-spine-block').evaluateAll(items => items.map(item => {
+    const rect = item.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height };
+  }));
+  assert.ok(expandedCards.every(card => card.height === 60));
+  assert.ok(expandedCards.every((card, i) => expandedCards.slice(i + 1).every(other => card.right <= other.left || other.right <= card.left || card.bottom <= other.top || other.bottom <= card.top)), 'expanded cards must not overlap');
+  assert.equal(await page.locator('.week-spine-block').last().isVisible(), true);
+  const expandedAdd = page.locator('.week-spine-activity-list').nth(1).locator('.week-spine-list-add');
+  assert.equal(await expandedAdd.evaluate(el => getComputedStyle(el).gridColumnStart), '2');
+  assert.equal(await expandedAdd.evaluate(el => getComputedStyle(el).gridRowStart), '4');
+  await page.locator('.week-spine-block').last().click();
+  assert.ok(await page.evaluate(() => window.phase1.calls.some(call => call.type === 'edit' && call.value === 'overlap-9')));
+  await page.locator('.week-spine-list-more').click();
+  await page.waitForFunction(() => document.querySelectorAll('.week-spine-block').length === 5);
+  assert.equal(await page.locator('.week-spine-list-more').textContent(), '+11');
   assert.ok(cards.every((card, index) => cards.slice(index + 1).every(other => card.right <= other.left || other.right <= card.left || card.bottom <= other.top || other.bottom <= card.top)), 'wrapped activities must never overlap');
   assert.equal(await page.locator('.week-spine-overflow-count').count(), 0);
   assert.equal(await page.locator('.week-spine-block-time').first().textContent(), 'ทั้งวัน');
@@ -93,6 +112,19 @@ try {
   assert.equal(await page.locator(".week-spine-hours").count(), 0);
   assert.ok((await page.locator(".week-spine-block").evaluateAll(elements => elements.map(el => el.getBoundingClientRect().height))).every(height => height === 60));
   assert.equal(await page.locator(".week-spine-density-control").count(), 0);
+  for (const count of [8, 5, 4, 0]) {
+    await page.evaluate(count => window.phase1.setActivities(Array.from({ length: count }, (_, i) => ({
+      id: `limit-${i}`, summary: `Activity ${i}`,
+      start: { dateTime: new Date(2026, 8, 7, 9).toISOString() },
+      end: { dateTime: new Date(2026, 8, 7, 10).toISOString() },
+    }))), count);
+    await page.waitForFunction(count => document.querySelectorAll('.week-spine-block').length === Math.min(5, count), count);
+    if (count > 5) assert.equal(await page.locator('.week-spine-list-more').textContent(), '+3');
+    else assert.equal(await page.locator('.week-spine-list-more').count(), 0);
+    const add = page.locator('.week-spine-activity-list').nth(1).locator('.week-spine-list-add');
+    if (count > 5) assert.equal(await add.count(), 0);
+    else assert.equal(await add.evaluate(el => getComputedStyle(el).gridColumnStart), String(count + 1));
+  }
   await page.evaluate(() => {
     window.phase1.set({ anchorDate: new Date(2027, 0, 1) });
     window.phase1.setActivities([
@@ -126,7 +158,7 @@ try {
   }
   await page.evaluate(() => window.phase1.set({ anchorDate: new Date(2026, 10, 8) }));
   await page.waitForFunction(() => !document.querySelector('.week-spine-day.is-today') && document.querySelector('.week-spine-timeline-surface').scrollLeft === 0);
-  console.log("PASS: Summary Hero totals, year boundary, horizontal seven-day rows, wrapping, non-overlap, editing and responsive layout");
+  console.log("PASS: Summary Hero totals, year boundary, horizontal seven-day rows, five-card limit, remaining count, non-overlap, editing and responsive layout");
 } finally {
   await browser.close();
   await server.close();

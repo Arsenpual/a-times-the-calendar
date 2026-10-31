@@ -36,18 +36,19 @@
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 18%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-title,
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-time { color: var(--text-primary); text-shadow: none; }
-/* Horizontal week: seven day rows, wrapping cards with no hidden activities. */
+/* Horizontal week: five activity cards per day, with a remaining-count button. */
 .week-spine .week-spine-list-grid { display: block; }
 .week-spine .week-spine-list-grid .week-spine-days { grid-column: 1; grid-template-columns: minmax(0, 1fr); gap: 0; }
 .week-spine .week-spine-list-grid .week-spine-day { grid-template-columns: 132px minmax(0, 1fr); grid-template-rows: auto; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border); cursor: default; }
 .week-spine-day-heading { display: grid; grid-template-rows: 17px 30px 16px; align-content: start; min-width: 0; width: 100%; padding: 8px 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .week-spine-day-heading:disabled { opacity: .4; cursor: default; }
-.week-spine .week-spine-list-grid .week-spine-activity-list { box-sizing: border-box; display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 6px; height: auto; min-width: 0; min-height: 80px; margin-top: 0; padding: 8px; overflow: visible; background-image: none; touch-action: auto; }
-.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; flex: 0 0 min(180px, 100%); width: min(180px, 100%); max-width: 100%; height: 60px; min-height: 60px; padding: 6px; overflow: hidden; border: 1px solid currentColor; border-radius: 5px; background: color-mix(in srgb, var(--block-color) 18%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
+.week-spine .week-spine-list-grid .week-spine-activity-list { box-sizing: border-box; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 34px 30px; align-content: center; align-items: center; gap: 6px; height: auto; min-width: 0; min-height: 80px; margin-top: 0; padding: 8px; overflow: visible; background-image: none; touch-action: auto; }
+.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; height: 60px; min-height: 60px; padding: 6px; overflow: hidden; border: 1px solid currentColor; border-radius: 5px; background: color-mix(in srgb, var(--block-color) 18%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
 .week-spine .week-spine-activity-list .week-spine-block-time { display: block; padding: 0; overflow: hidden; color: var(--text-secondary); font-size: 10px; line-height: 14px; white-space: nowrap; text-overflow: ellipsis; }
 .week-spine .week-spine-activity-list .week-spine-block-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; box-sizing: border-box; padding: 0; margin-top: 2px; color: var(--text-primary); font-size: 12px; line-height: 15px; white-space: normal; overflow-wrap: anywhere; text-shadow: none; }
-.week-spine-list-empty { padding: 8px; color: var(--text-secondary); font-size: 11px; text-align: center; }
+.week-spine-list-empty { grid-column: 2 / 6; grid-row: 1; padding: 8px; color: var(--text-secondary); font-size: 11px; text-align: center; }
 .week-spine-list-add { flex: 0 0 auto; max-width: 100%; min-height: 32px; padding: 4px; border: 1px dashed var(--border); border-radius: 5px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
+.week-spine-list-more { grid-column: 6; grid-row: 1; min-width: 0; padding: 5px 2px; border: 0; border-radius: 12px; background: var(--hover); color: var(--today); font: inherit; font-size: 11px; font-weight: 600; line-height: 1.4; cursor: pointer; white-space: nowrap; }
 .week-spine-list-add:hover { background: var(--hover); }
 
 .week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-label,
@@ -336,3 +337,6 @@
   color: var(--text-secondary);
   padding: 8px 2px;
 }
+
+.week-spine-planner-open { grid-column: 7; grid-row: 1; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-muted); color: var(--today); cursor: pointer; }
+.week-spine-planner-open:hover { background: var(--hover); }

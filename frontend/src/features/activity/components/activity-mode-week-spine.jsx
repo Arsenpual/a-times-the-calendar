@@ -5,6 +5,10 @@ import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import ActivityPopup from "./activity-popup.jsx";
 import ActivitySummaryHero from "./activity-summary-hero.jsx";
+import { useWeekSpineTimeChanges } from "../hooks/use-week-spine-time-changes.js";
+import PlannerTimeActions from "./planner-time-actions.jsx";
+import { applyTimeDraft } from "../lib/planner-time-draft.js";
+import ActivityDailyPlanner from "./activity-daily-planner.jsx";
 import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
 import { useWeekNames } from "../hooks/use-week-names.js";
 import WeekNameField from "./week-name-field.jsx";
@@ -38,6 +42,7 @@ function WeekSpineContent({
   lockedActivities,
   onAddActivity,
   onEditActivity,
+  onSaveTimes,
   onSelectDay,
   onRestoreArchivedActivity,
   onAssignCategory,
@@ -92,7 +97,8 @@ function WeekSpineContent({
     isSelectionMode,
     selectedActivityIds,
     toggleActivitySelection,
-    addActivitySelection
+    addActivitySelection,
+    clearSelection
   } = useWeekSpineSelection({
     onDeleteActivity,
     onError: showInteractionWarning
@@ -124,8 +130,33 @@ function WeekSpineContent({
       return day;
     });
   }, [weekStart.getTime()]);
+  const [openPlannerDays, setOpenPlannerDays] = useState(() => new Set());
+  useEffect(() => { setOpenPlannerDays(new Set()); }, [weekDays, viewMode]);
+  const togglePlanner = dayKey => {
+    clearSelection();
+    setContextMenu(null);
+    setOpenPlannerDays(current => {
+      const next = new Set(current);
+      if (next.has(dayKey)) next.delete(dayKey);
+      else next.add(dayKey);
+      return next;
+    });
+  };
+  const closePlanner = dayKey => {
+    setOpenPlannerDays(current => { const next = new Set(current); next.delete(dayKey); return next; });
+    requestAnimationFrame(() => document.getElementById(`week-spine-planner-${dayKey}`)?.focus({ preventScroll: true }));
+  };
+  const [expandedDays, setExpandedDays] = useState(() => new Set());
+  useEffect(() => { setExpandedDays(new Set()); }, [weekDays, viewMode]);
+  const toggleExpandedDay = (key) => setExpandedDays(current => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
   const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = cycleData;
-  const timelineActivities = activities;
+  const timeChanges = useWeekSpineTimeChanges({ onSaveTimes, onError: showInteractionWarning });
+  const timelineActivities = useMemo(() => activities.map(activity => applyTimeDraft(activity, timeChanges.pendingTimeChanges.get(activity.id))), [activities, timeChanges.pendingTimeChanges]);
   const { timedSegments, allDayActivities } = useMemo(
     () => buildWeekSpineData({ activities: timelineActivities, weekStart: visibleWeekStart, weekEnd: visibleWeekEnd, activityCategoryMap, categories, lockedActivities }),
     [timelineActivities, visibleWeekStart, visibleWeekEnd, activityCategoryMap, categories, lockedActivities]
@@ -148,7 +179,7 @@ function WeekSpineContent({
   }, []);
 
   const isSummaryBackgroundTarget = (target) => target instanceof Element
-    && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .activity-archive");
+    && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .activity-archive, .daily-planner");
 
   const focusSummaryFromWeekSpine = (event) => {
     const target = event.target;
@@ -220,6 +251,9 @@ function WeekSpineContent({
             const dayAllDayActivities = visibleAllDayActivities.filter((activity) => activity.start < dayEnd && activity.end > day);
             const dayActivities = [...dayAllDayActivities, ...daySegments].sort((a, b) =>
               Number(b.isAllDay) - Number(a.isAllDay) || a.start - b.start || a.title.localeCompare(b.title) || a.calendarId.localeCompare(b.calendarId));
+            const dayKey = day.toISOString();
+            const isExpanded = expandedDays.has(dayKey);
+            const dayListId = `week-spine-activities-${index}`;
             const isSelected = isSameDay(day, visibleSelectedDay);
             const isToday = isSameDay(day, today);
             return <div className={`week-spine-day${day.getDay() === 0 || day.getDay() === 6 ? " is-weekend" : ""}${isOutsideVisibleYear ? " is-outside-year" : ""}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`} key={day.toISOString()}>
@@ -228,13 +262,13 @@ function WeekSpineContent({
                 <strong><span>{day.getDate()}</span><small className="week-spine-day-month">{day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { month: "short" })}</small></strong>
                 <small className="week-spine-day-meta">{dayActivities.length} กิจกรรม · {(daySegments.reduce((total, segment) => total + (segment.end - segment.start), 0) / 3600000).toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม.</small>
               </button>
-              <div className="week-spine-track week-spine-activity-list" data-day-index={index}>
-                {!isOutsideVisibleYear && dayActivities.map((activity) => <button
+              {!openPlannerDays.has(dayKey) && <div id={dayListId} className="week-spine-track week-spine-activity-list" data-day-index={index}>
+                {!isOutsideVisibleYear && (isExpanded ? dayActivities : dayActivities.slice(0, 5)).map((activity, activityIndex) => <button
                   type="button"
                   key={activity.segmentId || `all-day:${activity.calendarId}`}
                   title={`${activity.title}${activity.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${activity.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`}
                   className={`week-spine-block${activity.isAllDay ? " week-spine-all-day-track-block" : ""}${activity.isLocked ? " is-locked" : ""}${selectedActivityIds.has(activity.calendarId) ? " is-series-selected" : ""}`}
-                  style={{ "--block-color": activity.color.border, color: activity.color.border }}
+                  style={{ "--block-color": activity.color.border, color: activity.color.border, gridColumn: activityIndex % 5 + 1, gridRow: Math.floor(activityIndex / 5) + 1 }}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (isSelectionMode || event.ctrlKey || event.metaKey) { toggleActivitySelection(activity.calendarId); return; }
@@ -246,13 +280,17 @@ function WeekSpineContent({
                   <span className="week-spine-block-time">{activity.isAllDay ? "ทั้งวัน" : `${activity.continuesFromPreviousDay ? "↳ " : ""}${formatTime(activity.start, language)}–${formatTime(activity.end, language)}${activity.continuesIntoNextDay ? " ↳" : ""}`}</span>
                   <span className="week-spine-block-title">{activity.isLocked ? "🔒 " : ""}{activity.title}</span>
                 </button>)}
+                {!isOutsideVisibleYear && dayActivities.length > 5 && <button type="button" className="week-spine-list-more" onClick={() => toggleExpandedDay(dayKey)} aria-expanded={isExpanded} aria-controls={dayListId} title={isExpanded ? "ย่อกลับเหลือ 5 กิจกรรม" : `ดูทั้งหมด ${dayActivities.length} กิจกรรม`} aria-label={isExpanded ? "ย่อกลับเหลือ 5 กิจกรรม" : `แสดงอีก ${dayActivities.length - 5} กิจกรรม`}>{isExpanded ? "ย่อ" : `+${dayActivities.length - 5}`}</button>}
+                {!isOutsideVisibleYear && <button type="button" className="week-spine-planner-open" id={`week-spine-planner-${dayKey}`} title="วางแผนรายวัน" aria-label={`วางแผนรายวัน ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}`} aria-expanded={openPlannerDays.has(dayKey)} aria-controls={`daily-drawer-${dayKey}`} onClick={() => togglePlanner(dayKey)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M7 2v4m10-4v4M3 9h18M7 13h5m-5 4h10" /></svg></button>}
                 {!isOutsideVisibleYear && dayActivities.length === 0 && <span className="week-spine-list-empty">ไม่มีกิจกรรม</span>}
-                {!isOutsideVisibleYear && <button type="button" className="week-spine-list-add" onClick={() => onAddActivity?.(day)} aria-label={`เพิ่มกิจกรรม ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}`}>+ เพิ่มกิจกรรม</button>}
-              </div>
+                {!isOutsideVisibleYear && (isExpanded || dayActivities.length <= 5) && <button type="button" className="week-spine-list-add" style={{ gridColumn: !isExpanded && dayActivities.length === 5 ? 6 : dayActivities.length % 5 + 1, gridRow: !isExpanded && dayActivities.length === 5 ? 1 : Math.floor(dayActivities.length / 5) + 1 }} onClick={() => onAddActivity?.(day)} aria-label={`เพิ่มกิจกรรม ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}` } title="เพิ่มกิจกรรม">+</button>}
+              </div>}
+              {openPlannerDays.has(dayKey) && <ActivityDailyPlanner id={`daily-drawer-${dayKey}`} timeChanges={timeChanges} day={day} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} loading={activitiesLoading} onClose={() => closePlanner(dayKey)} onAddActivity={onAddActivity} onEditActivity={onEditActivity} />}
             </div>;
           })}
         </div>
       </div>
+      {openPlannerDays.size === 0 && timeChanges.pendingTimeChanges.size > 0 && <footer className="daily-planner-detail"><PlannerTimeActions changes={timeChanges} /></footer>}
       {contextMenu && <ActivityPopup
         activity={contextMenu.segment.source}
         start={contextMenu.segment.start}

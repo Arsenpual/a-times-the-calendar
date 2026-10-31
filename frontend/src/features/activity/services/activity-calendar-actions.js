@@ -1,3 +1,4 @@
+import { applyTimeDraft } from "../lib/planner-time-draft.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { introducesOverlapLimitViolation } from "../lib/timeline-layout.js";
 import {
@@ -181,8 +182,8 @@ export function createActivityCalendarActions({
       if (conflict) anyConflicts = true;
       try {
         const savedActivity = await updateActivity(calendarAccessToken, id, {
-          start: { dateTime: start.toISOString() },
-          end: { dateTime: end.toISOString() }
+          start: applyTimeDraft(activities.find(item => item.id === id) || {}, { start, end }).start,
+          end: applyTimeDraft(activities.find(item => item.id === id) || {}, { start, end }).end
         });
         syncActivityNotification(savedActivity).catch((error) => setError(`อัปเดตเวลาแล้ว แต่ตั้งการแจ้งเตือนไม่สำเร็จ: ${error.message}`));
       } catch (error) {
