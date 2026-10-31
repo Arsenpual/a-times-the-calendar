@@ -343,24 +343,6 @@
   background: var(--border);
 }
 
-/* 🧪 DEV TEST BUTTON — อยู่คู่กับปุ่ม dev-only ใน app-header.jsx
-   จริง พื้นหลังส้ม/เหลืองเตือนตาให้ต่างจากปุ่ม header อื่นๆ อย่างชัดเจน
-   ทันทีที่มองเห็น เพื่อไม่ให้ปนกับปุ่มถาวรของแอปโดยไม่ตั้งใจ */
-.dev-test-btn {
-  background: #fef3c7;
-  border: 1px dashed #d97706;
-}
-
-.dev-test-btn:hover {
-  background: #fde68a;
-}
-
-.dev-test-btn.is-active {
-  background: #d97706;
-  border-style: solid;
-  color: #fff;
-}
-
 /* Main area */
 
 .app-main {

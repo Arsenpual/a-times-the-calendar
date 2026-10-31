@@ -67,6 +67,11 @@ function AssistantPreferenceRow({ field, item, onSave, onDelete }) {
 export default function SettingsDrawer({
   open,
   onClose,
+  calendarAccessToken,
+  setCalendarTokenExpiresAtState,
+  calendarTokenExpiresAtStorageKey,
+  onTestFirestoreQuota,
+  firestoreQuotaTestActive,
   theme,
   onThemeChange,
   reminderTimelineColors,
@@ -118,6 +123,22 @@ export default function SettingsDrawer({
         </div>
 
         <div className="settings-drawer-body">
+          {import.meta.env.DEV && <section className="settings-section">
+            <h3 className="settings-section-title">เครื่องมือสำหรับนักพัฒนา</h3>
+            <div className="settings-row">
+              <div className="settings-row-label"><span className="settings-row-title">จำลอง token ใกล้หมดอายุ</span><span className="settings-row-desc">ตั้งเวลาเหลือ 4 นาที</span></div>
+              <button type="button" className="settings-assistant-action" disabled={!calendarAccessToken} onClick={() => {
+                const fakeExpiresAt = Date.now() + 4 * 60 * 1000;
+                setCalendarTokenExpiresAtState(fakeExpiresAt);
+                try { window.localStorage.setItem(calendarTokenExpiresAtStorageKey, String(fakeExpiresAt)); } catch { /* State remains active for this session. */ }
+              }}>ทดสอบ</button>
+            </div>
+            {["localhost", "127.0.0.1", "::1"].includes(window.location.hostname) && <div className="settings-row">
+              <div className="settings-row-label"><span className="settings-row-title">ตัวอย่างแจ้งเตือนโควต้า Firestore</span><span className="settings-row-desc">เปิดหรือปิดการจำลอง</span></div>
+              <button type="button" className="settings-assistant-action" aria-pressed={firestoreQuotaTestActive} onClick={onTestFirestoreQuota}>{firestoreQuotaTestActive ? "ปิด" : "เปิด"}</button>
+            </div>}
+          </section>}
+
           <section className="settings-section">
             <h3 className="settings-section-title">{t("settings.display")}</h3>
             <div className="settings-row">

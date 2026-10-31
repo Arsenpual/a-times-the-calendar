@@ -90,6 +90,52 @@ function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, ca
  * avoiding a second summary endpoint and keeping its totals in lockstep with
  * the coloured tabs in the four-week view.
  */
+export function calculateCycleSummary(cycle, activities, categories, activityCategoryMap) {
+  const cycleStart = cycle.start;
+  const cycleEnd = cycle.end;
+  const weeks = cycle.weeks.map((week) => ({ start: new Date(week.start), end: new Date(week.end), count: 0, minutes: 0 }));
+  const categoryStats = new Map();
+  const dayStats = new Map();
+  let totalMinutes = 0;
+  let totalActivities = 0;
+
+  activities.forEach((activity) => {
+    const start = activityDate(activity.start);
+    const end = activityDate(activity.end);
+    if (!start || !end || start < cycleStart || start > cycleEnd) return;
+
+    const minutes = Math.max(0, Math.round((end - start) / 60000)) || 30;
+    const categoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
+    const previous = categoryStats.get(categoryId) || { categoryId, minutes: 0, count: 0 };
+    previous.minutes += minutes;
+    previous.count += 1;
+    categoryStats.set(categoryId, previous);
+
+    const weekIndex = weeks.findIndex((week) => start >= week.start && start <= week.end);
+    if (weekIndex >= 0) {
+      weeks[weekIndex].count += 1;
+      weeks[weekIndex].minutes += minutes;
+    }
+
+    const dayKey = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
+    const day = dayStats.get(dayKey) || { date: new Date(start), count: 0 };
+    day.count += 1;
+    dayStats.set(dayKey, day);
+    totalActivities += 1;
+    totalMinutes += minutes;
+  });
+
+  const byCategory = [...categoryStats.values()]
+    .map((item) => ({
+      ...item,
+      name: item.categoryId ? categories.find((category) => category.id === item.categoryId)?.name || "ไม่ระบุหมวดหมู่" : "ไม่ระบุหมวดหมู่",
+      percent: totalMinutes ? (item.minutes / totalMinutes) * 100 : 0
+    }))
+    .sort((left, right) => right.minutes - left.minutes);
+  const busiestDay = [...dayStats.values()].sort((left, right) => right.count - left.count)[0] || null;
+  return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
+}
+
 export default function CycleSummaryPanel({
   anchorDate,
   activities = [],
@@ -106,49 +152,7 @@ export default function CycleSummaryPanel({
   const cycleStart = cycle.start;
   const cycleEnd = cycle.end;
 
-  const summary = useMemo(() => {
-    const weeks = cycle.weeks.map((week) => ({ start: new Date(week.start), end: new Date(week.end), count: 0, minutes: 0 }));
-    const categoryStats = new Map();
-    const dayStats = new Map();
-    let totalMinutes = 0;
-    let totalActivities = 0;
-
-    activities.forEach((activity) => {
-      const start = activityDate(activity.start);
-      const end = activityDate(activity.end);
-      if (!start || !end || start < cycleStart || start > cycleEnd) return;
-
-      const minutes = Math.max(0, Math.round((end - start) / 60000)) || 30;
-      const categoryId = activityCategoryMap[normalizeActivityId(activity.id)] || null;
-      const previous = categoryStats.get(categoryId) || { categoryId, minutes: 0, count: 0 };
-      previous.minutes += minutes;
-      previous.count += 1;
-      categoryStats.set(categoryId, previous);
-
-      const weekIndex = weeks.findIndex((week) => start >= week.start && start <= week.end);
-      if (weekIndex >= 0) {
-        weeks[weekIndex].count += 1;
-        weeks[weekIndex].minutes += minutes;
-      }
-
-      const dayKey = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
-      const day = dayStats.get(dayKey) || { date: new Date(start), count: 0 };
-      day.count += 1;
-      dayStats.set(dayKey, day);
-      totalActivities += 1;
-      totalMinutes += minutes;
-    });
-
-    const byCategory = [...categoryStats.values()]
-      .map((item) => ({
-        ...item,
-        name: item.categoryId ? categories.find((category) => category.id === item.categoryId)?.name || "ไม่ระบุหมวดหมู่" : "ไม่ระบุหมวดหมู่",
-        percent: totalMinutes ? (item.minutes / totalMinutes) * 100 : 0
-      }))
-      .sort((left, right) => right.minutes - left.minutes);
-    const busiestDay = [...dayStats.values()].sort((left, right) => right.count - left.count)[0] || null;
-    return { weeks, byCategory, busiestDay, totalActivities, totalMinutes, activeDays: dayStats.size };
-  }, [activities, activityCategoryMap, categories, cycleStart, cycleEnd, cycle.weeks]);
+  const summary = useMemo(() => calculateCycleSummary(cycle, activities, categories, activityCategoryMap), [cycle, activities, categories, activityCategoryMap]);
 
   const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
   if (!glass) return <aside className="summary-panel cycle-summary-panel"><CycleSummaryContent {...content} /></aside>;

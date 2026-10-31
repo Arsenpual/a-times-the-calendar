@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { formatTime, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
@@ -66,7 +66,6 @@ function WeekSpineContent({
   cycleData = { activities: [], loading: false, error: "" },
   weekStreamgraph,
 }) {
-  const timelineSurfaceRef = useRef(null);
   const { language } = useLanguage();
   const [defaultWeekStart, defaultWeekEnd] = getYearWeekRange(anchorDate);
   const weekStart = weekRangeOverride?.start instanceof Date ? weekRangeOverride.start : defaultWeekStart;
@@ -147,27 +146,6 @@ function WeekSpineContent({
     const timer = window.setInterval(() => setToday(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const todayKey = today.toDateString();
-  useEffect(() => {
-    const surface = timelineSurfaceRef.current;
-    if (viewMode !== "week" || !surface) return;
-    const revealToday = () => {
-      const currentDay = surface.querySelector(".week-spine-day.is-today:not(.is-outside-year)");
-      if (!currentDay) return;
-      const viewport = surface.getBoundingClientRect();
-      const day = currentDay.getBoundingClientRect();
-      const left = viewport.left + surface.clientLeft;
-      const right = left + surface.clientWidth;
-      // Move only enough to show the whole day; preserve room for its neighbours.
-      if (day.left < left) surface.scrollLeft += day.left - left;
-      else if (day.right > right) surface.scrollLeft += day.right - right;
-    };
-    surface.scrollLeft = 0;
-    revealToday();
-    const observer = new ResizeObserver(revealToday);
-    observer.observe(surface);
-    return () => observer.disconnect();
-  }, [viewMode, weekDays, anchorDate.getTime(), todayKey]);
 
   const isSummaryBackgroundTarget = (target) => target instanceof Element
     && !target.closest("button, input, select, textarea, [contenteditable='true'], .week-spine-track, .week-spine-block, .week-spine-day, .activity-archive");
@@ -217,7 +195,7 @@ function WeekSpineContent({
 
   return (
     <div className="week-spine-layout">
-      {viewMode === "week" && <ActivitySummaryHero header={summaryHeader} days={weekDays} visibleStart={visibleWeekStart} visibleEnd={visibleWeekEnd} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} onSelectDay={selectDay} loading={activitiesLoading} weekName={<aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
+      {viewMode === "week" && <ActivitySummaryHero header={summaryHeader} days={weekDays} visibleStart={visibleWeekStart} visibleEnd={visibleWeekEnd} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} loading={activitiesLoading} weekName={<aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
           <WeekNameField className="week-spine-week-name" weekStart={visibleWeekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
         </aside>} />}
       <section className={`week-spine${isSummaryTargetHovered ? " is-summary-target-hovered" : ""}`} aria-label="Activity Week Spine" onClick={focusSummaryFromWeekSpine} onPointerMove={updateSummaryHover} onPointerLeave={() => setIsSummaryTargetHovered(false)}>
@@ -226,7 +204,7 @@ function WeekSpineContent({
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
               : <FourWeekOverview weeks={cycle.weeks} cycleStart={cycle.start} cycleEnd={cycle.end} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
         ) : <>
-        <section ref={timelineSurfaceRef} className="week-spine-timeline-surface" aria-label="ปฏิทิน 7 วัน" tabIndex={0}>
+        <section className="week-spine-timeline-surface" aria-label="ปฏิทิน 7 วัน" tabIndex={0}>
         <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
           <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
           <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>

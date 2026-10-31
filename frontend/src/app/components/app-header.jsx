@@ -2,6 +2,9 @@ import React from "react";
 import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
 
 export default function AppHeader({
+  summaryOpen,
+  onToggleSummary,
+  summaryContent,
   navigationExpanded,
   onToggleNavigation,
   firebaseUser,
@@ -21,10 +24,6 @@ export default function AppHeader({
   openAddActivity,
   cursorDate,
   calendarAccessToken,
-  setCalendarTokenExpiresAtState,
-  calendarTokenExpiresAtStorageKey,
-  onTestFirestoreQuota,
-  firestoreQuotaTestActive,
   accountMenuRef,
   accountMenuOpen,
   setAccountMenuOpen,
@@ -83,6 +82,7 @@ export default function AppHeader({
           <div className="app-header-right">
             {mode === "activity" ? (
               <>
+                <button type="button" className="btn btn-outline" aria-expanded={Boolean(summaryOpen)} aria-controls="header-summary" onClick={onToggleSummary}>{summaryOpen ? "ซ่อนสรุป" : "แสดงสรุป"}</button>
                 <div className="tag-search-wrap">
                   <svg className="tag-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <circle cx="10.5" cy="10.5" r="6.5" />
@@ -143,61 +143,6 @@ export default function AppHeader({
                 >
                   + เพิ่มกิจกรรม
                 </button>
-                {/* 🧪 DEV TEST BUTTON — เดิมไม่มี guard ใดๆ ทำให้ปุ่มนี้ขึ้น
-                    ในโปรดักชันจริงด้วย ตอนนี้ห่อด้วย import.meta.env.DEV
-                    (Vite inject ให้เป็น false เสมอใน build production —
-                    ทั้ง `npm run build` และ `npm run preview` ตัด branch
-                    นี้ทิ้งไปเลยตอน tree-shaking ไม่ใช่แค่ซ่อนด้วย CSS) จึง
-                    ไม่มีทางหลุดไป deploy จริงได้อีกไม่ว่าจะลืมลบเองหรือไม่
-                    จำลอง token "ใกล้หมดอายุ" — ตั้ง calendarTokenExpiresAt
-                    ให้เหลือ 4 นาทีจากตอนนี้ (น้อยกว่า
-                    CALENDAR_TOKEN_WARNING_WINDOW_MS ที่ตั้งไว้ 5 นาที แต่
-                    ยังมากกว่า 0) เพื่อให้ผ่านเงื่อนไขทั้งสองใน checkExpiry()
-                    ด้านบนพร้อมกัน (msRemaining > 0 && msRemaining <= 5
-                    นาที) แล้วเห็นการ์ดเตือนใกล้หมดอายุทันที โดยไม่ต้องรอ
-                    token ใกล้หมดอายุจริง (~55 นาทีหลัง login) — เขียนลง
-                    localStorage ควบคู่ด้วยเพื่อให้ค่าคงอยู่ข้าม refresh
-                    เหมือนกับที่ setCalendarAccessToken ทำกับ token เอง
-                    ไม่ได้เรียก setCalendarAccessToken ตรงนี้ เพราะต้องคง
-                    calendarAccessToken เดิมไว้ (การ์ดนี้ต้องมี token อยู่
-                    จริงถึงจะขึ้น — ดูเงื่อนไข render ด้านล่าง) ถ้าลบ token
-                    ไปด้วยจะไปโดนการ์ด "หมดอายุแล้ว" แทน ไม่ใช่การ์ดนี้ */}
-                {import.meta.env.DEV && (
-                  <button
-                    type="button"
-                    className="btn-icon dev-test-btn"
-                    onClick={() => {
-                      const fakeExpiresAt = Date.now() + 4 * 60 * 1000;
-                      setCalendarTokenExpiresAtState(fakeExpiresAt);
-                      try {
-                        window.localStorage.setItem(
-                          calendarTokenExpiresAtStorageKey,
-                          String(fakeExpiresAt)
-                        );
-                      } catch {
-                        // localStorage ไม่พร้อมใช้งาน — การ์ดยังขึ้นได้ปกติ
-                        // จาก state ในตอนนี้ แค่ไม่รอดข้าม refresh เท่านั้น
-                      }
-                    }}
-                    disabled={!calendarAccessToken}
-                    aria-label="[ทดสอบ] จำลอง token ใกล้หมดอายุ"
-                    title="[DEV] จำลอง token ใกล้หมดอายุ (เหลือ 4 นาที) — ปุ่มนี้แสดงเฉพาะ dev build เท่านั้น"
-                  >
-                    ⏰
-                  </button>
-                )}
-                {import.meta.env.DEV && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname) && (
-                  <button
-                    type="button"
-                    className={`btn-icon dev-test-btn${firestoreQuotaTestActive ? " is-active" : ""}`}
-                    onClick={onTestFirestoreQuota}
-                    aria-pressed={firestoreQuotaTestActive}
-                    aria-label="[ทดสอบ] สลับตัวอย่างแจ้งเตือนโควต้า Firestore"
-                    title="[LOCAL DEV] เปิด/ปิดตัวอย่างแจ้งเตือนโควต้า Firestore"
-                  >
-                    🗄️
-                  </button>
-                )}
               </>
             ) : null}
             <div className="account-menu-wrap" ref={accountMenuRef}>
@@ -232,6 +177,7 @@ export default function AppHeader({
               )}
             </div>
           </div>
+          {mode === "activity" && summaryOpen && <div className="app-header-summary" id="header-summary">{summaryContent}</div>}
         </header>
       )}
     </>
