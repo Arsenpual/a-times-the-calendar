@@ -417,3 +417,6 @@
     transform: none;
   }
 }
+
+/* Activity view no longer reserves a column for the former summary panels. */
+.activity-dashboard { grid-template-columns: minmax(0, 1fr); }

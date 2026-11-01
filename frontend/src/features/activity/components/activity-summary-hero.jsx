@@ -7,7 +7,7 @@ const hours = (minutes) => (minutes / 60).toLocaleString("th-TH", { maximumFract
 
 export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, activities, categories, activityCategoryMap, weekName, header, loading = false }) {
   const data = useMemo(() => {
-    const daily = days.map((date) => ({ date }));
+    const daily = days.filter(date => date >= visibleStart && date <= visibleEnd).map(date => ({ date }));
     const byCategory = new Map();
     let count = 0;
     let totalMinutes = 0;
@@ -19,7 +19,7 @@ export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, ac
       const categoryId = activityCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId || null;
       const category = categories.find((item) => item.id === categoryId);
       const key = category?.id || "uncategorized";
-      const row = byCategory.get(key) || { key, name: category?.name || UNCATEGORIZED_COLOR.name, minutes: 0 };
+      const row = byCategory.get(key) || { key, name: category?.name || UNCATEGORIZED_COLOR.name, color: category?.color || UNCATEGORIZED_COLOR.border, minutes: 0 };
       let visible = false;
       for (const day of daily) {
         if (day.date < visibleStart || day.date > visibleEnd) continue;
@@ -54,6 +54,7 @@ export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, ac
         <div><strong>{hours(data.totalMinutes)}</strong><span>ชั่วโมงรวม</span></div>
         <div><strong className="is-accent">{topCategory ? hours(topCategory.minutes) : "0"}</strong><span>{topCategory?.name || "หมวดหมู่หลัก"}</span></div>
       </div>
+        <section aria-label="สรุปตามหมวดหมู่"><h3>เวลาตามหมวดหมู่</h3>{data.totalMinutes > 0 ? <><div className="activity-summary-category-track" aria-label="สัดส่วนเวลาตามหมวดหมู่">{data.categories.filter(category => category.minutes > 0).map(category => <span key={category.key} style={{ width: `${category.minutes / data.totalMinutes * 100}%`, backgroundColor: category.color }} title={`${category.name} ${hours(category.minutes)} ชม.`} />)}</div><div className="activity-summary-category-list">{data.categories.filter(category => category.minutes > 0).map(category => <span key={category.key}><i style={{ backgroundColor: category.color }} />{category.name} <strong>{hours(category.minutes)} ชม.</strong></span>)}</div></> : <small>ยังไม่มีกิจกรรมที่ระบุเวลา</small>}</section>
     </div>
   </section>;
 }

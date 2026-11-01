@@ -328,3 +328,46 @@
 .activity-time-streamgraph:fullscreen .activity-time-streamgraph-chart { height: 100vh; border: 0; border-radius: 0; }
 .activity-time-streamgraph:fullscreen .activity-time-streamgraph-y-label { font-size: 10px; }
 .activity-time-streamgraph-crosshair { position: absolute; z-index: 3; display: block; pointer-events: none; background: color-mix(in srgb, var(--text-primary) 65%, transparent); }.activity-time-streamgraph-crosshair--vertical { top: 0; bottom: 0; width: 1px; }.activity-time-streamgraph-crosshair--horizontal { left: 0; right: 0; height: 1px; }.activity-time-streamgraph-tooltip { position: absolute; z-index: 4; min-width: 126px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; transform: translate(-50%, calc(-100% - 10px)); background: color-mix(in srgb, var(--bg) 94%, transparent); box-shadow: 0 5px 18px color-mix(in srgb, #000 18%, transparent); color: var(--text-secondary); font-size: 10px; line-height: 1.45; pointer-events: none; }.activity-time-streamgraph-tooltip b, .activity-time-streamgraph-tooltip span { display: block; }.activity-time-streamgraph-tooltip b { color: var(--text-primary); font-size: 11px; }.activity-time-streamgraph-fullscreen { min-width: 26px; padding: 3px 6px !important; color: var(--text-primary) !important; font-size: 16px !important; line-height: 1; }.activity-time-streamgraph:fullscreen { width: 100vw; height: 100vh; box-sizing: border-box; padding: 24px; border: 0; border-radius: 0; background: var(--bg-muted); }.activity-time-streamgraph:fullscreen .activity-time-streamgraph-chart { height: calc(100vh - 192px); }.activity-time-streamgraph:fullscreen .activity-time-streamgraph-y-label { font-size: 14px; }
+
+/* Match the summary hero while keeping archive controls readable. */
+.week-spine-layout .activity-archive {
+  --bg: #1b2942;
+  --bg-muted: #1b2942;
+  --text-primary: #f2f5fb;
+  --text-secondary: #aeb9d0;
+  --border: #394966;
+  --hover: #26334f;
+  --today: #9db4ff;
+  padding: 16px 20px 20px;
+  border: 1px solid #26334f;
+  border-radius: 16px;
+  background: #0f1a2e;
+  color: #f2f5fb;
+  color-scheme: dark;
+}
+.week-spine-layout .activity-archive-heading { align-items: center; padding-bottom: 14px; border-bottom: 1px solid #26334f; }
+.week-spine-layout .activity-archive h3 { color: #f2f5fb; }
+.week-spine-layout .activity-archive-list { gap: 6px; padding-top: 10px; }
+.week-spine-layout .activity-archive-list li { padding: 10px; border: 1px solid #26334f; border-radius: 9px; background: #16243a; }
+.week-spine-layout .activity-archive-list li:hover,
+.week-spine-layout .activity-archive-list li:focus-within { background: #1b2c47; border-color: #526589; }
+.week-spine-layout .activity-archive-add,
+.week-spine-layout .activity-archive-tag-add { border-color: #526589; background: #263b65; color: #e4ebff; }
+.week-spine-layout .activity-archive-add:hover,
+.week-spine-layout .activity-archive-tag-add:hover { background: #344e7c; }
+.week-spine-layout .activity-archive-title-input { color: #f2f5fb; }
+.week-spine-layout .activity-archive-field input,
+.week-spine-layout .activity-archive-category select,
+.week-spine-layout .activity-archive-tag-input { border-color: #52617c; background: #0f1a2e; color: #f2f5fb; }
+.week-spine-layout .activity-archive-actions .activity-archive-edit,
+.week-spine-layout .activity-archive-actions .activity-archive-restore { background: #263b65 !important; color: #e4ebff !important; }
+.week-spine-layout .activity-archive-actions .activity-archive-delete { background: #56333c !important; color: #ffe5e5 !important; }
+.week-spine-layout .activity-archive-actions button:hover { filter: brightness(1.25); }
+.week-spine-layout .activity-archive > p { padding-top: 14px; }
+@media (max-width: 640px) { .week-spine-layout .activity-archive { padding: 14px; } }
+
+/* Join the three Activity Mode surfaces into one continuous square-edged layout. */
+.activity-dashboard.has-summary-hero { gap: 0; }
+.activity-dashboard.has-summary-hero .activity-summary-hero,
+.activity-dashboard.has-summary-hero .week-spine,
+.activity-dashboard.has-summary-hero .activity-archive { margin: 0; border-radius: 0; }

@@ -42,3 +42,5 @@
 .daily-planner .daily-planner-normal-view { display: inline-flex; align-items: center; gap: 5px; }
 
 .daily-planner .daily-planner-normal-view { justify-content: center; width: 34px; height: 30px; padding: 4px; border-color: #8095ce; background: #e5ecff; color: #2545a4; }
+
+.daily-planner .daily-planner-event[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }

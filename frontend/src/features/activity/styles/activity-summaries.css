@@ -33,7 +33,7 @@
 .activity-dashboard.has-summary-hero .week-spine-day.is-weekend .week-spine-track { background-color: #fafbfd; }
 .activity-dashboard.has-summary-hero .week-spine-day.is-today .week-spine-track { background-color: #f6f8ff; box-shadow: none; }
 .activity-dashboard.has-summary-hero .week-spine-day.is-selected .week-spine-track { border: 0; border-left: 1px solid #e3e8f0; border-bottom: 1px solid #e3e8f0; box-shadow: inset 0 0 0 1px #a9bef7; }
-.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 18%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
+.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 26%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-title,
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-time { color: var(--text-primary); text-shadow: none; }
 /* Horizontal week: five activity cards per day, with a remaining-count button. */
@@ -343,3 +343,35 @@
 
 .week-spine .week-spine-day-heading.has-unsaved-draft { position: relative; box-shadow: inset 3px 0 #e37b7b; background: #fff4f4; }
 .week-spine-unsaved-warning { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #d55050; color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }
+
+.week-spine .week-spine-day.is-summary-drop-target { outline: 1px dashed #7592d8; outline-offset: -2px; background: #f2f6ff; }
+.week-spine-block[draggable=true] { cursor: grab; }
+.week-spine-block[draggable=true]:active { cursor: grabbing; }
+
+.week-spine-day-heading-wrap { position: relative; min-width: 0; }
+.week-spine-day-heading-wrap .week-spine-day-heading { height: 100%; }
+.week-spine-draft-save { position: absolute; top: 27px; right: 4px; display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 1px solid #cd6b6b; border-radius: 6px; background: #fff; color: #b23535; cursor: pointer; }
+.week-spine-draft-save:hover { background: #ffe3e3; }
+.week-spine-draft-save:focus-visible { outline: 2px solid #9a3030; outline-offset: 2px; }
+.week-spine-draft-save:disabled { opacity: .5; cursor: wait; }
+
+ .activity-summary-hero-main > section[aria-label="สรุปตามหมวดหมู่"] { flex: 1 1 220px; max-width: 400px; min-width: 0; font-size: 12px; color: #aeb9d0; }
+.activity-summary-hero-main > section h3 { margin-bottom: 8px; }
+.activity-summary-category-track { display: flex; overflow: hidden; height: 8px; border-radius: 5px; background: #26334f; }
+.activity-summary-category-list { display: flex; flex-wrap: wrap; gap: 7px 12px; margin-top: 8px; }
+.activity-summary-category-list span { display: inline-flex; align-items: center; gap: 4px; }
+.activity-summary-category-list strong { color: #f2f5fb; }
+.activity-summary-category-list i { width: 8px; height: 8px; border-radius: 50%; }
+
+.activity-dashboard { scrollbar-width: thin; scrollbar-color: #bbc5d4 transparent; scrollbar-gutter: auto; }
+.activity-dashboard::-webkit-scrollbar { width: 3px; height: 3px; }
+.activity-dashboard::-webkit-scrollbar-track { background: transparent; }
+.activity-dashboard::-webkit-scrollbar-thumb { background: #bbc5d4; border-radius: 9px; }
+.week-spine .week-spine-list-grid { position: relative; }
+.week-spine-timeline-surface .week-spine-edge-nav { position: absolute; z-index: 12; top: 5px; right: 8px; display: flex; gap: 4px; margin: 0; opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
+.week-spine-timeline-surface:hover .week-spine-edge-nav, .week-spine-timeline-surface:focus-within .week-spine-edge-nav { opacity: 1; pointer-events: auto; }
+.week-spine-timeline-surface .week-spine-edge-nav button { position: static; width: 30px; height: 30px; opacity: 1; pointer-events: auto; transform: none; border: 1px solid #c6d1e3; border-radius: 7px; background: #fffffff2; color: #2545a4; box-shadow: 0 2px 8px #152c5826; cursor: pointer; font-size: 18px; }
+.week-spine-timeline-surface .week-spine-edge-nav button:focus-visible { outline: 2px solid #2d4fe8; outline-offset: 2px; }
+.week-spine-timeline-surface:fullscreen { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 12px; background: #fff; }
+.week-spine-timeline-surface:fullscreen .week-spine-grid-wrap { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+@media (hover: none) { .week-spine-timeline-surface .week-spine-edge-nav { opacity: 1; pointer-events: auto; } }

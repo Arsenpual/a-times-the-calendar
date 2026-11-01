@@ -31,17 +31,41 @@ export function usePlannerDrag({ day, changes }) {
       if (!target) return;
       const targetDay = edge === "move" ? new Date(target.dataset.day) : day;
       const rect = edge === "move" ? target.getBoundingClientRect() : origin;
-      let deltaMinutes = item.isAllDay ? 0 : Math.round(((e.clientX - rect.left) / rect.width - (x - origin.left) / origin.width) * 1440 / 15) * 15;
-      if (!item.isAllDay && edge === "move") {
-        const segmentMinute = (item.start.getTime() - day.getTime()) / 60000;
-        deltaMinutes = Math.max(-segmentMinute, Math.min(1425 - segmentMinute, deltaMinutes));
-      }
-      const shift = targetDay.getTime() - day.getTime() + deltaMinutes * 60000;
-      const newStart = new Date(+start + (edge === "end" ? 0 : shift));
-      const newEnd = new Date(+end + (edge === "start" ? 0 : shift));
-      if (+newEnd - +newStart < 15 * 60000) {
-        if (edge === "start") newStart.setTime(+newEnd - 15 * 60000);
-        else newEnd.setTime(+newStart + 15 * 60000);
+      const rawDelta = ((e.clientX - rect.left) / rect.width - (x - origin.left) / origin.width) * 1440;
+      const dayShift = targetDay.getTime() - day.getTime();
+      const snapTime = date => {
+        const snapped = new Date(date);
+        const minutes = snapped.getHours() * 60 + snapped.getMinutes() + snapped.getSeconds() / 60 + snapped.getMilliseconds() / 60000;
+        snapped.setHours(0, Math.round(minutes / 15) * 15, 0, 0);
+        return snapped;
+      };
+      let newStart = new Date(start), newEnd = new Date(end);
+      if (item.isAllDay) {
+        newStart = new Date(+start + dayShift);
+        newEnd = new Date(+end + dayShift);
+      } else if (edge === "move") {
+        const proposed = snapTime(new Date(+start + dayShift + rawDelta * 60000));
+        // Keep the grabbed segment within the destination day's clock.
+        const segmentOffset = +item.start - +start;
+        const first = +targetDay - segmentOffset;
+        const last = +targetDay + 1425 * 60000 - segmentOffset;
+        newStart = new Date(Math.max(first, Math.min(last, +proposed)));
+        newEnd = new Date(+newStart + (+end - +start));
+      } else if (edge === "start") {
+        newStart = snapTime(new Date(+start + rawDelta * 60000));
+        if (+newStart > +end - 15 * 60000) {
+          newStart = new Date(end);
+          newStart.setSeconds(0, 0);
+          newStart.setMinutes(Math.floor((newStart.getMinutes() - 15) / 15) * 15);
+        }
+      } else {
+        newEnd = snapTime(new Date(+end + rawDelta * 60000));
+        if (+newEnd < +start + 15 * 60000) {
+          newEnd = new Date(start);
+          const minute = newEnd.getMinutes() + (newEnd.getSeconds() || newEnd.getMilliseconds() ? 1 : 0);
+          newEnd.setSeconds(0, 0);
+          newEnd.setMinutes(Math.ceil((minute + 15) / 15) * 15);
+        }
       }
       next = { id: item.calendarId, start: newStart, end: newEnd };
       changes.setDragPreview(next);

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatTime, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
@@ -7,6 +7,7 @@ import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import ActivityPopup from "./activity-popup.jsx";
 import ActivitySummaryHero from "./activity-summary-hero.jsx";
 import { useWeekSpineTimeChanges } from "../hooks/use-week-spine-time-changes.js";
+import { activityDate } from "../../../shared/lib/date-utils.js";
 import { applyTimeDraft } from "../lib/planner-time-draft.js";
 import ActivityDailyPlanner from "./activity-daily-planner.jsx";
 import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
@@ -95,7 +96,6 @@ function WeekSpineContent({
   onFocusOverviewSummary,
   onFocusWeekSummary,
   cycleData = { activities: [], loading: false, error: "" },
-  weekStreamgraph,
 }) {
   const { language } = useLanguage();
   const [defaultWeekStart, defaultWeekEnd] = getYearWeekRange(anchorDate);
@@ -156,6 +156,20 @@ function WeekSpineContent({
       return day;
     });
   }, [weekStart.getTime()]);
+  const timelineRef = useRef(null);
+  const [timelineFullscreen, setTimelineFullscreen] = useState(false);
+  useEffect(() => {
+    const sync = () => setTimelineFullscreen(document.fullscreenElement === timelineRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  const toggleTimelineFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === timelineRef.current) await document.exitFullscreen();
+      else await timelineRef.current?.requestFullscreen();
+    } catch { showInteractionWarning("ไม่สามารถเปิดเต็มจอได้ในขณะนี้"); }
+  };
+  const [summaryDrag, setSummaryDrag] = useState(null);
   const [openPlannerDays, setOpenPlannerDays] = useState(() => new Set());
   useEffect(() => { setOpenPlannerDays(new Set()); }, [weekDays, viewMode]);
   const togglePlanner = dayKey => {
@@ -261,14 +275,15 @@ function WeekSpineContent({
             : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
               : <FourWeekOverview weeks={cycle.weeks} cycleStart={cycle.start} cycleEnd={cycle.end} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
         ) : <>
-        <section className="week-spine-timeline-surface" aria-label="ปฏิทิน 7 วัน" tabIndex={0}>
-        <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
-          <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
-          <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>
-        </div>
+        <section ref={timelineRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}`} aria-label="ปฏิทิน 7 วัน" tabIndex={0}>
         <PlannerGuideBridges draft={timeChanges.dragPreview} />
         {interactionWarning && <PopupLayerItem id="week-spine-interaction-warning" region="bottom-center" priority={65}><p className="error-banner" role="alert">{interactionWarning}</p></PopupLayerItem>}
       <div className="week-spine-grid-wrap week-spine-list-grid">
+        <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
+          <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
+          <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>
+          <button type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มจอ" : "แสดงปฏิทินเต็มจอ"} title={timelineFullscreen ? "ออกจากเต็มจอ" : "แสดงปฏิทินเต็มจอ"}>{timelineFullscreen ? "×" : "⛶"}</button>
+        </div>
         <div className="week-spine-days">
           {weekDays.map((day, index) => {
             const isOutsideVisibleYear = day < weekStart || day > weekEnd;
@@ -287,16 +302,39 @@ function WeekSpineContent({
             const dayListId = `week-spine-activities-${index}`;
             const isSelected = isSameDay(day, visibleSelectedDay);
             const isToday = isSameDay(day, today);
-            return <div className={`week-spine-day${day.getDay() === 0 || day.getDay() === 6 ? " is-weekend" : ""}${isOutsideVisibleYear ? " is-outside-year" : ""}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`} key={day.toISOString()}>
+            return <div onDragOver={event => { if (summaryDrag && !isOutsideVisibleYear) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }} onDrop={event => {
+              if (!summaryDrag || isOutsideVisibleYear) return;
+              event.preventDefault();
+              const { activity, sourceDay } = summaryDrag;
+              if (+sourceDay !== +day) {
+                const start = activityDate(activity.source.start), end = activityDate(activity.source.end);
+                const days = Math.round((Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) - Date.UTC(sourceDay.getFullYear(), sourceDay.getMonth(), sourceDay.getDate())) / 86400000);
+                start.setDate(start.getDate() + days); end.setDate(end.getDate() + days);
+                if (timeChanges.pendingTimeChanges.has(activity.calendarId)) {
+                  showInteractionWarning("กิจกรรมนี้มีการปรับเวลาที่ยังไม่ได้บันทึก กรุณาบันทึกหรือย้อนกลับใน planner ก่อนย้าย");
+                } else if (onSaveTimes) {
+                  Promise.resolve(onSaveTimes([{ id: activity.calendarId, start, end }])).then(saved => {
+                    if (saved === false) showInteractionWarning("ย้ายกิจกรรมไม่สำเร็จ กรุณาลองอีกครั้ง");
+                  }).catch(error => showInteractionWarning(error?.message || "ย้ายกิจกรรมไม่สำเร็จ"));
+                } else showInteractionWarning("ไม่พบคำสั่งบันทึกกิจกรรม");
+              }
+              setSummaryDrag(null);
+            }} className={`week-spine-day${summaryDrag && +summaryDrag.sourceDay !== +day && !isOutsideVisibleYear ? " is-summary-drop-target" : ""}${day.getDay() === 0 || day.getDay() === 6 ? " is-weekend" : ""}${isOutsideVisibleYear ? " is-outside-year" : ""}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`} key={day.toISOString()}>
+              <div className="week-spine-day-heading-wrap">
               <button className={`week-spine-day-heading${hasHiddenDraft ? " has-unsaved-draft" : ""}`} type="button" disabled={isOutsideVisibleYear} onClick={() => selectDay(day)} aria-pressed={!isOutsideVisibleYear && isSelected} aria-current={isToday ? "date" : undefined}>
                 {hasHiddenDraft && <span className="week-spine-unsaved-warning" role="img" aria-label="มีการปรับเวลาที่ยังไม่ได้บันทึก" title="มีการปรับเวลาที่ยังไม่ได้บันทึก">!</span>}
                 <span className="week-spine-day-label"><span className="week-spine-day-label-full">{day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { weekday: "long" }).replace(/^วัน/, "")}</span><span className="week-spine-day-label-short">{labels[day.getDay()]}</span></span>
                 <strong><span>{day.getDate()}</span><small className="week-spine-day-month">{day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { month: "short" })}</small></strong>
                 <small className="week-spine-day-meta">{dayActivities.length} กิจกรรม · {(daySegments.reduce((total, segment) => total + (segment.end - segment.start), 0) / 3600000).toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม.</small>
               </button>
+              {hasHiddenDraft && <button type="button" className="week-spine-draft-save" disabled={timeChanges.forDay(dayKey).isSavingTimeChanges} onClick={() => timeChanges.forDay(dayKey).savePendingTimeChanges()} aria-label={`บันทึกการปรับเวลา ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}`} title="บันทึกการปรับเวลา"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 3h13l3 3v15H4z"/><path d="M8 3v6h8V3M8 21v-8h8v8"/></svg></button>}
+              </div>
               {!openPlannerDays.has(dayKey) && <div id={dayListId} className="week-spine-track week-spine-activity-list" data-day-index={index}>
                 {!isOutsideVisibleYear && (isExpanded ? dayActivities : featuredActivities).map((activity, activityIndex) => <button
                   type="button"
+                  draggable={!activity.isLocked && !activity.source.isOnboardingSample}
+                  onDragStart={event => { if (activity.isLocked || activity.source.isOnboardingSample) { event.preventDefault(); return; } event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", activity.title); setSummaryDrag({ activity, sourceDay: day }); }}
+                  onDragEnd={() => setSummaryDrag(null)}
                   key={activity.segmentId || `all-day:${activity.calendarId}`}
                   title={`${activity.title}${activity.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${activity.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`}
                   className={`week-spine-block${activity.isAllDay ? " week-spine-all-day-track-block" : ""}${activity.isLocked ? " is-locked" : ""}${selectedActivityIds.has(activity.calendarId) ? " is-series-selected" : ""}`}
@@ -307,7 +345,6 @@ function WeekSpineContent({
                     if (activity.isLocked) { showInteractionWarning("กิจกรรมนี้ถูกล็อกไว้ — ปลดล็อกก่อนแก้ไข"); return; }
                     openSegmentEditor(activity);
                   }}
-                  onContextMenu={(event) => openContextMenu(event, activity)}
                 >
                   <span className="week-spine-block-time">{activity.isAllDay ? "ทั้งวัน" : `${activity.continuesFromPreviousDay ? "↳ " : ""}${formatTime(activity.start, language)}–${formatTime(activity.end, language)}${activity.continuesIntoNextDay ? " ↳" : ""}`}</span>
                   <span className="week-spine-block-title">{activity.isLocked ? "🔒 " : ""}{activity.title}</span>
@@ -317,7 +354,7 @@ function WeekSpineContent({
                 {!isOutsideVisibleYear && dayActivities.length === 0 && <span className="week-spine-list-empty">ไม่มีกิจกรรม</span>}
                 {!isOutsideVisibleYear && (isExpanded || dayActivities.length <= 5) && <button type="button" className="week-spine-list-add" style={{ gridColumn: !isExpanded && dayActivities.length === 5 ? 6 : dayActivities.length % 5 + 1, gridRow: !isExpanded && dayActivities.length === 5 ? 1 : Math.floor(dayActivities.length / 5) + 1 }} onClick={() => onAddActivity?.(day)} aria-label={`เพิ่มกิจกรรม ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}` } title="เพิ่มกิจกรรม">+</button>}
               </div>}
-              {openPlannerDays.has(dayKey) && <ActivityDailyPlanner id={`daily-drawer-${dayKey}`} timeChanges={timeChanges.forDay(dayKey)} day={day} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} loading={activitiesLoading} onClose={() => closePlanner(dayKey)} onAddActivity={onAddActivity} onEditActivity={onEditActivity} />}
+              {openPlannerDays.has(dayKey) && <ActivityDailyPlanner id={`daily-drawer-${dayKey}`} timeChanges={timeChanges.forDay(dayKey)} onContextMenu={openContextMenu} day={day} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} loading={activitiesLoading} onClose={() => closePlanner(dayKey)} onAddActivity={onAddActivity} onEditActivity={onEditActivity} />}
             </div>;
           })}
         </div>
@@ -352,7 +389,6 @@ function WeekSpineContent({
       </>}
       </section>
       {viewMode !== "four-weeks" && <>
-      {weekStreamgraph}
       <section className="activity-archive" aria-label="คลังกิจกรรม">
         <div className="activity-archive-heading"><h3>คลังกิจกรรม</h3><span>{activityArchive.length} รายการ</span><button type="button" className="activity-archive-add" onClick={addArchiveDraft}>+ เพิ่มกิจกรรม</button></div>
         {activityArchive.length === 0 ? <p>ยังไม่มีกิจกรรมที่เก็บไว้</p> : (

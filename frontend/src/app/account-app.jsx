@@ -7,11 +7,6 @@ import { useDisplayPreferences } from "../features/settings/hooks/use-display-pr
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
-import HeaderSummary from "../features/activity/components/header-summary.jsx";
-import WeeklySummaryPanel from "../features/activity/components/weekly-summary-panel.jsx";
-import CycleSummaryPanel from "../features/activity/components/cycle-summary-panel.jsx";
-import ActivityTimeStreamgraph from "../features/activity/components/activity-time-streamgraph.jsx";
-import MiniTimelinePanel from "../features/activity/components/mini-timeline-panel.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
@@ -138,7 +133,7 @@ export default function AccountApp({ auth }) {
   const { mode, setMode, closeAiMode, toggleAiMode, settingsOpen, setSettingsOpen } = useAppNavigation();
   const [navigationExpanded, setNavigationExpanded] = useState(() => window.matchMedia("(min-width: 761px)").matches);
   const {
-    theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
+    reminderTimelineColors, setReminderTimelineColors,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   } = useDisplayPreferences();
   const nav = useWeekNavigation({ mode, userId: firebaseUser?.uid ?? null });
@@ -157,7 +152,6 @@ export default function AccountApp({ auth }) {
   const {
     weekSpineViewMode,
     cycleAnchorDate,
-    summaryPanelMode,
     setWeekSpineView,
     navigateCycle,
     openCycleWeekEditor,
@@ -167,13 +161,10 @@ export default function AccountApp({ auth }) {
     focusWeeklySummary,
     activityHeaderTitle
   } = useActivityView({ cursorDate, selectWeek, closeDay, userId: firebaseUser?.uid ?? null });
-  const [streamgraphRange, setStreamgraphRange] = useState("week");
-  const [headerSummaryOpen, setHeaderSummaryOpen] = useState(false);
-  const [headerSummaryPeriod, setHeaderSummaryPeriod] = useState("week");
   // In the normal Week Spine, Cycle Streamgraph follows the week currently
   // on screen. The four-week overview continues to own its own cycle anchor.
   const cycleRange = getYearCycle(
-    weekSpineViewMode === "four-weeks" ? cycleAnchorDate : ((streamgraphRange === "cycle" || (headerSummaryOpen && headerSummaryPeriod === "cycle")) ? cursorDate : cycleAnchorDate)
+    cycleAnchorDate
   );
   const cycleData = useCycleActivities({
     viewMode: mode === "activity" && firebaseUser ? weekSpineViewMode : "week",
@@ -182,7 +173,7 @@ export default function AccountApp({ auth }) {
     cycleEnd: cycleRange.end,
     userId: firebaseUser?.uid,
     archivedActivityIds,
-    includeWhenWeek: mode === "activity" && (streamgraphRange === "cycle" || (headerSummaryOpen && headerSummaryPeriod === "cycle"))
+    includeWhenWeek: false
   });
   const {
     isActivityReading,
@@ -444,9 +435,6 @@ export default function AccountApp({ auth }) {
   const headerInSummary = mode === "activity" && weekSpineViewMode === "week" && !isSearchingTags;
   const appHeader = (
     <AppHeader
-        summaryOpen={headerSummaryOpen}
-        onToggleSummary={() => setHeaderSummaryOpen((open) => !open)}
-        summaryContent={headerSummaryOpen && <HeaderSummary period={headerSummaryPeriod} onPeriodChange={setHeaderSummaryPeriod} date={expandedDate || cursorDate} activities={activities} archivedActivityIds={archivedActivityIds} connected={Boolean(calendarAccessToken)} loading={loading} categories={categories} activityCategoryMap={activityCategoryMap} weeklySummary={summary} weeklyLoading={summaryLoading} weeklyError={summaryError} cycleAnchor={weekSpineViewMode === "four-weeks" ? cycleAnchorDate : cursorDate} cycleData={cycleData} />}
         navigationExpanded={navigationExpanded}
         onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
         firebaseUser={firebaseUser}
@@ -570,46 +558,6 @@ export default function AccountApp({ auth }) {
 
             {firebaseUser && (
               <div ref={activityDashboardRef} className={`dashboard activity-dashboard${weekSpineViewMode === "week" && !isSearchingTags ? " has-summary-hero" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
-                <div className={`summary-column${expandedDate ? " has-selected-day" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`}>
-                  <div className={`flip-card${expandedDate ? " is-flipped" : ""}`}>
-                    <div className="flip-face flip-face-summary">
-                      {weekSpineViewMode === "four-weeks" && summaryPanelMode === "cycle" ? <CycleSummaryPanel
-                            anchorDate={cycleAnchorDate}
-                            activities={cycleData.activities}
-                            loading={cycleData.loading}
-                            error={cycleData.error}
-                            categories={categories}
-                            activityCategoryMap={activityCategoryMap}
-                            onSelectWeek={selectCycleWeek}
-                            onSelectDay={focusDate}
-                            glass={summaryPanelGlassEnabled}
-                            theme={theme}
-                          /> : <WeeklySummaryPanel
-                            anchorDate={cursorDate}
-                            summary={summary}
-                            loading={summaryLoading}
-                            error={summaryError}
-                            onSelectDay={openDay}
-                            categories={categories}
-                            glass={summaryPanelGlassEnabled}
-                            theme={theme}
-                          />}
-                    </div>
-                    <div className="flip-face flip-face-timeline">
-                      <MiniTimelinePanel
-                        activities={visibleActivities}
-                        categories={categories}
-                        activityCategoryMap={activityCategoryMap}
-                        lockedActivities={lockedActivities}
-                        userId={firebaseUser.uid}
-                        expandedDate={expandedDate}
-                        onClose={closeDay}
-                        onEditActivity={openEditActivity}
-                        onOpenDailySummary={requestAssistantDailySummary}
-                      />
-                    </div>
-                  </div>
-                </div>
                 {isSearchingTags ? (
                   <TagSearchResults
                     activities={visibleActivities}
@@ -669,18 +617,6 @@ export default function AccountApp({ auth }) {
                     onFocusOverviewSummary={focusCycleSummary}
                     onFocusWeekSummary={focusWeeklySummary}
                     cycleData={cycleData}
-                    weekStreamgraph={weekSpineViewMode === "week" ? <ActivityTimeStreamgraph
-                      anchorDate={cursorDate}
-                      activities={visibleActivities}
-                      cycleAnchorDate={streamgraphRange === "cycle" ? cursorDate : cycleAnchorDate}
-                      cycleActivities={cycleData.activities}
-                      cycleLoading={cycleData.loading}
-                      categories={categories}
-                      activityCategoryMap={activityCategoryMap}
-                      range={streamgraphRange}
-                      onRangeChange={setStreamgraphRange}
-                      onSelectDay={openDay}
-                    /> : null}
                   />
                 )}
               </div>
@@ -780,8 +716,6 @@ export default function AccountApp({ auth }) {
         onTestFirestoreQuota={handleTestFirestoreQuota}
         firestoreQuotaTestActive={Boolean(firestoreQuota?.simulated)}
         onClose={() => setSettingsOpen(false)}
-        theme={theme}
-        onThemeChange={setTheme}
         reminderTimelineColors={reminderTimelineColors}
         onReminderTimelineColorsChange={setReminderTimelineColors}
         summaryPanelGlassEnabled={summaryPanelGlassEnabled}

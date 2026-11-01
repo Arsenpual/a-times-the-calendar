@@ -59,8 +59,6 @@ function AssistantPreferenceRow({ field, item, onSave, onDelete }) {
  *
  * @param {boolean} open
  * @param {() => void} onClose
- * @param {"light"|"dark"} theme current theme
- * @param {(theme: "light"|"dark") => void} onThemeChange
  * @param {{nowIndicator:string}} reminderTimelineColors
  * @param {(partial: object) => void} onReminderTimelineColorsChange
  */
@@ -72,8 +70,6 @@ export default function SettingsDrawer({
   calendarTokenExpiresAtStorageKey,
   onTestFirestoreQuota,
   firestoreQuotaTestActive,
-  theme,
-  onThemeChange,
   reminderTimelineColors,
   onReminderTimelineColorsChange,
   summaryPanelGlassEnabled = false,
@@ -141,23 +137,6 @@ export default function SettingsDrawer({
 
           <section className="settings-section">
             <h3 className="settings-section-title">{t("settings.display")}</h3>
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <span className="settings-row-title">{t("settings.darkMode")}</span>
-                <span className="settings-row-desc">{t("settings.darkModeDesc")}</span>
-              </div>
-              <button
-                type="button"
-                className={`settings-toggle${theme === "dark" ? " is-on" : ""}`}
-                role="switch"
-                aria-checked={theme === "dark"}
-                aria-label={t("settings.darkMode")}
-                onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
-            </div>
-
             <div className="settings-row">
               <div className="settings-row-label">
                 <span className="settings-row-title">{t("settings.summaryPanelGlass")}</span>

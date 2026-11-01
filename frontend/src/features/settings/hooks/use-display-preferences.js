@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 
 const SUMMARY_PANEL_GLASS_KEY = "times-summary-panel-glass";
 
-const THEME_STORAGE_KEY = "theme";
 const REMINDER_TIMELINE_COLORS_STORAGE_KEY = "reminder-timeline-colors";
 const DEFAULT_REMINDER_TIMELINE_COLORS = {
   nowIndicator: "#ea4335"
@@ -39,31 +38,8 @@ export function useDisplayPreferences() {
     }
   }, [summaryPanelGlassEnabled]);
 
-  // Dark mode theme — persisted in localStorage so it survives refresh.
-  // Read once at mount; applied to <html> as a data-theme attribute below
-  // so CSS can key off [data-theme="dark"] selectors globally. Defaults
-  // to the system preference (prefers-color-scheme) on first-ever visit.
-  const [theme, setThemeState] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === "light" || saved === "dark") return saved;
-    } catch {
-      // localStorage unavailable — fall through to system preference below.
-    }
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
-  const setTheme = useCallback((next) => {
-    setThemeState(next);
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      // If storage isn't available, the app still works, it just won't
-      // remember the choice on reload.
-    }
-  }, []);
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+  // Use the current light base while the app's color system is being redesigned.
+  useEffect(() => { document.documentElement.setAttribute("data-theme", "light"); }, []);
 
   // สีของเอฟเฟกต์เวลาใน Reminder Timeline เป็น preference ฝั่งเครื่อง:
   // ไม่เกี่ยวกับข้อมูล Activity/Reminder จึงไม่ควร sync ขึ้น Calendar หรือ Firebase.
@@ -81,7 +57,7 @@ export function useDisplayPreferences() {
   }, []);
 
   return {
-    theme, setTheme, reminderTimelineColors, setReminderTimelineColors,
+    reminderTimelineColors, setReminderTimelineColors,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   };
 }

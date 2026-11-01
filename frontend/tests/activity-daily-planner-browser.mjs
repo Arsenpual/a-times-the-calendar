@@ -27,10 +27,20 @@ try {
     { id: 'night', summary: 'Night', start: { dateTime: new Date(2026, 8, 7, 23).toISOString() }, end: { dateTime: new Date(2026, 8, 8, 1).toISOString() } },
     { id: 'all-day', summary: 'All day', start: { date: '2026-09-07' }, end: { date: '2026-09-08' } },
   ]));
+  const sourceDay = page.locator('.week-spine-day').nth(1);
+  const destinationDay = page.locator('.week-spine-day').nth(2);
+  await sourceDay.locator('.week-spine-block').filter({ hasText: 'Design' }).click({ button: 'right' });
+  assert.equal(await page.locator('.activity-popup').count(), 0, 'summary has no activity context menu');
+  await sourceDay.locator('.week-spine-block').filter({ hasText: 'Design' }).dragTo(destinationDay.locator('.week-spine-day-heading'));
+  await page.waitForFunction(() => window.phase1.calls.some(c => c.type === 'save'));
+  await destinationDay.locator('.week-spine-block').filter({ hasText: 'Design' }).waitFor();
+  assert.equal(await sourceDay.locator('.week-spine-unsaved-warning').count(), 0, 'summary move saves immediately');
+  await page.evaluate(() => { window.phase1.setActivities(current => current.map(item => item.id === 'long' ? { ...item, start: { dateTime: new Date(2026, 8, 7, 9).toISOString() }, end: { dateTime: new Date(2026, 8, 7, 11).toISOString() } } : item)); });
   const launcher = page.locator('.week-spine-day').nth(1).locator('.week-spine-planner-open');
   await launcher.click();
   const monday = page.getByRole('region', { name: 'รายละเอียดวัน 7 กันยายน', exact: true });
   await monday.waitFor();
+  assert.equal(await monday.getByRole('button', { name: 'ดาวน์โหลดแผนวันนี้เป็นรูปภาพ' }).count(), 1);
   assert.equal(await page.locator('.week-spine-day').count(), 7, 'week remains visible');
   assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-activity-list').count(), 0, 'timeline replaces the summary cards');
   const aligned = await monday.evaluate(el => Math.abs(el.getBoundingClientRect().top - el.parentElement.querySelector('.week-spine-day-heading').getBoundingClientRect().top) < 1);
@@ -41,6 +51,9 @@ try {
   assert.equal(await monday.locator('.daily-planner-lane').count(), 3);
   assert.equal(await monday.locator('textarea').count(), 0, 'no planning forms in compact drawer');
   assert.ok(await monday.evaluate(el => el.getBoundingClientRect().height < 240));
+  await monday.locator('.daily-planner-event').filter({ hasText: 'Design' }).click({ button: 'right' });
+  assert.equal(await page.locator('.activity-popup').count(), 1, 'context menu opens from planner');
+  await page.keyboard.press('Escape');
   const bars = await monday.locator('.daily-planner-event').evaluateAll(elements => elements.map(el => ({ text: el.title, width: parseFloat(el.style.width), top: el.getBoundingClientRect().top })));
   assert.ok(Math.abs(bars.find(item => item.text.startsWith('Design')).width - 100 / 12) < .001);
   assert.notEqual(bars.find(item => item.text.startsWith('Design')).top, bars.find(item => item.text.startsWith('Meeting')).top);
@@ -73,7 +86,7 @@ try {
     assert.equal(await page.locator('.planner-drag-ghost').count(), 0);
   };
   const axisWidth = (await monday.locator('.daily-planner-lanes').boundingBox()).width;
-  const savesBefore = await page.evaluate(() => window.phase1.calls.filter(c => c.type === 'save').length);
+  let savesBefore = await page.evaluate(() => window.phase1.calls.filter(c => c.type === 'save').length);
   const firstBox = await design.boundingBox();
   await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 14);
   await page.mouse.down();
@@ -88,8 +101,22 @@ try {
   const heading = page.locator('.week-spine-day').nth(1).locator('.week-spine-day-heading');
   assert.equal(await heading.locator('.week-spine-unsaved-warning').count(), 1, 'closed planner warns about unsaved edits');
   assert.equal(await page.locator('.week-spine-day').nth(2).locator('.week-spine-unsaved-warning').count(), 0);
-  await launcher.click();
+  const quickSave = sourceDay.getByRole('button', { name: 'บันทึกการปรับเวลา 7 กันยายน' });
+  assert.equal(await quickSave.count(), 1);
+  await page.evaluate(() => { window.phase1.failSave = true; });
+  await quickSave.click();
+  await page.getByRole('alert').filter({ hasText: 'บันทึกการปรับเวลาไม่สำเร็จ' }).waitFor();
+  assert.equal(await quickSave.isEnabled(), true, 'failed save remains available');
+  await page.evaluate(() => { window.phase1.failSave = false; });
+  await quickSave.click();
+  await quickSave.waitFor({ state: 'detached' });
+  savesBefore = await page.evaluate(() => window.phase1.calls.filter(c => c.type === 'save').length);
   assert.equal(await heading.locator('.week-spine-unsaved-warning').count(), 0);
+  // Restore the test activity's original time and create a fresh draft.
+  await page.evaluate(() => window.phase1.setActivities(current => current.map(item => item.id === 'long' ? { ...item, start: { dateTime: new Date(2026, 8, 7, 9).toISOString() }, end: { dateTime: new Date(2026, 8, 7, 11).toISOString() } } : item)));
+  await launcher.click();
+  await drag(design, axisWidth / 24);
+  assert.match(await design.getAttribute('title'), /10:00–12:00/);
   await monday.getByRole('button', { name: '↶ ย้อนกลับ', exact: true }).click();
   assert.match(await design.getAttribute('title'), /09:00–11:00/);
   assert.equal(await tuesday.getByRole('button', { name: '↷ ทำซ้ำ', exact: true }).isDisabled(), true);
@@ -155,6 +182,19 @@ try {
   assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-block').count(), 5);
   assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-list-more').textContent(), '+3');
   await launcher.click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => window.phase1.setActivities([{ id: 'off-grid', summary: 'Off grid', start: { dateTime: new Date(2026, 8, 7, 6, 59, 30).toISOString() }, end: { dateTime: new Date(2026, 8, 7, 8, 29, 30).toISOString() } }]));
+  const offGrid = monday.locator('.daily-planner-event').filter({ hasText: 'Off grid' });
+  const width = (await monday.locator('.daily-planner-lanes').boundingBox()).width;
+  await drag(offGrid, width / 24 / 4);
+  assert.match(await offGrid.getAttribute('title'), /07:15–08:45/, 'moving snaps start to quarter hour and preserves duration');
+  await monday.getByRole('button', { name: '↶ ย้อนกลับ', exact: true }).click();
+  await drag(offGrid.locator('.planner-resize.start'), width / 24 / 4);
+  assert.match(await offGrid.getAttribute('title'), /07:15–08:29/, 'resizing snaps the changed edge');
+  await monday.getByRole('button', { name: '↶ ย้อนกลับ', exact: true }).click();
+  await drag(offGrid.locator('.planner-resize.end'), width / 24 / 4);
+  assert.match(await offGrid.getAttribute('title'), /06:59–08:45/, 'end resize snaps without changing start');
+  await monday.getByRole('button', { name: '↶ ย้อนกลับ', exact: true }).click();
   await page.evaluate(() => window.phase1.set({ anchorDate: new Date(2026, 8, 14) }));
   await page.waitForFunction(() => !document.querySelector('.daily-planner'));
   assert.deepEqual(errors, []);

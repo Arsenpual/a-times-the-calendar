@@ -2,9 +2,6 @@ import React from "react";
 import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
 
 export default function AppHeader({
-  summaryOpen,
-  onToggleSummary,
-  summaryContent,
   navigationExpanded,
   onToggleNavigation,
   firebaseUser,
@@ -82,7 +79,6 @@ export default function AppHeader({
           <div className="app-header-right">
             {mode === "activity" ? (
               <>
-                <button type="button" className="btn btn-outline" aria-expanded={Boolean(summaryOpen)} aria-controls="header-summary" onClick={onToggleSummary}>{summaryOpen ? "ซ่อนสรุป" : "แสดงสรุป"}</button>
                 <div className="tag-search-wrap">
                   <svg className="tag-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <circle cx="10.5" cy="10.5" r="6.5" />
@@ -177,7 +173,6 @@ export default function AppHeader({
               )}
             </div>
           </div>
-          {mode === "activity" && summaryOpen && <div className="app-header-summary" id="header-summary">{summaryContent}</div>}
         </header>
       )}
     </>

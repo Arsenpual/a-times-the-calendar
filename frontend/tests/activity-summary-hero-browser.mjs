@@ -36,6 +36,8 @@ try {
   ]));
   await page.waitForFunction(() => document.querySelector(".activity-summary-hero-stats strong")?.textContent === "2");
   assert.deepEqual(await page.locator(".activity-summary-hero-stats strong").allTextContents(), ["2", "2", "2"]);
+  assert.equal(await page.locator(".activity-summary-details").count(), 0);
+  assert.ok(await page.getByRole("region", { name: "สรุปตามหมวดหมู่" }).isVisible());
   assert.equal(await page.locator(".activity-summary-hero-days").count(), 0);
   assert.equal(await page.locator(".activity-summary-hero-categories").count(), 0);
   await page.evaluate(() => window.phase1.set({ viewMode: "four-weeks" }));
@@ -82,7 +84,7 @@ try {
   assert.equal(await page.locator('.week-spine-block-time').first().isVisible(), true);
   assert.ok(await page.locator('.week-spine-day-heading').first().evaluate(element => element.getBoundingClientRect().height >= 63), 'date and daily counts must remain visible above the cards');
   await page.locator('.week-spine-block').nth(1).click({ button: 'right' });
-  assert.ok(await page.locator('.activity-popup').count() > 0, 'context menu stays available');
+  assert.equal(await page.locator('.activity-popup').count(), 0, 'context menu belongs to planner');
   await page.keyboard.press('Escape');
   const rows = await page.locator('.week-spine-day').evaluateAll(elements => elements.map(element => {
     const rect = element.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width };
@@ -91,7 +93,19 @@ try {
   assert.ok(rows.every(row => Math.abs(row.width - rows[0].width) < 1 && row.left === rows[0].left), 'each day uses the full width');
   assert.ok(rows.slice(1).every((row, index) => row.top >= rows[index].bottom), 'seven days run down the page');
   const surface = page.locator('.week-spine-timeline-surface');
+  const nav = page.locator('.week-spine-grid-wrap .week-spine-edge-nav');
+  await surface.hover();
+  assert.equal(await nav.evaluate(el => getComputedStyle(el).opacity), '1');
+  await page.getByRole('button', { name: 'แสดงปฏิทินเต็มจอ' }).click();
+  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('week-spine-timeline-surface'));
+  assert.equal(await page.locator('.week-spine-day').count(), 7);
+  await page.getByRole('button', { name: 'ออกจากเต็มจอ' }).click();
+  await page.waitForFunction(() => !document.fullscreenElement);
+
   assert.ok(await surface.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1), 'all days and activities fit without an inner scrollbar');
+  const panels = await page.evaluate(() => ['.activity-summary-hero', '.week-spine', '.activity-archive'].map(selector => { const el = document.querySelector(selector); const rect = el.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, radius: getComputedStyle(el).borderTopLeftRadius }; }));
+  assert.ok(Math.abs(panels[0].bottom - panels[1].top) < 1 && Math.abs(panels[1].bottom - panels[2].top) < 1, 'main panels touch without gaps');
+  assert.ok(panels.every(panel => panel.radius === '0px'), 'main panels have square corners');
   await page.locator("main").evaluate((main) => {
     const panel = document.createElement("aside");
     panel.className = "summary-column has-selected-day";

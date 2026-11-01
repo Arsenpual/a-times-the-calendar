@@ -1,4 +1,6 @@
 import { createPortal } from "react-dom";
+import { downloadDayTimelineImage } from "../lib/export-day-image.js";
+import { activityDate, isSameDay } from "../../../shared/lib/date-utils.js";
 import PlannerTimeActions from "./planner-time-actions.jsx";
 import { usePlannerDrag } from "../hooks/use-planner-drag.js";
 import React, { useMemo } from "react";
@@ -6,7 +8,7 @@ import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { buildDailyPlannerLayout, minuteLabel } from "../lib/daily-planner-layout.js";
 import "../styles/activity-daily-planner.css";
 
-export default function ActivityDailyPlanner({ id, timeChanges, day, activities, categories, activityCategoryMap, lockedActivities, loading, onClose, onAddActivity, onEditActivity }) {
+export default function ActivityDailyPlanner({ id, timeChanges, day, activities, categories, activityCategoryMap, lockedActivities, loading, onClose, onAddActivity, onEditActivity, onContextMenu }) {
   const { timedSegments, allDayActivities } = useMemo(() => buildWeekSpineData({ activities, weekStart: day, weekEnd: day, categories, activityCategoryMap, lockedActivities }), [activities, day, categories, activityCategoryMap, lockedActivities]);
   const layout = useMemo(() => buildDailyPlannerLayout(timedSegments, day), [timedSegments, day]);
   const { beginDrag, suppressClick, preview, ghost } = usePlannerDrag({ day, changes: timeChanges });
@@ -29,10 +31,10 @@ export default function ActivityDailyPlanner({ id, timeChanges, day, activities,
     <div data-day={day.toISOString()} className="daily-planner-lanes" aria-label="เส้นเวลา 00:00 ถึง 24:00">
       {matchedMinutes.map(value => <span key={value} className="planner-alignment-guide" data-minute={value} style={{ left: `${value / 1440 * 100}%` }} aria-hidden="true" />)}
       {allDayActivities.map(item => <div className="daily-planner-lane" key={`all-day:${item.calendarId}`}>
-        <button type="button" className="daily-planner-event is-all-day" style={{ left: "0%", width: "100%", "--event-color": item.color.border }} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ทั้งวัน 00:00–24:00`} aria-label={`${item.title} ทั้งวัน 00:00 ถึง 24:00`} disabled={item.isLocked || timeChanges.isSavingTimeChanges}><span className="daily-planner-all-day-badge">ทั้งวัน</span><span>{item.title}</span></button>
+        <button type="button" className="daily-planner-event is-all-day" style={{ left: "0%", width: "100%", "--event-color": item.color.border }} onContextMenu={event => onContextMenu?.(event, item)} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ทั้งวัน 00:00–24:00`} aria-label={`${item.title} ทั้งวัน 00:00 ถึง 24:00`} aria-disabled={item.isLocked || timeChanges.isSavingTimeChanges}><span className="daily-planner-all-day-badge">ทั้งวัน</span><span>{item.title}</span></button>
       </div>)}
       {(layout.lanes.length ? layout.lanes : allDayActivities.length ? [] : [[]]).map((lane, index) => <div className="daily-planner-lane" key={index}>
-        {lane.map(item => <button key={item.segmentId} type="button" className={`daily-planner-event${matches(item) ? " is-aligned" : ""}`} style={{ left: `${item.startMinute / 1440 * 100}%`, width: `${(item.endMinute - item.startMinute) / 1440 * 100}%`, "--event-color": item.color.border }} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ${timeLabel(item)}`} aria-label={`${item.title} ${timeLabel(item)}`} disabled={item.isLocked || timeChanges.isSavingTimeChanges}>{!item.continuesFromPreviousDay && <span className="planner-resize start" aria-label="ปรับเวลาเริ่ม" onPointerDown={event => beginDrag(event, item, "start")} />}
+        {lane.map(item => <button key={item.segmentId} type="button" className={`daily-planner-event${matches(item) ? " is-aligned" : ""}`} style={{ left: `${item.startMinute / 1440 * 100}%`, width: `${(item.endMinute - item.startMinute) / 1440 * 100}%`, "--event-color": item.color.border }} onContextMenu={event => onContextMenu?.(event, item)} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ${timeLabel(item)}`} aria-label={`${item.title} ${timeLabel(item)}`} aria-disabled={item.isLocked || timeChanges.isSavingTimeChanges}>{!item.continuesFromPreviousDay && <span className="planner-resize start" aria-label="ปรับเวลาเริ่ม" onPointerDown={event => beginDrag(event, item, "start")} />}
           <span>{item.title}</span>
           {!item.continuesIntoNextDay && <span className="planner-resize end" aria-label="ปรับเวลาสิ้นสุด" onPointerDown={event => beginDrag(event, item, "end")} />}
         </button>)}
@@ -45,6 +47,7 @@ export default function ActivityDailyPlanner({ id, timeChanges, day, activities,
       {all.length === 0 && <small>ยังไม่มีกิจกรรมในวันนี้</small>}
       <button type="button" onClick={() => onAddActivity?.(day)}>+ เพิ่มกิจกรรม</button>
       <PlannerTimeActions changes={timeChanges} />
+      <button type="button" className="day-timeline-nav" onClick={() => downloadDayTimelineImage({ day, activities: activities.filter(activity => { const start = activityDate(activity.start); const end = activityDate(activity.end); if (!start) return false; if (activity.start?.date) { const next = new Date(day); next.setDate(next.getDate() + 1); return start < next && end > day; } return isSameDay(start, day); }), allActivities: activities, categories, activityCategoryMap })} aria-label="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ" title="ดาวน์โหลดแผนวันนี้เป็นรูปภาพ (PNG)">📷</button>
       <button type="button" className="daily-planner-normal-view" onClick={onClose} aria-label={`กลับสู่มุมมองปกติ ${dateLabel}`} title="กลับสู่มุมมองปกติ"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M7 9h10M7 12h10M7 15h7" /></svg></button>
     </footer>
   </section>;
