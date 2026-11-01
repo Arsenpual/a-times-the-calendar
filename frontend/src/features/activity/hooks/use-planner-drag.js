@@ -5,6 +5,7 @@ export function usePlannerDrag({ day, changes }) {
   const cleanup = useRef(() => {});
   const suppressClick = useRef(false);
   const [preview, setPreview] = useState("");
+  const [ghost, setGhost] = useState(null);
   useEffect(() => () => cleanup.current(), []);
   const beginDrag = (event, item, edge = "move") => {
     if (event.button !== 0 || item.isLocked || item.source.isOnboardingSample || changes.isSavingTimeChanges) return;
@@ -18,21 +19,36 @@ export function usePlannerDrag({ day, changes }) {
       if (Math.hypot(e.clientX - x, e.clientY - y) < 5 && !moved) return;
       moved = true;
       suppressClick.current = true;
-      const target = edge === "move" ? [...document.querySelectorAll(".daily-planner-lanes[data-day]")].find(el => {
-        const r = el.getBoundingClientRect();
-        return e.clientY >= r.top && e.clientY <= r.bottom && e.clientX >= r.left && e.clientX <= r.right;
-      }) : handle;
-      if (!target) { next = null; setPreview("วางบนเส้นเวลาของวันที่เปิดไว้ · Esc ยกเลิก"); return; }
+      setGhost({ title: item.title, color: item.color.border, x: e.clientX, y: e.clientY });
+      // Choose the nearest open day even over its heading/footer or outside the axis.
+      // This keeps the snapped layout visible continuously, before pointerup.
+      const targets = [...document.querySelectorAll(".daily-planner-lanes[data-day]")];
+      const distance = el => {
+        const r = el.closest(".daily-planner").getBoundingClientRect();
+        return Math.max(r.top - e.clientY, e.clientY - r.bottom, 0);
+      };
+      const target = edge === "move" ? targets.sort((a, b) => distance(a) - distance(b))[0] : handle;
+      if (!target) return;
       const targetDay = edge === "move" ? new Date(target.dataset.day) : day;
       const rect = edge === "move" ? target.getBoundingClientRect() : origin;
-      const deltaMinutes = item.isAllDay ? 0 : Math.round(((e.clientX - rect.left) / rect.width - (x - origin.left) / origin.width) * 1440 / 15) * 15;
+      let deltaMinutes = item.isAllDay ? 0 : Math.round(((e.clientX - rect.left) / rect.width - (x - origin.left) / origin.width) * 1440 / 15) * 15;
+      if (!item.isAllDay && edge === "move") {
+        const segmentMinute = (item.start.getTime() - day.getTime()) / 60000;
+        deltaMinutes = Math.max(-segmentMinute, Math.min(1425 - segmentMinute, deltaMinutes));
+      }
       const shift = targetDay.getTime() - day.getTime() + deltaMinutes * 60000;
       const newStart = new Date(+start + (edge === "end" ? 0 : shift));
       const newEnd = new Date(+end + (edge === "start" ? 0 : shift));
-      if (+newEnd - +newStart < 15 * 60000) { next = null; return; }
+      if (+newEnd - +newStart < 15 * 60000) {
+        if (edge === "start") newStart.setTime(+newEnd - 15 * 60000);
+        else newEnd.setTime(+newStart + 15 * 60000);
+      }
       next = { id: item.calendarId, start: newStart, end: newEnd };
+      changes.setDragPreview(next);
       const format = date => date.toLocaleString("th-TH", { day: "numeric", month: "short", ...(item.isAllDay ? {} : { hour: "2-digit", minute: "2-digit", hour12: false }) });
-      setPreview(`${item.title}: ${format(newStart)} – ${format(newEnd)} · ปล่อยเพื่อใช้ฉบับร่าง · Esc ยกเลิก`);
+      const changeMinutes = Math.round(((edge === "end" ? +newEnd - +end : +newStart - +start) / 60000));
+      const deltaLabel = `${changeMinutes > 0 ? "+" : ""}${changeMinutes} นาที`;
+      setPreview(`${item.title}: ${format(newStart)} – ${format(newEnd)} (${deltaLabel}) · ปล่อยเพื่อใช้ฉบับร่าง · Esc ยกเลิก`);
     };
     const finish = e => {
       if (e.type === "pointerup" && moved && next && (+next.start !== +start || +next.end !== +end)) changes.queueTimeChanges([next]);
@@ -46,6 +62,8 @@ export function usePlannerDrag({ day, changes }) {
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
       window.removeEventListener("keydown", key);
+      changes.setDragPreview(null);
+      setGhost(null);
       setPreview("");
     };
     window.addEventListener("pointermove", move);
@@ -53,5 +71,5 @@ export function usePlannerDrag({ day, changes }) {
     window.addEventListener("pointercancel", finish);
     window.addEventListener("keydown", key);
   };
-  return { beginDrag, suppressClick, preview };
+  return { beginDrag, suppressClick, preview, ghost };
 }

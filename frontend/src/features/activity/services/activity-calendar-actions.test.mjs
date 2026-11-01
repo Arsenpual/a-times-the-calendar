@@ -185,3 +185,17 @@ assert.equal(await moveActions.handleSaveTimes([{ id: "movable", start: new Date
 assert.equal(moved, 1, "moving into an empty slot must ignore overcrowding elsewhere");
 
 console.log("PASS: Activity calendar save ordering, overlap boundaries, and recurring occurrence metadata retention");
+
+// A deliberate Save may persist a draft made before locking; ordinary writes keep the lock guard.
+const lockedWrites = [];
+const lockedDraftActions = createActivityCalendarActions({ ...common,
+  activities: [{ id: "locked-draft", start: { dateTime: "2026-09-07T09:00:00Z" }, end: { dateTime: "2026-09-07T10:00:00Z" } }],
+  lockedActivities: { "locked-draft": true },
+  updateActivity: async (_token, id, body) => { lockedWrites.push({ id, ...body }); return { id, ...body }; }
+});
+const lockedDraft = [{ id: "locked-draft", start: new Date("2026-09-07T11:00:00Z"), end: new Date("2026-09-07T12:00:00Z") }];
+assert.equal(await lockedDraftActions.handleSaveTimes(lockedDraft), false);
+assert.equal(lockedWrites.length, 0);
+assert.equal(await lockedDraftActions.handleSaveTimes(lockedDraft, { allowLockedDrafts: true }), true);
+assert.equal(lockedWrites.length, 1);
+assert.equal(lockedWrites[0].start.dateTime, lockedDraft[0].start.toISOString());

@@ -51,6 +51,7 @@ try {
     })),
   ]));
   await page.waitForFunction(() => document.querySelectorAll('.week-spine-block').length === 5);
+  assert.deepEqual(await page.locator('.week-spine-block-title').allTextContents(), ['All day list', 'Overlap 11', 'Overlap 12', 'Overlap 13', 'Overlap 14'], 'longest five distinct activities shown in start order');
   const cards = await page.locator('.week-spine-block').evaluateAll(elements => elements.map(el => {
     const rect = el.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height, width: rect.width };
   }));

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { formatTime, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
@@ -6,7 +7,6 @@ import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import ActivityPopup from "./activity-popup.jsx";
 import ActivitySummaryHero from "./activity-summary-hero.jsx";
 import { useWeekSpineTimeChanges } from "../hooks/use-week-spine-time-changes.js";
-import PlannerTimeActions from "./planner-time-actions.jsx";
 import { applyTimeDraft } from "../lib/planner-time-draft.js";
 import ActivityDailyPlanner from "./activity-daily-planner.jsx";
 import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
@@ -24,6 +24,32 @@ function toDateTimeLocalValue(value) {
   if (Number.isNaN(date.getTime())) return "";
   const pad = (part) => String(part).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function PlannerGuideBridges({ draft }) {
+  const [lines, setLines] = useState([]);
+  useLayoutEffect(() => {
+    if (!draft) { setLines([]); return; }
+    const measure = () => {
+      const groups = new Map();
+      document.querySelectorAll(".daily-planner .planner-alignment-guide").forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const key = el.dataset.minute;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rect);
+      });
+      setLines([...groups].flatMap(([key, rects]) => {
+        const planners = [...document.querySelectorAll(".daily-planner-lanes")].map(el => el.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+        if (planners.length < 2) return [];
+        return [{ key, left: rects[0].left, top: planners[0].top, height: planners.at(-1).bottom - planners[0].top }];
+      }));
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => { window.removeEventListener("scroll", measure, true); window.removeEventListener("resize", measure); };
+  }, [draft]);
+  return createPortal(lines.map(line => <span key={line.key} className="planner-guide-bridge" style={{ left: line.left, top: line.top, height: line.height }} aria-hidden="true" />), document.body);
 }
 
 /** Account-scoped timeline, cycle overview and archive presentation. */
@@ -156,7 +182,7 @@ function WeekSpineContent({
   });
   const { activities: fourWeekActivities, loading: fourWeekLoading, error: fourWeekError } = cycleData;
   const timeChanges = useWeekSpineTimeChanges({ onSaveTimes, onError: showInteractionWarning });
-  const timelineActivities = useMemo(() => activities.map(activity => applyTimeDraft(activity, timeChanges.pendingTimeChanges.get(activity.id))), [activities, timeChanges.pendingTimeChanges]);
+  const timelineActivities = useMemo(() => activities.map(activity => applyTimeDraft(activity, (timeChanges.dragPreview?.id === activity.id ? timeChanges.dragPreview : timeChanges.pendingTimeChanges.get(activity.id)))), [activities, timeChanges.pendingTimeChanges, timeChanges.dragPreview]);
   const { timedSegments, allDayActivities } = useMemo(
     () => buildWeekSpineData({ activities: timelineActivities, weekStart: visibleWeekStart, weekEnd: visibleWeekEnd, activityCategoryMap, categories, lockedActivities }),
     [timelineActivities, visibleWeekStart, visibleWeekEnd, activityCategoryMap, categories, lockedActivities]
@@ -240,6 +266,7 @@ function WeekSpineContent({
           <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
           <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>
         </div>
+        <PlannerGuideBridges draft={timeChanges.dragPreview} />
         {interactionWarning && <PopupLayerItem id="week-spine-interaction-warning" region="bottom-center" priority={65}><p className="error-banner" role="alert">{interactionWarning}</p></PopupLayerItem>}
       <div className="week-spine-grid-wrap week-spine-list-grid">
         <div className="week-spine-days">
@@ -249,21 +276,26 @@ function WeekSpineContent({
             const dayEnd = new Date(day);
             dayEnd.setDate(dayEnd.getDate() + 1);
             const dayAllDayActivities = visibleAllDayActivities.filter((activity) => activity.start < dayEnd && activity.end > day);
-            const dayActivities = [...dayAllDayActivities, ...daySegments].sort((a, b) =>
-              Number(b.isAllDay) - Number(a.isAllDay) || a.start - b.start || a.title.localeCompare(b.title) || a.calendarId.localeCompare(b.calendarId));
+            const dayActivities = [...new Map([...dayAllDayActivities, ...daySegments].map(activity => [activity.calendarId, activity])).values()]
+              .sort((a, b) => Math.max(+a.start, +day) - Math.max(+b.start, +day) || a.title.localeCompare(b.title) || a.calendarId.localeCompare(b.calendarId));
+            const durationInDay = activity => Math.min(+activity.end, +dayEnd) - Math.max(+activity.start, +day);
+            const featuredActivities = [...dayActivities].sort((a, b) => durationInDay(b) - durationInDay(a) || Math.max(+a.start, +day) - Math.max(+b.start, +day) || a.calendarId.localeCompare(b.calendarId))
+              .slice(0, 5).sort((a, b) => Math.max(+a.start, +day) - Math.max(+b.start, +day) || a.calendarId.localeCompare(b.calendarId));
             const dayKey = day.toISOString();
+            const hasHiddenDraft = !openPlannerDays.has(dayKey) && timeChanges.forDay(dayKey).pendingTimeChanges.size > 0;
             const isExpanded = expandedDays.has(dayKey);
             const dayListId = `week-spine-activities-${index}`;
             const isSelected = isSameDay(day, visibleSelectedDay);
             const isToday = isSameDay(day, today);
             return <div className={`week-spine-day${day.getDay() === 0 || day.getDay() === 6 ? " is-weekend" : ""}${isOutsideVisibleYear ? " is-outside-year" : ""}${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`} key={day.toISOString()}>
-              <button className="week-spine-day-heading" type="button" disabled={isOutsideVisibleYear} onClick={() => selectDay(day)} aria-pressed={!isOutsideVisibleYear && isSelected} aria-current={isToday ? "date" : undefined}>
+              <button className={`week-spine-day-heading${hasHiddenDraft ? " has-unsaved-draft" : ""}`} type="button" disabled={isOutsideVisibleYear} onClick={() => selectDay(day)} aria-pressed={!isOutsideVisibleYear && isSelected} aria-current={isToday ? "date" : undefined}>
+                {hasHiddenDraft && <span className="week-spine-unsaved-warning" role="img" aria-label="มีการปรับเวลาที่ยังไม่ได้บันทึก" title="มีการปรับเวลาที่ยังไม่ได้บันทึก">!</span>}
                 <span className="week-spine-day-label"><span className="week-spine-day-label-full">{day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { weekday: "long" }).replace(/^วัน/, "")}</span><span className="week-spine-day-label-short">{labels[day.getDay()]}</span></span>
                 <strong><span>{day.getDate()}</span><small className="week-spine-day-month">{day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { month: "short" })}</small></strong>
                 <small className="week-spine-day-meta">{dayActivities.length} กิจกรรม · {(daySegments.reduce((total, segment) => total + (segment.end - segment.start), 0) / 3600000).toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม.</small>
               </button>
               {!openPlannerDays.has(dayKey) && <div id={dayListId} className="week-spine-track week-spine-activity-list" data-day-index={index}>
-                {!isOutsideVisibleYear && (isExpanded ? dayActivities : dayActivities.slice(0, 5)).map((activity, activityIndex) => <button
+                {!isOutsideVisibleYear && (isExpanded ? dayActivities : featuredActivities).map((activity, activityIndex) => <button
                   type="button"
                   key={activity.segmentId || `all-day:${activity.calendarId}`}
                   title={`${activity.title}${activity.continuesFromPreviousDay ? " (ต่อเนื่องจากวันก่อน)" : ""}${activity.continuesIntoNextDay ? " (ต่อเนื่องวันถัดไป)" : ""}`}
@@ -285,12 +317,11 @@ function WeekSpineContent({
                 {!isOutsideVisibleYear && dayActivities.length === 0 && <span className="week-spine-list-empty">ไม่มีกิจกรรม</span>}
                 {!isOutsideVisibleYear && (isExpanded || dayActivities.length <= 5) && <button type="button" className="week-spine-list-add" style={{ gridColumn: !isExpanded && dayActivities.length === 5 ? 6 : dayActivities.length % 5 + 1, gridRow: !isExpanded && dayActivities.length === 5 ? 1 : Math.floor(dayActivities.length / 5) + 1 }} onClick={() => onAddActivity?.(day)} aria-label={`เพิ่มกิจกรรม ${day.toLocaleDateString("th-TH", { day: "numeric", month: "long" })}` } title="เพิ่มกิจกรรม">+</button>}
               </div>}
-              {openPlannerDays.has(dayKey) && <ActivityDailyPlanner id={`daily-drawer-${dayKey}`} timeChanges={timeChanges} day={day} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} loading={activitiesLoading} onClose={() => closePlanner(dayKey)} onAddActivity={onAddActivity} onEditActivity={onEditActivity} />}
+              {openPlannerDays.has(dayKey) && <ActivityDailyPlanner id={`daily-drawer-${dayKey}`} timeChanges={timeChanges.forDay(dayKey)} day={day} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} loading={activitiesLoading} onClose={() => closePlanner(dayKey)} onAddActivity={onAddActivity} onEditActivity={onEditActivity} />}
             </div>;
           })}
         </div>
       </div>
-      {openPlannerDays.size === 0 && timeChanges.pendingTimeChanges.size > 0 && <footer className="daily-planner-detail"><PlannerTimeActions changes={timeChanges} /></footer>}
       {contextMenu && <ActivityPopup
         activity={contextMenu.segment.source}
         start={contextMenu.segment.start}

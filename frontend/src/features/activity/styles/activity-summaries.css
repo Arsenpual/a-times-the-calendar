@@ -340,3 +340,6 @@
 
 .week-spine-planner-open { grid-column: 7; grid-row: 1; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-muted); color: var(--today); cursor: pointer; }
 .week-spine-planner-open:hover { background: var(--hover); }
+
+.week-spine .week-spine-day-heading.has-unsaved-draft { position: relative; box-shadow: inset 3px 0 #e37b7b; background: #fff4f4; }
+.week-spine-unsaved-warning { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #d55050; color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }

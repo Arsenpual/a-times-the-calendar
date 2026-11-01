@@ -28,3 +28,17 @@
 .planner-time-actions .planner-save { background: #284fc4; color: white; border-color: #284fc4; font-weight: 700; }
 .planner-time-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .planner-drag-preview { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; pointer-events: none; max-width: 90vw; display: block; padding: 5px; background: #fff1c9; color: #533c06; font-size: 11px; }
+
+.planner-drag-ghost { position: fixed; z-index: 10000; pointer-events: none; width: 210px; padding: 9px 12px; border: 2px solid var(--event-color); border-radius: 8px; background: #fff; color: #17263e; box-shadow: 0 8px 28px #152c5850; }
+.planner-drag-ghost strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.planner-drag-ghost small { display: block; margin-top: 4px; font-size: 10px; }
+
+.daily-planner-lanes { position: relative; }
+.planner-alignment-guide { position: absolute; top: 0; bottom: 0; z-index: 2; width: 1px; background: #6585dc; box-shadow: 0 0 5px #6689e088; pointer-events: none; }
+.daily-planner .daily-planner-event.is-aligned { box-shadow: 0 0 0 1px #6689e088, 0 0 7px #6689e077; }
+
+.planner-guide-bridge { position: fixed; z-index: 50; width: 1px; pointer-events: none; background: #6585dca6; box-shadow: 0 0 5px #6689e088; }
+
+.daily-planner .daily-planner-normal-view { display: inline-flex; align-items: center; gap: 5px; }
+
+.daily-planner .daily-planner-normal-view { justify-content: center; width: 34px; height: 30px; padding: 4px; border-color: #8095ce; background: #e5ecff; color: #2545a4; }

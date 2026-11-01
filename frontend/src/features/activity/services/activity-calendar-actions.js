@@ -156,7 +156,7 @@ export function createActivityCalendarActions({
     return { created, failed, warnings };
   };
 
-  const handleSaveTimes = async (changes) => {
+  const handleSaveTimes = async (changes, { allowLockedDrafts = false } = {}) => {
     if (!calendarAccessToken) return false;
     if (changes.length === 0) return true;
     const changesById = new Map(changes.map((change) => [change.id, change]));
@@ -174,7 +174,7 @@ export function createActivityCalendarActions({
     let tokenExpired = false;
     for (const { id, start, end } of changes) {
       const normalizedId = normalizeActivityId(id);
-      if (lockedActivities[normalizedId]) {
+      if (lockedActivities[normalizedId] && !allowLockedDrafts) {
         anySkippedLocked = true;
         continue;
       }
