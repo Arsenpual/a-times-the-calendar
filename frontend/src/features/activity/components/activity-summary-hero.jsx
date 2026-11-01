@@ -1,60 +1,46 @@
 import React, { useMemo } from "react";
 import { activityDate } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
 
-const hours = (minutes) => (minutes / 60).toLocaleString("th-TH", { maximumFractionDigits: 1 });
+const formatMinutes = value => `${Math.floor(value / 60)}:${String(Math.round(value % 60)).padStart(2, "0")}`;
 
-export default function ActivitySummaryHero({ days, visibleStart, visibleEnd, activities, categories, activityCategoryMap, weekName, header, loading = false }) {
-  const data = useMemo(() => {
-    const daily = days.filter(date => date >= visibleStart && date <= visibleEnd).map(date => ({ date }));
-    const byCategory = new Map();
-    let count = 0;
-    let totalMinutes = 0;
-    for (const activity of activities) {
-      const from = activityDate(activity.start);
-      const to = activityDate(activity.end);
-      if (!from || !to || !Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to <= from) continue;
-      const isAllDay = Boolean(activity.start?.date && !activity.start?.dateTime);
-      const categoryId = activityCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId || null;
-      const category = categories.find((item) => item.id === categoryId);
-      const key = category?.id || "uncategorized";
-      const row = byCategory.get(key) || { key, name: category?.name || UNCATEGORIZED_COLOR.name, color: category?.color || UNCATEGORIZED_COLOR.border, minutes: 0 };
-      let visible = false;
-      for (const day of daily) {
-        if (day.date < visibleStart || day.date > visibleEnd) continue;
-        const next = new Date(day.date);
-        next.setDate(next.getDate() + 1);
-        const overlap = Math.max(0, Math.min(to.getTime(), next.getTime()) - Math.max(from.getTime(), day.date.getTime()));
-        if (!overlap) continue;
-        visible = true;
-        // All-day items count as activities but do not claim 24 hours of focused work.
-        const minutes = isAllDay ? 0 : overlap / 60000;
-        row.minutes += minutes;
-        totalMinutes += minutes;
-      }
-      if (visible) {
-        count += 1;
-        byCategory.set(key, row);
-      }
-    }
-    return { categories: [...byCategory.values()].sort((a, b) => b.minutes - a.minutes), count, totalMinutes };
-  }, [activities, categories, activityCategoryMap, days, visibleStart, visibleEnd]);
-  const topCategory = data.categories[0];
+export default function ActivitySummaryHero({ visibleStart, visibleEnd, activities = [], activityCategoryMap = {}, weekName, header, loading = false }) {
   const dateLabel = `${visibleStart.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} – ${visibleEnd.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}`;
-
-  if (loading) return <section className="activity-summary-hero" aria-label="สรุป 7 วัน" aria-busy="true">{header && <div className="activity-summary-hero-header">{header}</div>}<div className="activity-summary-hero-main"><div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p>{weekName}</div><p role="status">กำลังโหลดกิจกรรม…</p></div></section>;
-
-  return <section className="activity-summary-hero" aria-label="สรุป 7 วัน">
-    {header && <div className="activity-summary-hero-header">{header}</div>}
+  const overview = useMemo(() => {
+    const start = new Date(visibleStart); start.setHours(0, 0, 0, 0);
+    const end = new Date(visibleEnd); end.setHours(0, 0, 0, 0); end.setDate(end.getDate() + 1);
+    const ranges = [], ids = new Set(), categoryIds = new Set();
+    for (const activity of activities) {
+      const from = activityDate(activity.start), to = activityDate(activity.end);
+      if (!from || !to || !Number.isFinite(+from) || !Number.isFinite(+to) || to <= from || from >= end || to <= start) continue;
+      ids.add(activity.id);
+      const category = activityCategoryMap[normalizeActivityId(activity.id)] || activity.categoryId;
+      if (category) categoryIds.add(category);
+      if (!activity.start?.date || activity.start?.dateTime) ranges.push([Math.max(+start, +from), Math.min(+end, +to)]);
+    }
+    ranges.sort((a, b) => a[0] - b[0]);
+    let occupied = 0, lastEnd = +start;
+    for (const [from, to] of ranges) { occupied += Math.max(0, to - Math.max(from, lastEnd)); lastEnd = Math.max(lastEnd, to); }
+    const total = Math.round((end - start) / 60000), scheduled = Math.round(occupied / 60000);
+    return { days: Math.round((Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000), total, scheduled, free: Math.max(0, total - scheduled), count: ids.size, categories: categoryIds.size };
+  }, [activities, activityCategoryMap, visibleStart, visibleEnd]);
+  return <section className="activity-summary-hero" aria-label="สรุป 7 วัน" aria-busy={loading || undefined}>
+    <div className="activity-summary-hero-header">{header}<div className="activity-summary-week-info"><div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p></div>{weekName}</div></div>
     <div className="activity-summary-hero-main">
-      <div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p>{weekName}</div>
-      <div className="activity-summary-hero-stats">
-        <div><strong>{data.count}</strong><span>กิจกรรม</span></div>
-        <div><strong>{hours(data.totalMinutes)}</strong><span>ชั่วโมงรวม</span></div>
-        <div><strong className="is-accent">{topCategory ? hours(topCategory.minutes) : "0"}</strong><span>{topCategory?.name || "หมวดหมู่หลัก"}</span></div>
-      </div>
-        <section aria-label="สรุปตามหมวดหมู่"><h3>เวลาตามหมวดหมู่</h3>{data.totalMinutes > 0 ? <><div className="activity-summary-category-track" aria-label="สัดส่วนเวลาตามหมวดหมู่">{data.categories.filter(category => category.minutes > 0).map(category => <span key={category.key} style={{ width: `${category.minutes / data.totalMinutes * 100}%`, backgroundColor: category.color }} title={`${category.name} ${hours(category.minutes)} ชม.`} />)}</div><div className="activity-summary-category-list">{data.categories.filter(category => category.minutes > 0).map(category => <span key={category.key}><i style={{ backgroundColor: category.color }} />{category.name} <strong>{hours(category.minutes)} ชม.</strong></span>)}</div></> : <small>ยังไม่มีกิจกรรมที่ระบุเวลา</small>}</section>
+      <section className="weekly-overview" aria-label="ภาพรวมสัปดาห์">
+        <div className="weekly-overview-heading"><h3>WEEKLY OVERVIEW</h3><span>{overview.days} DAYS</span></div>
+        {loading ? <p role="status">กำลังโหลดกิจกรรม…</p> : <>
+          <div className="weekly-overview-content">
+          <div className="weekly-overview-total"><strong>{formatMinutes(overview.total)} h</strong><span>เวลาทั้งหมดในช่วงนี้</span></div>
+          <div className="weekly-overview-grid">
+            <div><strong>{formatMinutes(overview.scheduled)}</strong><span>เวลาที่วางแผน</span></div>
+            <div><strong>{formatMinutes(overview.free)}</strong><span>เวลาที่ยังไม่ได้วางแผน</span></div>
+            <div><strong>{overview.count}</strong><span>จำนวนกิจกรรม</span></div>
+            <div><strong>{overview.categories}</strong><span>หมวดหมู่ที่ใช้</span></div>
+          </div>
+          </div>
+        </>}
+      </section>
     </div>
   </section>;
 }

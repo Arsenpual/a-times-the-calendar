@@ -22,8 +22,8 @@ try {
   await page.getByRole("status").filter({ hasText: "กำลังโหลดกิจกรรม" }).waitFor();
   assert.equal(await page.locator(".activity-summary-hero-stats").count(), 0);
   await page.evaluate(() => window.phase1.set({ activitiesLoading: false }));
-  await page.locator(".activity-summary-hero-stats").waitFor();
-  assert.deepEqual(await page.locator(".activity-summary-hero-stats strong").allTextContents(), ["4", "6", "6"]);
+  await page.waitForFunction(() => !document.querySelector(".activity-summary-hero[aria-busy=true]"));
+  assert.equal(await page.locator(".activity-summary-hero-stats").count(), 0);
   assert.equal(await page.locator('.week-spine-hours').count(), 0);
   assert.equal(await page.locator('.week-spine-resize-handle').count(), 0);
   await page.locator('.week-spine-block[title="Activity B"]').click();
@@ -34,10 +34,13 @@ try {
     { id: "night", summary: "Night", start: { dateTime: new Date(2026, 8, 7, 23).toISOString() }, end: { dateTime: new Date(2026, 8, 8, 1).toISOString() } },
     { id: "all-day", summary: "All day", start: { date: "2026-09-07" }, end: { date: "2026-09-08" } },
   ]));
-  await page.waitForFunction(() => document.querySelector(".activity-summary-hero-stats strong")?.textContent === "2");
-  assert.deepEqual(await page.locator(".activity-summary-hero-stats strong").allTextContents(), ["2", "2", "2"]);
+  await page.waitForFunction(() => document.querySelectorAll(".week-spine-block").length > 0);
+  const overview = page.getByRole('region', { name: 'ภาพรวมสัปดาห์' });
+  await page.waitForFunction(() => document.querySelector('.weekly-overview-grid > div:nth-child(3) strong')?.textContent === '2');
+  assert.equal(await overview.locator('.weekly-overview-total strong').textContent(), '168:00 h');
+  assert.deepEqual(await overview.locator('.weekly-overview-grid strong').allTextContents(), ['2:00', '166:00', '2', '0']);
   assert.equal(await page.locator(".activity-summary-details").count(), 0);
-  assert.ok(await page.getByRole("region", { name: "สรุปตามหมวดหมู่" }).isVisible());
+  assert.equal(await page.getByRole("region", { name: "สรุปตามหมวดหมู่" }).count(), 0);
   assert.equal(await page.locator(".activity-summary-hero-days").count(), 0);
   assert.equal(await page.locator(".activity-summary-hero-categories").count(), 0);
   await page.evaluate(() => window.phase1.set({ viewMode: "four-weeks" }));
@@ -146,8 +149,7 @@ try {
       { id: "year-boundary", summary: "Year boundary", start: { dateTime: new Date(2026, 11, 31, 23).toISOString() }, end: { dateTime: new Date(2027, 0, 1, 1).toISOString() } },
     ]);
   });
-  await page.waitForFunction(() => document.querySelector(".activity-summary-hero-stats strong")?.textContent === "1");
-  assert.deepEqual(await page.locator(".activity-summary-hero-stats strong").allTextContents(), ["1", "1", "1"]);
+  await page.waitForFunction(() => document.querySelectorAll(".week-spine-block").length === 1);
   assert.equal(await page.locator(".week-spine-fullscreen-btn").count(), 0);
   // Today remains highlighted in its full-width row for every weekday.
   for (let offset = 0; offset < 7; offset += 1) {

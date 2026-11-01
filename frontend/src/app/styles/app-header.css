@@ -181,3 +181,6 @@ html.screen-reader-mode .app-header :is(button, input) { min-height: 42px; font-
   .header-summary-top { justify-content: space-between; }
   .header-summary-stats div:first-child { padding-left: 0; border-left: 0; }
 }
+
+.app-header .app-logo { width: 92px; }
+@media (max-width: 640px) { .app-header .app-logo { width: 78px; } }
