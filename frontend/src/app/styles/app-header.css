@@ -184,3 +184,6 @@ html.screen-reader-mode .app-header :is(button, input) { min-height: 42px; font-
 
 .app-header .app-logo { width: 92px; }
 @media (max-width: 640px) { .app-header .app-logo { width: 78px; } }
+
+.account-menu-actions .account-settings-button { display: flex; align-items: center; gap: 8px; color: #161616; background: #fff; }
+.account-menu-actions .account-settings-button:hover, .account-menu-actions .account-settings-button:focus-visible { background: #e9e9e9; color: #000; }

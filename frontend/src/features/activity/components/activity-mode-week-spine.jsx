@@ -157,6 +157,22 @@ function WeekSpineContent({
     });
   }, [weekStart.getTime()]);
   const timelineRef = useRef(null);
+  const navigationRef = useRef(null);
+  const [nearNavigation, setNearNavigation] = useState(false);
+  useEffect(() => {
+    const trackPointer = event => {
+      if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+      const rect = navigationRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const dx = Math.max(rect.left - event.clientX, 0, event.clientX - rect.right);
+      const dy = Math.max(rect.top - event.clientY, 0, event.clientY - rect.bottom);
+      setNearNavigation(Math.hypot(dx, dy) <= 80);
+    };
+    const leave = event => { if (!event.relatedTarget) setNearNavigation(false); };
+    document.addEventListener("pointermove", trackPointer);
+    document.addEventListener("pointerout", leave);
+    return () => { document.removeEventListener("pointermove", trackPointer); document.removeEventListener("pointerout", leave); };
+  }, []);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
   useEffect(() => {
     const sync = () => setTimelineFullscreen(document.fullscreenElement === timelineRef.current);
@@ -269,6 +285,7 @@ function WeekSpineContent({
       {viewMode === "week" && <ActivitySummaryHero header={summaryHeader} days={weekDays} visibleStart={visibleWeekStart} visibleEnd={visibleWeekEnd} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} loading={activitiesLoading} weekName={<aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
           <WeekNameField className="week-spine-week-name" weekStart={visibleWeekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
         </aside>} />}
+      {viewMode === "four-weeks" && <ActivitySummaryHero period="cycle" header={summaryHeader} visibleStart={cycle.start} visibleEnd={cycle.end} activities={fourWeekActivities} activityCategoryMap={activityCategoryMap} loading={fourWeekLoading} error={fourWeekError} />}
       <section className={`week-spine${isSummaryTargetHovered ? " is-summary-target-hovered" : ""}`} aria-label="Activity Week Spine" onClick={focusSummaryFromWeekSpine} onPointerMove={updateSummaryHover} onPointerLeave={() => setIsSummaryTargetHovered(false)}>
         {viewMode === "four-weeks" ? (
           fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
@@ -279,7 +296,7 @@ function WeekSpineContent({
         <PlannerGuideBridges draft={timeChanges.dragPreview} />
         {interactionWarning && <PopupLayerItem id="week-spine-interaction-warning" region="bottom-center" priority={65}><p className="error-banner" role="alert">{interactionWarning}</p></PopupLayerItem>}
       <div className="week-spine-grid-wrap week-spine-list-grid">
-        <div className="week-spine-edge-nav" aria-label="เปลี่ยนสัปดาห์">
+        <div ref={navigationRef} className={`week-spine-edge-nav${nearNavigation ? " is-near" : ""}`} aria-label="เปลี่ยนสัปดาห์">
           <button type="button" className="week-spine-edge-nav-prev" onClick={() => navigateWeekBy(-1)} aria-label="สัปดาห์ก่อนหน้า">‹</button>
           <button type="button" className="week-spine-edge-nav-next" onClick={() => navigateWeekBy(1)} aria-label="สัปดาห์ถัดไป">›</button>
           <button type="button" onClick={toggleTimelineFullscreen} aria-label={timelineFullscreen ? "ออกจากเต็มจอ" : "แสดงปฏิทินเต็มจอ"} title={timelineFullscreen ? "ออกจากเต็มจอ" : "แสดงปฏิทินเต็มจอ"}>{timelineFullscreen ? "×" : "⛶"}</button>

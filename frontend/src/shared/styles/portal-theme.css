@@ -305,3 +305,10 @@ html .reminder-app-container, html[data-theme="dark"] .reminder-app-container {
   .mode-switch button.active, .reminder-app-container .nav-item.is-active { outline: 2px solid Highlight; }
 }
 html.screen-reader-mode .app-main { background-image: none; }
+
+/* Account menu and settings use a neutral monochrome palette. */
+.app-header .account-menu { --bg: #fff; --bg-muted: #fff; --text-primary: #171717; --text-secondary: #666; --border: #d4d4d4; --hover: #ededed; background: #fff; color: #171717; border-color: #d4d4d4; }
+.app-header .account-menu-actions button, .app-header .account-menu-actions .is-danger { background: transparent; color: #171717; }
+.app-header .account-menu-actions button:hover, .app-header .account-menu-actions button:focus-visible { background: #ededed; color: #000; }
+.app-header .account-menu-avatar-fallback { background: #e5e5e5; color: #222; }
+.settings-drawer { --bg: #fff; --bg-muted: #fafafa; --text: #171717; --text-primary: #171717; --text-secondary: #666; --border: #d4d4d4; --hover: #ededed; --blue: #333; --blue-dark: #292929; --blue-tint: #e5e5e5; --accent: #333; --danger: #333; color: #171717; }

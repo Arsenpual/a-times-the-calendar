@@ -166,7 +166,7 @@ export default function AppHeader({
                     </div>
                   </div>
                   <div className="account-menu-actions">
-                    <button type="button" role="menuitem" onClick={() => { setSettingsOpen(true); setAccountMenuOpen(false); }}>⚙️ การตั้งค่า</button>
+                    <button type="button" role="menuitem" className="account-settings-button" onClick={() => { setSettingsOpen(true); setAccountMenuOpen(false); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a8 8 0 0 0 0-3l1.5-1.2-1.5-2.6-1.8.6a8 8 0 0 0-2.6-1.5L14.7 4h-3l-.3 1.8a8 8 0 0 0-2.6 1.5L7 6.7 5.5 9.3 7 10.5a8 8 0 0 0 0 3l-1.5 1.2L7 17.3l1.8-.6a8 8 0 0 0 2.6 1.5l.3 1.8h3l.3-1.8a8 8 0 0 0 2.6-1.5l1.8.6 1.5-2.6z"/></svg><span>การตั้งค่า</span></button>
                     <button type="button" role="menuitem" className="is-danger" onClick={() => { setAccountMenuOpen(false); handleLogout(); }}>ออกจากระบบ</button>
                   </div>
                 </div>

@@ -4,8 +4,7 @@ import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 const formatMinutes = value => `${Math.floor(value / 60)}:${String(Math.round(value % 60)).padStart(2, "0")}`;
 
-export default function ActivitySummaryHero({ visibleStart, visibleEnd, activities = [], activityCategoryMap = {}, weekName, header, loading = false }) {
-  const dateLabel = `${visibleStart.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} – ${visibleEnd.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}`;
+export default function ActivitySummaryHero({ visibleStart, visibleEnd, activities = [], activityCategoryMap = {}, weekName, header, loading = false, period = "week", error = "" }) {
   const overview = useMemo(() => {
     const start = new Date(visibleStart); start.setHours(0, 0, 0, 0);
     const end = new Date(visibleEnd); end.setHours(0, 0, 0, 0); end.setDate(end.getDate() + 1);
@@ -24,12 +23,11 @@ export default function ActivitySummaryHero({ visibleStart, visibleEnd, activiti
     const total = Math.round((end - start) / 60000), scheduled = Math.round(occupied / 60000);
     return { days: Math.round((Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000), total, scheduled, free: Math.max(0, total - scheduled), count: ids.size, categories: categoryIds.size };
   }, [activities, activityCategoryMap, visibleStart, visibleEnd]);
-  return <section className="activity-summary-hero" aria-label="สรุป 7 วัน" aria-busy={loading || undefined}>
-    <div className="activity-summary-hero-header">{header}<div className="activity-summary-week-info"><div><h2>สรุป 7 วัน</h2><p>{dateLabel}</p></div>{weekName}</div></div>
+  return <section className={`activity-summary-hero${period === "cycle" ? " is-cycle" : ""}`} aria-label={period === "cycle" ? "สรุป Cycle" : "สรุป 7 วัน"} aria-busy={loading || undefined}>
+    <div className="activity-summary-hero-header">{header}{weekName && <div className="activity-summary-week-info">{weekName}</div>}</div>
     <div className="activity-summary-hero-main">
-      <section className="weekly-overview" aria-label="ภาพรวมสัปดาห์">
-        <div className="weekly-overview-heading"><h3>WEEKLY OVERVIEW</h3><span>{overview.days} DAYS</span></div>
-        {loading ? <p role="status">กำลังโหลดกิจกรรม…</p> : <>
+      <section className="weekly-overview" aria-label={period === "cycle" ? "ภาพรวม Cycle" : "ภาพรวมสัปดาห์"}>
+        {loading ? <p role="status">กำลังโหลดกิจกรรม…</p> : error ? <p role="alert">{error}</p> : <>
           <div className="weekly-overview-content">
           <div className="weekly-overview-total"><strong>{formatMinutes(overview.total)} h</strong><span>เวลาทั้งหมดในช่วงนี้</span></div>
           <div className="weekly-overview-grid">

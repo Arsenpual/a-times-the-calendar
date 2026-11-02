@@ -432,7 +432,7 @@ export default function AccountApp({ auth }) {
 
   useActivityTelegramNotifications({ firebaseUser, activities, archivedActivityIds });
 
-  const headerInSummary = mode === "activity" && weekSpineViewMode === "week" && !isSearchingTags;
+  const headerInSummary = mode === "activity" && !isSearchingTags;
   const appHeader = (
     <AppHeader
         navigationExpanded={navigationExpanded}

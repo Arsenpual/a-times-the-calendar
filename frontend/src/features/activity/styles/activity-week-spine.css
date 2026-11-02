@@ -371,3 +371,15 @@
 .activity-dashboard.has-summary-hero .activity-summary-hero,
 .activity-dashboard.has-summary-hero .week-spine,
 .activity-dashboard.has-summary-hero .activity-archive { margin: 0; border-radius: 0; }
+
+/* Cycle: four weeks as compact groups of seven horizontal category bars. */
+.week-spine-four-week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.week-spine-overview-days { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.week-spine-overview-day { display: grid; grid-template-columns: 48px minmax(0, 1fr) 24px; align-items: center; gap: 8px; min-height: 30px; padding: 3px 6px; }
+.week-spine-overview-day header { margin: 0; }
+.week-spine-overview-day.is-today { box-shadow: inset 3px 0 0 var(--today); }
+.week-spine-overview-tabs { display: flex; align-items: stretch; min-width: 0; height: 12px; overflow: hidden; border-radius: 999px; background: #e7ebf2; }
+.week-spine-overview-tabs > span { display: block; min-width: 2px; height: 100%; background: var(--activity-color); }
+.week-spine-overview-tabs > i { flex: 0 0 5px; height: 100%; background: var(--activity-color); }
+.week-spine-overview-day-count { color: var(--text-secondary); text-align: right; font-size: 10px; }
+@media (max-width: 600px) { .week-spine-four-week-grid { grid-template-columns: minmax(0, 1fr); } }

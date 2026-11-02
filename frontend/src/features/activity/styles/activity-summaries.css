@@ -369,7 +369,7 @@
 .activity-dashboard::-webkit-scrollbar-thumb { background: #bbc5d4; border-radius: 9px; }
 .week-spine .week-spine-list-grid { position: relative; }
 .week-spine-timeline-surface .week-spine-edge-nav { position: absolute; z-index: 12; top: 5px; right: 8px; display: flex; gap: 4px; margin: 0; opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
-.week-spine-timeline-surface:hover .week-spine-edge-nav, .week-spine-timeline-surface:focus-within .week-spine-edge-nav { opacity: 1; pointer-events: auto; }
+.week-spine-timeline-surface .week-spine-edge-nav.is-near, .week-spine-timeline-surface .week-spine-edge-nav:focus-within { opacity: 1; pointer-events: auto; }
 .week-spine-timeline-surface .week-spine-edge-nav button { position: static; width: 30px; height: 30px; opacity: 1; pointer-events: auto; transform: none; border: 1px solid #c6d1e3; border-radius: 7px; background: #fffffff2; color: #2545a4; box-shadow: 0 2px 8px #152c5826; cursor: pointer; font-size: 18px; }
 .week-spine-timeline-surface .week-spine-edge-nav button:focus-visible { outline: 2px solid #2d4fe8; outline-offset: 2px; }
 .week-spine-timeline-surface:fullscreen { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 12px; background: #fff; }
@@ -426,3 +426,34 @@
 .activity-summary-week-info h2 { font-size: 13px; }
 .activity-summary-week-info p { color: #aeb9d0; font-size: 11px; }
 .activity-summary-hero .activity-summary-week-info .week-spine-week-glance-demo { margin: 0; }
+
+.activity-summary-hero-main .weekly-overview-content { margin-top: 0; }
+.activity-summary-hero { gap: 8px; }
+.activity-summary-hero-header { padding-bottom: 8px; }
+
+.activity-summary-hero-main > .activity-summary-week-info { margin-left: auto; justify-content: flex-end; }
+.activity-summary-hero .activity-summary-week-info .week-spine-week-glance-demo { margin: 0; }
+
+.activity-summary-hero-header { position: relative; }
+.activity-summary-hero-header > .activity-summary-week-info { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; }
+@media (max-width: 1100px) { .activity-summary-hero-header > .activity-summary-week-info { position: static; transform: none; flex: 1 1 100%; justify-content: center; } }
+
+/* Week view uses a warm orange palette; Cycle retains its own header styling. */
+.activity-dashboard.has-summary-hero .activity-summary-hero { background: #48281c; border-color: #48281c; color: #fff6ef; }
+.activity-dashboard.has-summary-hero .activity-summary-hero-header { border-color: #855037; }
+.activity-dashboard.has-summary-hero .activity-summary-hero-header .app-header { --bg: #48281c; --bg-muted: #623925; --text-primary: #fff6ef; --text-secondary: #f0c8ae; --border: #a26848; --hover: #70432e; --blue-dark: #ffd2ad; --blue-tint: #844a2b; --header-control: #623925; --header-selected: #a94f20; --today: #f18a43; color: #fff6ef; }
+.activity-dashboard.has-summary-hero .app-header .header-week-spine-view-switch { border-color: #a26848; background: #623925; }
+.activity-dashboard.has-summary-hero .app-header .header-week-spine-view-switch button.is-active { background: #d76b29; color: #fff; }
+.activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name { background: #623925; border-color: #a26848; color: #fff1e4; }
+.activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name:hover,
+.activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name:focus-visible,
+.activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name.is-editing { border-color: #ffc595; outline-color: #ffc595; }
+.activity-dashboard.has-summary-hero .weekly-overview-total { border-color: #855037; }
+.activity-dashboard.has-summary-hero .weekly-overview-total span,
+.activity-dashboard.has-summary-hero .weekly-overview-grid span { color: #f0c8ae; }
+
+.activity-summary-hero.is-cycle { grid-column: 1 / -1; border-radius: 0; background: #102947; border-color: #102947; }
+.activity-summary-hero.is-cycle .activity-summary-hero-header { border-color: #345577; }
+.activity-summary-hero.is-cycle .activity-summary-hero-header .app-header { --bg: #102947; --bg-muted: #1c3b5c; --border: #456787; --hover: #294b6e; --header-control: #1c3b5c; --header-selected: #2c6191; --today: #75b5f0; }
+.activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch { background: #1c3b5c; border-color: #456787; }
+.activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch button.is-active { background: #326ea3; color: #fff; }

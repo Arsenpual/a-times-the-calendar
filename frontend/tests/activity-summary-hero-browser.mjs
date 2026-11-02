@@ -44,7 +44,12 @@ try {
   assert.equal(await page.locator(".activity-summary-hero-days").count(), 0);
   assert.equal(await page.locator(".activity-summary-hero-categories").count(), 0);
   await page.evaluate(() => window.phase1.set({ viewMode: "four-weeks" }));
-  await page.waitForFunction(() => !document.querySelector(".activity-summary-hero"));
+  await page.getByRole("region", { name: "สรุป Cycle" }).waitFor();
+  assert.equal(await page.getByRole("region", { name: "ภาพรวม Cycle" }).count(), 1);
+  assert.equal(await page.locator('.week-spine-overview-week').count(), 4);
+  assert.equal(await page.locator('.week-spine-overview-day').count(), 28);
+  assert.equal(await page.locator('.week-spine-four-week-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2);
+  assert.equal(await page.locator('.week-spine-overview-days').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 1);
   await page.evaluate(() => window.phase1.set({ viewMode: "week" }));
   await page.locator(".activity-summary-hero").waitFor();
   await page.evaluate(() => window.phase1.setActivities([
@@ -97,8 +102,11 @@ try {
   assert.ok(rows.slice(1).every((row, index) => row.top >= rows[index].bottom), 'seven days run down the page');
   const surface = page.locator('.week-spine-timeline-surface');
   const nav = page.locator('.week-spine-grid-wrap .week-spine-edge-nav');
-  await surface.hover();
-  assert.equal(await nav.evaluate(el => getComputedStyle(el).opacity), '1');
+  const navBox = await nav.boundingBox();
+  await page.mouse.move(navBox.x - 160, navBox.y + 15);
+  assert.equal(await nav.evaluate(el => el.classList.contains('is-near')), false);
+  await page.mouse.move(navBox.x - 30, navBox.y + 15);
+  assert.equal(await nav.evaluate(el => el.classList.contains('is-near')), true);
   await page.getByRole('button', { name: 'แสดงปฏิทินเต็มจอ' }).click();
   await page.waitForFunction(() => document.fullscreenElement?.classList.contains('week-spine-timeline-surface'));
   assert.equal(await page.locator('.week-spine-day').count(), 7);
@@ -121,7 +129,7 @@ try {
     return { panelTop: panel.top, spineBottom: spine.bottom, heroBackground: getComputedStyle(document.querySelector(".activity-summary-hero")).backgroundColor, spineBackground: getComputedStyle(document.querySelector(".week-spine")).getPropertyValue("--bg-muted").trim() };
   });
   assert.ok(desktopLayout.panelTop >= desktopLayout.spineBottom, "day details should follow the calendar on desktop");
-  assert.equal(desktopLayout.heroBackground, "rgb(15, 26, 46)");
+  assert.equal(desktopLayout.heroBackground, "rgb(72, 40, 28)");
   assert.equal(desktopLayout.spineBackground, "#fff");
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileLayout = await page.evaluate(() => ({ panel: document.querySelector(".summary-column").getBoundingClientRect().top, spine: document.querySelector(".week-spine").getBoundingClientRect().bottom }));

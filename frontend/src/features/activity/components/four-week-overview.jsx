@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { getWeekRange, getYearWeekRange, isSameDay, weekdayShortLabels, formatTime } from "../../../shared/lib/date-utils.js";
+import { getWeekRange, getYearWeekRange, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import WeekNameField from "./week-name-field.jsx";
 
@@ -37,14 +37,24 @@ export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, c
           <WeekNameField className="week-spine-overview-week-name" weekStart={week.start} weekNames={weekNames} editingWeekKey={editingWeekKey} weekNameDraft={weekNameDraft} onStartEditing={onStartEditingWeekName} onDraftChange={onWeekNameDraftChange} onCommit={onCommitWeekName} onCancel={onCancelWeekName} />
           <button type="button" className="week-spine-overview-fullscreen-btn" onClick={(event) => { event.stopPropagation(); onOpenWeekEditor?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd }); }} aria-label={`เปิดและแก้ไขสัปดาห์ ${formatVisibleRange(week.visibleStart, week.visibleEnd, language)}`} title="เปิดสัปดาห์เพื่อแก้ไข">↗</button>
         </header>
-        {week.allDayActivities.length > 0 && <div className="week-spine-overview-all-day">{week.allDayActivities.slice(0, 3).map((activity) => <span key={activity.calendarId} style={{ "--activity-color": activity.color.border }} title={`กิจกรรมทั้งวัน: ${activity.title}`} />)}{week.allDayActivities.length > 3 && <small>+{week.allDayActivities.length - 3}</small>}</div>}
         <div className="week-spine-overview-days">
           {week.days.map((day) => {
             const isOutsideCycle = day < week.visibleStart || day > week.visibleEnd;
             const items = week.timedSegments.filter((segment) => isSameDay(segment.day, day)).sort((a, b) => a.start - b.start);
+            const nextDay = new Date(day); nextDay.setDate(nextDay.getDate() + 1);
+            const allDay = week.allDayActivities.filter(item => item.start < nextDay && item.end > day);
+            const groups = new Map();
+            for (const item of items) {
+              const key = item.color.border;
+              const group = groups.get(key) || { color: key, duration: 0 };
+              group.duration += item.end - item.start;
+              groups.set(key, group);
+            }
+            const total = [...groups.values()].reduce((sum, group) => sum + group.duration, 0);
             return <button type="button" disabled={isOutsideCycle} className={`week-spine-overview-day${isOutsideCycle ? " is-outside-cycle" : ""}${isSameDay(day, new Date()) ? " is-today" : ""}`} key={day.toISOString()} onClick={(event) => { event.stopPropagation(); onSelectDay?.(day); }} aria-label={isOutsideCycle ? "อยู่นอกขอบเขต Cycle ของปีนี้" : `เปิดรายการกิจกรรม ${labels[day.getDay()]} ${day.getDate()}`}>
               {!isOutsideCycle && <header><span>{labels[day.getDay()]}</span><strong>{day.getDate()}</strong></header>}
-              <div className="week-spine-overview-tabs">{items.map((item) => <span key={item.segmentId} style={{ "--activity-color": item.color.border }} title={`${formatTime(item.start, language)} ${item.title}`} />)}</div>
+              <span className="week-spine-overview-tabs" aria-hidden="true">{[...groups.values()].map(group => <span key={group.color} style={{ "--activity-color": group.color, flex: `${group.duration / total} 1 0` }} />)}{allDay.map(item => <i key={item.calendarId} style={{ "--activity-color": item.color.border }} />)}</span>
+              <small className="week-spine-overview-day-count">{items.length + allDay.length}</small>
             </button>;
           })}
         </div>
