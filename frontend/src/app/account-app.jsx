@@ -327,6 +327,7 @@ export default function AccountApp({ auth }) {
     handleToggleLock,
     handleAssignCategory,
     handleCreateCategory,
+    handleUpdateCategoryColor,
     handleDeleteCategory,
     handleSaveActivity,
     handleSaveActivityPlan,
@@ -696,6 +697,7 @@ export default function AccountApp({ auth }) {
         activityCategoryMap={activityCategoryMap}
         activityTagMap={activityTagMap}
         onCreateCategory={handleCreateCategory}
+        onUpdateCategoryColor={handleUpdateCategoryColor}
         onDeleteCategory={handleDeleteCategory}
         onSave={saveActivityWithAssistantLearning}
         onDelete={handleDeleteActivity}

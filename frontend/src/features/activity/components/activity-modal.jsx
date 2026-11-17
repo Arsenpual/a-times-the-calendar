@@ -95,6 +95,7 @@ export default function ActivityModal({
   activityCategoryMap,
   activityTagMap,
   onCreateCategory,
+  onUpdateCategoryColor,
   onDeleteCategory,
   onSave,
   onDelete,
@@ -592,6 +593,7 @@ export default function ActivityModal({
             setCategoryId={setCategoryId}
             categories={categories}
             onCreateCategory={onCreateCategory}
+            onUpdateCategoryColor={onUpdateCategoryColor}
             onDeleteCategory={onDeleteCategory}
             deletingCategoryId={deletingCategoryId}
             handleDeleteCategory={handleDeleteCategory}

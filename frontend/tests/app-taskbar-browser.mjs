@@ -23,6 +23,20 @@ try {
       for(const expanded of [false,true]) {
         if((await toggle.getAttribute('aria-expanded')==='true')!==expanded) await toggle.click();
         assert.equal(await nav.isVisible(),expanded);
+        if (expanded && width > 760) {
+          const [taskbarWidth, mainWidth] = await Promise.all([
+            nav.evaluate(element => element.getBoundingClientRect().width),
+            page.locator('.app-workspace > .app-main').evaluate(element => element.getBoundingClientRect().width),
+          ]);
+          assert.ok(Math.abs(taskbarWidth / (taskbarWidth + mainWidth) - .25) < .01, `${theme}/${width} taskbar is 25%`);
+        }
+        if (!expanded && width > 760) {
+          const [workspaceWidth, mainWidth] = await Promise.all([
+            page.locator('.app-workspace').evaluate(element => element.getBoundingClientRect().width),
+            page.locator('.app-workspace > .app-main').evaluate(element => element.getBoundingClientRect().width),
+          ]);
+          assert.ok(Math.abs(workspaceWidth - mainWidth) < 1, `${theme}/${width} main fills closed taskbar space`);
+        }
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${theme}/${width}/${expanded} overflow`);
       }
       if([1440,390].includes(width)) await page.screenshot({path:join(tmpdir(),`times-taskbar-${theme}-${width}.png`)});

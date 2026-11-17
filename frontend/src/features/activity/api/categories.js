@@ -19,6 +19,12 @@ export async function createCategory(name, color) {
   return handleResponse(res, "POST /api/categories");
 }
 
+/** Update a category's shared color. */
+export async function updateCategory(id, color) {
+  const res = await apiRequest(`/api/categories/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ color }) });
+  return handleResponse(res, "PUT /api/categories/:id");
+}
+
 /**
  * DELETE /api/categories/:id — ลบหมวดหมู่ชีวิต
  * mapping ของกิจกรรมที่เคยผูกกับหมวดหมู่นี้จะถูกลบตามไปด้วยฝั่ง backend

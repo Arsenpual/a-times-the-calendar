@@ -182,6 +182,16 @@ html[data-theme="dark"] .app--ai .brand-wordmark .brand-wordmark-dark { display:
 .app-taskbar .taskbar-icon { position: relative; }
 .taskbar-unread { position: absolute; top: -3px; right: 0; min-width: 18px; padding: 1px 4px; border-radius: 999px; background: var(--portal-action); color: var(--portal-on-action); font-size: 10px; line-height: 16px; }
 .app-taskbar:not(.is-expanded) { display: none; }
+@media (min-width: 761px) {
+  .app-workspace > .app-main { box-sizing: border-box; flex: 0 0 75%; width: 75%; }
+  .app-taskbar:not(.is-expanded) + .app-main { flex: 1 1 100%; width: 100%; }
+  .app-taskbar.is-expanded {
+    box-sizing: border-box;
+    flex: 0 0 25%;
+    width: 25%;
+    padding-inline: 12px;
+  }
+}
 .app-header .app-navigation-toggle { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; }
 .app-navigation-toggle svg { width: 24px; height: 24px; }
 .header-feature-title { font-size: 18px; font-weight: 500; color: var(--text-primary); }

@@ -54,7 +54,6 @@ export default function FourWeekOverview({ weeks: cycleWeeks = [], cycleStart, c
             return <button type="button" disabled={isOutsideCycle} className={`week-spine-overview-day${isOutsideCycle ? " is-outside-cycle" : ""}${isSameDay(day, new Date()) ? " is-today" : ""}`} key={day.toISOString()} onClick={(event) => { event.stopPropagation(); onSelectDay?.(day); }} aria-label={isOutsideCycle ? "อยู่นอกขอบเขต Cycle ของปีนี้" : `เปิดรายการกิจกรรม ${labels[day.getDay()]} ${day.getDate()}`}>
               {!isOutsideCycle && <header><span>{labels[day.getDay()]}</span><strong>{day.getDate()}</strong></header>}
               <span className="week-spine-overview-tabs" aria-hidden="true">{[...groups.values()].map(group => <span key={group.color} style={{ "--activity-color": group.color, flex: `${group.duration / total} 1 0` }} />)}{allDay.map(item => <i key={item.calendarId} style={{ "--activity-color": item.color.border }} />)}</span>
-              <small className="week-spine-overview-day-count">{items.length + allDay.length}</small>
             </button>;
           })}
         </div>

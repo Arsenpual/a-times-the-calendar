@@ -35,6 +35,7 @@ export function useWeekSpineTimeChanges({ onSaveTimes, onError }) {
       },
       undoTimeChange: () => { if (!savingRef.current.has(day)) dispatch(day, { type: "undo" }); },
       redoTimeChange: () => { if (!savingRef.current.has(day)) dispatch(day, { type: "redo" }); },
+      discardPendingTimeChanges: () => { if (!savingRef.current.has(day)) dispatch(day, { type: "discard" }); },
       savePendingTimeChanges: async () => {
         if (savingRef.current.has(day)) return false;
         const submitted = new Map(statesRef.current[day]?.pending || []);

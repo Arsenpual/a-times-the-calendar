@@ -9,6 +9,7 @@ export function createActivityMetadataActions({
   assignActivityCategory,
   fetchActivityCategoryMap,
   createCategory,
+  updateCategory,
   deleteCategory,
   setCategories
 }) {
@@ -56,6 +57,12 @@ export function createActivityMetadataActions({
     return newCategory;
   };
 
+  const handleUpdateCategoryColor = async (id, color) => {
+    const updated = await updateCategory(id, color);
+    setCategories(previous => previous.map(category => category.id === id ? updated : category));
+    return updated;
+  };
+
   const handleDeleteCategory = async (categoryId) => {
     await deleteCategory(categoryId);
     setCategories((previous) => previous.filter((category) => category.id !== categoryId));
@@ -72,6 +79,7 @@ export function createActivityMetadataActions({
     handleToggleLock,
     handleAssignCategory,
     handleCreateCategory,
+    handleUpdateCategoryColor,
     handleDeleteCategory
   };
 }

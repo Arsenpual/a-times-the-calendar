@@ -30,40 +30,42 @@ const { useWeekSpineTimeChanges } = await load('use-week-spine-time-changes', {
   'import { createTimeChangeState, timeChangeReducer } from "../lib/week-spine-time-changes.js";': 'const { createTimeChangeState, timeChangeReducer } = globalThis.phase1History;'
 });
 let history, view, saveGate, saveResult = true, calls = [];
+const day1 = '2026-09-12', day2 = '2026-09-13';
 const changes = (hour, id = 'a') => [{ id, start: new Date(2026, 8, 12, hour), end: new Date(2026, 8, 12, hour + 1) }];
 function History() {
-  history = useWeekSpineTimeChanges({ onSaveTimes: async rows => { calls.push(['save', rows]); if (saveGate) await saveGate.promise; return saveResult; }, onMoveActivityToDay: async () => calls.push(['move']), onError: message => calls.push(['error', message]) });
+  history = useWeekSpineTimeChanges({ onSaveTimes: async rows => { calls.push(['save', rows]); if (saveGate) await saveGate.promise; return saveResult; }, onError: message => calls.push(['error', message]) });
   return null;
 }
 await act(async () => { view = Renderer.create(React.createElement(History)); });
-await act(async () => { history.queueTimeChanges(changes(8)); history.queueTimeChanges(changes(10)); });
-assert.equal(history.undoTimeChangeHistory.length, 2);
-await act(async () => history.undoTimeChange());
+await act(async () => { history.forDay(day1).queueTimeChanges(changes(8)); history.forDay(day1).queueTimeChanges(changes(10)); });
+assert.equal(history.forDay(day1).undoTimeChangeHistory.length, 2);
+await act(async () => history.forDay(day1).undoTimeChange());
 assert.equal(history.pendingTimeChanges.get('a').start.getHours(), 8);
-await act(async () => history.redoTimeChange());
+await act(async () => history.forDay(day1).redoTimeChange());
 assert.equal(history.pendingTimeChanges.get('a').start.getHours(), 10);
-await act(async () => history.queueTimeChanges([...changes(11), ...changes(12, 'b')]));
-await act(async () => history.undoTimeChange());
+await act(async () => history.forDay(day1).queueTimeChanges([...changes(11), ...changes(12, 'b')]));
+await act(async () => history.forDay(day1).undoTimeChange());
 assert.equal(history.pendingTimeChanges.has('b'), false);
-await act(async () => history.redoTimeChange());
+await act(async () => history.forDay(day1).redoTimeChange());
 saveGate = deferred(); let saving;
-await act(async () => { saving = history.savePendingTimeChanges(); });
-await act(async () => { history.queueTimeChanges(changes(15)); history.discardPendingTimeChanges(); });
+await act(async () => { saving = history.forDay(day1).savePendingTimeChanges(); });
+await act(async () => { history.forDay(day1).queueTimeChanges(changes(15)); history.forDay(day1).discardPendingTimeChanges(); });
 assert.equal(history.pendingTimeChanges.get('a').start.getHours(), 15);
-assert.equal(await history.savePendingTimeChanges(), false);
+assert.equal(await history.forDay(day1).savePendingTimeChanges(), false);
 await act(async () => { saveGate.resolve(); await saving; });
 assert.equal(history.pendingTimeChanges.size, 1);
 assert.equal(history.pendingTimeChanges.get('a').start.getHours(), 15);
 saveGate = null; saveResult = false;
-await act(async () => assert.equal(await history.moveActivityToDay('a', '2026-09-13'), false));
-assert.equal(calls.some(([type]) => type === 'move'), false);
+await act(async () => { history.forDay(day2).queueTimeChanges(changes(18)); });
+assert.equal(history.forDay(day1).pendingTimeChanges.has('a'), false);
+assert.equal(history.forDay(day2).pendingTimeChanges.get('a').start.getHours(), 18);
+assert.equal(await history.forDay(day2).savePendingTimeChanges(), false);
 assert.equal(history.pendingTimeChanges.size, 1);
 saveResult = true;
-await act(async () => history.moveActivityToDay('a', '2026-09-13'));
-assert.deepEqual(calls.slice(-2).map(([type]) => type), ['save', 'move']);
+await act(async () => { assert.equal(await history.forDay(day2).savePendingTimeChanges(), true); });
 assert.equal(history.pendingTimeChanges.size, 0);
 await act(async () => view.unmount());
-console.log('PASS history: batch undo/redo, save failure, concurrent edits, duplicate save, save-before-move');
+console.log('PASS history: batch undo/redo, save failure, concurrent edits, duplicate save, cross-planner transfer');
 
 let cloud = [], archiveCalls = [], fetchGate, writeGate, failWrite = false;
 globalThis.phase1ArchiveApi = {

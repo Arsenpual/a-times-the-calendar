@@ -23,6 +23,7 @@ const actions = createActivityMetadataActions({
   fetchActivityCategoryMap: async () => ({}),
   createCategory: async (name, color) => ({ id: "new", name, color }),
   deleteCategory: async () => {},
+  updateCategory: async (id, color) => ({ id, name: "Focus", color }),
   setCategories: apply("categories")
 });
 
@@ -33,6 +34,9 @@ assert.equal(state.categoryMap.activity, "cat-b");
 const created = await actions.handleCreateCategory("Focus", "#D85A30");
 assert.equal(created.id, "new");
 assert.equal(state.categories.at(-1).name, "Focus");
+await actions.handleUpdateCategoryColor("new", "#1557B0");
+assert.equal(state.categories.at(-1).color, "#1557B0");
+assert.equal(state.categoryMap.keep, "cat-b");
 await actions.handleDeleteCategory("cat-a");
 assert.equal(state.categories.some((category) => category.id === "cat-a"), false);
 assert.equal("old" in state.categoryMap, false);

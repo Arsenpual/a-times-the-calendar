@@ -9,6 +9,7 @@ import {
 } from "../../calendar-connection/api/google-calendar.js";
 import {
   createCategory as rawCreateCategory,
+  updateCategory as rawUpdateCategory,
   deleteCategory as rawDeleteCategory,
   assignActivityCategory as rawAssignActivityCategory,
   fetchActivityCategoryMap as rawFetchActivityCategoryMap
@@ -58,6 +59,7 @@ export function useActivityMutations({
   const deleteActivity = guardTask(rawDeleteActivity);
   const fetchRecurringInstances = guardTask(rawFetchRecurringInstances);
   const createCategory = guardTask(rawCreateCategory);
+  const updateCategory = guardTask(rawUpdateCategory);
   const deleteCategory = guardTask(rawDeleteCategory);
   const assignActivityCategory = guardTask(rawAssignActivityCategory);
   const fetchActivityCategoryMap = guardTask(rawFetchActivityCategoryMap);
@@ -125,6 +127,7 @@ export function useActivityMutations({
     assignActivityCategory,
     fetchActivityCategoryMap,
     createCategory,
+    updateCategory,
     deleteCategory,
     setCategories
   });

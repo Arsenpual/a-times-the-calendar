@@ -33,7 +33,7 @@
 .activity-dashboard.has-summary-hero .week-spine-day.is-weekend .week-spine-track { background-color: #fafbfd; }
 .activity-dashboard.has-summary-hero .week-spine-day.is-today .week-spine-track { background-color: #f6f8ff; box-shadow: none; }
 .activity-dashboard.has-summary-hero .week-spine-day.is-selected .week-spine-track { border: 0; border-left: 1px solid #e3e8f0; border-bottom: 1px solid #e3e8f0; box-shadow: inset 0 0 0 1px #a9bef7; }
-.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 26%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
+.activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 34%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-title,
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-time { color: var(--text-primary); text-shadow: none; }
 /* Horizontal week: five activity cards per day, with a remaining-count button. */
@@ -43,7 +43,7 @@
 .week-spine-day-heading { display: grid; grid-template-rows: 17px 30px 16px; align-content: start; min-width: 0; width: 100%; padding: 8px 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .week-spine-day-heading:disabled { opacity: .4; cursor: default; }
 .week-spine .week-spine-list-grid .week-spine-activity-list { box-sizing: border-box; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 34px 30px; align-content: center; align-items: center; gap: 6px; height: auto; min-width: 0; min-height: 80px; margin-top: 0; padding: 8px; overflow: visible; background-image: none; touch-action: auto; }
-.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; height: 60px; min-height: 60px; padding: 6px; overflow: hidden; border: 1px solid currentColor; border-radius: 5px; background: color-mix(in srgb, var(--block-color) 18%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
+.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; height: 60px; min-height: 60px; padding: 6px; overflow: hidden; border: 1px solid currentColor; border-radius: 5px; background: color-mix(in srgb, var(--block-color) 34%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
 .week-spine .week-spine-activity-list .week-spine-block-time { display: block; padding: 0; overflow: hidden; color: var(--text-secondary); font-size: 10px; line-height: 14px; white-space: nowrap; text-overflow: ellipsis; }
 .week-spine .week-spine-activity-list .week-spine-block-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; box-sizing: border-box; padding: 0; margin-top: 2px; color: var(--text-primary); font-size: 12px; line-height: 15px; white-space: normal; overflow-wrap: anywhere; text-shadow: none; }
 .week-spine-list-empty { grid-column: 2 / 6; grid-row: 1; padding: 8px; color: var(--text-secondary); font-size: 11px; text-align: center; }
@@ -453,7 +453,7 @@
 .activity-dashboard.has-summary-hero .weekly-overview-grid span { color: #f0c8ae; }
 
 .activity-summary-hero.is-cycle { grid-column: 1 / -1; border-radius: 0; background: #102947; border-color: #102947; }
-.activity-summary-hero.is-cycle .activity-summary-hero-header { border-color: #345577; }
+.activity-summary-hero.is-cycle .activity-summary-hero-header { padding-bottom: 0; border-bottom: 0; }
 .activity-summary-hero.is-cycle .activity-summary-hero-header .app-header { --bg: #102947; --bg-muted: #1c3b5c; --border: #456787; --hover: #294b6e; --header-control: #1c3b5c; --header-selected: #2c6191; --today: #75b5f0; }
 .activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch { background: #1c3b5c; border-color: #456787; }
 .activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch button.is-active { background: #326ea3; color: #fff; }

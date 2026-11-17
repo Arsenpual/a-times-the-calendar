@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { combineDateAndTime } from "../../../shared/lib/date-utils.js";
 import { describeRepeat, RRULE_WEEKDAYS } from "../lib/rrule-utils.js";
 
@@ -86,6 +86,7 @@ export function ActivityCategoryField({
   setCategoryId,
   categories,
   onCreateCategory,
+  onUpdateCategoryColor,
   onDeleteCategory,
   deletingCategoryId,
   handleDeleteCategory,
@@ -101,11 +102,21 @@ export function ActivityCategoryField({
   categorySaving,
   handleCreateCategory
 }) {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [colorBusy, setColorBusy] = useState(false);
+  const [colorError, setColorError] = useState("");
+  const saveColor = async color => {
+    if (colorBusy || !onUpdateCategoryColor || !selectedCategory) return;
+    setColorBusy(true); setColorError("");
+    try { await onUpdateCategoryColor(selectedCategory.id, color); }
+    catch (error) { setColorError(error?.message || "เปลี่ยนสีไม่สำเร็จ"); }
+    finally { setColorBusy(false); }
+  };
   return (
     <div className="modal-field" ref={categoryFieldRef} style={{ position: "relative" }}>
       <span className="field-label">หมวดหมู่</span>
       <div className="category-select-wrap">
-        {selectedCategory && <span className="category-swatch" style={{ background: selectedCategory.color }} />}
+        {selectedCategory && <button type="button" className="category-swatch category-swatch-trigger" style={{ background: selectedCategory.color }} onClick={() => { setPaletteOpen(value => !value); setCategoryDropdownOpen(false); }} aria-label={`เลือกสีหมวดหมู่ ${selectedCategory.name} สีปัจจุบัน ${selectedCategory.color}`} aria-expanded={paletteOpen} title="เปลี่ยนสีหมวดหมู่" />}
         <button
           type="button"
           className="category-dropdown-trigger"
@@ -117,6 +128,13 @@ export function ActivityCategoryField({
           <span className="category-dropdown-arrow">{categoryDropdownOpen ? "▲" : "▼"}</span>
         </button>
       </div>
+
+      {paletteOpen && selectedCategory && <div className="category-palette" role="group" aria-label={`สีหมวดหมู่ ${selectedCategory.name}`}>
+        <div className="category-palette-heading">สีปัจจุบัน <strong>{selectedCategory.color.toUpperCase()}</strong><button type="button" onClick={() => setPaletteOpen(false)} aria-label="ปิดถาดสี">×</button></div>
+        <div className="category-color-swatch-row">{categoryColorSwatches.map(hex => <button key={hex} type="button" className={`color-dot${selectedCategory.color.toLowerCase() === hex.toLowerCase() ? " is-selected" : ""}`} style={{ background: hex, color: hex }} onClick={() => saveColor(hex)} disabled={colorBusy} aria-label={`เลือกสี ${hex}`} aria-pressed={selectedCategory.color.toLowerCase() === hex.toLowerCase()} title={hex} />)}
+        <label className="category-custom-color" title="เลือกสีเอง"><input type="color" value={selectedCategory.color} disabled={colorBusy} onChange={event => saveColor(event.target.value)} aria-label="เลือกสีเอง" /></label></div>
+        <small>สีนี้ใช้กับทุกกิจกรรมในหมวดหมู่</small>{colorError && <p className="modal-error" role="alert">{colorError}</p>}
+      </div>}
 
       {categoryDropdownOpen && (
         <ul className="category-dropdown-list" role="listbox">

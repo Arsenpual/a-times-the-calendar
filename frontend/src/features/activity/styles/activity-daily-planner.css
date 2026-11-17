@@ -12,7 +12,7 @@
 .daily-planner-axis span:first-child { transform: none; }.daily-planner-axis span:last-child { transform: translateX(-100%); }
 .daily-planner-lanes { padding: 3px 0; background-image: linear-gradient(to right, #e2e8f2 1px, transparent 1px); background-size: calc(100% / 24) 100%; border-right: 1px solid #e2e8f2; }
 .daily-planner-lane { position: relative; height: 34px; }
-.daily-planner .daily-planner-event { position: absolute; top: 3px; height: 28px; min-width: 0; padding: 2px; overflow: hidden; border: 1px solid var(--event-color); border-radius: 4px; background: color-mix(in srgb, var(--event-color) 20%, #fff); color: #17263e; text-align: left; }
+.daily-planner .daily-planner-event { position: absolute; top: 3px; height: 28px; min-width: 0; padding: 2px; overflow: hidden; border: 1px solid var(--event-color); border-radius: 4px; background: color-mix(in srgb, var(--event-color) 34%, #fff); color: #17263e; text-align: left; }
 .daily-planner-event span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .daily-planner-detail { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11px; }
 .week-spine-planner-open[aria-expanded=true] { background: #eaf0ff; border-color: #2d4fe8; }
@@ -44,3 +44,6 @@
 .daily-planner .daily-planner-normal-view { justify-content: center; width: 34px; height: 30px; padding: 4px; border-color: #8095ce; background: #e5ecff; color: #2545a4; }
 
 .daily-planner .daily-planner-event[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+
+.daily-planner .day-timeline-nav { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 4px; }
+.day-timeline-aperture { display: block; width: 20px; height: 20px; }
