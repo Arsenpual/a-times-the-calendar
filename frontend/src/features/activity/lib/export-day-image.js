@@ -21,6 +21,61 @@ const WEEKDAY_FULL = {
   "อา": "อาทิตย์", "จ": "จันทร์", "อ": "อังคาร", "พ": "พุธ",
   "พฤ": "พฤหัสบดี", "ศ": "ศุกร์", "ส": "เสาร์"
 };
+const TITLE_FONT = "600 11px 'Noto Sans Thai', 'Segoe UI', sans-serif";
+const TIME_FONT = "10px 'Noto Sans Thai', 'Segoe UI', sans-serif";
+const INLINE_LABEL_GAP = 6;
+
+/** Truncates `text` with an ellipsis so it fits within `maxWidth` in the current canvas font. */
+function truncateText(ctx, text, maxWidth) {
+  if (maxWidth <= 0) return "";
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  const ellipsis = "…";
+  const ellipsisWidth = ctx.measureText(ellipsis).width;
+  if (ellipsisWidth > maxWidth) return "";
+  let end = text.length;
+  while (end > 0 && ctx.measureText(text.slice(0, end)).width + ellipsisWidth > maxWidth) {
+    end--;
+  }
+  return end > 0 ? `${text.slice(0, end)}${ellipsis}` : "";
+}
+
+/**
+ * Draws the block title and inline time label on a single line so even
+ * very short-duration blocks (height = 14px) keep their time visible.
+ */
+function drawBlockLabel(ctx, { left, top, colWidth, height, title, timeLabel }) {
+  const clipWidth = Math.max(0, colWidth - 8);
+  const textX = left + 8;
+  const textY = top + 12;
+  const maxWidth = Math.max(0, colWidth - 10);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left + 6, top, clipWidth, height);
+  ctx.clip();
+
+  ctx.font = TIME_FONT;
+  const timeWidth = timeLabel ? ctx.measureText(timeLabel).width : 0;
+
+  ctx.font = TITLE_FONT;
+  const maxTitleWidth = timeLabel ? maxWidth - timeWidth - INLINE_LABEL_GAP : maxWidth;
+  const renderedTitle = truncateText(ctx, title, maxTitleWidth);
+
+  let timeX = textX;
+  if (renderedTitle) {
+    ctx.fillStyle = "#3c4043";
+    ctx.fillText(renderedTitle, textX, textY);
+    timeX = textX + ctx.measureText(renderedTitle).width + INLINE_LABEL_GAP;
+  }
+
+  if (timeLabel) {
+    ctx.fillStyle = "#5f6368";
+    ctx.font = TIME_FONT;
+    ctx.fillText(timeLabel, timeX, textY);
+  }
+
+  ctx.restore();
+}
 
 /** Draws a rounded rectangle path — canvas has no built-in roundRect in every target browser, so do it manually. */
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -162,17 +217,14 @@ export function renderDayTimelineToCanvas({ day, activities, allActivities, cate
     ctx.fillStyle = color.border;
     ctx.fillRect(left, gridTop, 3, height); // left accent border, same as regular blocks
 
-    ctx.beginPath();
-    ctx.rect(left + 6, gridTop, colWidth - 8, height);
-    ctx.clip();
-    ctx.fillStyle = "#3c4043";
-    ctx.font = "600 11px 'Noto Sans Thai', 'Segoe UI', sans-serif";
-    ctx.fillText(`⤴ ${activity.summary || "(ไม่มีชื่อ)"}`, left + 8, gridTop + 13);
-    if (height >= 26) {
-      ctx.fillStyle = "#5f6368";
-      ctx.font = "10px 'Noto Sans Thai', 'Segoe UI', sans-serif";
-      ctx.fillText("ต่อจากเมื่อคืน", left + 8, gridTop + 25);
-    }
+    drawBlockLabel(ctx, {
+      left,
+      top: gridTop,
+      colWidth,
+      height,
+      title: `⤴ ${activity.summary || "(ไม่มีชื่อ)"}`,
+      timeLabel: "ต่อจากเมื่อคืน"
+    });
     ctx.restore();
   }
 
@@ -210,20 +262,15 @@ export function renderDayTimelineToCanvas({ day, activities, allActivities, cate
     ctx.fillStyle = color.border;
     ctx.fillRect(left, top, 3, height); // left accent border
 
-    // Text (clip to the block so long titles don't spill into neighbors)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(left + 6, top, colWidth - 8, height);
-    ctx.clip();
-    ctx.fillStyle = "#3c4043";
-    ctx.font = "600 11px 'Noto Sans Thai', 'Segoe UI', sans-serif";
-    ctx.fillText(activity.summary || "(ไม่มีชื่อ)", left + 8, top + 13);
-    if (height >= 26) {
-      ctx.fillStyle = "#5f6368";
-      ctx.font = "10px 'Noto Sans Thai', 'Segoe UI', sans-serif";
-      ctx.fillText(`${formatTime(start)} – ${formatTime(end)}`, left + 8, top + 25);
-    }
-    ctx.restore();
+    // Text (inline title + time so even very short blocks still show their time)
+    drawBlockLabel(ctx, {
+      left,
+      top,
+      colWidth,
+      height,
+      title: activity.summary || "(ไม่มีชื่อ)",
+      timeLabel: `${formatTime(start)} – ${formatTime(end)}`
+    });
   }
 
   if (timedActivities.length === 0 && incomingSpillover.length === 0) {
