@@ -24,6 +24,14 @@
   gap: 12px;
 }
 .app-header .app-header-right { margin-left: auto; }
+.app-header:has(.header-week-spine-view-switch) .app-header-left,
+.app-header:has(.header-week-spine-view-switch) .app-header-right {
+  flex: 1 1 0;
+}
+.app-header:has(.header-week-spine-view-switch) .app-header-right {
+  margin-left: 0;
+  justify-content: flex-end;
+}
 .app-header .app-logo { width: 120px; margin-right: 4px; }
 .app-header .app-title {
   margin: 0 4px;
@@ -34,9 +42,32 @@
   letter-spacing: 0;
 }
 .app-header .app-title-period { color: var(--blue-dark); font-size: 12px; font-weight: 400; }
+.app-header .app-title-date { display: flex; align-items: center; min-width: 0; }
+.app-header .app-title-week-name {
+  min-width: 0;
+  max-width: 260px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font: 600 16px/1.35 inherit;
+}
+.app-header .app-title-week-name:hover,
+.app-header .app-title-week-name:focus-visible {
+  background: var(--hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.app-header .app-title-week-name.is-editing {
+  width: 220px;
+  background: var(--header-control);
+  border-color: var(--today);
+  color: var(--text-primary);
+}
 
-.app-header .mode-switch,
-.app-header .header-week-spine-view-switch {
+.app-header .mode-switch {
   flex-shrink: 0;
   padding: 4px;
   gap: 2px;
@@ -44,8 +75,18 @@
   border-radius: 999px;
   background: var(--header-control);
 }
-.app-header .mode-switch button,
-.app-header .header-week-spine-view-switch button {
+.app-header .header-week-spine-view-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.app-header .mode-switch button {
   min-height: 48px;
   padding: 6px 14px;
   border-radius: 999px;
@@ -55,6 +96,19 @@
   line-height: 1.4;
   color: var(--text-secondary);
 }
+.app-header .header-week-spine-view-switch button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  opacity: 0.78;
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease, transform 150ms ease;
+}
 .app-header .mode-switch button { min-width: 88px; }
 .app-header .mode-switch button.active,
 .app-header .header-week-spine-view-switch button.is-active {
@@ -62,7 +116,11 @@
   background: var(--header-selected);
   box-shadow: none;
 }
-.app-header .header-week-spine-view-switch button:not(.is-active):hover { background: var(--hover); }
+.app-header .header-week-spine-view-switch button.is-active {
+  opacity: 1;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+.app-header .header-week-spine-view-switch button:not(.is-active):hover { background: var(--hover); opacity: 1; }
 .app-header .btn { min-height: 48px; padding: 8px 16px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
 .app-header .btn-outline { background: transparent; }
 .app-header .btn-outline:hover { background: var(--header-control); }
@@ -136,6 +194,7 @@ html.screen-reader-mode .app-header :is(button, input) { min-height: 42px; font-
   .app-header { padding: 12px 16px; }
   .app-header .app-header-left { flex: 1 1 100%; }
   .app-header .header-calendar-tools { flex: 1 1 auto; }
+  .app-header .header-week-spine-view-switch { order: 3; flex: 1 1 100%; justify-content: center; margin-inline: auto; }
   .app-header .app-header-right { flex: 1 1 100%; justify-content: flex-end; }
   .app-header .tag-search-wrap { margin-right: auto; max-width: none; }
   .app-header--reminder .app-header-left,
@@ -148,7 +207,7 @@ html.screen-reader-mode .app-header :is(button, input) { min-height: 42px; font-
   .app-header--reminder { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .app-header .app-logo { width: 104px; margin-right: 0; }
   .app-header .header-calendar-tools { flex-basis: 100%; }
-  .app-header .header-week-spine-view-switch { margin-left: auto; }
+  .app-header .header-week-spine-view-switch { margin-inline: auto; }
 }
 @media (max-width: 480px) {
   .app-header { padding: 10px 12px; gap: 12px; }

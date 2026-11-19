@@ -11,7 +11,7 @@ import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { getMonthCycle, getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
+import { getMonthCycle, getWeekRange, getYearCycle, getYearWeekRange, toDateInputValue } from "../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../shared/lib/id-utils.js";
 import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
 import { assertWeatherDraftCurrent } from "../features/activity/assistant/lib/weather-slot-validation.js";
@@ -20,6 +20,7 @@ import { fetchActivities } from "../features/calendar-connection/api/google-cale
 import { fetchDailySummary } from "../features/activity/api/summary.js";
 import ActivityAiAssistant from "../features/activity/assistant/components/activity-assistant-dialog.jsx";
 import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
+import { useWeekNames } from "../features/activity/hooks/use-week-names.js";
 import { useCalendarData } from "../features/activity/hooks/use-calendar-data.js";
 import { useTagSearch } from "../features/activity/hooks/use-tag-search.js";
 import { useActivityModal } from "../features/activity/hooks/use-activity-modal.js";
@@ -439,6 +440,12 @@ export default function AccountApp({ auth }) {
 
   useActivityTelegramNotifications({ firebaseUser, activities, archivedActivityIds });
 
+  const weekNamesState = useWeekNames(firebaseUser?.uid);
+  const [defaultHeaderWeekStart] = getYearWeekRange(cursorDate);
+  const headerWeekStart = weekRangeOverride?.start instanceof Date ? weekRangeOverride.start : defaultHeaderWeekStart;
+  const headerYearStart = new Date(cursorDate.getFullYear(), 0, 1);
+  const visibleHeaderWeekStart = headerWeekStart < headerYearStart ? headerYearStart : headerWeekStart;
+
   const headerInSummary = mode === "activity" && !isSearchingTags;
   const appHeader = (
     <AppHeader
@@ -459,6 +466,8 @@ export default function AccountApp({ auth }) {
         navigateDay={navigateDay}
         navigateWeek={weekSpineViewMode === "month" ? navigateMonth : navigateWeek}
         activityHeaderTitle={activityHeaderTitle}
+        weekStart={visibleHeaderWeekStart}
+        weekNamesState={weekNamesState}
         weekSpineViewMode={weekSpineViewMode}
         setWeekSpineView={setWeekSpineView}
         cycleAnchorDate={cycleAnchorDate}
@@ -588,6 +597,7 @@ export default function AccountApp({ auth }) {
                 ) : (
                   <ActivityModeWeekSpine
                     summaryHeader={headerInSummary ? appHeader : null}
+                    weekNamesState={weekNamesState}
                     anchorDate={cursorDate}
                     activities={visibleActivities}
                     categories={categories}

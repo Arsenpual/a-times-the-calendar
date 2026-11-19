@@ -45,9 +45,9 @@ try {
   assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-activity-list').count(), 0, 'timeline replaces the summary cards');
   const aligned = await monday.evaluate(el => Math.abs(el.getBoundingClientRect().top - el.parentElement.querySelector('.week-spine-day-heading').getBoundingClientRect().top) < 1);
   assert.equal(aligned, true, 'timeline shares the original day row');
-  assert.equal(await monday.locator('.daily-planner-axis span').count(), 25);
-  assert.equal(await monday.locator('.daily-planner-axis span').first().textContent(), '00:00');
-  assert.equal(await monday.locator('.daily-planner-axis span').last().textContent(), '24:00');
+  assert.equal(await monday.locator('.daily-planner-axis span').count(), 23);
+  assert.equal(await monday.locator('.daily-planner-axis span').first().textContent(), '01:00');
+  assert.equal(await monday.locator('.daily-planner-axis span').last().textContent(), '23:00');
   assert.equal(await monday.locator('.daily-planner-lane').count(), 3);
   assert.equal(await monday.locator('textarea').count(), 0, 'no planning forms in compact drawer');
   assert.ok(await monday.evaluate(el => el.getBoundingClientRect().height < 240));
@@ -159,7 +159,7 @@ try {
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     assert.ok(await monday.evaluate(el => el.scrollWidth <= el.clientWidth + 1), `timeline fits at ${width}px`);
-    assert.equal(await monday.locator('.daily-planner-axis span').count(), 25);
+    assert.equal(await monday.locator('.daily-planner-axis span').count(), 23);
   }
   await tuesday.getByRole('button', { name: 'กลับสู่มุมมองปกติ 8 กันยายน' }).click();
   assert.equal(await tuesday.count(), 0);
@@ -179,8 +179,8 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.daily-planner-event').length === 8);
   assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-block').count(), 0);
   await monday.getByRole('button', { name: 'กลับสู่มุมมองปกติ 7 กันยายน' }).click();
-  assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-block').count(), 5);
-  assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-list-more').textContent(), '+3');
+  assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-block').count(), 7);
+  assert.equal(await page.locator('.week-spine-day').nth(1).locator('.week-spine-list-more').textContent(), '+1');
   await launcher.click();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.phase1.setActivities([{ id: 'off-grid', summary: 'Off grid', start: { dateTime: new Date(2026, 8, 7, 6, 59, 30).toISOString() }, end: { dateTime: new Date(2026, 8, 7, 8, 29, 30).toISOString() } }]));

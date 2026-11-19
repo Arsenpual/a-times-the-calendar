@@ -28,7 +28,6 @@
 .activity-dashboard.has-summary-hero .week-spine-timeline-surface::-webkit-scrollbar-thumb { border-radius: 999px; background: #aeb9ca; }
 .activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-grid-wrap { direction: ltr; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 0; overflow: visible; }
 .activity-dashboard.has-summary-hero .week-spine-timeline-surface:not(.is-fullscreen) .week-spine-days { grid-template-columns: minmax(0, 1fr); gap: 0; }
-.activity-dashboard.has-summary-hero .week-spine-day-meta { overflow: hidden; padding-left: 6px; border-left: 1px solid #e3e8f0; color: var(--text-secondary); font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .activity-dashboard.has-summary-hero .week-spine-track { box-sizing: border-box; border: 0; border-left: 1px solid #e3e8f0; border-bottom: 1px solid #e3e8f0; border-radius: 0; background-color: #fff; background-image: linear-gradient(to bottom, #e3e8f0 1px, transparent 1px), linear-gradient(to bottom, transparent calc(50% - .5px), #f0f3f8 calc(50% - .5px), #f0f3f8 calc(50% + .5px), transparent calc(50% + .5px)); background-size: 100% calc(100% / var(--week-spine-hour-cell-count)); }
 .activity-dashboard.has-summary-hero .week-spine-day.is-weekend .week-spine-track { background-color: #fafbfd; }
 .activity-dashboard.has-summary-hero .week-spine-day.is-today .week-spine-track { background-color: #f6f8ff; box-shadow: none; }
@@ -36,32 +35,31 @@
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging):not(.week-spine-all-day-track-block) { box-sizing: border-box; container-type: normal; background: color-mix(in srgb, var(--block-color, currentColor) 34%, #fff) !important; border: 1px solid currentColor; border-radius: 5px; }
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-title,
 .activity-dashboard.has-summary-hero .week-spine-block:not(.is-dragging) .week-spine-block-time { color: var(--text-primary); text-shadow: none; }
-/* Horizontal week: five activity cards per day, with a remaining-count button. */
+/* Horizontal week: seven compact activity cards per day, with expand button in day heading corner. */
 .week-spine .week-spine-list-grid { display: block; }
 .week-spine .week-spine-list-grid .week-spine-days { grid-column: 1; grid-template-columns: minmax(0, 1fr); gap: 0; }
-.week-spine .week-spine-list-grid .week-spine-day { grid-template-columns: 132px minmax(0, 1fr); grid-template-rows: auto; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border); cursor: default; }
-.week-spine-day-heading { display: grid; grid-template-rows: 17px 30px 16px; align-content: start; min-width: 0; width: 100%; padding: 8px 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.week-spine .week-spine-list-grid .week-spine-day { grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: auto; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border); cursor: default; }
+.week-spine-day-heading { display: grid; grid-template-rows: 16px 28px; align-content: start; min-width: 0; width: 100%; padding: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .week-spine-day-heading:disabled { opacity: .4; cursor: default; }
-.week-spine .week-spine-list-grid .week-spine-activity-list { box-sizing: border-box; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 34px 30px; align-content: center; align-items: center; gap: 6px; height: auto; min-width: 0; min-height: 80px; margin-top: 0; padding: 8px; overflow: visible; background-image: none; touch-action: auto; }
-.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; height: 60px; min-height: 60px; padding: 6px; overflow: hidden; border: 1px solid currentColor; border-radius: 5px; background: color-mix(in srgb, var(--block-color) 34%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
-.week-spine .week-spine-activity-list .week-spine-block-time { display: block; padding: 0; overflow: hidden; color: var(--text-secondary); font-size: 10px; line-height: 14px; white-space: nowrap; text-overflow: ellipsis; }
-.week-spine .week-spine-activity-list .week-spine-block-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; box-sizing: border-box; padding: 0; margin-top: 2px; color: var(--text-primary); font-size: 12px; line-height: 15px; white-space: normal; overflow-wrap: anywhere; text-shadow: none; }
-.week-spine-list-empty { grid-column: 2 / 6; grid-row: 1; padding: 8px; color: var(--text-secondary); font-size: 11px; text-align: center; }
+.week-spine .week-spine-list-grid .week-spine-activity-list { box-sizing: border-box; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) 30px; align-content: center; align-items: center; gap: 4px; height: auto; min-width: 0; min-height: 68px; margin-top: 0; padding: 6px 8px; overflow: visible; background-image: none; touch-action: auto; }
+.week-spine .week-spine-activity-list .week-spine-block { position: relative; inset: auto; box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; height: 48px; min-height: 48px; padding: 4px 5px; overflow: hidden; border: 1px solid currentColor; border-radius: 4px; background: color-mix(in srgb, var(--block-color) 34%, #fff); opacity: 1; font: inherit; text-align: left; cursor: pointer; container-type: normal; }
+.week-spine .week-spine-activity-list .week-spine-block-time { display: block; padding: 0; overflow: hidden; color: var(--text-secondary); font-size: 9px; line-height: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.week-spine .week-spine-activity-list .week-spine-block-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; box-sizing: border-box; padding: 0; margin-top: 1px; color: var(--text-primary); font-size: 10.5px; line-height: 13px; white-space: normal; overflow-wrap: anywhere; text-shadow: none; }
+.week-spine-list-empty { grid-column: 1 / 8; grid-row: 1; padding: 8px; color: var(--text-secondary); font-size: 11px; text-align: center; }
 .week-spine-list-add { flex: 0 0 auto; max-width: 100%; min-height: 32px; padding: 4px; border: 1px dashed var(--border); border-radius: 5px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
-.week-spine-list-more { grid-column: 6; grid-row: 1; min-width: 0; padding: 5px 2px; border: 0; border-radius: 12px; background: var(--hover); color: var(--today); font: inherit; font-size: 11px; font-weight: 600; line-height: 1.4; cursor: pointer; white-space: nowrap; }
+.week-spine-list-more { position: absolute; top: 5px; right: 5px; z-index: 2; min-width: 24px; height: 20px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--today) 28%, transparent); border-radius: 999px; background: var(--hover); color: var(--today); font: inherit; font-size: 10px; font-weight: 700; line-height: 18px; cursor: pointer; white-space: nowrap; }
+.week-spine-list-more:hover { background: color-mix(in srgb, var(--today) 14%, var(--hover)); }
 .week-spine-list-add:hover { background: var(--hover); }
 
 .week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-label,
-.week-spine .week-spine-list-grid .week-spine-day-heading strong,
-.week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-meta { border-left: 0; }
-.week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-meta { display: block; }
+.week-spine .week-spine-list-grid .week-spine-day-heading strong { border-left: 0; }
+.week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-label { padding-right: 32px; }
 .week-spine .week-spine-list-grid .week-spine-day.is-today { box-shadow: inset 3px 0 0 var(--today); }
-.week-spine-timeline-surface .week-spine-edge-nav { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
+.week-spine-timeline-surface .week-spine-edge-nav { display: flex; justify-content: flex-end; gap: 6px; padding: 8px 8px 0; margin-bottom: 6px; }
 .week-spine-timeline-surface .week-spine-edge-nav button { position: static; width: 30px; height: 30px; opacity: 1; pointer-events: auto; transform: none; box-shadow: none; }
 @media (max-width: 640px) {
-  .week-spine .week-spine-list-grid .week-spine-day { grid-template-columns: 92px minmax(0, 1fr); }
+  .week-spine .week-spine-list-grid .week-spine-day { grid-template-columns: 74px minmax(0, 1fr); }
   .week-spine-day-heading { padding-inline: 2px; }
-  .week-spine .week-spine-list-grid .week-spine-day-heading .week-spine-day-meta { font-size: 9px; white-space: normal; }
 }
 
 .activity-summary-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px 20px; border: 1px solid #0f1a2e; border-radius: 16px; background: #0f1a2e; color: #f2f5fb; }
@@ -72,11 +70,13 @@
 .activity-summary-hero-header { grid-column: 1 / -1; min-width: 0; padding-bottom: 16px; border-bottom: 1px solid #26334f; }
 .activity-summary-hero .activity-summary-hero-header .app-header { --bg: #0f1a2e; --bg-muted: #1b2942; --text-primary: #f2f5fb; --text-secondary: #aeb9d0; --border: #394966; --hover: #26334f; --blue-dark: #b8c9ff; --blue-tint: #263b65; --header-control: #1b2942; --header-selected: #263b65; --today: #526fe8; position: relative; width: 100%; max-height: none; padding: 0; border: 0; background: transparent; box-shadow: none; color: #f2f5fb; opacity: 1; overflow: visible; pointer-events: auto; }
 .activity-summary-hero .app-header .app-header-left,
-.activity-summary-hero .app-header .app-header-right { flex: 1 1 auto; }
+.activity-summary-hero .app-header .app-header-right { flex: 1 1 0; }
 .activity-summary-hero .app-header .app-header-right { justify-content: flex-end; }
 .activity-summary-hero .app-header .brand-wordmark .brand-wordmark-light { display: none; }
 .activity-summary-hero .app-header .brand-wordmark .brand-wordmark-dark { display: block; }
-.activity-summary-hero .app-header .tag-search-wrap { flex: 1 1 160px; min-width: 0; }
+.activity-summary-hero .app-header .tag-search-wrap { flex: 0 1 150px; width: 150px; max-width: 170px; min-width: 0; min-height: 36px; padding: 4px 10px; border-radius: 18px; }
+.activity-summary-hero .app-header .tag-search-icon { width: 15px; height: 15px; }
+.activity-summary-hero .app-header .tag-search-input { width: 64px; font-size: 12px; }
 .activity-summary-hero .app-header .btn-icon,
 .activity-summary-hero .app-header .btn-outline { color: #f2f5fb; }
 .activity-summary-hero-main { min-width: 0; }
@@ -338,7 +338,7 @@
   padding: 8px 2px;
 }
 
-.week-spine-planner-open { grid-column: 7; grid-row: 1; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-muted); color: var(--today); cursor: pointer; }
+.week-spine-planner-open { grid-column: 8; grid-row: 1; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-muted); color: var(--today); cursor: pointer; }
 .week-spine-planner-open:hover { background: var(--hover); }
 
 .week-spine .week-spine-day-heading.has-unsaved-draft { position: relative; box-shadow: inset 3px 0 #e37b7b; background: #fff4f4; }
@@ -372,8 +372,9 @@
 .week-spine-timeline-surface .week-spine-edge-nav.is-near, .week-spine-timeline-surface .week-spine-edge-nav:focus-within { opacity: 1; pointer-events: auto; }
 .week-spine-timeline-surface .week-spine-edge-nav button { position: static; width: 30px; height: 30px; opacity: 1; pointer-events: auto; transform: none; border: 1px solid #c6d1e3; border-radius: 7px; background: #fffffff2; color: #2545a4; box-shadow: 0 2px 8px #152c5826; cursor: pointer; font-size: 18px; }
 .week-spine-timeline-surface .week-spine-edge-nav button:focus-visible { outline: 2px solid #2d4fe8; outline-offset: 2px; }
-.week-spine-timeline-surface:fullscreen { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 12px; background: #fff; }
-.week-spine-timeline-surface:fullscreen .week-spine-grid-wrap { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.week-spine-timeline-surface:fullscreen { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 0; background: #fff; }
+.week-spine-timeline-surface:fullscreen .week-spine-grid-wrap { width: 100%; min-width: 0; min-height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.week-spine-timeline-surface:fullscreen .week-spine-days { min-height: 100%; grid-auto-rows: minmax(80px, 1fr); }
 @media (hover: none) { .week-spine-timeline-surface .week-spine-edge-nav { opacity: 1; pointer-events: auto; } }
 
 .weekly-overview { flex: 1 1 360px; max-width: 575px; min-width: 0; padding: 12px; border: 1px solid #394966; border-radius: 10px; background: #0b1424; color: #f2f5fb; }
@@ -442,8 +443,12 @@
 .activity-dashboard.has-summary-hero .activity-summary-hero { background: #48281c; border-color: #48281c; color: #fff6ef; }
 .activity-dashboard.has-summary-hero .activity-summary-hero-header { border-color: #855037; }
 .activity-dashboard.has-summary-hero .activity-summary-hero-header .app-header { --bg: #48281c; --bg-muted: #623925; --text-primary: #fff6ef; --text-secondary: #f0c8ae; --border: #a26848; --hover: #70432e; --blue-dark: #ffd2ad; --blue-tint: #844a2b; --header-control: #623925; --header-selected: #a94f20; --today: #f18a43; color: #fff6ef; }
-.activity-dashboard.has-summary-hero .app-header .header-week-spine-view-switch { border-color: #a26848; background: #623925; }
+.activity-dashboard.has-summary-hero .app-header .header-week-spine-view-switch { border: 0; background: transparent; padding: 0; }
 .activity-dashboard.has-summary-hero .app-header .header-week-spine-view-switch button.is-active { background: #d76b29; color: #fff; }
+.activity-dashboard.has-summary-hero .app-header .app-title-week-name { background: transparent; border-color: transparent; color: #fff6ef; }
+.activity-dashboard.has-summary-hero .app-header .app-title-week-name:hover,
+.activity-dashboard.has-summary-hero .app-header .app-title-week-name:focus-visible,
+.activity-dashboard.has-summary-hero .app-header .app-title-week-name.is-editing { background: #623925; border-color: #ffc595; color: #fff; outline-color: #ffc595; }
 .activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name { background: #623925; border-color: #a26848; color: #fff1e4; }
 .activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name:hover,
 .activity-dashboard.has-summary-hero .activity-summary-hero .week-spine-week-name:focus-visible,
@@ -455,5 +460,5 @@
 .activity-summary-hero.is-cycle { grid-column: 1 / -1; border-radius: 0; background: #102947; border-color: #102947; }
 .activity-summary-hero.is-cycle .activity-summary-hero-header { padding-bottom: 0; border-bottom: 0; }
 .activity-summary-hero.is-cycle .activity-summary-hero-header .app-header { --bg: #102947; --bg-muted: #1c3b5c; --border: #456787; --hover: #294b6e; --header-control: #1c3b5c; --header-selected: #2c6191; --today: #75b5f0; }
-.activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch { background: #1c3b5c; border-color: #456787; }
+.activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch { background: transparent; border: 0; padding: 0; }
 .activity-summary-hero.is-cycle .app-header .header-week-spine-view-switch button.is-active { background: #326ea3; color: #fff; }

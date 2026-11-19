@@ -283,7 +283,6 @@ html .reminder-app-container, html[data-theme="dark"] .reminder-app-container {
   .login-portal-caption > span { font-size: 9px; }
   .login-card { padding: 28px 24px; gap: 16px; }
   .login-headline { font-size: 22px; }
-  .week-spine { padding: 14px; }
   .week-spine-grid-wrap { grid-template-columns: 36px minmax(350px, 1fr); overflow-x: auto; padding-bottom: 6px; }
 }
 @media (max-width: 480px) {

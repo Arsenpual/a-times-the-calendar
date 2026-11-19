@@ -1,5 +1,6 @@
 import React from "react";
 import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";
+import WeekNameField from "../../features/activity/components/week-name-field.jsx";
 
 export default function AppHeader({
   navigationExpanded,
@@ -12,6 +13,8 @@ export default function AppHeader({
   navigateDay,
   navigateWeek,
   activityHeaderTitle,
+  weekStart,
+  weekNamesState,
   weekSpineViewMode,
   setWeekSpineView,
   cycleAnchorDate,
@@ -22,9 +25,6 @@ export default function AppHeader({
   setTagSearchTerms,
   tagSearchDraft,
   setTagSearchDraft,
-  openAddActivity,
-  cursorDate,
-  calendarAccessToken,
   accountMenuRef,
   accountMenuOpen,
   setAccountMenuOpen,
@@ -67,18 +67,35 @@ export default function AppHeader({
                 </div>
                 {!isCompactCalendarHeader && (
                   <h1 className="app-title">
-                    <span className="app-title-date">{activityHeaderTitle.date}</span>
+                    <span className="app-title-date">
+                      {weekNamesState && weekStart ? (
+                        <WeekNameField
+                          className="week-spine-week-name app-title-week-name"
+                          weekStart={weekStart}
+                          weekNames={weekNamesState.weekNames}
+                          editingWeekKey={weekNamesState.editingWeekKey}
+                          weekNameDraft={weekNamesState.weekNameDraft}
+                          onStartEditing={weekNamesState.startEditingWeekName}
+                          onDraftChange={weekNamesState.setWeekNameDraft}
+                          onCommit={weekNamesState.commitWeekName}
+                          onCancel={weekNamesState.cancelWeekNameEdit}
+                        />
+                      ) : activityHeaderTitle.date}
+                    </span>
                     <span className="app-title-period">{activityHeaderTitle.period}</span>
                   </h1>
                 )}
-                <div className="header-week-spine-view-switch" role="group" aria-label="มุมมอง Activity Mode">
-                  <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
-                  <button type="button" className={weekSpineViewMode === "month" ? "is-active" : ""} onClick={() => setWeekSpineView("month")}>เดือน</button>
-                  <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Lonth</button>
-                </div>
               </div>
             )}
           </div>
+
+          {mode === "activity" && (
+            <div className="header-week-spine-view-switch" role="group" aria-label="มุมมอง Activity Mode">
+              <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
+              <button type="button" className={weekSpineViewMode === "month" ? "is-active" : ""} onClick={() => setWeekSpineView("month")}>เดือน</button>
+              <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Lonth</button>
+            </div>
+          )}
 
           {mode === "reminder" && (
             <div className="app-header-reminder-slot" ref={reminderHeaderRef} role="group" aria-label="เครื่องมือ Reminder" />
@@ -143,13 +160,6 @@ export default function AppHeader({
                     </button>
                   )}
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => openAddActivity(new Date(cursorDate))}
-                  disabled={!calendarAccessToken}
-                >
-                  + เพิ่มกิจกรรม
-                </button>
               </>
             ) : null}
             <div className="account-menu-wrap" ref={accountMenuRef}>

@@ -7,12 +7,38 @@ const { default: React } = await import(reactUrl);
 const { default: Renderer } = await import("react-test-renderer");
 const { act } = Renderer;
 
-const rawSource = readFileSync(new URL("../src/app/components/app-header.jsx", import.meta.url), "utf8")
-  .replace('from "react"', 'from "' + reactUrl + '"')
-  .replace('import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";', 'const BrandWordmark = () => React.createElement("div", { className: "app-logo" });');
+const storage = new Map();
+globalThis.window = {
+  localStorage: {
+    getItem: (key) => (storage.has(key) ? storage.get(key) : null),
+    setItem: (key, value) => storage.set(key, String(value)),
+  },
+};
 
-const transformed = esbuild.transformSync(rawSource, { loader: "jsx" });
-const { default: AppHeader } = await import("data:text/javascript;base64," + Buffer.from(transformed.code).toString("base64"));
+const loadJsxModule = (relativePath, replacements = []) => {
+  let source = readFileSync(new URL(relativePath, import.meta.url), "utf8")
+    .replace('from "react"', 'from "' + reactUrl + '"');
+  for (const [target, replacement] of replacements) {
+    source = source.replace(target, replacement);
+  }
+  const transformed = esbuild.transformSync(source, { loader: "jsx" });
+  return "data:text/javascript;base64," + Buffer.from(transformed.code).toString("base64");
+};
+
+const dateUtilsUrl = new URL("../src/shared/lib/date-utils.js", import.meta.url).href;
+const useWeekNamesUrl = loadJsxModule("../src/features/activity/hooks/use-week-names.js", [
+  ['from "../../../shared/lib/date-utils.js"', `from "${dateUtilsUrl}"`],
+]);
+const weekNameFieldUrl = loadJsxModule("../src/features/activity/components/week-name-field.jsx", [
+  ['from "../hooks/use-week-names.js"', `from "${useWeekNamesUrl}"`],
+]);
+const appHeaderUrl = loadJsxModule("../src/app/components/app-header.jsx", [
+  ['import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";', 'const BrandWordmark = () => React.createElement("div", { className: "app-logo" });'],
+  ['from "../../features/activity/components/week-name-field.jsx"', `from "${weekNameFieldUrl}"`],
+]);
+
+const { useWeekNames } = await import(useWeekNamesUrl);
+const { default: AppHeader } = await import(appHeaderUrl);
 
 const baseProps = {
   firebaseUser: { displayName: "User", email: "user@example.com" },
@@ -52,9 +78,9 @@ await act(async () => {
 const root = renderer.root;
 
 // In week mode:
-// 1. tag-search-wrap and "+ เพิ่มกิจกรรม" button should be present
+// 1. tag-search-wrap should be present and "+ เพิ่มกิจกรรม" button should be removed
 assert.equal(root.findAllByProps({ className: "tag-search-wrap" }).length, 1, "Week view should display tag search");
-assert.equal(root.findAll((el) => el.type === "button" && el.props.children === "+ เพิ่มกิจกรรม").length, 1, "Week view should display + เพิ่มกิจกรรม button");
+assert.equal(root.findAll((el) => el.type === "button" && el.props.children === "+ เพิ่มกิจกรรม").length, 0, "Week view should NOT display + เพิ่มกิจกรรม button");
 // 2. btn btn-outline ("วันนี้") should be present
 assert.equal(root.findAll((el) => el.type === "button" && el.props.className?.includes("btn-outline")).length, 1, "Week view should display วันนี้ (btn btn-outline)");
 // 3. app-title should be present
@@ -87,20 +113,64 @@ await act(async () => {
   renderer.update(React.createElement(AppHeader, { ...baseProps, weekSpineViewMode: "four-weeks" }));
 });
 
-// In Lonth mode:
-// 1. search and + เพิ่มกิจกรรม should be cleared out
 assert.equal(root.findAllByProps({ className: "tag-search-wrap" }).length, 0, "Lonth view should NOT display tag search");
 assert.equal(root.findAll((el) => el.type === "button" && el.props.children === "+ เพิ่มกิจกรรม").length, 0, "Lonth view should NOT display + เพิ่มกิจกรรม button");
-
-// 2. btn btn-outline and app-title should be cleared out
 assert.equal(root.findAll((el) => el.type === "button" && el.props.className?.includes("btn-outline")).length, 0, "Lonth view should NOT display วันนี้ (btn btn-outline)");
 assert.equal(root.findAllByProps({ className: "app-title" }).length, 0, "Lonth view should NOT display app-title");
-
-// 3. lonth-nav-bar was moved to the bottom of Lonth view, so it should NOT be in header
 assert.equal(root.findAllByProps({ className: "lonth-nav-bar" }).length, 0, "Lonth view should NOT display lonth-nav-bar in header");
+assert.ok(root.findByType("header").props.className.includes("app-header--lonth"), "Lonth view should have app-header--lonth class");
 
-// 4. app-header--lonth class should be on header
-const headerElement = root.findByType("header");
-assert.ok(headerElement.props.className.includes("app-header--lonth"), "Lonth view should have app-header--lonth class");
+// Interactive test: clicking app-title-date week name edits and persists the week name at any time
+function HeaderWithWeekName() {
+  const weekNamesState = useWeekNames("user-1");
+  return React.createElement(AppHeader, {
+    ...baseProps,
+    weekStart: new Date(2026, 10, 16),
+    weekNamesState,
+  });
+}
 
-console.log("PASS: AppHeader supports week, month, and lonth view modes without lonth-nav-bar in header");
+let interactiveRenderer;
+await act(async () => {
+  interactiveRenderer = Renderer.create(React.createElement(HeaderWithWeekName));
+});
+
+const interactiveRoot = interactiveRenderer.root;
+const titleDateSpan = interactiveRoot.findByProps({ className: "app-title-date" });
+const initialButton = titleDateSpan.findByType("button");
+assert.ok(initialButton.props.className.includes("app-title-week-name"), "app-title-date should render editable week name button");
+assert.match(initialButton.props.children, /^สัปดาห์ที่ \d+ ของปี 2026$/);
+
+// Click to start editing
+await act(async () => {
+  initialButton.props.onClick({ stopPropagation: () => {} });
+});
+
+const editInput = titleDateSpan.findByType("input");
+assert.ok(editInput.props.className.includes("is-editing"), "Clicking week name should switch to editing input");
+
+await act(async () => {
+  editInput.props.onChange({ target: { value: "สัปดาห์เร่งปิดโปรเจกต์" } });
+});
+await act(async () => {
+  editInput.props.onBlur();
+});
+
+const updatedButton = titleDateSpan.findByType("button");
+assert.equal(updatedButton.props.children, "สัปดาห์เร่งปิดโปรเจกต์", "Committed week name should display in app-title-date");
+assert.equal(JSON.parse(storage.get("times-activity-week-names:user-1"))["2026-11-16"], "สัปดาห์เร่งปิดโปรเจกต์");
+
+// Click again to verify it can be renamed repeatedly at any time
+await act(async () => {
+  updatedButton.props.onClick({ stopPropagation: () => {} });
+});
+const secondInput = titleDateSpan.findByType("input");
+await act(async () => {
+  secondInput.props.onChange({ target: { value: "สัปดาห์พักผ่อน" } });
+});
+await act(async () => {
+  secondInput.props.onBlur();
+});
+assert.equal(titleDateSpan.findByType("button").props.children, "สัปดาห์พักผ่อน", "Should allow renaming week name again anytime");
+
+console.log("PASS: AppHeader supports week, month, lonth view modes and editable week name in app-title-date");
