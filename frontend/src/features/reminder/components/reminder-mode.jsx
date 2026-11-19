@@ -49,6 +49,7 @@ export default function ReminderDashboard({
   onEditActivity,
   onToggleActivityLock,
   timelineColors,
+  nowIndicatorResetSeconds = 3,
   telegramIntegration,
   telegramChat
 }) {
@@ -109,6 +110,7 @@ export default function ReminderDashboard({
     userId: firebaseUser?.uid, calendarAccessToken, selectedDateKey,
     enabled: isVisible, activityRevision: activities, archivedActivityIds, onReauthRequired
   });
+  const timelineActivities = reminderCalendar.loaded ? reminderCalendar.activities : activities;
 
   // ฟอร์มสร้างกลุ่มใหม่แบบ inline ใน nav sidebar — เปิด/ปิดด้วยปุ่ม "+
   // เพิ่มกลุ่มใหม่" เก็บแค่ชื่อ (สีสุ่ม/วนจาก GROUP_COLOR_PALETTE อัตโนมัติ
@@ -142,12 +144,13 @@ export default function ReminderDashboard({
     timelineTrackMinWidth, calendarTimelineBlocks, runningReminderSpans,
     activityNowStatus, handleUserInteraction, focusReminderOnTimeline, SPACER_HEIGHT_PX
   } = useReminderTimeline({
-    reminders: remindersForTimeline, activities: reminderCalendar.activities, categories, activityCategoryMap, selectedDate, selectedDateKey,
+    reminders: remindersForTimeline, activities: timelineActivities, categories, activityCategoryMap, selectedDate, selectedDateKey,
     activeTypeFilter, activeGroupFilter, nowTick,
-    defaultLineColor: DEFAULT_LINE_COLOR, formatDurationClock
+    defaultLineColor: DEFAULT_LINE_COLOR, formatDurationClock,
+    nowIndicatorResetSeconds
   });
   const { isExporting, exportTimelineImage } = useReminderExport({
-    getExportReminders, selectedDate, activities: reminderCalendar.activities, categories, activityCategoryMap,
+    getExportReminders, selectedDate, activities: timelineActivities, categories, activityCategoryMap,
     groups, activeTypeFilter, activeGroupFilter
   });
 

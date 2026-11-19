@@ -17,7 +17,7 @@ function getReminderTimeSlots(reminder, dateMs) {
 export function useReminderTimeline({
   reminders, activities, categories, activityCategoryMap,
   selectedDate, selectedDateKey, activeTypeFilter, activeGroupFilter,
-  nowTick, defaultLineColor, formatDurationClock
+  nowTick, defaultLineColor, formatDurationClock, nowIndicatorResetSeconds = 3
 }) {
   const DEFAULT_LINE_COLOR = defaultLineColor;
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
@@ -25,6 +25,9 @@ export function useReminderTimeline({
   const isUserInteractingRef = useRef(false);
   const idleTimeoutRef = useRef(null);
   const hasSnappedInitiallyRef = useRef(false); // true = เคย sync ตำแหน่งกับเวลาจริงแล้ว รอบต่อไปให้ไหลต่อเนื่อง ไม่สแนปซ้ำ
+  const resetDelayMsRef = useRef(3000);
+  const normalizedResetSeconds = Number(nowIndicatorResetSeconds);
+  resetDelayMsRef.current = (Number.isFinite(normalizedResetSeconds) && normalizedResetSeconds >= 1 ? normalizedResetSeconds : 3) * 1000;
 
   const minutesPerRow = ZOOM_LEVELS_MINUTES[zoomIndex];
   const totalRows = 1440 / minutesPerRow;
@@ -303,13 +306,13 @@ export function useReminderTimeline({
       clearTimeout(idleTimeoutRef.current);
     }
 
-    // ตั้งเวลาถอยหลัง (Idle Timeout) 3 วินาที นับจากขยับครั้งสุดท้าย ตามที่ระบุในขั้นตอนวิธีแก้ไขปัญหา
+    // ตั้งเวลาถอยหลัง (Idle Timeout) ตามค่าที่ตั้งไว้ นับจากขยับครั้งสุดท้าย
     idleTimeoutRef.current = setTimeout(() => {
       isUserInteractingRef.current = false;
       // รีเซ็ตให้ rAF loop sync ตำแหน่งกับเวลาจริงอีกครั้งหนึ่งครั้งก่อน (กันคลาดเคลื่อนจากตอนลาก)
       // แล้วค่อยกลับไปไหลต่อเนื่องด้วยความเร็วคงที่ตามปกติ ไม่ใช่กระโดดดีดทุกครั้งที่ปล่อยมือ
       hasSnappedInitiallyRef.current = false;
-    }, 3000);
+    }, resetDelayMsRef.current);
   };
 
   // พา slot ของ reminder มาทับตำแหน่งกลาง viewport ซึ่งเป็นตำแหน่งเดียวกับ

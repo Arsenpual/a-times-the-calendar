@@ -135,6 +135,7 @@ export default function AccountApp({ auth }) {
   const [navigationExpanded, setNavigationExpanded] = useState(() => window.matchMedia("(min-width: 761px)").matches);
   const {
     reminderTimelineColors, setReminderTimelineColors,
+    nowIndicatorResetSeconds, setNowIndicatorResetSeconds,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   } = useDisplayPreferences();
   const nav = useWeekNavigation({ mode, userId: firebaseUser?.uid ?? null });
@@ -537,6 +538,7 @@ export default function AccountApp({ auth }) {
               onEditActivity={openEditActivity}
               onToggleActivityLock={handleToggleLock}
               timelineColors={reminderTimelineColors}
+              nowIndicatorResetSeconds={nowIndicatorResetSeconds}
               telegramIntegration={telegramIntegration}
               telegramChat={telegramChat}
             />
@@ -749,6 +751,8 @@ export default function AccountApp({ auth }) {
         onClose={() => setSettingsOpen(false)}
         reminderTimelineColors={reminderTimelineColors}
         onReminderTimelineColorsChange={setReminderTimelineColors}
+        nowIndicatorResetSeconds={nowIndicatorResetSeconds}
+        onNowIndicatorResetSecondsChange={setNowIndicatorResetSeconds}
         summaryPanelGlassEnabled={summaryPanelGlassEnabled}
         onSummaryPanelGlassChange={setSummaryPanelGlassEnabled}
         assistantPreferences={assistantPreferences.values}

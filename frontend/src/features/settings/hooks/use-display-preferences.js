@@ -6,6 +6,27 @@ const REMINDER_TIMELINE_COLORS_STORAGE_KEY = "reminder-timeline-colors";
 const DEFAULT_REMINDER_TIMELINE_COLORS = {
   nowIndicator: "#ea4335"
 };
+const NOW_INDICATOR_RESET_SECONDS_KEY = "reminder-now-indicator-reset-seconds";
+export const DEFAULT_NOW_INDICATOR_RESET_SECONDS = 3;
+export const MIN_NOW_INDICATOR_RESET_SECONDS = 1;
+export const MAX_NOW_INDICATOR_RESET_SECONDS = 120;
+
+export function normalizeNowIndicatorResetSeconds(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < MIN_NOW_INDICATOR_RESET_SECONDS) {
+    return DEFAULT_NOW_INDICATOR_RESET_SECONDS;
+  }
+  return Math.min(MAX_NOW_INDICATOR_RESET_SECONDS, Math.round(numeric));
+}
+
+function loadNowIndicatorResetSeconds() {
+  try {
+    const saved = window.localStorage.getItem(NOW_INDICATOR_RESET_SECONDS_KEY);
+    return saved === null ? DEFAULT_NOW_INDICATOR_RESET_SECONDS : normalizeNowIndicatorResetSeconds(saved);
+  } catch {
+    return DEFAULT_NOW_INDICATOR_RESET_SECONDS;
+  }
+}
 
 function loadReminderTimelineColors() {
   try {
@@ -56,8 +77,20 @@ export function useDisplayPreferences() {
     });
   }, []);
 
+  const [nowIndicatorResetSeconds, setNowIndicatorResetSecondsState] = useState(loadNowIndicatorResetSeconds);
+  const setNowIndicatorResetSeconds = useCallback((value) => {
+    const next = normalizeNowIndicatorResetSeconds(value);
+    setNowIndicatorResetSecondsState(next);
+    try {
+      window.localStorage.setItem(NOW_INDICATOR_RESET_SECONDS_KEY, String(next));
+    } catch {
+      // localStorage ไม่พร้อมใช้: เปลี่ยนเวลา reset ใน session ปัจจุบันได้ตามปกติ
+    }
+  }, []);
+
   return {
     reminderTimelineColors, setReminderTimelineColors,
+    nowIndicatorResetSeconds, setNowIndicatorResetSeconds,
     summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
   };
 }

@@ -4,6 +4,12 @@ import DataLabInsights from "./data-lab-insights.jsx";
 import React, { useEffect, useState } from "react";
 import { useLanguage, SUPPORTED_LANGUAGES } from "../../../shared/i18n/i18n.jsx";
 import { ASSISTANT_PREFERENCE_FIELDS } from "../../activity/assistant/hooks/use-assistant-preferences.js";
+import {
+  DEFAULT_NOW_INDICATOR_RESET_SECONDS,
+  MAX_NOW_INDICATOR_RESET_SECONDS,
+  MIN_NOW_INDICATOR_RESET_SECONDS,
+  normalizeNowIndicatorResetSeconds
+} from "../hooks/use-display-preferences.js";
 
 function AssistantPreferenceRow({ field, item, onSave, onDelete }) {
   const [draft, setDraft] = useState(item?.value ?? "");
@@ -72,6 +78,8 @@ export default function SettingsDrawer({
   firestoreQuotaTestActive,
   reminderTimelineColors,
   onReminderTimelineColorsChange,
+  nowIndicatorResetSeconds = DEFAULT_NOW_INDICATOR_RESET_SECONDS,
+  onNowIndicatorResetSecondsChange,
   summaryPanelGlassEnabled = false,
   onSummaryPanelGlassChange,
   assistantPreferences = {},
@@ -86,6 +94,8 @@ export default function SettingsDrawer({
   onAssistantInsightChange
 }) {
   const { language, setLanguage, t } = useLanguage();
+  const [resetSecondsDraft, setResetSecondsDraft] = useState(String(nowIndicatorResetSeconds));
+  useEffect(() => { setResetSecondsDraft(String(nowIndicatorResetSeconds)); }, [nowIndicatorResetSeconds]);
   // Escape ปิด drawer ได้ — เหมือน pattern เดียวกับ ActivityModal
   useEffect(() => {
     if (!open) return;
@@ -182,7 +192,7 @@ export default function SettingsDrawer({
           </section>
 
           <section className="settings-section">
-            <h3 className="settings-section-title">สี Timeline Reminder</h3>
+            <h3 className="settings-section-title">Timeline Reminder</h3>
             <div className="settings-color-list">
               {[["nowIndicator", "เส้นเวลาปัจจุบัน", "เส้น now-indicator และข้อความสถานะกลาง Timeline"]].map(([key, title, description]) => (
                 <label className="settings-color-row" key={key}>
@@ -199,6 +209,38 @@ export default function SettingsDrawer({
                   />
                 </label>
               ))}
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <span className="settings-row-title">เวลา reset เส้น now-indicator</span>
+                <span className="settings-row-desc">หน่วงเวลาก่อนเลื่อนกลับตำแหน่งเวลาปัจจุบันหลังเลื่อนดู Timeline ({MIN_NOW_INDICATOR_RESET_SECONDS}–{MAX_NOW_INDICATOR_RESET_SECONDS} วินาที)</span>
+              </div>
+              <div className="settings-number-control">
+                <input
+                  type="number"
+                  className="settings-number-input"
+                  min={MIN_NOW_INDICATOR_RESET_SECONDS}
+                  max={MAX_NOW_INDICATOR_RESET_SECONDS}
+                  step="1"
+                  value={resetSecondsDraft}
+                  aria-label="เวลา reset เส้น now-indicator (วินาที)"
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setResetSecondsDraft(nextValue);
+                    if (nextValue === "") return;
+                    const parsed = Number(nextValue);
+                    if (Number.isFinite(parsed) && parsed >= MIN_NOW_INDICATOR_RESET_SECONDS) {
+                      onNowIndicatorResetSecondsChange?.(normalizeNowIndicatorResetSeconds(parsed));
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalized = normalizeNowIndicatorResetSeconds(resetSecondsDraft === "" ? nowIndicatorResetSeconds : resetSecondsDraft);
+                    setResetSecondsDraft(String(normalized));
+                    onNowIndicatorResetSecondsChange?.(normalized);
+                  }}
+                />
+                <span className="settings-number-unit">วินาที</span>
+              </div>
             </div>
           </section>
 

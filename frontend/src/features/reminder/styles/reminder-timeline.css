@@ -326,7 +326,6 @@
 
         .time-row.major-hour {
           border-bottom-color: var(--g-outline);
-          background-color: var(--g-major-hour-tint);
         }
 
         .time-label {

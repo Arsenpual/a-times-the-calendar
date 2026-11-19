@@ -34,8 +34,10 @@ export function useReminderCalendar({
   const activities = useMemo(() => source.filter(activity =>
     !archivedActivityIds.has(activity.id) && !archivedActivityIds.has(normalizeActivityId(activity.id))
   ), [source, archivedActivityIds]);
+  const loaded = active && result.scope === scope && !result.loading && !result.error;
   return {
     activities,
+    loaded,
     loading: active && (result.scope !== scope || result.loading),
     error: active && result.scope === scope ? result.error : ""
   };
