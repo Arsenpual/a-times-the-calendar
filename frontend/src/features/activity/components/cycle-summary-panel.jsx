@@ -48,11 +48,12 @@ function SlowOverflowText({ children }) {
   </strong>;
 }
 
-function CycleSummaryContent({ cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, decorative = false }) {
+function CycleSummaryContent({ cycle, cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay, decorative = false }) {
+  const lonthTitle = cycle?.lonthId ? `สรุป Lonth ${cycle.lonthId} · ${cycle.dayCount} วัน` : "สรุป Lonth · 4 สัปดาห์";
   return <>
-    <p className="summary-label">สรุป Cycle · 4 สัปดาห์</p>
+    <p className="summary-label">{lonthTitle}</p>
     <p className="cycle-summary-range">{formatCycleRange(cycleStart, cycleEnd)}</p>
-    {loading && <p className="summary-loading">กำลังคำนวณ Cycle...</p>}
+    {loading && <p className="summary-loading">กำลังคำนวณ Lonth...</p>}
     {error && <p className="summary-error">{error}</p>}
     {!loading && !error && <>
       <div className="cycle-summary-stats">
@@ -154,7 +155,7 @@ export default function CycleSummaryPanel({
 
   const summary = useMemo(() => calculateCycleSummary(cycle, activities, categories, activityCategoryMap), [cycle, activities, categories, activityCategoryMap]);
 
-  const content = { cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
+  const content = { cycle, cycleStart, cycleEnd, summary, loading, error, categories, onSelectWeek, onSelectDay };
   if (!glass) return <aside className="summary-panel cycle-summary-panel"><CycleSummaryContent {...content} /></aside>;
 
   return <div className="summary-panel-glass-stack">

@@ -25,7 +25,7 @@ export default function ActivitySummaryHero({ visibleStart, visibleEnd, activiti
   }, [activities, activityCategoryMap, visibleStart, visibleEnd]);
   return <section className={`activity-summary-hero${period === "cycle" ? " is-cycle" : ""}`} aria-label={period === "cycle" ? "สรุป Cycle" : "สรุป 7 วัน"} aria-busy={loading || undefined}>
     <div className="activity-summary-hero-header">{header}{weekName && <div className="activity-summary-week-info">{weekName}</div>}</div>
-    {period !== "cycle" && <div className="activity-summary-hero-main">
+    <div className="activity-summary-hero-main">
       <section className="weekly-overview" aria-label={period === "cycle" ? "ภาพรวม Cycle" : "ภาพรวมสัปดาห์"}>
         {loading ? <p role="status">กำลังโหลดกิจกรรม…</p> : error ? <p role="alert">{error}</p> : <>
           <div className="weekly-overview-content">
@@ -39,6 +39,6 @@ export default function ActivitySummaryHero({ visibleStart, visibleEnd, activiti
           </div>
         </>}
       </section>
-    </div>}
+    </div>
   </section>;
 }

@@ -11,7 +11,7 @@ import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
+import { getMonthCycle, getWeekRange, getYearCycle, toDateInputValue } from "../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../shared/lib/id-utils.js";
 import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
 import { assertWeatherDraftCurrent } from "../features/activity/assistant/lib/weather-slot-validation.js";
@@ -152,8 +152,13 @@ export default function AccountApp({ auth }) {
   const {
     weekSpineViewMode,
     cycleAnchorDate,
+    monthAnchorDate,
     setWeekSpineView,
     navigateCycle,
+    navigateMonth,
+    setMonthAnchorDate,
+    selectMonthDate,
+    selectCycleDate,
     openCycleWeekEditor,
     openCycleWeekView,
     selectCycleWeek,
@@ -166,11 +171,12 @@ export default function AccountApp({ auth }) {
   const cycleRange = getYearCycle(
     cycleAnchorDate
   );
+  const monthRange = getMonthCycle(monthAnchorDate);
   const cycleData = useCycleActivities({
     viewMode: mode === "activity" && firebaseUser ? weekSpineViewMode : "week",
     calendarAccessToken,
-    cycleStart: cycleRange.start,
-    cycleEnd: cycleRange.end,
+    cycleStart: weekSpineViewMode === "month" ? monthRange.gridStart : cycleRange.start,
+    cycleEnd: weekSpineViewMode === "month" ? monthRange.gridEnd : cycleRange.end,
     userId: firebaseUser?.uid,
     archivedActivityIds,
     includeWhenWeek: false
@@ -443,12 +449,21 @@ export default function AccountApp({ auth }) {
         aiHeaderRef={setAiHeaderTarget}
         mode={mode}
         setMode={setMode}
-        goToday={goToday}
+        goToday={() => {
+          goToday();
+          if (weekSpineViewMode === "month") {
+            const today = new Date();
+            setMonthAnchorDate(new Date(today.getFullYear(), today.getMonth(), 1));
+          }
+        }}
         navigateDay={navigateDay}
-        navigateWeek={navigateWeek}
+        navigateWeek={weekSpineViewMode === "month" ? navigateMonth : navigateWeek}
         activityHeaderTitle={activityHeaderTitle}
         weekSpineViewMode={weekSpineViewMode}
         setWeekSpineView={setWeekSpineView}
+        cycleAnchorDate={cycleAnchorDate}
+        onNavigateCycle={navigateCycle}
+        onSelectLonthDate={selectCycleDate}
         tagSearchTerms={tagSearchTerms}
         setTagSearchTerms={setTagSearchTerms}
         tagSearchDraft={tagSearchDraft}
@@ -558,7 +573,7 @@ export default function AccountApp({ auth }) {
             )}
 
             {firebaseUser && (
-              <div ref={activityDashboardRef} className={`dashboard activity-dashboard${weekSpineViewMode === "week" && !isSearchingTags ? " has-summary-hero" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
+              <div ref={activityDashboardRef} className={`dashboard activity-dashboard${(weekSpineViewMode === "week" || weekSpineViewMode === "four-weeks" || weekSpineViewMode === "month") && !isSearchingTags ? " has-summary-hero" : ""}${assistantDailySummary.open ? " is-assistant-daily-summary" : ""}`} onScroll={handleActivityDashboardScroll}>
                 {isSearchingTags ? (
                   <TagSearchResults
                     activities={visibleActivities}
@@ -610,9 +625,13 @@ export default function AccountApp({ auth }) {
                     viewMode={weekSpineViewMode}
                     weekRangeOverride={weekRangeOverride}
                     cycleStartDate={cycleAnchorDate}
+                    monthAnchorDate={monthAnchorDate}
                     onSelectOverviewWeek={selectCycleWeek}
                     onSelectOverviewDay={focusDate}
                     onNavigateCycle={navigateCycle}
+                    onNavigateMonth={navigateMonth}
+                    onSelectLonthDate={selectCycleDate}
+                    onSelectMonthDate={selectMonthDate}
                     onOpenOverviewWeekEditor={openCycleWeekEditor}
                     onOpenOverviewWeekView={openCycleWeekView}
                     onFocusOverviewSummary={focusCycleSummary}

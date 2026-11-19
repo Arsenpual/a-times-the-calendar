@@ -198,35 +198,222 @@ export function totalWeeksInYear(year) {
   return getYearWeekBlock(new Date(year, 11, 31)).total;
 }
 
-/**
- * Returns the fixed four-week Cycle that contains `date`.
- *
- * Cycles group four canonical Activity Week blocks. The first/last Cycle may
- * contain a partial boundary week, but never include days from another year.
- */
-export function getYearCycle(date, cycleWeeks = 4) {
-  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
-  const activeWeek = getYearWeekBlock(safeDate);
-  const cycleIndex = Math.floor(activeWeek.index / cycleWeeks);
-  const firstWeekIndex = cycleIndex * cycleWeeks;
-  const weekCount = Math.min(cycleWeeks, activeWeek.total - firstWeekIndex);
-  const weeks = Array.from({ length: weekCount }, (_, offset) => {
-    const dateInWeek = new Date(activeWeek.year, 0, 1);
-    dateInWeek.setDate(dateInWeek.getDate() + (firstWeekIndex + offset) * 7);
-    return getYearWeekBlock(dateInWeek);
+export function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+}
+
+export function getDaysInYear(year) {
+  return isLeapYear(year) ? 366 : 365;
+}
+
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function addDaysToDate(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function diffInDays(start, end) {
+  const msPerDay = 86_400_000;
+  const utcStart = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const utcEnd = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.round((utcEnd - utcStart) / msPerDay) + 1;
+}
+
+function buildLonthWeeks(startDate, endDate) {
+  const weeks = [];
+  let currentStart = new Date(startDate);
+  while (currentStart <= endDate) {
+    const dayOfWeek = currentStart.getDay();
+    const daysUntilSaturday = 6 - dayOfWeek;
+    let currentEnd = addDaysToDate(currentStart, daysUntilSaturday);
+    if (currentEnd > endDate) currentEnd = new Date(endDate);
+
+    const days = [];
+    let cur = new Date(currentStart);
+    while (cur <= currentEnd) {
+      days.push(new Date(cur));
+      cur = addDaysToDate(cur, 1);
+    }
+    weeks.push({
+      start: startOfDay(currentStart),
+      end: endOfDay(currentEnd),
+      startDate: startOfDay(currentStart),
+      endDate: endOfDay(currentEnd),
+      dayCount: days.length,
+      days
+    });
+    currentStart = addDaysToDate(currentEnd, 1);
+  }
+  return weeks;
+}
+
+export function buildYearLonths(year) {
+  const jan1 = new Date(year, 0, 1);
+  const dec31 = new Date(year, 11, 31);
+  const jan1Day = jan1.getDay();
+  const daysToFirstSaturday = (6 - jan1Day + 7) % 7;
+  const firstSaturday = addDaysToDate(jan1, daysToFirstSaturday);
+  const l01End = addDaysToDate(firstSaturday, 21);
+  const lonths = [];
+
+  const l01Start = startOfDay(jan1);
+  const l01EndDay = endOfDay(l01End);
+  lonths.push({
+    id: "L01",
+    index: 1,
+    year,
+    startDate: l01Start,
+    endDate: l01EndDay,
+    dayCount: diffInDays(l01Start, l01EndDay),
+    isStandard28: diffInDays(l01Start, l01EndDay) === 28,
+    weeks: buildLonthWeeks(l01Start, l01EndDay)
   });
-  const start = new Date(weeks[0].start);
-  const end = new Date(weeks.at(-1).end);
+
+  let currentStart = addDaysToDate(l01End, 1);
+  for (let i = 2; i <= 13; i++) {
+    const padIndex = String(i).padStart(2, "0");
+    const id = `L${padIndex}`;
+    const blockStart = startOfDay(currentStart);
+    const blockEnd = endOfDay(addDaysToDate(currentStart, 27));
+    lonths.push({
+      id,
+      index: i,
+      year,
+      startDate: blockStart,
+      endDate: blockEnd,
+      dayCount: 28,
+      isStandard28: true,
+      weeks: buildLonthWeeks(blockStart, blockEnd)
+    });
+    currentStart = addDaysToDate(currentStart, 28);
+  }
+
+  const l14Start = startOfDay(currentStart);
+  const l14End = endOfDay(dec31);
+  lonths.push({
+    id: "L14",
+    index: 14,
+    year,
+    startDate: l14Start,
+    endDate: l14End,
+    dayCount: diffInDays(l14Start, l14End),
+    isStandard28: diffInDays(l14Start, l14End) === 28,
+    weeks: buildLonthWeeks(l14Start, l14End)
+  });
+  return lonths;
+}
+
+const yearLonthsCache = new Map();
+
+export function getCachedYearLonths(year) {
+  if (!yearLonthsCache.has(year)) {
+    yearLonthsCache.set(year, buildYearLonths(year));
+  }
+  return yearLonthsCache.get(year);
+}
+
+export function findLonthByDate(date) {
+  const target = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const year = target.getFullYear();
+  const lonths = getCachedYearLonths(year);
+  const targetDay = startOfDay(target).getTime();
+  for (const lonth of lonths) {
+    const start = startOfDay(lonth.startDate).getTime();
+    const end = startOfDay(lonth.endDate).getTime();
+    if (targetDay >= start && targetDay <= end) {
+      const dayIndex = diffInDays(lonth.startDate, target);
+      return { ...lonth, dayIndex };
+    }
+  }
+  return targetDay < startOfDay(lonths[0].startDate).getTime()
+    ? { ...lonths[0], dayIndex: 1 }
+    : { ...lonths[13], dayIndex: lonths[13].dayCount };
+}
+
+export function getLonthById(year, lonthId) {
+  const lonths = getCachedYearLonths(year);
+  return lonths.find((item) => item.id === lonthId) || lonths[0];
+}
+
+export function getAdjacentLonth(year, lonthId, delta) {
+  const lonths = getCachedYearLonths(year);
+  const currentIndex = lonths.findIndex((l) => l.id === lonthId);
+  const nextRawIndex = (currentIndex === -1 ? 0 : currentIndex) + delta;
+
+  if (nextRawIndex < 0) {
+    const prevYear = year - 1;
+    const prevLonths = getCachedYearLonths(prevYear);
+    return { year: prevYear, lonthId: "L14", lonth: prevLonths[13] };
+  }
+  if (nextRawIndex >= 14) {
+    const nextYear = year + 1;
+    const nextLonths = getCachedYearLonths(nextYear);
+    return { year: nextYear, lonthId: "L01", lonth: nextLonths[0] };
+  }
+  const targetLonth = lonths[nextRawIndex];
+  return { year, lonthId: targetLonth.id, lonth: targetLonth };
+}
+
+export function formatLonthRange(lonth, lang = DEFAULT_LANGUAGE) {
+  const shortMonths = MONTHS_SHORT[lang] || MONTHS_SHORT.th;
+  const startMonth = shortMonths[lonth.startDate.getMonth()];
+  const endMonth = shortMonths[lonth.endDate.getMonth()];
+  const startDay = lonth.startDate.getDate();
+  const endDay = lonth.endDate.getDate();
+  if (startMonth === endMonth) {
+    return `${startDay}–${endDay} ${startMonth}`;
+  }
+  return `${startDay} ${startMonth} – ${endDay} ${endMonth}`;
+}
+
+/**
+ * Returns the 14-Lonth block containing `date` according to TIMES-CAL-001.
+ *
+ * Each year has exactly 14 Lonths (L01–L14):
+ * - L01: Jan 1 to first Sat + 21 days
+ * - L02–L13: 12 blocks of exactly 28 days (4 standard Sunday–Saturday weeks) = 336 days
+ * - L14: remaining days through Dec 31
+ */
+export function getYearLonth(date) {
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const lonth = findLonthByDate(safeDate);
+  const weeks = lonth.weeks.map((w) => ({
+    start: w.startDate,
+    end: w.endDate,
+    dayCount: w.dayCount,
+    days: w.days
+  }));
   return {
-    year: activeWeek.year,
-    start,
-    end,
-    weekCount,
+    id: lonth.id,
+    lonthId: lonth.id,
+    lonthNumber: lonth.index,
+    totalLonths: 14,
+    year: lonth.year,
+    start: lonth.startDate,
+    end: lonth.endDate,
+    dayCount: lonth.dayCount,
+    isStandard28: lonth.isStandard28,
     weeks,
-    cycleNumber: cycleIndex + 1,
-    totalCycles: Math.ceil(activeWeek.total / cycleWeeks)
+    weekCount: weeks.length,
+    // Backward-compatibility:
+    cycleNumber: lonth.index,
+    totalCycles: 14
   };
 }
+
+export const getYearCycle = getYearLonth;
 
 /** e.g. "26 กรกฎาคม สัปดาห์ที่ 31/52 ของปี" (th) or "26 July, week 31/52 of the year" (en) — the first day of the week containing `date`. */
 export function formatWeekLabel(date, lang = DEFAULT_LANGUAGE) {
@@ -255,4 +442,35 @@ export function formatFocusedDayLabel(date, lang = DEFAULT_LANGUAGE) {
     return `${date.getDate()} ${monthName} สัปดาห์ที่ ${weekOfYear(date)}/${total} ของปี`;
   }
   return `${date.getDate()} ${monthName}, week ${weekOfYear(date)}/${total} of the year`;
+}
+
+/** Standard Gregorian month range and Sunday-first week rows for Month view. */
+export function getMonthCycle(date) {
+  const anchor = new Date(date);
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  const [gridStart] = getWeekRange(monthStart);
+  const [, gridEnd] = getWeekRange(monthEnd);
+  const weeks = [];
+  const cursor = new Date(gridStart);
+  while (cursor <= gridEnd) {
+    const start = new Date(cursor);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    weeks.push({ start, end });
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return {
+    start: monthStart,
+    end: monthEnd,
+    gridStart,
+    gridEnd,
+    year,
+    month,
+    weeks
+  };
 }

@@ -4,7 +4,7 @@ import { formatWeekLabel, getYearCycle, getYearWeekRange } from "../../../shared
 function formatCycleLabel(date) {
   const cycle = getYearCycle(date);
   const dateLabel = cycle.start.toLocaleDateString("th-TH", { day: "numeric", month: "long" });
-  return `${dateLabel} cycle ที่ ${cycle.cycleNumber}/${cycle.totalCycles} ของปี`;
+  return `${dateLabel} Lonth ${cycle.lonthId || "L01"} (${cycle.cycleNumber}/${cycle.totalCycles}) ของปี`;
 }
 
 /** Coordinates Activity views. cursorDate remains owned by week navigation.
@@ -16,17 +16,23 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
   // This deliberately stays separate from cursorDate. In Cycle view, users
   // may inspect any of its four weeks without moving the visible Cycle.
   const [cycleAnchorDate, setCycleAnchorDate] = useState(() => new Date());
+  const [monthAnchorDate, setMonthAnchorDate] = useState(() => new Date());
   const [summaryPanelMode, setSummaryPanelMode] = useState("week");
   // Reset account-scoped view state before rendering children.
   if (ownerId !== userId) {
     setOwnerId(userId);
     setWeekSpineViewMode("week");
     setCycleAnchorDate(new Date());
+    setMonthAnchorDate(new Date());
     setSummaryPanelMode("week");
   }
   const setWeekSpineView = useCallback((nextView) => {
     if (nextView === "four-weeks") {
       setCycleAnchorDate(getYearCycle(cursorDate).start);
+      setSummaryPanelMode("cycle");
+    }
+    if (nextView === "month") {
+      setMonthAnchorDate(new Date(cursorDate.getFullYear(), cursorDate.getMonth(), 1));
       setSummaryPanelMode("cycle");
     }
     if (nextView === "week") setSummaryPanelMode("week");
@@ -42,6 +48,16 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
     // inside the Cycle; returning to 7-day view then restores that focus.
     setCycleAnchorDate(nextCycle.start);
   }, [cycleAnchorDate]);
+  const navigateMonth = useCallback((direction) => {
+    setMonthAnchorDate((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
+  }, []);
+  const selectMonthDate = useCallback((date) => {
+    setMonthAnchorDate(new Date(date.getFullYear(), date.getMonth(), 1));
+  }, []);
+  const selectCycleDate = useCallback((date) => {
+    const nextCycle = getYearCycle(date);
+    setCycleAnchorDate(nextCycle.start);
+  }, []);
   const openCycleWeekEditor = useCallback((date, range = null) => {
     selectWeek(date, range);
     setSummaryPanelMode("week");
@@ -70,9 +86,16 @@ export function useActivityView({ cursorDate, selectWeek, closeDay, userId = nul
   const headerDate = weekSpineViewMode === "four-weeks"
     ? getYearCycle(cycleAnchorDate).start
     : getYearWeekRange(cursorDate)[0];
-  const activityHeaderTitle = {
-    date: headerDate.toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }),
-    period: headerLabel.slice(headerLabel.indexOf(weekSpineViewMode === "four-weeks" ? "cycle ที่" : "สัปดาห์ที่")),
-  };
-  return { weekSpineViewMode, cycleAnchorDate, summaryPanelMode, setWeekSpineView, navigateCycle, openCycleWeekEditor, openCycleWeekView, selectCycleWeek, focusCycleSummary, focusWeeklySummary, activityHeaderTitle };
+  const activityHeaderTitle = weekSpineViewMode === "month"
+    ? {
+        date: monthAnchorDate.toLocaleDateString("th-TH-u-ca-gregory", { month: "long", year: "numeric" }),
+        period: "รายเดือน",
+      }
+    : {
+        date: headerDate.toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }),
+        period: weekSpineViewMode === "four-weeks"
+          ? `Lonth ${getYearCycle(cycleAnchorDate).lonthId || "L01"} (${getYearCycle(cycleAnchorDate).cycleNumber}/14)`
+          : headerLabel.slice(headerLabel.indexOf("สัปดาห์ที่")),
+      };
+  return { weekSpineViewMode, cycleAnchorDate, monthAnchorDate, summaryPanelMode, setWeekSpineView, navigateCycle, navigateMonth, setMonthAnchorDate, selectMonthDate, selectCycleDate, openCycleWeekEditor, openCycleWeekView, selectCycleWeek, focusCycleSummary, focusWeeklySummary, activityHeaderTitle };
 }

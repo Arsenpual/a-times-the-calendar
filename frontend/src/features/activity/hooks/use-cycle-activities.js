@@ -13,7 +13,7 @@ export function useCycleActivities({
 }) {
   const startMs = cycleStart.getTime();
   const endMs = cycleEnd.getTime();
-  const enabled = (viewMode === "four-weeks" || includeWhenWeek) && Boolean(calendarAccessToken);
+  const enabled = (viewMode === "four-weeks" || viewMode === "month" || includeWhenWeek) && Boolean(calendarAccessToken);
   const scope = JSON.stringify([userId || "", calendarAccessToken, startMs, endMs, enabled]);
   const [snapshot, setSnapshot] = useState({ scope: null, activities: EMPTY_ACTIVITIES, loading: false, error: "" });
 

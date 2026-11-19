@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { formatTime, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
+import { formatTime, getMonthCycle, getWeekRange, getYearWeekRange, getYearCycle, isSameDay, weekdayShortLabels } from "../../../shared/lib/date-utils.js";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
@@ -14,6 +14,8 @@ import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
 import { useWeekNames } from "../hooks/use-week-names.js";
 import WeekNameField from "./week-name-field.jsx";
 import FourWeekOverview from "./four-week-overview.jsx";
+import LonthNavBar from "./lonth-nav-bar.jsx";
+import MonthNavBar from "./month-nav-bar.jsx";
 import { useWeekSpineSelection } from "../hooks/use-week-spine-selection.js";
 import { useWeekSpineUiState } from "../hooks/use-week-spine-ui-state.js";
 
@@ -88,9 +90,13 @@ function WeekSpineContent({
   viewMode = "week",
   weekRangeOverride,
   cycleStartDate,
+  monthAnchorDate,
   onSelectOverviewWeek,
   onSelectOverviewDay,
   onNavigateCycle,
+  onNavigateMonth,
+  onSelectLonthDate,
+  onSelectMonthDate,
   onOpenOverviewWeekEditor,
   onOpenOverviewWeekView,
   onFocusOverviewSummary,
@@ -106,6 +112,7 @@ function WeekSpineContent({
   const visibleWeekStart = weekStart < visibleYearStart ? visibleYearStart : weekStart;
   const visibleWeekEnd = weekEnd > visibleYearEnd ? visibleYearEnd : weekEnd;
   const cycle = getYearCycle(cycleStartDate || anchorDate);
+  const monthCycle = useMemo(() => getMonthCycle(monthAnchorDate || anchorDate), [monthAnchorDate, anchorDate]);
   const {
     selectedDay,
     selectDay,
@@ -242,7 +249,7 @@ function WeekSpineContent({
     // Background clicks are a lightweight way back to the relevant summary.
     // Do not steal the click from any timeline editing/control surface.
     if (!isSummaryBackgroundTarget(target)) return;
-    if (viewMode === "four-weeks") onFocusOverviewSummary?.();
+    if (viewMode === "four-weeks" || viewMode === "month") onFocusOverviewSummary?.();
     else onFocusWeekSummary?.();
   };
 
@@ -285,12 +292,56 @@ function WeekSpineContent({
       {viewMode === "week" && <ActivitySummaryHero header={summaryHeader} days={weekDays} visibleStart={visibleWeekStart} visibleEnd={visibleWeekEnd} activities={summaryActivities} categories={categories} activityCategoryMap={activityCategoryMap} loading={activitiesLoading} weekName={<aside className="week-spine-week-glance-demo" aria-label="ชื่อสัปดาห์">
           <WeekNameField className="week-spine-week-name" weekStart={visibleWeekStart} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditing={startEditingWeekName} onDraftChange={setWeekNameDraft} onCommit={commitWeekName} onCancel={cancelWeekNameEdit} />
         </aside>} />}
-      {viewMode === "four-weeks" && <ActivitySummaryHero period="cycle" header={summaryHeader} visibleStart={cycle.start} visibleEnd={cycle.end} activities={fourWeekActivities} activityCategoryMap={activityCategoryMap} loading={fourWeekLoading} error={fourWeekError} />}
+      {(viewMode === "four-weeks" || viewMode === "month") && <ActivitySummaryHero period="cycle" header={summaryHeader} visibleStart={viewMode === "month" ? monthCycle.start : cycle.start} visibleEnd={viewMode === "month" ? monthCycle.end : cycle.end} activities={fourWeekActivities} activityCategoryMap={activityCategoryMap} loading={fourWeekLoading} error={fourWeekError} />}
       <section className={`week-spine${isSummaryTargetHovered ? " is-summary-target-hovered" : ""}`} aria-label="Activity Week Spine" onClick={focusSummaryFromWeekSpine} onPointerMove={updateSummaryHover} onPointerLeave={() => setIsSummaryTargetHovered(false)}>
-        {viewMode === "four-weeks" ? (
-          fourWeekLoading ? <p className="week-spine-overview-state">กำลังโหลดกิจกรรม 4 สัปดาห์…</p>
-            : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
-              : <FourWeekOverview weeks={cycle.weeks} cycleStart={cycle.start} cycleEnd={cycle.end} focusedWeekDate={anchorDate} activities={fourWeekActivities} categories={categories} activityCategoryMap={activityCategoryMap} lockedActivities={lockedActivities} weekNames={customWeekNames} editingWeekKey={editingWeekNameKey} weekNameDraft={weekNameDraft} onStartEditingWeekName={startEditingWeekName} onWeekNameDraftChange={setWeekNameDraft} onCommitWeekName={commitWeekName} onCancelWeekName={cancelWeekNameEdit} language={language} onSelectWeek={onSelectOverviewWeek} onSelectDay={onSelectOverviewDay} onNavigateCycle={onNavigateCycle} onOpenWeekEditor={onOpenOverviewWeekEditor} onOpenWeekView={onOpenOverviewWeekView} />
+        {viewMode === "four-weeks" || viewMode === "month" ? (
+          <>
+            {fourWeekLoading ? <p className="week-spine-overview-state">{viewMode === "month" ? "กำลังโหลดกิจกรรมรายเดือน…" : "กำลังโหลดกิจกรรม 4 สัปดาห์…"}</p>
+              : fourWeekError ? <p className="week-spine-overview-state is-error">{fourWeekError}</p>
+                : <FourWeekOverview
+                    calendarMode={viewMode === "month" ? "month" : "lonth"}
+                    weeks={viewMode === "month" ? monthCycle.weeks : cycle.weeks}
+                    cycleStart={viewMode === "month" ? monthCycle.start : cycle.start}
+                    cycleEnd={viewMode === "month" ? monthCycle.end : cycle.end}
+                    focusedWeekDate={anchorDate}
+                    activities={fourWeekActivities}
+                    categories={categories}
+                    activityCategoryMap={activityCategoryMap}
+                    lockedActivities={lockedActivities}
+                    weekNames={customWeekNames}
+                    editingWeekKey={editingWeekNameKey}
+                    weekNameDraft={weekNameDraft}
+                    onStartEditingWeekName={startEditingWeekName}
+                    onWeekNameDraftChange={setWeekNameDraft}
+                    onCommitWeekName={commitWeekName}
+                    onCancelWeekName={cancelWeekNameEdit}
+                    language={language}
+                    onSelectWeek={onSelectOverviewWeek}
+                    onSelectDay={onSelectOverviewDay}
+                    onNavigateCycle={viewMode === "month" ? onNavigateMonth : onNavigateCycle}
+                    onSelectLonthDate={onSelectLonthDate}
+                    onOpenWeekEditor={onOpenOverviewWeekEditor}
+                    onOpenWeekView={onOpenOverviewWeekView}
+                    onEditActivity={onEditActivity}
+                    onAddActivity={onAddActivity}
+                  />}
+            {viewMode === "four-weeks" && (
+              <LonthNavBar
+                activeDate={cycleStartDate || anchorDate}
+                onNavigate={onNavigateCycle}
+                onSelectDate={onSelectLonthDate}
+                language={language}
+              />
+            )}
+            {viewMode === "month" && (
+              <MonthNavBar
+                activeDate={monthAnchorDate || anchorDate}
+                onNavigate={onNavigateMonth}
+                onSelectDate={onSelectMonthDate}
+                language={language}
+              />
+            )}
+          </>
         ) : <>
         <section ref={timelineRef} className={`week-spine-timeline-surface${timelineFullscreen ? " is-fullscreen" : ""}`} aria-label="ปฏิทิน 7 วัน" tabIndex={0}>
         <PlannerGuideBridges draft={timeChanges.dragPreview} />
@@ -405,7 +456,7 @@ function WeekSpineContent({
         </section>
       </>}
       </section>
-      {viewMode !== "four-weeks" && <>
+      {viewMode !== "four-weeks" && viewMode !== "month" && <>
       <section className="activity-archive" aria-label="คลังกิจกรรม">
         <div className="activity-archive-heading"><h3>คลังกิจกรรม</h3><span>{activityArchive.length} รายการ</span><button type="button" className="activity-archive-add" onClick={addArchiveDraft}>+ เพิ่มกิจกรรม</button></div>
         {activityArchive.length === 0 ? <p>ยังไม่มีกิจกรรมที่เก็บไว้</p> : (

@@ -14,6 +14,10 @@ export default function AppHeader({
   activityHeaderTitle,
   weekSpineViewMode,
   setWeekSpineView,
+  cycleAnchorDate,
+  onNavigateCycle,
+  onSelectLonthDate,
+  language = "th",
   tagSearchTerms,
   setTagSearchTerms,
   tagSearchDraft,
@@ -27,10 +31,12 @@ export default function AppHeader({
   setSettingsOpen,
   handleLogout,
 }) {
+  const isLonthView = mode === "activity" && (weekSpineViewMode === "four-weeks" || weekSpineViewMode === "lonth");
+  const isCompactCalendarHeader = isLonthView || (mode === "activity" && weekSpineViewMode === "month");
   return (
     <>
 {firebaseUser && (
-        <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}${mode === "ai" ? " app-header--ai" : ""}`}>
+        <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}${mode === "ai" ? " app-header--ai" : ""}${isCompactCalendarHeader ? " app-header--lonth" : ""}`}>
           <div className="app-header-left">
             <button id="app-navigation-toggle" className="btn-icon app-navigation-toggle" type="button" onClick={onToggleNavigation} aria-label={navigationExpanded ? "ซ่อนเมนูฟีเจอร์" : "เปิดเมนูฟีเจอร์"} aria-expanded={Boolean(navigationExpanded)} aria-controls="app-taskbar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -39,9 +45,11 @@ export default function AppHeader({
             {mode === "reminder" && <span className="header-feature-title">Reminder</span>}
             {mode === "activity" && (
               <div className="header-calendar-tools">
-                <button className="btn btn-outline" onClick={goToday}>
-                  วันนี้
-                </button>
+                {!isCompactCalendarHeader && (
+                  <button className="btn btn-outline" onClick={goToday}>
+                    วันนี้
+                  </button>
+                )}
                 <div className="calendar-nav-pad" role="group" aria-label="ปุ่มนำทางปฏิทิน">
                   <button className="btn-icon calendar-nav-up" onClick={() => navigateDay(-1)} aria-label="วันก่อนหน้า">
                     ▲
@@ -57,13 +65,16 @@ export default function AppHeader({
                     ▼
                   </button>
                 </div>
-                <h1 className="app-title">
-                  <span className="app-title-date">{activityHeaderTitle.date}</span>
-                  <span className="app-title-period">{activityHeaderTitle.period}</span>
-                </h1>
+                {!isCompactCalendarHeader && (
+                  <h1 className="app-title">
+                    <span className="app-title-date">{activityHeaderTitle.date}</span>
+                    <span className="app-title-period">{activityHeaderTitle.period}</span>
+                  </h1>
+                )}
                 <div className="header-week-spine-view-switch" role="group" aria-label="มุมมอง Activity Mode">
                   <button type="button" className={weekSpineViewMode === "week" ? "is-active" : ""} onClick={() => setWeekSpineView("week")}>1 สัปดาห์</button>
-                  <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Cycle</button>
+                  <button type="button" className={weekSpineViewMode === "month" ? "is-active" : ""} onClick={() => setWeekSpineView("month")}>เดือน</button>
+                  <button type="button" className={weekSpineViewMode === "four-weeks" ? "is-active" : ""} onClick={() => setWeekSpineView("four-weeks")}>Lonth</button>
                 </div>
               </div>
             )}
@@ -77,7 +88,7 @@ export default function AppHeader({
           )}
 
           <div className="app-header-right">
-            {mode === "activity" ? (
+            {mode === "activity" && !isCompactCalendarHeader ? (
               <>
                 <div className="tag-search-wrap">
                   <svg className="tag-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

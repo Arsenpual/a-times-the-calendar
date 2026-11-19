@@ -48,8 +48,7 @@ try {
   assert.equal(await page.getByRole("region", { name: "ภาพรวม Cycle" }).count(), 1);
   assert.equal(await page.locator('.week-spine-overview-week').count(), 4);
   assert.equal(await page.locator('.week-spine-overview-day').count(), 28);
-  assert.equal(await page.locator('.week-spine-four-week-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2);
-  assert.equal(await page.locator('.week-spine-overview-days').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 1);
+  assert.equal(await page.locator('.week-spine-overview-days').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 7);
   await page.evaluate(() => window.phase1.set({ viewMode: "week" }));
   await page.locator(".activity-summary-hero").waitFor();
   await page.evaluate(() => window.phase1.setActivities([

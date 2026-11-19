@@ -20,6 +20,7 @@ const unitTests = [
   "src/features/activity/services/activity-metadata-actions.test.mjs",
   "src/features/activity/services/activity-calendar-actions.test.mjs",
   "src/shared/i18n/i18n-catalog.test.mjs",
+  "src/shared/lib/lonth-engine.test.mjs",
   "src/features/settings/lib/data-lab-export-window.test.mjs",
   "src/features/settings/lib/data-lab-insight-report.test.mjs",
   "src/features/activity/assistant/tests/activity-popup-handoff.test.js",
@@ -29,6 +30,7 @@ const unitTests = [
   "src/features/activity/assistant/tests/validate-plan-draft.test.js",
   "src/features/activity/assistant/tests/weather-slot-validation.test.js",
   "src/features/reminder/hooks/reminder-timeline-export.test.mjs",
+  "tests/app-header-view-mode.test.mjs",
 ];
 
 const browserTests = [

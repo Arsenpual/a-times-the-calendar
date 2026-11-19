@@ -99,6 +99,12 @@
 
 .app-header .app-header-reminder-slot { flex: 1 1 320px; }
 .app-header--ai .app-header-ai-slot { flex: 1 1 430px; min-width: 0; }
+.app-header .lonth-nav-bar {
+  margin-bottom: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
 .app-header--ai .activity-ai-header { min-height: 48px; padding: 0; border: 0; gap: 16px; }
 .app-header--ai .activity-ai-header > div { gap: 8px; }
 .app-header--ai .activity-ai-header > div:last-child { flex-shrink: 0; }
