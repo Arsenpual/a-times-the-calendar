@@ -9,6 +9,7 @@ import ActivityModeWeekSpine from "../features/activity/components/activity-mode
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
+import CozyDeskMode from "../features/cozy-desk/cozy-desk-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
 import { getMonthCycle, getWeekRange, getYearCycle, getYearWeekRange, toDateInputValue } from "../shared/lib/date-utils.js";
@@ -545,6 +546,13 @@ export default function AccountApp({ auth }) {
           </div>
         )}
 
+        {firebaseUser && (
+          <CozyDeskMode
+            isVisible={mode === "cozy"}
+            firebaseUser={firebaseUser}
+          />
+        )}
+
         {mode === "activity" && (
           <React.Fragment>
             <ActivityAuthState
@@ -630,6 +638,9 @@ export default function AccountApp({ auth }) {
                     onEditSeries={handleEditSeries}
                     onFetchSeriesCount={handleFetchSeriesCount}
                     onNavigateWeek={navigateWeek}
+                    onNavigateDay={navigateDay}
+                    onGoToday={goToday}
+                    activityHeaderTitle={activityHeaderTitle}
                     onFocusArchiveTimeline={focusDate}
                     onOpenArchiveDraft={(item, warning = "") => openAddActivity(item.start ? new Date(item.start) : new Date(cursorDate), { preserveTime: Boolean(item.start), end: item.end || null, title: item.title, warning, missingFields: [!item.start && "start", !item.end && "end"].filter(Boolean) })}
                     onEditArchivedActivity={openEditActivityById}

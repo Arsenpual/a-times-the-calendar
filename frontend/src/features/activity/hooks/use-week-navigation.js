@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getYearWeekRange } from "../../../shared/lib/date-utils.js";
+import { getYearWeekRange, shiftYearWeek } from "../../../shared/lib/date-utils.js";
 
 /** Owns Activity week/day navigation. App supplies the active mode for shortcuts. */
 export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
@@ -27,11 +27,7 @@ export function useWeekNavigation({ mode = "activity", userId = null } = {}) {
    */
   const navigateWeek = useCallback((direction) => {
     setWeekRangeOverride(null);
-    setCursorDate((prevCursorDate) => {
-      const next = new Date(prevCursorDate);
-      next.setDate(next.getDate() + direction * 7);
-      return next;
-    });
+    setCursorDate((prevCursorDate) => shiftYearWeek(prevCursorDate, direction));
   }, []);
 
   // เปลี่ยนวันโดยยึดวันที่ที่กำลังอ่านใน Daily Gantt อยู่เป็นหลัก; ถ้ายังไม่

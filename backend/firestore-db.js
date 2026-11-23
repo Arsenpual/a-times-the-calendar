@@ -109,6 +109,14 @@ function activityModeDoc(userId) {
   return userDoc(userId).collection("modes").doc("activity-mode");
 }
 
+function cozyDeskModeDoc(userId) {
+  return userDoc(userId).collection("modes").doc("cozy-desk-mode");
+}
+
+function cozySleepLogsCol(userId) {
+  return cozyDeskModeDoc(userId).collection("sleepLogs");
+}
+
 // เอกสารสิทธิ์ Google Calendar เป็น private server-only document: เขียน/อ่าน
 // ผ่าน Firebase Admin SDK เท่านั้น ไม่เคยถูกส่งกลับ frontend และเก็บ refresh
 // token ในรูปเข้ารหัส (ดู calendar-oauth.js).
@@ -469,6 +477,8 @@ module.exports = {
   auth,
   reminderModeDoc,
   activityModeDoc,
+  cozyDeskModeDoc,
+  cozySleepLogsCol,
   calendarAuthDoc,
   assistantPreferencesDoc,
   telegramAuthDoc,

@@ -188,6 +188,33 @@ export function getYearWeekRange(date) {
   return [start, end];
 }
 
+/**
+ * Steps by Activity Week blocks (`delta` = ±1, etc.) without skipping partial
+ * boundary weeks such as week 53 at year-end or week 1 at year-start.
+ */
+export function shiftYearWeek(date, delta = 1) {
+  let cursor = new Date(date);
+  const step = delta >= 0 ? 1 : -1;
+  const count = Math.abs(Math.trunc(delta));
+  for (let i = 0; i < count; i += 1) {
+    const [weekStart, weekEnd] = getYearWeekRange(cursor);
+    const pivot = new Date(step > 0 ? weekEnd : weekStart);
+    pivot.setHours(0, 0, 0, 0);
+    pivot.setDate(pivot.getDate() + step);
+    const [nextStart, nextEnd] = getYearWeekRange(pivot);
+    const candidate = new Date(cursor);
+    candidate.setDate(candidate.getDate() + step * 7);
+    if (candidate >= nextStart && candidate <= nextEnd) {
+      cursor = candidate;
+    } else {
+      cursor = step > 0
+        ? new Date(nextStart)
+        : new Date(nextEnd.getFullYear(), nextEnd.getMonth(), nextEnd.getDate());
+    }
+  }
+  return cursor;
+}
+
 /** One-based fixed seven-day Activity Week within its calendar year. */
 export function weekOfYear(date) {
   return getYearWeekBlock(date).index + 1;

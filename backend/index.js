@@ -21,6 +21,7 @@ const aiActivityDraftRouter = require("./routes/ai-activity-draft.js");
 const { createAiWeatherPlanRouter } = require("./routes/ai-weather-plan.js");
 const assistantPreferencesRouter = require("./routes/assistant-preferences.js");
 const { createDataLabExportRouter } = require("./routes/data-lab-export.js");
+const cozyDeskRouter = require("./routes/cozy-desk.js");
 const { firestoreQuotaExhaustedPayload } = require("./lib/firestore-quota.js");
 const { startStartupTask } = require("./lib/startup-task.js");
 
@@ -68,7 +69,7 @@ app.use(
     credentials: false
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 // จำกัดจำนวน request ต่อ IP ต่อ 15 นาที — เดิมไม่มี rate limiting เลยสัก
 // จุดเดียว (ระบุไว้เป็นงานค้างใน overview.md) ทำให้ user ที่ login ถูกต้อง
@@ -143,6 +144,7 @@ app.use("/api/calendar", requireAuth, calendarRouter);
 app.use("/api/announcement", requireAuth, announcementRouter);
 app.use("/api/assistant-preferences", requireAuth, assistantPreferencesRouter);
 app.use("/api/data-lab", requireAuth, createDataLabExportRouter());
+app.use("/api/cozy-desk", requireAuth, cozyDeskRouter);
 // Gemini is used only to propose a draft. The client still confirms before
 // saving anything to Google Calendar.
 const aiLimiter = rateLimit({

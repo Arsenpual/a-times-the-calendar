@@ -5,6 +5,7 @@ function TaskbarIcon({ name }) {
     activity: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M8 3v4m8-4v4M4 10h16m-12 4h3m2 3h3" /></>,
     reminder: <><path d="M6 9a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9m4 12h4" /></>,
     assistant: <><rect x="3" y="6" width="18" height="15" rx="5" /><path d="M12 3v3m-5 6h2m6 0h2m-9 5h8" /></>,
+    cozy: <><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1z" /></>,
   };
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -24,6 +25,9 @@ export default function AppTaskbar({ mode, expanded, onClose, onSelectMode, onOp
         </button>
       )}
       <button type="button" className={`taskbar-item${mode === "ai" ? " is-active" : ""}`} onClick={() => { onOpenAssistant(); document.getElementById("app-navigation-toggle")?.focus(); }} aria-pressed={mode === "ai"} aria-controls="ai-mode-workspace" aria-label={`${mode === "ai" ? "ออกจาก AI Mode" : "เปิด AI Mode MR.Zettascale"}${unreadCount > 0 ? ` มี ${unreadCount} ข้อความที่ยังไม่อ่าน` : ""}`}><span className="taskbar-icon"><TaskbarIcon name="assistant" />{unreadCount > 0 && <span className="taskbar-unread" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}</span><span>AI Mode</span></button>
+      <button type="button" className={`taskbar-item${mode === "cozy" ? " is-active" : ""}`} aria-current={mode === "cozy" ? "page" : undefined} onClick={() => { onSelectMode("cozy"); document.getElementById("app-navigation-toggle")?.focus(); }}>
+        <span className="taskbar-icon"><TaskbarIcon name="cozy" /></span><span>Cozy Desk</span>
+      </button>
     </div>
     <button type="button" className="taskbar-item google-calendar-sync-btn" onClick={onSyncGoogleCalendar} disabled={googleCalendarSyncing} aria-busy={googleCalendarSyncing} aria-label={googleCalendarSyncing ? "กำลังซิงค์ Google Calendar" : "ซิงค์ Google Calendar"} title="ดึงกิจกรรมสัปดาห์นี้">
       <span className="taskbar-icon"><img src={`${import.meta.env.BASE_URL}logo/google-calendar.svg`} alt="" /></span>

@@ -286,7 +286,7 @@ html .reminder-app-container, html[data-theme="dark"] .reminder-app-container {
   .week-spine-grid-wrap { grid-template-columns: 36px minmax(350px, 1fr); overflow-x: auto; padding-bottom: 6px; }
 }
 @media (max-width: 480px) {
-  .app-main { padding: 10px; background-size: 32px 32px; }
+  .app-main { background-size: 32px 32px; }
   .app-header { padding-inline: 10px; max-height: none; }
   .app-header-left { gap: 5px; }
   .app-header-right { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }

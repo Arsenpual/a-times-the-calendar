@@ -8,6 +8,7 @@ import {
   formatLonthRange,
   getDaysInYear
 } from "./lonth-engine.js";
+import { shiftYearWeek, weekOfYear } from "./date-utils.js";
 
 test("TIMES-CAL-001 Section 5: Exact 2026 Lonth specification", () => {
   const lonths2026 = buildYearLonths(2026);
@@ -149,4 +150,35 @@ test("Format Lonth readable range", () => {
 
   const formattedEn = formatLonthRange(l01, "en");
   assert.ok(formattedEn.includes("Jan"), "Includes English month");
+});
+
+test("shiftYearWeek steps through partial boundary weeks without skipping week 53 or week 1", () => {
+  // 2026 Week 52 (Dec 20-26), Week 53 (Dec 27-31) -> 2027 Week 1 (Jan 1-2), Week 2 (Jan 3-9)
+  let cursor = new Date(2026, 11, 25); // Friday in Week 52
+  assert.equal(weekOfYear(cursor), 52);
+
+  cursor = shiftYearWeek(cursor, 1);
+  assert.equal(cursor.getFullYear(), 2026);
+  assert.equal(weekOfYear(cursor), 53);
+
+  cursor = shiftYearWeek(cursor, 1);
+  assert.equal(cursor.getFullYear(), 2027);
+  assert.equal(weekOfYear(cursor), 1);
+
+  cursor = shiftYearWeek(cursor, 1);
+  assert.equal(cursor.getFullYear(), 2027);
+  assert.equal(weekOfYear(cursor), 2);
+
+  // Step backwards from Week 2 of 2027 -> Week 1 (2027) -> Week 53 (2026) -> Week 52 (2026)
+  cursor = shiftYearWeek(cursor, -1);
+  assert.equal(cursor.getFullYear(), 2027);
+  assert.equal(weekOfYear(cursor), 1);
+
+  cursor = shiftYearWeek(cursor, -1);
+  assert.equal(cursor.getFullYear(), 2026);
+  assert.equal(weekOfYear(cursor), 53);
+
+  cursor = shiftYearWeek(cursor, -1);
+  assert.equal(cursor.getFullYear(), 2026);
+  assert.equal(weekOfYear(cursor), 52);
 });

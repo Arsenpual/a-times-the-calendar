@@ -32,6 +32,10 @@ const useWeekNamesUrl = loadJsxModule("../src/features/activity/hooks/use-week-n
 const weekNameFieldUrl = loadJsxModule("../src/features/activity/components/week-name-field.jsx", [
   ['from "../hooks/use-week-names.js"', `from "${useWeekNamesUrl}"`],
 ]);
+const weekNavBarUrl = loadJsxModule("../src/features/activity/components/week-nav-bar.jsx", [
+  ['from "../../../shared/lib/date-utils.js"', `from "${dateUtilsUrl}"`],
+  ['from "./week-name-field.jsx"', `from "${weekNameFieldUrl}"`],
+]);
 const appHeaderUrl = loadJsxModule("../src/app/components/app-header.jsx", [
   ['import BrandWordmark from "../../shared/ui/brand-wordmark.jsx";', 'const BrandWordmark = () => React.createElement("div", { className: "app-logo" });'],
   ['from "../../features/activity/components/week-name-field.jsx"', `from "${weekNameFieldUrl}"`],
@@ -39,6 +43,7 @@ const appHeaderUrl = loadJsxModule("../src/app/components/app-header.jsx", [
 
 const { useWeekNames } = await import(useWeekNamesUrl);
 const { default: AppHeader } = await import(appHeaderUrl);
+const { default: WeekNavBar } = await import(weekNavBarUrl);
 
 const baseProps = {
   firebaseUser: { displayName: "User", email: "user@example.com" },
@@ -81,11 +86,9 @@ const root = renderer.root;
 // 1. tag-search-wrap should be present and "+ เพิ่มกิจกรรม" button should be removed
 assert.equal(root.findAllByProps({ className: "tag-search-wrap" }).length, 1, "Week view should display tag search");
 assert.equal(root.findAll((el) => el.type === "button" && el.props.children === "+ เพิ่มกิจกรรม").length, 0, "Week view should NOT display + เพิ่มกิจกรรม button");
-// 2. btn btn-outline ("วันนี้") should be present
-assert.equal(root.findAll((el) => el.type === "button" && el.props.className?.includes("btn-outline")).length, 1, "Week view should display วันนี้ (btn btn-outline)");
-// 3. app-title should be present
-assert.equal(root.findAllByProps({ className: "app-title" }).length, 1, "Week view should display app-title");
-// 4. lonth-nav-bar should NOT be present in week view
+// 2. header-calendar-tools moved out of AppHeader to the bottom WeekNavBar
+assert.equal(root.findAllByProps({ className: "header-calendar-tools" }).length, 0, "AppHeader should NOT display header-calendar-tools");
+// 3. lonth-nav-bar should NOT be present in AppHeader
 assert.equal(root.findAllByProps({ className: "lonth-nav-bar" }).length, 0, "Week view should NOT display lonth-nav-bar in header");
 
 // View switch should have 1 สัปดาห์, เดือน, Lonth
@@ -120,13 +123,22 @@ assert.equal(root.findAllByProps({ className: "app-title" }).length, 0, "Lonth v
 assert.equal(root.findAllByProps({ className: "lonth-nav-bar" }).length, 0, "Lonth view should NOT display lonth-nav-bar in header");
 assert.ok(root.findByType("header").props.className.includes("app-header--lonth"), "Lonth view should have app-header--lonth class");
 
-// Interactive test: clicking app-title-date week name edits and persists the week name at any time
+// Interactive test: clicking app-title-date week name edits and persists the week name inside bottom WeekNavBar
 function HeaderWithWeekName() {
   const weekNamesState = useWeekNames("user-1");
-  return React.createElement(AppHeader, {
-    ...baseProps,
+  return React.createElement(WeekNavBar, {
     weekStart: new Date(2026, 10, 16),
-    weekNamesState,
+    activityHeaderTitle: { date: "16 พฤศจิกายน 2026", period: "สัปดาห์ที่ 47" },
+    weekNames: weekNamesState.weekNames,
+    editingWeekKey: weekNamesState.editingWeekKey,
+    weekNameDraft: weekNamesState.weekNameDraft,
+    onStartEditingWeekName: weekNamesState.startEditingWeekName,
+    onWeekNameDraftChange: weekNamesState.setWeekNameDraft,
+    onCommitWeekName: weekNamesState.commitWeekName,
+    onCancelWeekNameEdit: weekNamesState.cancelWeekNameEdit,
+    onGoToday: () => {},
+    onNavigateDay: () => {},
+    onNavigateWeek: () => {},
   });
 }
 

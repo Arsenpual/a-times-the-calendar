@@ -30,7 +30,7 @@ export function useDevMockupShortcut() {
         || target?.isContentEditable
         || !event.ctrlKey
         || !event.altKey
-        || !["KeyW", "KeyA", "Digit7", "KeyS"].includes(event.code)
+        || !["KeyW", "KeyA", "Digit7", "KeyS", "KeyN"].includes(event.code)
       ) return;
 
       event.preventDefault();
@@ -39,6 +39,7 @@ export function useDevMockupShortcut() {
       if (event.code === "KeyA") url.searchParams.set("mockup", "activity-mode-ai-workspace-mockup");
       if (event.code === "Digit7") url.searchParams.set("mockup", "activity-mode-seven-day-focus-mockup");
       if (event.code === "KeyS") url.searchParams.set("mockup", "activity-mode-summary-hero-mockup");
+      if (event.code === "KeyN") url.searchParams.set("mockup", "activity-mode-week-nav-bar-mockup");
       window.open(
         url.toString(),
         "times-activity-mode-mockups",

@@ -88,8 +88,8 @@
 .week-spine-overview-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .week-spine-overview-day { min-width: 0; min-height: 156px; padding: 4px; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 6px; background: var(--bg); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .week-spine-overview-day:hover { border-color: var(--today); background: var(--hover); }
-.week-spine-overview-day.is-outside-cycle { visibility: hidden; pointer-events: none; }
-.week-spine-day.is-outside-year { visibility: hidden; pointer-events: none; }
+.week-spine-overview-day.is-outside-cycle { pointer-events: none; }
+.week-spine-day.is-outside-year { background: color-mix(in srgb, #7c3aed 14%, var(--bg-muted)); pointer-events: none; }
 .week-spine-overview-day header { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; margin-bottom: 4px; color: var(--text-secondary); font-size: 10px; }
 .week-spine-overview-day header strong { color: var(--text-primary); font-size: 11px; }
 .week-spine-overview-day.is-today { border-color: var(--today); box-shadow: inset 0 2px 0 var(--today); }
@@ -449,6 +449,10 @@ html[data-theme="dark"] .lonth-nav-bar {
   cursor: pointer;
 }
 .month-nav-today-btn { padding: 0 10px; border-radius: 6px; }
+.week-nav-badge { margin: 0; font-size: 13px; }
+.week-nav-badge .app-title-date { display: inline-flex; align-items: center; }
+.week-nav-day-pill { gap: 4px; }
+.week-nav-day-pill.is-outside { opacity: 0.4; cursor: default; pointer-events: none; }
 
 /* Lonth: Google Calendar-style Month Grid (TIMES-CAL-001) */
 .lonth-gcal-month-view {
@@ -624,15 +628,28 @@ html[data-theme="dark"] .lonth-gcal-month-view {
   background: color-mix(in srgb, var(--lonth-accent) 7%, var(--lonth-day-bg));
 }
 
-.week-spine-overview-day.is-outside-cycle {
-  background: var(--lonth-day-outside-bg);
-  opacity: 0.65;
+.week-spine-overview-week.lonth-gcal-week-row.is-outside-cycle-week .lonth-gcal-week-header {
+  min-height: 29px;
+  background: color-mix(in srgb, #7c3aed 18%, var(--lonth-week-bg, #f8fafc));
+  border-bottom-color: color-mix(in srgb, #7c3aed 24%, var(--lonth-border, #e3e8f0));
+}
+
+.week-spine-overview-day.is-outside-cycle,
+.week-spine-overview-day.is-outside-month {
+  background: color-mix(in srgb, #7c3aed 14%, var(--lonth-day-bg, #fff));
+  border-right-color: color-mix(in srgb, #7c3aed 24%, var(--lonth-border, #e3e8f0));
+  opacity: 1;
   cursor: default;
   pointer-events: none;
 }
 
-.week-spine-overview-day.is-outside-month {
-  background: var(--lonth-day-outside-bg);
+html[data-theme="dark"] .week-spine-overview-week.lonth-gcal-week-row.is-outside-cycle-week .lonth-gcal-week-header {
+  background: color-mix(in srgb, #8b5cf6 24%, var(--lonth-week-bg, #131d2e));
+}
+
+html[data-theme="dark"] .week-spine-overview-day.is-outside-cycle,
+html[data-theme="dark"] .week-spine-overview-day.is-outside-month {
+  background: color-mix(in srgb, #8b5cf6 20%, var(--lonth-day-bg, #0d1522));
 }
 
 .week-spine-overview-day.is-outside-month .lonth-gcal-day-num,

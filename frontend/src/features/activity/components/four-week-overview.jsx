@@ -74,6 +74,35 @@ export default function FourWeekOverview({
     };
   }), [cycleWeeks, activities, activityCategoryMap, categories, lockedActivities, isMonthMode, cycleStart, cycleEnd]);
 
+  const displayWeeks = useMemo(() => {
+    const targetWeekCount = isMonthMode ? 6 : 4;
+    if (weeks.length >= targetWeekCount || weeks.length === 0) return weeks;
+    const result = [...weeks];
+    while (result.length < targetWeekCount) {
+      const prevWeek = result[result.length - 1];
+      const lastDay = prevWeek.days[prevWeek.days.length - 1];
+      const nextWeekStart = new Date(lastDay);
+      nextWeekStart.setDate(nextWeekStart.getDate() + 1);
+      nextWeekStart.setHours(0, 0, 0, 0);
+      const days = Array.from({ length: 7 }, (_, offset) => {
+        const day = new Date(nextWeekStart);
+        day.setDate(day.getDate() + offset);
+        return day;
+      });
+      result.push({
+        start: nextWeekStart,
+        end: days[6],
+        visibleStart: prevWeek.visibleStart,
+        visibleEnd: prevWeek.visibleEnd,
+        days,
+        timedSegments: [],
+        allDayActivities: [],
+        isOutsideCycleWeek: true
+      });
+    }
+    return result;
+  }, [weeks, isMonthMode]);
+
   return (
     <section
       className={`week-spine-four-week lonth-gcal-month-view${isMonthMode ? " is-standard-month" : ""}`}
@@ -95,47 +124,51 @@ export default function FourWeekOverview({
 
       {/* 4 Weeks Calendar Grid */}
       <div className="week-spine-four-week-grid lonth-gcal-grid">
-        {weeks.map((week, weekIndex) => (
+        {displayWeeks.map((week, weekIndex) => (
           <section
-            className={`week-spine-overview-week lonth-gcal-week-row${isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`}
+            className={`week-spine-overview-week lonth-gcal-week-row${week.isOutsideCycleWeek ? " is-outside-cycle-week" : ""}${!week.isOutsideCycleWeek && isSameDay(week.start, focusedWeekStart) ? " is-focus-week" : ""}`}
             key={week.start.toISOString()}
-            aria-current={isSameDay(week.start, focusedWeekStart) ? "true" : undefined}
-            onDoubleClick={() => onOpenWeekView?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd })}
+            aria-current={!week.isOutsideCycleWeek && isSameDay(week.start, focusedWeekStart) ? "true" : undefined}
+            onDoubleClick={week.isOutsideCycleWeek ? undefined : () => onOpenWeekView?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd })}
           >
             {!isMonthMode && (
             <header className="week-spine-overview-week-header lonth-gcal-week-header">
-              <button
-                type="button"
-                className="lonth-gcal-week-btn"
-                onClick={(e) => { e.stopPropagation(); onSelectWeek?.(week.visibleStart); }}
-                title="คลิกเพื่อเลือกสัปดาห์นี้"
-              >
-                <span className="lonth-gcal-week-tag">สัปดาห์ {weekIndex + 1}</span>
-                <span className="lonth-gcal-week-dates">{formatVisibleRange(week.visibleStart, week.visibleEnd, language)}</span>
-              </button>
-              <WeekNameField
-                className="week-spine-overview-week-name lonth-gcal-week-name"
-                weekStart={week.start}
-                weekNames={weekNames}
-                editingWeekKey={editingWeekKey}
-                weekNameDraft={weekNameDraft}
-                onStartEditing={onStartEditingWeekName}
-                onDraftChange={onWeekNameDraftChange}
-                onCommit={onCommitWeekName}
-                onCancel={onCancelWeekName}
-              />
-              <button
-                type="button"
-                className="week-spine-overview-fullscreen-btn lonth-gcal-fullscreen-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenWeekEditor?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd });
-                }}
-                aria-label={`เปิดและแก้ไขสัปดาห์ ${formatVisibleRange(week.visibleStart, week.visibleEnd, language)}`}
-                title="เปิดสัปดาห์เพื่อแก้ไข"
-              >
-                ↗
-              </button>
+              {!week.isOutsideCycleWeek && (
+                <>
+                  <button
+                    type="button"
+                    className="lonth-gcal-week-btn"
+                    onClick={(e) => { e.stopPropagation(); onSelectWeek?.(week.visibleStart); }}
+                    title="คลิกเพื่อเลือกสัปดาห์นี้"
+                  >
+                    <span className="lonth-gcal-week-tag">สัปดาห์ {weekIndex + 1}</span>
+                    <span className="lonth-gcal-week-dates">{formatVisibleRange(week.visibleStart, week.visibleEnd, language)}</span>
+                  </button>
+                  <WeekNameField
+                    className="week-spine-overview-week-name lonth-gcal-week-name"
+                    weekStart={week.start}
+                    weekNames={weekNames}
+                    editingWeekKey={editingWeekKey}
+                    weekNameDraft={weekNameDraft}
+                    onStartEditing={onStartEditingWeekName}
+                    onDraftChange={onWeekNameDraftChange}
+                    onCommit={onCommitWeekName}
+                    onCancel={onCancelWeekName}
+                  />
+                  <button
+                    type="button"
+                    className="week-spine-overview-fullscreen-btn lonth-gcal-fullscreen-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenWeekEditor?.(week.visibleStart, { start: week.visibleStart, end: week.visibleEnd });
+                    }}
+                    aria-label={`เปิดและแก้ไขสัปดาห์ ${formatVisibleRange(week.visibleStart, week.visibleEnd, language)}`}
+                    title="เปิดสัปดาห์เพื่อแก้ไข"
+                  >
+                    ↗
+                  </button>
+                </>
+              )}
             </header>
             )}
 
@@ -143,6 +176,7 @@ export default function FourWeekOverview({
               {week.days.map((day) => {
                 const isOutsideMonth = isMonthMode && (day < week.visibleStart || day > week.visibleEnd);
                 const isOutsideCycle = !isMonthMode && (day < week.visibleStart || day > week.visibleEnd);
+                const isOutsidePeriod = isOutsideCycle || isOutsideMonth;
                 const isToday = isSameDay(day, new Date());
 
                 // Timed activities
@@ -182,27 +216,29 @@ export default function FourWeekOverview({
                 return (
                   <button
                     type="button"
-                    disabled={isOutsideCycle}
+                    disabled={isOutsidePeriod}
                     className={`week-spine-overview-day lonth-gcal-day-cell${isOutsideCycle ? " is-outside-cycle" : ""}${isOutsideMonth ? " is-outside-month" : ""}${isToday ? " is-today" : ""}`}
                     key={day.toISOString()}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectDay?.(day);
                     }}
-                    aria-label={isOutsideCycle ? "อยู่นอกขอบเขต Lonth" : `${labels[day.getDay()]} ${day.getDate()} (${allEvents.length} กิจกรรม)`}
+                    aria-label={isOutsidePeriod ? (isMonthMode ? "อยู่นอกเดือนนี้" : "อยู่นอกขอบเขต Lonth") : `${labels[day.getDay()]} ${day.getDate()} (${allEvents.length} กิจกรรม)`}
                   >
                     <div className="lonth-gcal-day-top">
-                      {day.getDate() === 1 && !isOutsideCycle && (
+                      {!isOutsidePeriod && day.getDate() === 1 && (
                         <span className="lonth-gcal-month-prefix">
                           {day.toLocaleDateString(language === "th" ? "th-TH" : "en-US", { month: "short" })}
                         </span>
                       )}
-                      <span className={`lonth-gcal-day-num${isToday ? " is-today-badge" : ""}`}>
-                        {day.getDate()}
-                      </span>
+                      {!isOutsidePeriod && (
+                        <span className={`lonth-gcal-day-num${isToday ? " is-today-badge" : ""}`}>
+                          {day.getDate()}
+                        </span>
+                      )}
                     </div>
 
-                    {!isOutsideCycle && allEvents.length > 0 && (
+                    {!isOutsidePeriod && allEvents.length > 0 && (
                       <div className="lonth-gcal-events-wrap">
                         {visibleEvents.map((event) => (
                           <div

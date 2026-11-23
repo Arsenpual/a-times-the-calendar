@@ -36,57 +36,14 @@ export default function AppHeader({
   return (
     <>
 {firebaseUser && (
-        <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}${mode === "ai" ? " app-header--ai" : ""}${isCompactCalendarHeader ? " app-header--lonth" : ""}`}>
+        <header className={`app-header${mode === "reminder" ? " app-header--reminder" : ""}${mode === "ai" ? " app-header--ai" : ""}${mode === "cozy" ? " app-header--cozy" : ""}${isCompactCalendarHeader ? " app-header--lonth" : ""}`}>
           <div className="app-header-left">
             <button id="app-navigation-toggle" className="btn-icon app-navigation-toggle" type="button" onClick={onToggleNavigation} aria-label={navigationExpanded ? "ซ่อนเมนูฟีเจอร์" : "เปิดเมนูฟีเจอร์"} aria-expanded={Boolean(navigationExpanded)} aria-controls="app-taskbar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             <BrandWordmark className="app-logo" textOnly />
             {mode === "reminder" && <span className="header-feature-title">Reminder</span>}
-            {mode === "activity" && (
-              <div className="header-calendar-tools">
-                {!isCompactCalendarHeader && (
-                  <button className="btn btn-outline" onClick={goToday}>
-                    วันนี้
-                  </button>
-                )}
-                <div className="calendar-nav-pad" role="group" aria-label="ปุ่มนำทางปฏิทิน">
-                  <button className="btn-icon calendar-nav-up" onClick={() => navigateDay(-1)} aria-label="วันก่อนหน้า">
-                    ▲
-                  </button>
-                  <button className="btn-icon calendar-nav-left" onClick={() => navigateWeek(-1)} aria-label="สัปดาห์ก่อนหน้า">
-                    ◀
-                  </button>
-                  <span className="calendar-nav-center" aria-hidden="true" />
-                  <button className="btn-icon calendar-nav-right" onClick={() => navigateWeek(1)} aria-label="สัปดาห์ถัดไป">
-                    ▶
-                  </button>
-                  <button className="btn-icon calendar-nav-down" onClick={() => navigateDay(1)} aria-label="วันถัดไป">
-                    ▼
-                  </button>
-                </div>
-                {!isCompactCalendarHeader && (
-                  <h1 className="app-title">
-                    <span className="app-title-date">
-                      {weekNamesState && weekStart ? (
-                        <WeekNameField
-                          className="week-spine-week-name app-title-week-name"
-                          weekStart={weekStart}
-                          weekNames={weekNamesState.weekNames}
-                          editingWeekKey={weekNamesState.editingWeekKey}
-                          weekNameDraft={weekNamesState.weekNameDraft}
-                          onStartEditing={weekNamesState.startEditingWeekName}
-                          onDraftChange={weekNamesState.setWeekNameDraft}
-                          onCommit={weekNamesState.commitWeekName}
-                          onCancel={weekNamesState.cancelWeekNameEdit}
-                        />
-                      ) : activityHeaderTitle.date}
-                    </span>
-                    <span className="app-title-period">{activityHeaderTitle.period}</span>
-                  </h1>
-                )}
-              </div>
-            )}
+            {mode === "cozy" && <span className="header-feature-title">Cozy Desk</span>}
           </div>
 
           {mode === "activity" && (
