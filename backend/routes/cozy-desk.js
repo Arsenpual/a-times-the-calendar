@@ -1615,13 +1615,31 @@ function createCozyDeskRouter({
     beginCharacterTask(req.userId, assistantId, summarizeTaskLabel(rawTitle, "ทำงานตาม Task"));
 
     try {
-      const payload = await generateContent(
-        {
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        },
-        { env }
-      );
+      let payload;
+      try {
+        payload = await generateContent(
+          {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          },
+          { env }
+        );
+      } catch (primaryErr) {
+        console.warn(
+          "[cozy-desk] /assistant/execute-task primary attempt failed, retrying with fallback model:",
+          primaryErr?.message || primaryErr
+        );
+        const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+        const fallbackModel =
+          currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+        payload = await generateContent(
+          {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          },
+          { env: { ...env, GEMINI_MODEL: fallbackModel } }
+        );
+      }
       const text = (
         payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
       ).trim();
@@ -1641,9 +1659,11 @@ function createCozyDeskRouter({
         completedAt: new Date().toISOString(),
       });
     } catch (err) {
+      console.error("[cozy-desk] /assistant/execute-task failed:", err);
       const classified = classifyGeminiError(err);
+      const detail = err instanceof Error ? err.message.slice(0, 220) : undefined;
       recordCharacterError(req.userId, assistantId, classified.code, classified.message);
-      res.status(classified.status).json({ error: classified.message });
+      res.status(classified.status).json({ error: classified.message, code: classified.code, detail });
     } finally {
       endCharacterTask(req.userId, assistantId);
     }

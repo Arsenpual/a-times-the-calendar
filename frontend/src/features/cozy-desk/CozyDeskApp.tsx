@@ -1677,8 +1677,10 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
       if (!res.ok) {
         let errMsg = 'มีน่าไม่สามารถสรุปภาพรวมข้อมูลการนอนได้ในขณะนี้';
         try {
-          const payload = (await res.json()) as { error?: string };
-          if (payload.error) errMsg = payload.error;
+          const payload = (await res.json()) as { error?: string; detail?: string };
+          if (payload.error) {
+            errMsg = payload.detail ? `${payload.error} [${payload.detail}]` : payload.error;
+          }
         } catch {
           // Keep default error message
         }
