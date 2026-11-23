@@ -1103,6 +1103,7 @@ function createCozyDeskRouter({
 
       res.json({ ok: true, record, model: env.GEMINI_MODEL || PRIMARY_MODEL });
     } catch (err) {
+      console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
       res.status(classified.status).json({ error: classified.message });
     }
@@ -1166,6 +1167,7 @@ function createCozyDeskRouter({
       recordTokenUsage(req.userId, usedTokens);
       res.json({ ok: true, analysis });
     } catch (err) {
+      console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
       res.status(classified.status).json({ error: classified.message });
     }
