@@ -908,6 +908,169 @@ function formatSleepLogsContext(sleepLogs) {
   ].join("\n");
 }
 
+function formatThaiMinutesText(minutes) {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes < 0) return "—";
+  const rounded = Math.round(minutes);
+  const hrs = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  if (hrs > 0 && mins > 0) return `${hrs} ชั่วโมง ${mins} นาที`;
+  if (hrs > 0) return `${hrs} ชั่วโมง`;
+  return `${mins} นาที`;
+}
+
+const THAI_FULL_MONTHS = [
+  "มกราคม",
+  "กุมภาพันธ์",
+  "มีนาคม",
+  "เมษายน",
+  "พฤษภาคม",
+  "มิถุนายน",
+  "กรกฎาคม",
+  "สิงหาคม",
+  "กันยายน",
+  "ตุลาคม",
+  "พฤศจิกายน",
+  "ธันวาคม",
+];
+const THAI_FULL_WEEKDAYS = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+
+function formatThaiFullDate(dateIso) {
+  const parsed = new Date(`${dateIso}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateIso;
+  const day = parsed.getDate();
+  const month = THAI_FULL_MONTHS[parsed.getMonth()];
+  const year = parsed.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
+function formatThaiWeekdayDate(dateIso) {
+  const parsed = new Date(`${dateIso}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateIso;
+  const weekday = THAI_FULL_WEEKDAYS[parsed.getDay()];
+  return `วัน${weekday}ที่ ${formatThaiFullDate(dateIso)}`;
+}
+
+function buildDeterministicSleepSummary(sleepLogs) {
+  const logs = (Array.isArray(sleepLogs) ? sleepLogs : [])
+    .slice()
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+  if (logs.length === 0) {
+    return "ยังไม่มีข้อมูลบันทึกการนอนที่สะสมไว้ในระบบครับ";
+  }
+
+  const avg = (arr) =>
+    arr.length > 0 ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+
+  const scores = logs.map((l) => l.sleepScore).filter((n) => typeof n === "number");
+  const durations = logs
+    .map((l) => l.totalSleepMinutes)
+    .filter((n) => typeof n === "number" && n > 0);
+  const deepMins = logs.map((l) => l.stages?.deep?.minutes).filter((n) => typeof n === "number");
+  const deepPcts = logs.map((l) => l.stages?.deep?.percent).filter((n) => typeof n === "number");
+  const lightMins = logs.map((l) => l.stages?.light?.minutes).filter((n) => typeof n === "number");
+  const lightPcts = logs.map((l) => l.stages?.light?.percent).filter((n) => typeof n === "number");
+  const remMins = logs.map((l) => l.stages?.rem?.minutes).filter((n) => typeof n === "number");
+  const remPcts = logs.map((l) => l.stages?.rem?.percent).filter((n) => typeof n === "number");
+  const continuities = logs
+    .map((l) => l.deepSleepContinuityScore)
+    .filter((n) => typeof n === "number");
+  const breathings = logs
+    .map((l) => l.breathingQualityScore)
+    .filter((n) => typeof n === "number");
+  const awakes = logs.map((l) => l.awakeCount).filter((n) => typeof n === "number");
+
+  const oldest = logs[logs.length - 1];
+  const newest = logs[0];
+  const dateRangeText =
+    logs.length === 1 || oldest.date === newest.date
+      ? `${formatThaiFullDate(newest.date)} (${newest.date})`
+      : `${formatThaiFullDate(oldest.date)} – ${formatThaiFullDate(newest.date)}`;
+
+  const bedtimes = logs.map((l) => l.bedtime).filter(Boolean);
+  const waketimes = logs.map((l) => l.wakeTime).filter(Boolean);
+  const windowSummary =
+    bedtimes.length > 0 && waketimes.length > 0
+      ? `${bedtimes[0]} น. – ${waketimes[0]} น.`
+      : "—";
+
+  const lines = [
+    `สวัสดีค่ะคุณผู้ใช้ มีน่า (Mina) จัดเตรียมสรุปภาพรวมข้อมูลการนอนประจำห้องทำงาน Cozy Desk มาให้แล้วนะคะ เรียบเรียงข้อมูลจริงจากไฟล์ \`.json\` ทั้งหมด ${logs.length} วัน แบบกระชับ อ่านง่าย และพร้อมนำไปใช้ต่อได้ทันทีค่ะ`,
+    "",
+    "---",
+    "",
+    "### 📊 ภาพรวมสถิติการนอนทั้งหมด",
+    "",
+    `* **จำนวนวันที่บันทึก:** ${logs.length} วัน`,
+    `* **ช่วงวันที่:** ${dateRangeText}`,
+    "* **คะแนนการนอน (Sleep Score):**",
+    `  * ค่าเฉลี่ย: ${avg(scores) != null ? `${avg(scores)} คะแนน` : "—"}`,
+    `  * ต่ำสุด: ${scores.length > 0 ? `${Math.min(...scores)} คะแนน` : "—"}`,
+    `  * สูงสุด: ${scores.length > 0 ? `${Math.max(...scores)} คะแนน` : "—"}`,
+    "* **ระยะเวลานอนรวม:**",
+    `  * ค่าเฉลี่ย: ${formatThaiMinutesText(avg(durations))}`,
+    `  * ต่ำสุด / สูงสุด: ${
+      durations.length > 0
+        ? `${formatThaiMinutesText(Math.min(...durations))} / ${formatThaiMinutesText(Math.max(...durations))}`
+        : "—"
+    }`,
+    `* **ช่วงเวลาเข้านอน – ตื่นนอน (โดยรวม):** ${windowSummary}`,
+    "* **สัดส่วนและระยะเวลาเฉลี่ยของคุณภาพการนอน:**",
+    `  * **หลับลึก (Deep Sleep):** ${formatThaiMinutesText(avg(deepMins))}${avg(deepPcts) != null ? ` (${avg(deepPcts)}%)` : ""}`,
+    `  * **หลับตื้น (Light Sleep):** ${formatThaiMinutesText(avg(lightMins))}${avg(lightPcts) != null ? ` (${avg(lightPcts)}%)` : ""}`,
+    `  * **REM Sleep:** ${formatThaiMinutesText(avg(remMins))}${avg(remPcts) != null ? ` (${avg(remPcts)}%)` : ""}`,
+    "* **ค่าตัวชี้วัดเสริม (ภาพรวม):**",
+    `  * ความต่อเนื่องในการหลับลึก: ${avg(continuities) ?? "—"}`,
+    `  * คะแนนการหายใจ: ${avg(breathings) ?? "—"}`,
+    `  * จำนวนครั้งที่ตื่น: ${avg(awakes) != null ? `${avg(awakes)} ครั้ง` : "—"}`,
+    "",
+    "---",
+    "",
+    "### 📅 รายการสรุปรายวัน",
+    "",
+  ];
+
+  logs.forEach((log, idx) => {
+    const scoreStr = typeof log.sleepScore === "number" ? `${log.sleepScore} คะแนน` : "—";
+    const durStr = log.totalSleepText || formatThaiMinutesText(log.totalSleepMinutes);
+    const timeStr =
+      log.bedtime && log.wakeTime ? `เข้านอน ${log.bedtime} น. – ตื่นนอน ${log.wakeTime} น.` : "—";
+    const deep = log.stages?.deep;
+    const light = log.stages?.light;
+    const rem = log.stages?.rem;
+    const contStr = log.deepSleepContinuityScore ?? "—";
+    const breathStr = log.breathingQualityScore ?? "—";
+    const awakeStr = log.awakeCount != null ? `${log.awakeCount} ครั้ง` : "—";
+
+    lines.push(`**${idx + 1}. ${formatThaiWeekdayDate(log.date)}**`);
+    lines.push(`* **คะแนนการนอน:** ${scoreStr}`);
+    lines.push(`* **ระยะเวลานอน:** ${durStr}`);
+    lines.push(`* **ช่วงเวลา:** ${timeStr}`);
+    lines.push("* **โครงสร้างการนอน:**");
+    lines.push(
+      `  * หลับลึก: ${deep?.durationText || formatThaiMinutesText(deep?.minutes)}${deep?.percent != null ? ` (${deep.percent}%)` : ""}`
+    );
+    lines.push(
+      `  * หลับตื้น: ${light?.durationText || formatThaiMinutesText(light?.minutes)}${light?.percent != null ? ` (${light.percent}%)` : ""}`
+    );
+    lines.push(
+      `  * REM: ${rem?.durationText || formatThaiMinutesText(rem?.minutes)}${rem?.percent != null ? ` (${rem.percent}%)` : ""}`
+    );
+    lines.push(
+      `* **ตัวชี้วัดอื่น ๆ:** ต่อเนื่องหลับลึก ${contStr} | คะแนนหายใจ ${breathStr} | ตื่น ${awakeStr}`
+    );
+    lines.push("");
+  });
+
+  lines.push("---");
+  lines.push("");
+  lines.push(
+    "หากคุณผู้ใช้ต้องการให้มีน่าช่วยจัดการข้อมูลส่วนไหนเพิ่มเติม แจ้งมาได้เลยนะคะ ขอให้วันนี้เป็นวันที่สดใสค่ะ! ✨"
+  );
+
+  return lines.join("\n");
+}
+
 function buildMinaSystemInstruction(mode, timeOfDay, localDate, tasksContext, sleepLogsContext) {
   const timeContext = {
     morning: "ตอนนี้เป็นช่วงเช้าในบ้าน บรรยากาศสดใสเหมาะกับการวางแผนและเริ่มงาน",
@@ -1633,7 +1796,8 @@ function createCozyDeskRouter({
     beginCharacterTask(req.userId, assistantId, summarizeTaskLabel(rawTitle, "ทำงานตาม Task"));
 
     try {
-      let payload;
+      let payload = null;
+      let fallbackSummary = null;
       try {
         payload = await generateContent(
           {
@@ -1650,25 +1814,45 @@ function createCozyDeskRouter({
         const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
         const fallbackModel =
           currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
-        payload = await generateContent(
-          {
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          },
-          { env: { ...env, GEMINI_MODEL: fallbackModel } }
-        );
+        try {
+          payload = await generateContent(
+            {
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            },
+            { env: { ...env, GEMINI_MODEL: fallbackModel } }
+          );
+        } catch (secondaryErr) {
+          if (
+            isSleepSummaryTask &&
+            Array.isArray(body.sleepLogsContext) &&
+            body.sleepLogsContext.length > 0
+          ) {
+            console.warn(
+              "[cozy-desk] /assistant/execute-task using deterministic sleep summary fallback:",
+              secondaryErr?.message || secondaryErr
+            );
+            fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
+          } else {
+            throw secondaryErr;
+          }
+        }
       }
-      const text = (
-        payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
-      ).trim();
+      const text =
+        fallbackSummary ??
+        (payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "").trim();
       const summary = (text || "ดำเนินการตามรายการนี้เรียบร้อยแล้ว กรุณาตรวจสอบรายละเอียดได้เลยครับ").slice(
         0,
         isSleepSummaryTask ? 3600 : 2400
       );
       const usedTokens =
-        payload?.usageMetadata?.totalTokenCount ??
-        estimateFallbackTokens(systemInstruction.length + userPrompt.length, summary.length);
-      recordTokenUsage(req.userId, usedTokens);
+        fallbackSummary != null
+          ? 0
+          : payload?.usageMetadata?.totalTokenCount ??
+            estimateFallbackTokens(systemInstruction.length + userPrompt.length, summary.length);
+      if (usedTokens > 0) {
+        recordTokenUsage(req.userId, usedTokens);
+      }
 
       res.json({
         assistantId,
