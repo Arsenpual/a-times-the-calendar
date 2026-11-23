@@ -643,10 +643,36 @@ function classifyGeminiError(err) {
     lower.includes("quota") ||
     statusNum === 429
   ) {
+    const retrySec =
+      typeof err?.retryAfterSeconds === "number" && err.retryAfterSeconds > 0
+        ? err.retryAfterSeconds
+        : null;
+    const quotaWindow = err?.quotaWindow || "unknown";
+
+    let resetHint = "";
+    if (retrySec != null) {
+      const resetAt = new Date(Date.now() + retrySec * 1000);
+      const resetTimeStr = resetAt.toLocaleTimeString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      resetHint = `โควต้าจะรีเซ็ตในอีกประมาณ ${retrySec} วินาที (เวลา ~${resetTimeStr} น.)`;
+    } else if (quotaWindow === "day") {
+      resetHint =
+        "โควต้ารายวัน (RPD) ของ Gemini API จะรีเซ็ตเวลา 00:00 น. PT (ประมาณ 15:00 น. เวลาไทย)";
+    } else if (quotaWindow === "minute") {
+      resetHint = "โควต้ารายนาที (RPM) จะรีเซ็ตภายใน ~1 นาที กรุณารอสักครู่แล้วลองใหม่";
+    } else {
+      resetHint =
+        "หากเป็นโควต้ารายนาทีจะรีเซ็ตภายใน ~1 นาที แต่หากเกินโควต้ารายวันจะรีเซ็ตเวลา 00:00 น. PT (ประมาณ 15:00 น. เวลาไทย)";
+    }
+
     return {
       status: 429,
       code: "RESOURCE_EXHAUSTED",
-      message: "ใช้งานเกินโควต้าของ Gemini API ชั่วคราว กรุณารอสักครู่แล้วลองส่งใหม่อีกครั้ง",
+      message: `ใช้งานเกินโควต้าของ Gemini API ชั่วคราว — ${resetHint}`,
     };
   }
   return {
@@ -1197,10 +1223,9 @@ function createCozyDeskRouter({
         );
       } catch (primaryErr) {
         console.warn("[cozy-desk] /sleep/extract primary attempt failed, retrying without strict schema:", primaryErr?.message || primaryErr);
+        const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
         const fallbackModel =
-          env.GEMINI_MODEL && env.GEMINI_MODEL !== "gemini-3.8-flash"
-            ? "gemini-3.8-flash"
-            : "gemini-3.5-flash-lite";
+          currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
         const fallbackPrompt = [
           extractPrompt,
           "",
