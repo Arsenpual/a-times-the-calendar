@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { answerDeterministicCalendarQuestion, calendarRangeForQuestion, isCalendarQuestion, isDeterministicCalendarQuestion, needsCalendarReauth } = require("../calendar-question.js");
+const { answerDeterministicCalendarQuestion, calendarRangeForQuestion, isCalendarQuestion, isDeterministicCalendarQuestion, needsCalendarReauth } = require("../lib/calendar-question.js");
 
 test("Calendar 403 errors request reauth only for credential failures", () => {
   assert.equal(needsCalendarReauth(401, null), true);

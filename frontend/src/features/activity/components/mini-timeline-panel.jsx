@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "../styles/mini-timeline-panel.css";
 import { activityDate, formatTime, isSameDay } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "../lib/activity-colors.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
 import { downloadDayTimelineImage } from "../lib/export-day-image.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateContent } = require('../gemini-api.js');
+const { generateContent } = require('../lib/gemini-api.js');
 
 test('Developer API uses server header and preserves structured output settings', async () => {
   const body = { contents: [], generationConfig: { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } } };

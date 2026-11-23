@@ -1,6 +1,6 @@
 const express = require("express");
 const { FieldValue } = require("firebase-admin/firestore");
-const { assistantPreferencesDoc } = require("../firestore-db.js");
+const { assistantPreferencesDoc } = require("../lib/firestore-db.js");
 const {
   PREFERENCE_DEFINITIONS,
   validPreferenceValue,

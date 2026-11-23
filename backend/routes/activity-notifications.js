@@ -1,5 +1,5 @@
 const express = require("express");
-const { activityNotificationsCol } = require("../firestore-db.js");
+const { activityNotificationsCol } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 const MAX_TITLE_LENGTH = 300;

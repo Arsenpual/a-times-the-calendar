@@ -19,7 +19,7 @@ import {
   fetchGmailMessages,
   GmailApiError,
   type GmailFilterCategory,
-} from '../utils/gmailApi';
+} from '../api/gmailApi';
 
 interface MailboxModalProps {
   googleUser: User | null;

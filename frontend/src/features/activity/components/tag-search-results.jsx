@@ -1,6 +1,6 @@
 import React from "react";
 import { activityDate, formatTime, formatMonthYear } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "../lib/activity-colors.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 /**

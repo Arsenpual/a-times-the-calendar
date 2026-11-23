@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { introducesOverlapLimitViolation } from "./timeline-layout.js";
+import { introducesOverlapLimitViolation } from "../../../shared/lib/timeline-layout.js";
 
 const source = readFileSync(new URL("./activity-mutation-logic.js", import.meta.url), "utf8")
   .replace(

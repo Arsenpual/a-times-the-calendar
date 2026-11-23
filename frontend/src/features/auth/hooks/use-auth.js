@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { auth } from "../../../shared/config/firebase-auth.js";
 import { signInWithGoogle, subscribeToAuthState, signOut } from "../api/google-auth.js";
-import { beginCalendarAuthorization, disconnectCalendarConnection, getCalendarConnectionStatus } from "../../calendar-connection/api/google-calendar.js";
+import { beginCalendarAuthorization, disconnectCalendarConnection, getCalendarConnectionStatus } from "../../../shared/api/google-calendar.js";
 
 const CALENDAR_TOKEN_STORAGE_KEY = "calendarAccessToken";
 const CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY = "calendarAccessTokenExpiresAt";

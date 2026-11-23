@@ -1,4 +1,4 @@
-const { auth } = require("../firestore-db.js");
+const { auth } = require("../lib/firestore-db.js");
 
 /**
  * Middleware บังคับทุก request ต้องแนบ Firebase ID token ถูกต้อง — ตาม

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchActivities, isCalendarAuthExpiredError } from "../../calendar-connection/api/google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../../../shared/api/google-calendar.js";
 import { fetchCategories, fetchActivityCategoryMap } from "../api/categories.js";
 import { fetchActivityTagMap } from "../api/tags.js";
 import { fetchLockedActivities } from "../api/locks.js";

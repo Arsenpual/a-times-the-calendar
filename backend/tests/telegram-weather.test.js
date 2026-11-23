@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createWeatherController, reportData, recommendedSlots } = require("../lib/telegram-weather.js");
-const { coordinates, lookupGoogleWeather, findGoogleWeatherLocation } = require("../google-weather.js");
+const { coordinates, lookupGoogleWeather, findGoogleWeatherLocation } = require("../lib/google-weather.js");
 
 function sampleWeather() {
   return {

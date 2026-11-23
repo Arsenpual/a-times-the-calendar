@@ -1,6 +1,6 @@
 import { activityDate } from "../../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../../shared/lib/id-utils.js";
-import { exceedsOverlapLimit } from "../../lib/timeline-layout.js";
+import { exceedsOverlapLimit } from "../../../../shared/lib/timeline-layout.js";
 
 function localDateTime(date) {
   const pad = (value) => String(value).padStart(2, "0");

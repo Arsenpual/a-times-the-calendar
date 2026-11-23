@@ -6,7 +6,7 @@ import {
   deleteActivity as rawDeleteActivity,
   fetchRecurringInstances as rawFetchRecurringInstances,
   isCalendarAuthExpiredError
-} from "../../calendar-connection/api/google-calendar.js";
+} from "../../../shared/api/google-calendar.js";
 import {
   createCategory as rawCreateCategory,
   updateCategory as rawUpdateCategory,

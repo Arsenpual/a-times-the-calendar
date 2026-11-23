@@ -1,42 +1,27 @@
-import { useActivityView } from "../features/activity/hooks/use-activity-view.js";
-import { useActivityError } from "../features/activity/hooks/use-activity-error.js";
-import { useCycleActivities } from "../features/activity/hooks/use-cycle-activities.js";
-import { useActivityCollections } from "../features/activity/hooks/use-activity-collections.js";
+import React, { useCallback, useEffect, useState } from "react";
 import { useAppNavigation } from "./hooks/use-app-navigation.js";
+import { useAppShellUi } from "./hooks/use-app-shell-ui.js";
 import { useDisplayPreferences } from "../features/settings/hooks/use-display-preferences.js";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ActivityModeWeekSpine from "../features/activity/components/activity-mode-week-spine.jsx";
+import ActivityPopup from "../features/activity/components/activity-popup.jsx";
 import TagSearchResults from "../features/activity/components/tag-search-results.jsx";
 import ActivityModal from "../features/activity/components/activity-modal.jsx";
+import ActivityAiAssistant from "../features/activity/assistant/components/activity-assistant-dialog.jsx";
 import ReminderMode from "../features/reminder/components/reminder-mode.jsx";
 import CozyDeskMode from "../features/cozy-desk/cozy-desk-mode.jsx";
 import AnnouncementTicker from "../features/announcements/components/announcement-ticker.jsx";
 import SettingsDrawer from "../features/settings/components/settings-drawer.jsx";
-import { getMonthCycle, getWeekRange, getYearCycle, getYearWeekRange, toDateInputValue } from "../shared/lib/date-utils.js";
-import { normalizeActivityId } from "../shared/lib/id-utils.js";
-import { collectPreferenceCorrections } from "../features/activity/assistant/lib/preference-corrections.js";
-import { assertWeatherDraftCurrent } from "../features/activity/assistant/lib/weather-slot-validation.js";
-import { fetchWeatherPlan } from "../features/activity/assistant/api/activity-assistant-api.js";
-import { fetchActivities } from "../features/calendar-connection/api/google-calendar.js";
-import { fetchDailySummary } from "../features/activity/api/summary.js";
-import ActivityAiAssistant from "../features/activity/assistant/components/activity-assistant-dialog.jsx";
-import { useWeekNavigation } from "../features/activity/hooks/use-week-navigation.js";
-import { useWeekNames } from "../features/activity/hooks/use-week-names.js";
-import { useCalendarData } from "../features/activity/hooks/use-calendar-data.js";
-import { useTagSearch } from "../features/activity/hooks/use-tag-search.js";
-import { useActivityModal } from "../features/activity/hooks/use-activity-modal.js";
-import { useActivityMutations } from "../features/activity/hooks/use-activity-mutations.js";
-import { useActivityOnboarding } from "../features/activity/hooks/use-activity-onboarding.js";
-import { useArchivedActivityIds } from "../features/activity/hooks/use-archived-activity-ids.js";
-import { useActivityTelegramNotifications } from "../features/notifications/telegram/hooks/use-activity-telegram-notifications.js";
-import { useAnnouncementMessage } from "../features/announcements/hooks/use-announcement-message.js";
-import { useAppShellUi } from "./hooks/use-app-shell-ui.js";
+import { useActivityWorkspace } from "../features/activity/hooks/use-activity-workspace.js";
+import { useAssistantActivityActions } from "../features/activity/assistant/hooks/use-assistant-activity-actions.js";
 import { useAssistantPreferences } from "../features/activity/assistant/hooks/use-assistant-preferences.js";
-import { useTelegramConnection } from "../features/reminder/hooks/use-telegram-connection.js";
-import { useTelegramWebChat } from "../features/notifications/telegram/hooks/use-telegram-web-chat.js";
+import { useAnnouncementMessage } from "../features/announcements/hooks/use-announcement-message.js";
+import { useActivityTelegramNotifications } from "../features/notifications/hooks/use-activity-telegram-notifications.js";
+import { usePushNotifications } from "../features/notifications/hooks/use-push-notifications.js";
+import { useTelegramConnection } from "../features/notifications/hooks/use-telegram-connection.js";
+import { useTelegramWebChat } from "../features/notifications/hooks/use-telegram-web-chat.js";
 import AppHeader from "./components/app-header.jsx";
 import AppTaskbar from "./components/app-taskbar.jsx";
-import CalendarConnectionOverlays from "./components/calendar-connection-overlays.jsx";
+import CalendarConnectionOverlays from "../features/calendar-connection/components/calendar-connection-overlays.jsx";
 import ActivityAuthState from "./components/activity-auth-state.jsx";
 import FirestoreQuotaBanner from "./components/firestore-quota-banner.jsx";
 import { PopupLayerItem } from "../shared/ui/popup-layer.jsx";
@@ -109,13 +94,113 @@ export default function AccountApp({ auth }) {
     CALENDAR_TOKEN_EXPIRES_AT_STORAGE_KEY
   } = auth;
   const assistantPreferences = useAssistantPreferences(firebaseUser?.uid);
+  const { isEnabled: isPushEnabled } = usePushNotifications({ firebaseUser });
   const telegramIntegration = useTelegramConnection(firebaseUser);
   const telegramChat = useTelegramWebChat(firebaseUser, telegramIntegration.telegramConnection.isConnected);
-  const { error: activityError, setError } = useActivityError(firebaseUser?.uid);
-  const error = authError || activityError;
-
-  const archivedActivityIds = useArchivedActivityIds(firebaseUser);
   const announcement = useAnnouncementMessage(firebaseUser);
+
+  const { mode, setMode, closeAiMode, toggleAiMode, settingsOpen, setSettingsOpen } = useAppNavigation();
+  const [navigationExpanded, setNavigationExpanded] = useState(() => window.matchMedia("(min-width: 761px)").matches);
+  const {
+    reminderTimelineColors, setReminderTimelineColors,
+    nowIndicatorResetSeconds, setNowIndicatorResetSeconds,
+    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
+  } = useDisplayPreferences();
+
+  const {
+    isActivityReading,
+    setIsActivityReading,
+    accountMenuOpen,
+    setAccountMenuOpen,
+    accountMenuRef,
+    activityDashboardRef,
+    handleActivityDashboardScroll
+  } = useAppShellUi({ mode, userId: firebaseUser?.uid });
+
+  const {
+    activityError,
+    setError,
+    archivedActivityIds,
+    cursorDate,
+    weekRangeOverride,
+    navigateWeek,
+    navigateDay,
+    goToday,
+    focusDate,
+    openDay,
+    closeDay,
+    weekSpineViewMode,
+    cycleAnchorDate,
+    monthAnchorDate,
+    setWeekSpineView,
+    navigateCycle,
+    navigateMonth,
+    setMonthAnchorDate,
+    selectMonthDate,
+    selectCycleDate,
+    openCycleWeekEditor,
+    openCycleWeekView,
+    selectCycleWeek,
+    focusCycleSummary,
+    focusWeeklySummary,
+    activityHeaderTitle,
+    cycleData,
+    activities,
+    loading,
+    categories,
+    activityCategoryMap,
+    activityTagMap,
+    lockedActivities,
+    resetOnLogout,
+    handleManualCalendarSync,
+    tagSearchTerms,
+    setTagSearchTerms,
+    tagSearchDraft,
+    setTagSearchDraft,
+    tagSearchLoading,
+    tagSearchError,
+    isSearchingTags,
+    modalOpen,
+    modalDefaultDate,
+    modalDefaultEnd,
+    modalDefaultTitle,
+    modalInitialDraft,
+    modalInitialWarning,
+    modalMissingFields,
+    modalEditingActivity,
+    modalEditingAsSeries,
+    modalSessionId,
+    openAddActivity,
+    openEditActivity,
+    openEditActivityById,
+    closeModal,
+    handleEditSeries,
+    handleToggleLock,
+    handleAssignCategory,
+    handleCreateCategory,
+    handleUpdateCategoryColor,
+    handleDeleteCategory,
+    handleSaveActivity,
+    handleSaveActivityPlan,
+    handleSaveTimes,
+    handleFetchSeriesCount,
+    handleDeleteActivity,
+    handleDeleteSeries,
+    handleDuplicateActivity,
+    handleMoveActivityToDay,
+    calendarActivities,
+    visibleActivities,
+    displayedActivityCategoryMap,
+    weekNamesState,
+    visibleHeaderWeekStart
+  } = useActivityWorkspace({
+    mode,
+    firebaseUser,
+    calendarAccessToken,
+    setCalendarAccessToken
+  });
+
+  const error = authError || activityError;
 
   useEffect(() => {
     if (!error) return undefined;
@@ -132,287 +217,41 @@ export default function AccountApp({ auth }) {
     };
   }, [error, setError, setAuthError]);
 
-  const { mode, setMode, closeAiMode, toggleAiMode, settingsOpen, setSettingsOpen } = useAppNavigation();
-  const [navigationExpanded, setNavigationExpanded] = useState(() => window.matchMedia("(min-width: 761px)").matches);
   const {
-    reminderTimelineColors, setReminderTimelineColors,
-    nowIndicatorResetSeconds, setNowIndicatorResetSeconds,
-    summaryPanelGlassEnabled, setSummaryPanelGlassEnabled
-  } = useDisplayPreferences();
-  const nav = useWeekNavigation({ mode, userId: firebaseUser?.uid ?? null });
-  const {
-    cursorDate,
-    expandedDate,
-    weekRangeOverride,
-    navigateWeek,
-    navigateDay,
-    goToday,
-    selectWeek,
-    focusDate,
-    openDay,
-    closeDay
-  } = nav;
-  const {
-    weekSpineViewMode,
-    cycleAnchorDate,
-    monthAnchorDate,
-    setWeekSpineView,
-    navigateCycle,
-    navigateMonth,
-    setMonthAnchorDate,
-    selectMonthDate,
-    selectCycleDate,
-    openCycleWeekEditor,
-    openCycleWeekView,
-    selectCycleWeek,
-    focusCycleSummary,
-    focusWeeklySummary,
-    activityHeaderTitle
-  } = useActivityView({ cursorDate, selectWeek, closeDay, userId: firebaseUser?.uid ?? null });
-  // In the normal Week Spine, Cycle Streamgraph follows the week currently
-  // on screen. The four-week overview continues to own its own cycle anchor.
-  const cycleRange = getYearCycle(
-    cycleAnchorDate
-  );
-  const monthRange = getMonthCycle(monthAnchorDate);
-  const cycleData = useCycleActivities({
-    viewMode: mode === "activity" && firebaseUser ? weekSpineViewMode : "week",
-    calendarAccessToken,
-    cycleStart: weekSpineViewMode === "month" ? monthRange.gridStart : cycleRange.start,
-    cycleEnd: weekSpineViewMode === "month" ? monthRange.gridEnd : cycleRange.end,
-    userId: firebaseUser?.uid,
-    archivedActivityIds,
-    includeWhenWeek: false
-  });
-  const {
-    isActivityReading,
-    setIsActivityReading,
-    accountMenuOpen,
-    setAccountMenuOpen,
-    accountMenuRef,
-    activityDashboardRef,
-    handleActivityDashboardScroll
-  } = useAppShellUi({ mode, userId: firebaseUser?.uid });
-
-  const calendarData = useCalendarData({ calendarAccessToken, setCalendarAccessToken, firebaseUser, cursorDate, setError, archivedActivityIds });
-  const {
-    activities,
-    setActivities,
-    loading,
-    categories,
-    setCategories,
-    activityCategoryMap,
-    setActivityCategoryMap,
-    activityTagMap,
-    setActivityTagMap,
-    lockedActivities,
-    setLockedActivities,
-    summary,
-    summaryLoading,
-    summaryError,
-    loadActivities,
-    resetOnLogout
-  } = calendarData;
-
-  const handleManualCalendarSync = useCallback(async () => {
-    if (!calendarAccessToken) {
-      setError("สิทธิ์ Google Calendar หมดอายุแล้ว — ยืนยันตัวตนเมื่อต้องการดึงกิจกรรม");
-      return;
-    }
-    try {
-      await loadActivities();
-    } catch {
-      // loadActivities already exposes a recoverable error and clears an
-      // expired token. Keep navigation usable after a failed manual sync.
-    }
-  }, [calendarAccessToken, loadActivities, setError]);
-
-  const tagSearch = useTagSearch({ calendarAccessToken, setCalendarAccessToken });
-  const {
-    tagSearchTerms,
-    setTagSearchTerms,
-    tagSearchDraft,
-    setTagSearchDraft,
-    tagSearchResults,
-    tagSearchLoading,
-    tagSearchError,
-    refreshTagSearchIfActive,
-    isSearchingTags
-  } = tagSearch;
-
-  const activityModal = useActivityModal({ calendarAccessToken, lockedActivities, setError });
-  const {
-    modalOpen,
-    modalDefaultDate,
-    modalDefaultEnd,
-    modalDefaultTitle,
-    modalInitialDraft,
-    modalInitialWarning,
-    modalMissingFields,
-    modalEditingActivity,
-    modalEditingAsSeries,
-    modalSessionId,
-    openAddActivity,
-    openEditActivity,
-    openEditActivityById,
-    closeModal,
-    handleEditSeries
-  } = activityModal;
-  const activityAssistantOpen = mode === "ai";
-  const setActivityAssistantOpen = useCallback((open) => {
-    if (open) setMode("ai");
-    else closeAiMode();
-  }, [setMode, closeAiMode]);
-  const [assistantInsight, setAssistantInsight] = useState(null);
-  const [activityAssistantFormUpdate, setActivityAssistantFormUpdate] = useState(null);
-  const [activityAssistantStartRequest, setActivityAssistantStartRequest] = useState(0);
-  const [activityAssistantDailySummaryRequest, setActivityAssistantDailySummaryRequest] = useState(0);
-  const [assistantDailySummary, setAssistantDailySummary] = useState({ open: false, loading: false, error: "", data: null });
-  useEffect(() => {
-    if (mode === "ai") return;
-    telegramChat.closeChat();
-    setAssistantDailySummary(current => current.open ? { open: false, loading: false, error: "", data: null } : current);
-  }, [mode, telegramChat.closeChat]);
-  const handleCloseActivityModal = () => {
-    // An assistant hand-off belongs only to the current form.  Clearing it on
-    // close prevents an old chat reply from refilling the next blank form.
-    setActivityAssistantFormUpdate(null);
-    closeModal();
-  };
-  const openAssistantDailySummary = useCallback(async () => {
-    if (!calendarAccessToken) throw new Error("กรุณาเชื่อม Google Calendar ก่อนดูสรุปกิจกรรม");
-    const now = new Date();
-    const date = toDateInputValue(now);
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-    setAssistantDailySummary({ open: true, loading: true, error: "", data: null });
-    handleCloseActivityModal();
-    try {
-      const dayActivities = await fetchActivities(calendarAccessToken, dayStart, dayEnd);
-      const payload = dayActivities
-        .filter((activity) => !archivedActivityIds.has(activity.id))
-        .map((activity) => {
-          const allDay = Boolean(activity.start?.date && !activity.start?.dateTime);
-          return {
-            id: activity.id,
-            summary: activity.summary,
-            start: allDay ? `${activity.start.date}T00:00:00` : activity.start?.dateTime,
-            end: allDay ? `${activity.end?.date || activity.start.date}T00:00:00` : activity.end?.dateTime,
-            allDay
-          };
-        })
-        .filter((activity) => activity.start && activity.end);
-      const data = await fetchDailySummary(date, payload);
-      setAssistantDailySummary({ open: true, loading: false, error: "", data });
-      return data;
-    } catch (error) {
-      setAssistantDailySummary({ open: true, loading: false, error: error.message, data: null });
-      throw error;
-    }
-  }, [calendarAccessToken, archivedActivityIds]);
-  const requestAssistantDailySummary = useCallback(() => {
-    setActivityAssistantOpen(true);
-    setActivityAssistantDailySummaryRequest((current) => current + 1);
-  }, [setActivityAssistantOpen]);
-
-  const mutations = useActivityMutations({
-    calendarAccessToken,
-    setCalendarAccessToken,
-    activities,
-    setActivities,
-    activityCategoryMap,
-    setActivityCategoryMap,
-    activityTagMap,
-    setActivityTagMap,
-    lockedActivities,
-    setLockedActivities,
-    setCategories,
-    loadActivities,
-    refreshTagSearchIfActive,
-    setError
-  });
-  const {
-    handleToggleLock,
-    handleAssignCategory,
-    handleCreateCategory,
-    handleUpdateCategoryColor,
-    handleDeleteCategory,
-    handleSaveActivity,
-    handleSaveActivityPlan,
-    handleSaveTimes,
-    handleFetchSeriesCount,
-    handleDeleteActivity,
-    handleDeleteSeries,
-    handleDuplicateActivity,
-    handleMoveActivityToDay
-  } = mutations;
-  const saveActivityWithAssistantLearning = useCallback(async (payload) => {
-    await assertWeatherDraftCurrent({ validation: payload.weatherValidation, activityBody: payload.activityBody, fetchPlan: fetchWeatherPlan });
-    const saved = await handleSaveActivity(payload);
-    const corrections = collectPreferenceCorrections(payload);
-    // Preference learning is never allowed to make a Calendar save look as if
-    // it failed. It is an optional follow-up and has its own visible UI.
-    if (corrections.length) assistantPreferences.recordCorrections(corrections).catch(() => {});
-    return saved;
-  }, [assistantPreferences, handleSaveActivity]);
-  const saveAssistantRailEdit = useCallback(async ({ id, updated, draft }) => {
-    const start = new Date(draft?.startLocal || "");
-    const end = new Date(draft?.endLocal || "");
-    if (!id || !draft?.title?.trim() || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
-      throw new Error("ข้อมูลกิจกรรมที่แก้ไขไม่ถูกต้อง");
-    }
-    const normalizedId = normalizeActivityId(id);
-    return handleSaveActivity({
-      existingId: id,
-      knownUpdated: updated,
-      categoryId: activityCategoryMap[normalizedId] || null,
-      tags: activityTagMap[normalizedId] || [],
-      activityBody: {
-        summary: draft.title.trim(),
-        start: { dateTime: start.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-        end: { dateTime: end.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-      }
-    });
-  }, [activityCategoryMap, activityTagMap, handleSaveActivity]);
-  const saveAssistantPlan = useCallback(async (drafts) => {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const items = drafts.map((draft) => {
-      const start = new Date(draft.startLocal || "");
-      const end = new Date(draft.endLocal || "");
-      if (!draft.title?.trim() || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
-        throw new Error("แผนมีชื่อหรือวันเวลาที่ไม่ถูกต้อง");
-      }
-      const categoryId = categories.find((category) => category.name === draft.categoryName)?.id || null;
-      return {
-        activityBody: {
-          summary: draft.title.trim(),
-          description: draft.notes?.trim() || null,
-          start: { dateTime: start.toISOString(), timeZone },
-          end: { dateTime: end.toISOString(), timeZone }
-        },
-        categoryId,
-        tags: Array.isArray(draft.tags) ? draft.tags : []
-      };
-    });
-    return handleSaveActivityPlan(items);
-  }, [categories, handleSaveActivityPlan]);
-
-  const { onboardingActivities, onboardingCategoryMap } = useActivityOnboarding({
+    activityAssistantOpen,
+    assistantInsight,
+    setAssistantInsight,
+    activityAssistantFormUpdate,
+    activityAssistantStartRequest,
+    activityAssistantDailySummaryRequest,
+    assistantDailySummary,
+    handleCloseActivityModal,
+    openAssistantDailySummary,
+    saveActivityWithAssistantLearning,
+    saveAssistantRailEdit,
+    saveAssistantPlan,
+    handleCloseAssistant,
+    handleOpenActivityFormFromAssistant,
+    handleUpdateActivityFormFromAssistant,
+    handleOpenAssistantFromModal
+  } = useAssistantActivityActions({
     mode,
-    firebaseUser,
+    setMode,
+    closeAiMode,
+    calendarAccessToken,
+    archivedActivityIds,
     categories,
-    cursorDate,
-    activities
+    activityCategoryMap,
+    activityTagMap,
+    assistantPreferences,
+    telegramChat,
+    openAddActivity,
+    closeModal,
+    handleSaveActivity,
+    handleSaveActivityPlan
   });
 
-  // handleLogout composes both hooks' own cleanup — useAuth only knows
-  // how to sign out of Firebase, useCalendarData only knows how to clear
-  // the data it owns; neither hook has a reference to the other, so this
-  // composition has to happen here.
   const handleLogout = async () => {
-    // Close transient UI immediately. Firebase identity change then unmounts
-    // the account tree, including both modes' timers and subscriptions.
     setAccountMenuOpen(false);
     setSettingsOpen(false);
     setIsActivityReading(false);
@@ -425,28 +264,7 @@ export default function AccountApp({ auth }) {
     resetOnLogout();
   };
 
-  /**
-   * กรองกิจกรรมด้วย tag search (OR — มี tag ใดอันหนึ่งตรงกับคำค้นหาอันใด
-   * อันหนึ่งก็นับ) เมื่อกำลังค้นหาอยู่ (มี tagSearchTerms) ใช้
-   * tagSearchResults (ดึงมาแบบกว้าง ±3 เดือน จาก useTagSearch) แทน
-   * activities ของสัปดาห์ปัจจุบัน เพื่อให้เห็นผลลัพธ์ข้ามสัปดาห์ได้
-   */
-  const { calendarActivities, visibleActivities } = useActivityCollections({
-    activities, onboardingActivities, archivedActivityIds,
-    tagSearchTerms, tagSearchResults, activityTagMap
-  });
-  const displayedActivityCategoryMap = useMemo(
-    () => ({ ...activityCategoryMap, ...onboardingCategoryMap }),
-    [activityCategoryMap, onboardingCategoryMap]
-  );
-
   useActivityTelegramNotifications({ firebaseUser, activities, archivedActivityIds });
-
-  const weekNamesState = useWeekNames(firebaseUser?.uid);
-  const [defaultHeaderWeekStart] = getYearWeekRange(cursorDate);
-  const headerWeekStart = weekRangeOverride?.start instanceof Date ? weekRangeOverride.start : defaultHeaderWeekStart;
-  const headerYearStart = new Date(cursorDate.getFullYear(), 0, 1);
-  const visibleHeaderWeekStart = headerWeekStart < headerYearStart ? headerYearStart : headerWeekStart;
 
   const headerInSummary = mode === "activity" && !isSearchingTags;
   const appHeader = (
@@ -542,6 +360,8 @@ export default function AccountApp({ auth }) {
               nowIndicatorResetSeconds={nowIndicatorResetSeconds}
               telegramIntegration={telegramIntegration}
               telegramChat={telegramChat}
+              isPushEnabled={isPushEnabled}
+              ActivityPopupComponent={ActivityPopup}
             />
           </div>
         )}
@@ -674,11 +494,7 @@ export default function AccountApp({ auth }) {
         dailySummaryOpen={assistantDailySummary.open}
         startActivityCreationRequest={activityAssistantStartRequest}
         startDailySummaryRequest={activityAssistantDailySummaryRequest}
-        onClose={() => {
-          setActivityAssistantOpen(false);
-          telegramChat.closeChat();
-          setAssistantDailySummary({ open: false, loading: false, error: "", data: null });
-        }}
+        onClose={handleCloseAssistant}
         categories={categories}
         activities={activities}
         activityTagMap={activityTagMap}
@@ -692,13 +508,8 @@ export default function AccountApp({ auth }) {
         onClearTelegramMessages={telegramChat.clearChatMessages}
         lockedActivities={lockedActivities}
         userId={firebaseUser?.uid}
-        onOpenActivityForm={(draft) => {
-          setActivityAssistantFormUpdate(null);
-          const start = new Date(draft.startLocal || new Date());
-          const end = new Date(draft.endLocal || start.getTime() + 60 * 60000);
-          openAddActivity(start, { preserveTime: true, end, title: draft.title || "", initialDraft: { ...draft, assistantOrigin: "mr-zettascale" } });
-        }}
-        onUpdateActivityForm={({ values, changedField }) => setActivityAssistantFormUpdate({ values, changedField, revision: Date.now() })}
+        onOpenActivityForm={handleOpenActivityFormFromAssistant}
+        onUpdateActivityForm={handleUpdateActivityFormFromAssistant}
         onConfirmActivityPlan={saveAssistantPlan}
         onUpdateActivityFromRail={saveAssistantRailEdit}
         onDeleteActivityFromRail={handleDeleteActivity}
@@ -743,11 +554,7 @@ export default function AccountApp({ auth }) {
         onDeleteCategory={handleDeleteCategory}
         onSave={saveActivityWithAssistantLearning}
         onDelete={handleDeleteActivity}
-        onOpenAssistant={() => {
-          handleCloseActivityModal();
-          setActivityAssistantOpen(true);
-          setActivityAssistantStartRequest((current) => current + 1);
-        }}
+        onOpenAssistant={handleOpenAssistantFromModal}
         onClose={handleCloseActivityModal}
       />
 

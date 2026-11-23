@@ -1,4 +1,4 @@
-const { findGoogleWeatherLocation, lookupGoogleWeather, coordinates } = require("../google-weather.js");
+const { findGoogleWeatherLocation, lookupGoogleWeather, coordinates } = require("./google-weather.js");
 const { buildZettascaleInstruction } = require("./zettascale-persona.js");
 const MODES = Object.freeze({ now: "ตอนนี้", today: "วันนี้", tomorrow: "พรุ่งนี้", days: "3 วัน" });
 const { ACTIVITIES, stamp, weatherHours, rankHour, recommendedSlots } = require("./weather-planning.js");

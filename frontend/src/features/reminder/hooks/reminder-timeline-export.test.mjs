@@ -4,8 +4,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { reminderSlotsOnDate, localDateKey } from "../lib/reminder-date-view.js";
 import { REMINDER_TYPE } from "../lib/reminder-due-logic.js";
-import { getDisplayColor } from "../../activity/lib/activity-colors.js";
-import { layoutOverlaps } from "../../activity/lib/timeline-layout.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
+import { layoutOverlaps } from "../../../shared/lib/timeline-layout.js";
 
 // Load the real date parser without the unrelated JSX localization module.
 const dateContext = vm.createContext({});

@@ -20,7 +20,7 @@ import {
   fetchDriveFolders,
   GoogleDriveApiError,
   uploadConvertedDriveDocument,
-} from '../utils/driveApi';
+} from '../api/driveApi';
 import {
   type DriveExportFormat,
   extractCleanDocumentBody,
@@ -28,7 +28,7 @@ import {
   markdownToSpreadsheetRows,
   rowsToUtf8Csv,
   suggestDocumentTitle,
-} from '../utils/driveExport';
+} from '../lib/driveExport';
 
 interface SaveToDriveModalProps {
   isOpen: boolean;

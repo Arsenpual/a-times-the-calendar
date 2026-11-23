@@ -6,7 +6,7 @@
 // multi-day support do not have to reinterpret event data independently.
 
 import { activityDate, isSameDay } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "./activity-colors.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 function dayStart(date) {

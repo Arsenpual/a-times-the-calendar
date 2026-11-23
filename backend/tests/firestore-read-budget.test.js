@@ -93,7 +93,7 @@ test("news changed/deleted during search is not delivered or written", async () 
 });
 
 test("repair marker survives process restarts; incomplete repairs remain retryable", async () => {
-  const dbSource = fs.readFileSync(require.resolve("../firestore-db.js"), "utf8");
+  const dbSource = fs.readFileSync(require.resolve("../lib/firestore-db.js"), "utf8");
   const start = dbSource.indexOf("async function repairLegacyActivityCategoryMappings(");
   const fn = dbSource.slice(start, dbSource.indexOf("\n}", start) + 2);
   let marker = {}, scans = 0, fail = true;

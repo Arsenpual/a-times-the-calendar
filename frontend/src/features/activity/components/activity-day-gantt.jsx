@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { activityDate, formatTime, isSameDay } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "../lib/activity-colors.js";
-import { MAX_OVERLAP_STACKS } from "../lib/timeline-layout.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
+import { MAX_OVERLAP_STACKS } from "../../../shared/lib/timeline-layout.js";
 
 const DAY_MINUTES = 24 * 60;
 const TRACK_HEIGHT = 38;

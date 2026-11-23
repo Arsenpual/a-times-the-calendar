@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { activityDate, getYearWeekRange, getYearCycle } from "../../../shared/lib/date-utils.js";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-import { getDisplayColor, UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
+import { getDisplayColor, UNCATEGORIZED_COLOR } from "../../../shared/lib/activity-colors.js";
 
 function startOfDay(day) {
   const start = new Date(day);

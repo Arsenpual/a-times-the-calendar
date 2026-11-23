@@ -13,7 +13,7 @@ function loadAccess(env) {
   } };
   const context = { module: { exports: {} }, process: { env }, Intl, Date,
     require: () => ({ db, telegramAuthDoc: () => ref }) };
-  vm.runInNewContext(fs.readFileSync(require.resolve('../gemini-chat.js'), 'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(require.resolve('../lib/gemini-chat.js'), 'utf8'), context);
   return { api: context.module.exports, counts: () => ({ reads, transactions }) };
 }
 

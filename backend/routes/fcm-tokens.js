@@ -1,5 +1,5 @@
 const express = require("express");
-const { fcmTokensCol } = require("../firestore-db.js");
+const { fcmTokensCol } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 

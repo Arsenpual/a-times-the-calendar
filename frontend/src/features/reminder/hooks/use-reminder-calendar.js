@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchActivities, isCalendarAuthExpiredError } from "../../calendar-connection/api/google-calendar.js";
+import { fetchActivities, isCalendarAuthExpiredError } from "../../../shared/api/google-calendar.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 const EMPTY = [];

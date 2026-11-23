@@ -1,6 +1,6 @@
 import React from "react";
 import { dateForWeekdayLabel, getYearWeekRange } from "../../../shared/lib/date-utils.js";
-import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
+import { UNCATEGORIZED_COLOR } from "../../../shared/lib/activity-colors.js";
 
 const WEEKDAY_FULL = {
   "อา": "อาทิตย์", "จ": "จันทร์", "อ": "อังคาร", "พ": "พุธ",

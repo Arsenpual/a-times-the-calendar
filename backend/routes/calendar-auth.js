@@ -6,7 +6,7 @@ const {
   storeRefreshToken,
   connectionStatus,
   disconnectCalendar
-} = require("../calendar-oauth.js");
+} = require("../lib/calendar-oauth.js");
 
 const router = express.Router();
 

@@ -1,5 +1,5 @@
 const express = require("express");
-const { activityArchiveCol } = require("../firestore-db.js");
+const { activityArchiveCol } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 const MAX_TITLE_LENGTH = 300;

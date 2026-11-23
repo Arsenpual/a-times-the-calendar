@@ -1,27 +1,35 @@
 # Shared
 
-โค้ดที่หลายฟีเจอร์ใช้ร่วมกัน ไม่มี dependency กลับไปยัง features หรือ app
+โค้ดที่หลายฟีเจอร์ใช้ร่วมกัน ไม่มี dependency ย้อนกลับไปยัง `features/` หรือ `app/` (ตรวจอัตโนมัติด้วย `tests/architecture-boundaries.test.mjs`)
 
 ```text
 shared/
-├── api/client.js
+├── api/
+│   ├── client.js
+│   ├── firestore-quota-status.js
+│   ├── google-calendar.js
+│   └── in-flight-reads.js
 ├── config/
-│   ├── firebase-config.js
-│   └── firebase-auth.js
+│   ├── assistant-preference-fields.js
+│   ├── firebase-auth.js
+│   └── firebase-config.js
+├── hooks/
+│   └── use-session-task-guard.js
 ├── i18n/
 │   ├── i18n.jsx          # React provider/context
 │   └── i18n-catalog.js   # dictionary และ locale data แบบ pure JS
 ├── lib/
+│   ├── activity-colors.js
 │   ├── date-utils.js
-│   └── id-utils.js
-├── styles/global.css
-└── ui/auto-shrink-text.jsx
+│   ├── id-utils.js
+│   ├── lonth-engine.js
+│   └── timeline-layout.js
+├── styles/
+│   ├── global.css
+│   ├── popup-layer.css
+│   └── portal-theme.css
+└── ui/
+    ├── auto-shrink-text.jsx
+    ├── brand-wordmark.jsx
+    └── popup-layer.jsx
 ```
-
-ย้ายไฟล์เพิ่ม 5 ไฟล์และปรับ import โดยคง logic เดิม ทั้ง HTTP client และ Firebase Auth ใช้ Firebase config จากตำแหน่งนี้
-
-`styles/global.css` เก็บ design token, theme และ reset ที่ใช้ร่วมกัน ส่วน `src/index.css` ทำหน้าที่เป็น CSS manifest เพื่อ import style ของแต่ละ feature ตามลำดับ cascade. Endpoint เดิมใน `src/api.js` แยกไปยัง API ของ Activity, Reminder และ Announcements ครบแล้ว ทุกส่วนใช้ `shared/api/client.js` ร่วมกัน
-
-หลัง build ผ่าน ให้ลองเปลี่ยนภาษา/ธีม, แสดงวันเวลา, ชื่อกิจกรรมยาว และ login/โหลดข้อมูลด้วยบัญชีจริง
-
-`i18n.jsx` re-export API ของ catalog เพื่อรักษา import เดิมของ components ส่วน pure utilities ควร import `i18n-catalog.js` โดยตรงเพื่อไม่เพิ่ม React dependency โดยไม่จำเป็น

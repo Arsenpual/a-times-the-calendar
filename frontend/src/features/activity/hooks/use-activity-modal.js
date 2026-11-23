@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getActivity } from "../../calendar-connection/api/google-calendar.js";
+import { getActivity } from "../../../shared/api/google-calendar.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 
 /**

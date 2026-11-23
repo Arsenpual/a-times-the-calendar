@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { db, categoriesCol, activityCategoriesCol, ensureDefaultCategoriesForUser } = require("../firestore-db.js");
+const { db, categoriesCol, activityCategoriesCol, ensureDefaultCategoriesForUser } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 

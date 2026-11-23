@@ -6,7 +6,6 @@ import { useReminderComposerActions } from "../hooks/use-reminder-composer-actio
 import { useReminderActions } from "../hooks/use-reminder-actions.js";
 import { useReminderComposerPreview } from "../hooks/use-reminder-composer-preview.js";
 import { useReminderGroups } from "../hooks/use-reminder-groups.js";
-import { usePushNotifications } from "../../notifications/push/hooks/use-push-notifications.js";
 import { useReminderStore } from "../hooks/use-reminder-store.js";
 import { useReminderStats } from "../hooks/use-reminder-stats.js";
 import { useActivityContextMenu } from "../hooks/use-activity-context-menu.js";
@@ -18,7 +17,6 @@ import ReminderCard from "./reminder-card.jsx";
 import ReminderListPanel from "./reminder-list-panel.jsx";
 import ReminderTimelinePanel from "./reminder-timeline-panel.jsx";
 import ReminderStatsPanel from "./reminder-stats-panel.jsx";
-import ActivityPopup from "../../activity/components/activity-popup.jsx";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
 import { PopupLayerItem } from "../../../shared/ui/popup-layer.jsx";
 import { useLanguage } from "../../../shared/i18n/i18n.jsx";
@@ -32,7 +30,6 @@ import { createBlankDraft, DEFAULT_REMINDERS } from "../lib/reminder-defaults.js
 import { formatDurationClock } from "../lib/reminder-formatters.js";
 import ReminderTimelineRows from "./reminder-timeline-rows.jsx";
 import ReminderTopbar from "./reminder-topbar.jsx";
-import TelegramConnectionToast from "./telegram-connection-toast.jsx";
 import ReminderAlerts from "./reminder-alerts.jsx";
 
 export default function ReminderDashboard({
@@ -51,7 +48,9 @@ export default function ReminderDashboard({
   timelineColors,
   nowIndicatorResetSeconds = 3,
   telegramIntegration,
-  telegramChat
+  telegramChat,
+  isPushEnabled = false,
+  ActivityPopupComponent = null
 }) {
   const { t } = useLanguage();
   // Runtime reminder state belongs to a person, not to this browser. The
@@ -64,15 +63,26 @@ export default function ReminderDashboard({
     extractScheduleFields
   });
   const { groups, groupsError, addGroup, removeGroup } = useReminderGroups({ firebaseUser });
-  const {
-    isEnabled: isPushEnabled
-  } = usePushNotifications({ firebaseUser });
 
-  const { telegramConnection, areTelegramAlertsEnabled, handleTelegramAlertToggle, dismissTelegramStatus } = telegramIntegration;
+  const {
+    telegramConnection,
+    areTelegramAlertsEnabled,
+    handleTelegramAlertToggle,
+    dismissTelegramStatus,
+    sendTelegramReminder,
+    areTelegramNotificationsEnabled,
+    TelegramConnectionToast
+  } = telegramIntegration;
   const { activityContextMenu, openActivityContextMenu, closeActivityContextMenu } = useActivityContextMenu();
   const { reminderStats, recordStatsEvent, isStatsOpen, openStats, closeStats } = useReminderStats({ firebaseUser, reminders });
   const { dueReminders, nowTick, scheduleNext, markCompleted } = useDueReminders({
-    reminders, setReminders, updateReminders, firebaseUser, recordStatsEvent
+    reminders,
+    setReminders,
+    updateReminders,
+    firebaseUser,
+    recordStatsEvent,
+    sendTelegramReminder,
+    areTelegramNotificationsEnabled
   });
   const eventAnchorSessions = useEventAnchorSessions(reminders, nowTick);
   // Keep temporary sessions visible on their own, and also attach them to
@@ -231,7 +241,7 @@ export default function ReminderDashboard({
         openTelegramChat={telegramChat.openChat} isPushEnabled={isPushEnabled} openStats={openStats}
       />
 
-      <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />
+      {TelegramConnectionToast && <TelegramConnectionToast telegramConnection={telegramConnection} onClose={dismissTelegramStatus} />}
       <ReminderStatsPanel isOpen={isStatsOpen} onClose={() => closeStats()} stats={reminderStats} />
 
       {/* Backdrop ปิดเมนู "⋮" การ์ด / snooze dropdown เมื่อคลิกนอกเมนู —
@@ -335,8 +345,8 @@ export default function ReminderDashboard({
           onEditActivity={onEditActivity}
           onOpenActivityMenu={openActivityContextMenu}
         />
-        {activityContextMenu && (
-          <ActivityPopup
+        {activityContextMenu && ActivityPopupComponent && (
+          <ActivityPopupComponent
             activity={activityContextMenu.block.activity}
             start={new Date(activityContextMenu.block.actualStartMs)}
             end={new Date(activityContextMenu.block.actualEndMs)}

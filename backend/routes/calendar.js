@@ -1,5 +1,5 @@
 const express = require("express");
-const { getFreshAccessToken, CalendarReauthRequiredError } = require("../calendar-oauth.js");
+const { getFreshAccessToken, CalendarReauthRequiredError } = require("../lib/calendar-oauth.js");
 
 const router = express.Router();
 const EVENTS_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";

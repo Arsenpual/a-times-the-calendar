@@ -1,6 +1,6 @@
 import { applyTimeDraft } from "../lib/planner-time-draft.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-import { introducesOverlapLimitViolation } from "../lib/timeline-layout.js";
+import { introducesOverlapLimitViolation } from "../../../shared/lib/timeline-layout.js";
 import {
   activitySaveCandidateEntries,
   buildActivityDuplicateBody,

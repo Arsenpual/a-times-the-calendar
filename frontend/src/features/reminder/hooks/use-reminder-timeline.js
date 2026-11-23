@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reminderSlotsOnDate, localDateKey } from "../lib/reminder-date-view.js";
 import { REMINDER_TYPE } from "../lib/reminder-due-logic.js";
 import { activityDate } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "../../activity/lib/activity-colors.js";
-import { layoutOverlaps } from "../../activity/lib/timeline-layout.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
+import { layoutOverlaps } from "../../../shared/lib/timeline-layout.js";
 
 export const ZOOM_LEVELS_MINUTES = [60, 15, 5, 1];
 export const ROW_HEIGHT_PX = 32;

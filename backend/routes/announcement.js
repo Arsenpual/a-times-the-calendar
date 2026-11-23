@@ -1,6 +1,6 @@
 const express = require("express");
-const { announcementDoc } = require("../firestore-db.js");
-const { normalizeAnnouncementConfig } = require("../announcement-config.js");
+const { announcementDoc } = require("../lib/firestore-db.js");
+const { normalizeAnnouncementConfig } = require("../lib/announcement-config.js");
 
 const router = express.Router();
 

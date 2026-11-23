@@ -1,29 +1,21 @@
 # Notifications
 
-ช่องทางส่งแจ้งเตือนที่ Activity และ Reminder ใช้ร่วมกัน
+ช่องทางส่งแจ้งเตือน (Push และ Telegram) ที่ประกอบเข้ากับ Activity Mode และ Reminder Mode จากระดับบัญชีผู้ใช้
 
 ```text
 notifications/
-├── telegram/
-│   ├── api.js
-│   └── telegram-notification-preferences.js
-└── push/
-    ├── api.js
-    └── hooks/use-push-notifications.js
+├── api/
+│   ├── push-api.js
+│   ├── telegram-api.js
+│   └── telegram-chat-api.js
+├── components/
+│   ├── telegram-chat-launcher.jsx
+│   └── telegram-connection-toast.jsx
+├── hooks/
+│   ├── use-activity-telegram-notifications.js
+│   ├── use-push-notifications.js
+│   ├── use-telegram-connection.js
+│   └── use-telegram-web-chat.js
+└── lib/
+    └── telegram-notification-preferences.js
 ```
-
-- Telegram API: ดูสถานะ, เชื่อมต่อ, ส่งข้อความทดสอบ และส่งแจ้งเตือน Activity/Reminder
-- Telegram preferences: เปิด/ปิดการส่งจากเบราว์เซอร์นี้ แยกตาม user ID โดยคง storage key เดิม
-- `telegram/hooks/use-activity-telegram-notifications.js`: ตรวจเวลาเริ่ม Activity และส่ง Telegram ขณะเว็บเปิด
-- Push API/hook: ลงทะเบียนและยกเลิก FCM token ตามพฤติกรรมเดิม
-- ทั้งสอง API ใช้ `src/shared/api/client.js` ร่วมกับ `src/api.js` สำหรับ Firebase ID token, HTTP request และ error handling
-
-## ขอบเขตรอบนี้
-
-ย้ายไฟล์และแยกฟังก์ชัน API โดยไม่เปลี่ยน endpoint, payload, notificationKey หรือ function body ของ API ระบบ service worker ยังคงที่ `frontend/public/firebase-messaging-sw.js`
-
-ปุ่ม Telegram, flow เชื่อมต่อ และวงรอบ Reminder อยู่ใน `features/reminder/components/reminder-mode.jsx` วงรอบ Activity ประกอบที่ `src/app/account-app.jsx`
-
-## ตรวจสอบ
-
-Build ผ่าน หลังย้ายทดสอบด้วยบัญชีจริง: เชื่อม Telegram, เปิด/ปิดการส่ง, Reminder ถึงกำหนด, Activity เริ่ม และแจ้งเตือนขณะสลับโหมด การตรวจ build ไม่ได้ทดสอบการส่งถึง Telegram จริง

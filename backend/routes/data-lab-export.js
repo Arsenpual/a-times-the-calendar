@@ -112,8 +112,8 @@ function createDataLabExportRouter(overrides = {}) {
   let productionDependencies;
   function getProductionDependencies() {
     if (productionDependencies) return productionDependencies;
-    const { getFreshAccessToken, CalendarReauthRequiredError } = require("../calendar-oauth.js");
-    const { categoriesCol, activityCategoriesCol, activityTagsCol, lockedActivitiesCol } = require("../firestore-db.js");
+    const { getFreshAccessToken, CalendarReauthRequiredError } = require("../lib/calendar-oauth.js");
+    const { categoriesCol, activityCategoriesCol, activityTagsCol, lockedActivitiesCol } = require("../lib/firestore-db.js");
     productionDependencies = {
       getFreshAccessToken,
       fetchImpl: fetch,

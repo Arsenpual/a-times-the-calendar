@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { db, reminderModeDoc, remindersCol, reminderGroupsCol } = require("../firestore-db.js");
+const { db, reminderModeDoc, remindersCol, reminderGroupsCol } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 

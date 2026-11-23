@@ -1,8 +1,8 @@
 const express = require("express");
-const { findGoogleWeatherLocation, lookupGoogleWeather } = require("../google-weather.js");
+const { findGoogleWeatherLocation, lookupGoogleWeather } = require("../lib/google-weather.js");
 const { ACTIVITIES, recommendedSlots } = require("../lib/weather-planning.js");
 const { buildZettascaleInstruction } = require("../lib/zettascale-persona.js");
-const { generateContent } = require("../gemini-api.js");
+const { generateContent } = require("../lib/gemini-api.js");
 
 async function generateWeatherAdvice({ location, weather, recommendation, day, activity }) {
   const compact = {
@@ -26,8 +26,8 @@ async function generateWeatherAdvice({ location, weather, recommendation, day, a
 function createAiWeatherPlanRouter({
   find = findGoogleWeatherLocation,
   lookup = lookupGoogleWeather,
-  claimUsage = (...args) => require("../gemini-chat.js").claimGeminiChatUsage(...args),
-  releaseUsage = (...args) => require("../gemini-chat.js").releaseGeminiChatUsage(...args),
+  claimUsage = (...args) => require("../lib/gemini-chat.js").claimGeminiChatUsage(...args),
+  releaseUsage = (...args) => require("../lib/gemini-chat.js").releaseGeminiChatUsage(...args),
   generateAdvice = generateWeatherAdvice
 } = {}) {
   const router = express.Router();

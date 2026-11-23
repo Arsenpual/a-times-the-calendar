@@ -29,7 +29,7 @@ import {
   GoogleDriveApiError,
   isPreviewableDriveFile,
   previewDriveFileText,
-} from '../utils/driveApi';
+} from '../api/driveApi';
 
 interface DriveTableModalProps {
   googleUser: User | null;

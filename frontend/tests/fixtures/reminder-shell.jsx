@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReminderTopbar from "../../src/features/reminder/components/reminder-topbar.jsx";
-import TelegramConnectionToast from "../../src/features/reminder/components/telegram-connection-toast.jsx";
+import TelegramConnectionToast from "../../src/features/notifications/components/telegram-connection-toast.jsx";
 import ReminderAlerts from "../../src/features/reminder/components/reminder-alerts.jsx";
 import ReminderTimelineRows from "../../src/features/reminder/components/reminder-timeline-rows.jsx";
 import { extractScheduleFields } from "../../src/features/reminder/lib/reminder-sync-fields.js";

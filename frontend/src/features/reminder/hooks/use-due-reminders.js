@@ -3,8 +3,6 @@ import { REMINDER_TYPE, computeNextDueAt, isReminderDue, isOneShotType, hasEvent
 import { intervalScheduleMinutes } from "../lib/interval-schedule.js";
 import { localDateKey } from "../lib/reminder-date-view.js";
 import { logReminderEvent } from "../lib/reminder-telemetry.js";
-import { sendTelegramReminder } from "../../notifications/telegram/api.js";
-import { areTelegramNotificationsEnabled } from "../../notifications/telegram/telegram-notification-preferences.js";
 
 // Interval stays intentionally outside the normal due-banner/checklist flow.
 // This helper only identifies the current visual interval slot so the open
@@ -23,7 +21,15 @@ function getIntervalTelegramSlot(reminder, nowMs) {
 /** Owns the mounted Reminder view's clock, due state, delivery and due actions.
  * Scheduling rules remain in the shared reminder-due-logic module.
  */
-export function useDueReminders({ reminders, setReminders, updateReminders, firebaseUser, recordStatsEvent }) {
+export function useDueReminders({
+  reminders,
+  setReminders,
+  updateReminders,
+  firebaseUser,
+  recordStatsEvent,
+  sendTelegramReminder = async () => {},
+  areTelegramNotificationsEnabled = () => false
+}) {
   const [dueReminders, setDueReminders] = useState([]);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const sentTelegramReminderKeysRef = useRef(new Set());

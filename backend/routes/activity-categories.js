@@ -1,5 +1,5 @@
 const express = require("express");
-const { categoriesCol, activityCategoriesCol, activityTagsCol, lockedActivitiesCol } = require("../firestore-db.js");
+const { categoriesCol, activityCategoriesCol, activityTagsCol, lockedActivitiesCol } = require("../lib/firestore-db.js");
 
 const router = express.Router();
 

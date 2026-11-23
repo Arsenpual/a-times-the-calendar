@@ -1,17 +1,17 @@
 const express = require("express");
-const { generateContent } = require("../gemini-api.js");
+const { generateContent } = require("../lib/gemini-api.js");
 const { buildZettascaleInstruction } = require("../lib/zettascale-persona.js");
-const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../calendar-question.js");
+const { readCalendarQuestionContext, isCalendarQuestion, isDeterministicCalendarQuestion, answerDeterministicCalendarQuestion } = require("../lib/calendar-question.js");
 
 const { schema, buildPrompt, prepareContext, finishResult, validateDraft, assessDraftSchedule, findFreeTimeOptions } = require("../skills/activity-creation");
 const { answerTimesQuestion } = require("../skills/activity-creation/times-knowledge.js");
 
 function createActivityAssistantRouter({
-  claimChatUsage = (...args) => require("../gemini-chat.js").claimGeminiChatUsage(...args),
-  releaseChatUsage = (...args) => require("../gemini-chat.js").releaseGeminiChatUsage(...args),
-  claimDraftUsage = (...args) => require("../gemini-chat.js").claimGeminiDraftUsage(...args),
-  releaseDraftUsage = (...args) => require("../gemini-chat.js").releaseGeminiDraftUsage(...args),
-  getChatStatus = (...args) => require("../gemini-chat.js").getGeminiChatStatus(...args),
+  claimChatUsage = (...args) => require("../lib/gemini-chat.js").claimGeminiChatUsage(...args),
+  releaseChatUsage = (...args) => require("../lib/gemini-chat.js").releaseGeminiChatUsage(...args),
+  claimDraftUsage = (...args) => require("../lib/gemini-chat.js").claimGeminiDraftUsage(...args),
+  releaseDraftUsage = (...args) => require("../lib/gemini-chat.js").releaseGeminiDraftUsage(...args),
+  getChatStatus = (...args) => require("../lib/gemini-chat.js").getGeminiChatStatus(...args),
   readCalendarQuestion = readCalendarQuestionContext,
   answerDeterministicCalendar = answerDeterministicCalendarQuestion,
   generateActivity,

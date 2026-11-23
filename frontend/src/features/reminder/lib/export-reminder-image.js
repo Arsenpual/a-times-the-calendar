@@ -1,6 +1,6 @@
 import { reminderSlotsOnDate, localDateKey } from "./reminder-date-view.js";
 import { activityDate } from "../../../shared/lib/date-utils.js";
-import { getDisplayColor } from "../../activity/lib/activity-colors.js";
+import { getDisplayColor } from "../../../shared/lib/activity-colors.js";
 
 const WIDTH = 1080;
 const HEIGHT = 1528;

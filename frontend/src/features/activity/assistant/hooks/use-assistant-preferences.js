@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { deleteAssistantPreference, dismissAssistantPreferenceCandidate, getAssistantPreferences, recordAssistantPreferenceCorrections, saveAssistantPreference } from "../api/assistant-preferences-api.js";
 
-export const ASSISTANT_PREFERENCE_FIELDS = [
-  { key: "homeworkDefaultStart", label: "เวลาเริ่มทำการบ้าน", type: "time" },
-  { key: "homeworkDefaultDurationMinutes", label: "ระยะเวลาทำการบ้าน", type: "duration" },
-  { key: "exerciseDefaultDurationMinutes", label: "ระยะเวลาออกกำลังกาย", type: "duration" },
-  { key: "preferredEveningStart", label: "เวลาเริ่มช่วงเย็น", type: "time" }
-];
+import { ASSISTANT_PREFERENCE_FIELDS } from "../../../../shared/config/assistant-preference-fields.js";
+export { ASSISTANT_PREFERENCE_FIELDS };
 
 export function useAssistantPreferences(userId) {
   const [values, setValues] = useState({});

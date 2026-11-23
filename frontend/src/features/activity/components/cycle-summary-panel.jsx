@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { activityDate, getYearCycle } from "../../../shared/lib/date-utils.js";
 import { normalizeActivityId } from "../../../shared/lib/id-utils.js";
-import { UNCATEGORIZED_COLOR } from "../lib/activity-colors.js";
+import { UNCATEGORIZED_COLOR } from "../../../shared/lib/activity-colors.js";
 
 function formatHours(minutes) {
   if (minutes < 60) return `${minutes} นาที`;
