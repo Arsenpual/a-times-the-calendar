@@ -229,6 +229,224 @@ function sanitizeSleepStage(raw) {
   };
 }
 
+const THAI_MONTHS_SHORT = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
+];
+const THAI_WEEKDAYS_SHORT = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+
+function parseThaiHeaderParts(dateIso, dateLabel) {
+  const parsed = new Date(`${dateIso}T12:00:00`);
+  const validDate = !Number.isNaN(parsed.getTime());
+  const defaultShort = validDate
+    ? `${parsed.getDate()} ${THAI_MONTHS_SHORT[parsed.getMonth()]}`
+    : dateIso;
+  const defaultWeekday = validDate ? THAI_WEEKDAYS_SHORT[parsed.getDay()] : "";
+  const trimmed = (dateLabel || "").trim();
+  const match = trimmed.match(/^(อา\.|จ\.|อ\.|พ\.|พฤ\.|ศ\.|ส\.)\s+(.+)$/);
+  return {
+    date_iso: dateIso,
+    date_short_th: match ? match[2].trim() : defaultShort,
+    weekday_short_th: match ? match[1] : defaultWeekday,
+    raw_header_text: trimmed || (defaultWeekday ? `${defaultWeekday} ${defaultShort}` : defaultShort),
+  };
+}
+
+function parseTime24hParts(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") {
+    return { time_24h: null, hour: null, minute: null };
+  }
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { time_24h: timeStr.trim(), hour: null, minute: null };
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return {
+    time_24h: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    hour: Number.isFinite(hour) ? hour : null,
+    minute: Number.isFinite(minute) ? minute : null,
+  };
+}
+
+function parseReferenceRangeObj(rawText, defaultUnit, unitKey = "unit") {
+  const raw = (rawText || "").trim();
+  if (!raw) return null;
+  const betweenMatch = raw.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+  if (betweenMatch) {
+    return {
+      raw_text: raw,
+      [unitKey]: defaultUnit,
+      min_value: Number(betweenMatch[1]),
+      max_value: Number(betweenMatch[2]),
+      operator: "between_inclusive",
+    };
+  }
+  const ltMatch = raw.match(/<\s*(\d+(?:\.\d+)?)/);
+  if (ltMatch) {
+    return {
+      raw_text: raw,
+      [unitKey]: defaultUnit,
+      min_value: null,
+      max_value: Number(ltMatch[1]),
+      operator: "less_than",
+    };
+  }
+  return {
+    raw_text: raw,
+    [unitKey]: defaultUnit,
+    min_value: null,
+    max_value: null,
+    operator: "unknown",
+  };
+}
+
+function formatThaiFullDuration(minutes) {
+  const safe = Math.max(0, Math.round(minutes));
+  const hrs = Math.floor(safe / 60);
+  const mins = safe % 60;
+  if (hrs > 0 && mins > 0) return `${hrs} ชั่วโมง ${mins} นาที`;
+  if (hrs > 0) return `${hrs} ชั่วโมง`;
+  return `${mins} นาที`;
+}
+
+function buildRawSleepInfographic(record, starRatingHint = null) {
+  const header = parseThaiHeaderParts(record.date, record.dateLabel);
+  const mmdd = /^\d{4}-\d{2}-\d{2}$/.test(record.date)
+    ? `${record.date.slice(5, 7)}/${record.date.slice(8, 10)}`
+    : record.date;
+  const start = parseTime24hParts(record.bedtime);
+  const wake = parseTime24hParts(record.wakeTime);
+  const totalMins =
+    typeof record.totalSleepMinutes === "number" && Number.isFinite(record.totalSleepMinutes)
+      ? Math.max(0, Math.round(record.totalSleepMinutes))
+      : null;
+
+  const scoreVal = typeof record.sleepScore === "number" ? record.sleepScore : null;
+  const derivedRating =
+    typeof starRatingHint === "number" && starRatingHint >= 0 && starRatingHint <= 5
+      ? Math.round(starRatingHint * 2) / 2
+      : scoreVal != null
+        ? Math.round((scoreVal / 20) * 2) / 2
+        : null;
+  const fullStars = derivedRating != null ? Math.floor(derivedRating) : null;
+  const halfStars = derivedRating != null ? (derivedRating % 1 >= 0.5 ? 1 : 0) : null;
+
+  const buildStage = (stageKey, defaultLabel, defaultRef) => {
+    const st = record.stages?.[stageKey] || {};
+    const mins = Math.max(0, Math.round(st.minutes || 0));
+    const pct = typeof st.percent === "number" ? st.percent : null;
+    const rawRef = st.referenceRange || defaultRef;
+    return {
+      stage_key: stageKey,
+      label_th: defaultLabel,
+      duration_hours: Math.floor(mins / 60),
+      duration_minutes: mins % 60,
+      duration_total_minutes: mins,
+      duration_total_seconds: mins * 60,
+      duration_raw_text: st.durationText || formatThaiFullDuration(mins),
+      percentage_value: pct,
+      percentage_unit: "%",
+      percentage_raw_text: pct != null ? `${pct}%` : null,
+      status_label_th: st.status ?? null,
+      reference_range: parseReferenceRangeObj(rawRef, "percent", "unit"),
+    };
+  };
+
+  return {
+    record_header: header,
+    sleep_window: {
+      sleep_start_date: record.date,
+      sleep_start_time_24h: start.time_24h,
+      sleep_start_hour: start.hour,
+      sleep_start_minute: start.minute,
+      sleep_start_raw_label: start.time_24h ? `${mmdd} เวลานอน ${start.time_24h} น.` : null,
+      wake_up_date: record.date,
+      wake_up_time_24h: wake.time_24h,
+      wake_up_hour: wake.hour,
+      wake_up_minute: wake.minute,
+      wake_up_raw_label: wake.time_24h ? `${mmdd} ตื่นนอน ${wake.time_24h} น.` : null,
+    },
+    total_sleep_duration: {
+      hours: totalMins != null ? Math.floor(totalMins / 60) : 0,
+      minutes: totalMins != null ? totalMins % 60 : 0,
+      total_minutes: totalMins,
+      total_seconds: totalMins != null ? totalMins * 60 : null,
+      decimal_hours: totalMins != null ? Number((totalMins / 60).toFixed(4)) : null,
+      raw_text:
+        record.totalSleepText || (totalMins != null ? formatThaiFullDuration(totalMins) : null),
+      status_label_th: record.totalSleepStatus ?? null,
+      reference_range: parseReferenceRangeObj(
+        record.totalSleepReference || "6-10 ชม.",
+        "hour",
+        "unit"
+      ),
+    },
+    sleep_score_raw: {
+      score_value: scoreVal,
+      score_unit_th: "คะแนน",
+      better_than_users: {
+        percent_value: record.percentileBeat ?? null,
+        unit: "%",
+        raw_text:
+          record.percentileBeat != null ? `ดีกว่า ${record.percentileBeat}% ของผู้ใช้` : null,
+      },
+      star_rating_raw: {
+        full_stars: fullStars,
+        half_stars: halfStars,
+        total_displayed_stars: 5,
+        derived_numeric_rating: derivedRating,
+      },
+    },
+    sleep_stages_raw: {
+      deep_sleep: buildStage("deep", "นอนหลับสนิท", "20-60%"),
+      light_sleep: buildStage("light", "นอนน้อย", "<55%"),
+      rem_sleep: buildStage("rem", "นอนหลับ REM", "10-30%"),
+    },
+    sub_metrics_raw: {
+      deep_sleep_continuity: {
+        metric_key: "deep_sleep_continuity",
+        label_th: "ความต่อเนื่องของการนอนหลับลึก",
+        numeric_value: record.deepSleepContinuityScore ?? null,
+        unit_th: "คะแนน",
+        raw_text:
+          record.deepSleepContinuityScore != null
+            ? `${record.deepSleepContinuityScore} คะแนน`
+            : null,
+        status_label_th: record.deepSleepContinuityStatus ?? null,
+        reference_range: parseReferenceRangeObj("70-100 คะแนน", "คะแนน", "unit_th"),
+      },
+      breathing_quality: {
+        metric_key: "breathing_quality",
+        label_th: "คุณภาพการหายใจ",
+        numeric_value: record.breathingQualityScore ?? null,
+        unit_th: "คะแนน",
+        raw_text:
+          record.breathingQualityScore != null ? `${record.breathingQualityScore} คะแนน` : null,
+        status_label_th: record.breathingQualityStatus ?? null,
+        reference_range: parseReferenceRangeObj("70-100 คะแนน", "คะแนน", "unit_th"),
+      },
+      awakenings_count: {
+        metric_key: "awakenings",
+        label_th: "จำนวนครั้งที่ตื่นนอน",
+        numeric_value: record.awakeCount ?? null,
+        unit_th: "ครั้ง",
+        raw_text: record.awakeCount != null ? `${record.awakeCount} ครั้ง` : null,
+        status_label_th: record.awakeStatus ?? null,
+        reference_range: parseReferenceRangeObj("0-1 ครั้ง", "ครั้ง", "unit_th"),
+      },
+    },
+  };
+}
+
 function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(0, 10)) {
   const obj = raw && typeof raw === "object" ? raw : {};
   const nowIso = new Date().toISOString();
@@ -275,12 +493,12 @@ function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(
     }
   }
 
-  return {
+  const baseRecord = {
     id,
     date,
     dateLabel: toCleanStringOrNull(obj.dateLabel, 60) ?? date,
     sourceApp: toCleanStringOrNull(obj.sourceApp, 80) ?? "Health App",
-    userLabel: toCleanStringOrNull(obj.userLabel, 80),
+    userLabel: null,
     sleepScore: toFiniteNumberOrNull(obj.sleepScore),
     percentileBeat: toFiniteNumberOrNull(obj.percentileBeat),
     bedtime: toCleanStringOrNull(obj.bedtime, 20),
@@ -300,13 +518,20 @@ function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(
     awakeStatus: toCleanStringOrNull(obj.awakeStatus, 40),
     breathingQualityScore: toFiniteNumberOrNull(obj.breathingQualityScore),
     breathingQualityStatus: toCleanStringOrNull(obj.breathingQualityStatus, 40),
-    previousDayStressScore: toFiniteNumberOrNull(obj.previousDayStressScore),
-    appInsights: rawInsights,
-    appRecommendation: toCleanStringOrNull(obj.appRecommendation, 450),
+    previousDayStressScore: null,
+    appInsights: [],
+    appRecommendation: null,
     aiAnalysis,
     createdAt: toCleanStringOrNull(obj.createdAt, 40) ?? nowIso,
     updatedAt: nowIso,
   };
+
+  const starHint = toFiniteNumberOrNull(
+    obj.rawInfographic?.sleep_score_raw?.star_rating_raw?.derived_numeric_rating
+  );
+  baseRecord.rawInfographic = buildRawSleepInfographic(baseRecord, starHint);
+
+  return baseRecord;
 }
 
 const SLEEP_EXTRACT_RESPONSE_SCHEMA = {
@@ -315,9 +540,9 @@ const SLEEP_EXTRACT_RESPONSE_SCHEMA = {
     date: { type: "STRING" },
     dateLabel: { type: "STRING" },
     sourceApp: { type: "STRING" },
-    userLabel: { type: "STRING" },
     sleepScore: { type: "NUMBER" },
     percentileBeat: { type: "NUMBER" },
+    starRating: { type: "NUMBER" },
     bedtime: { type: "STRING" },
     wakeTime: { type: "STRING" },
     totalSleepMinutes: { type: "NUMBER" },
@@ -345,9 +570,6 @@ const SLEEP_EXTRACT_RESPONSE_SCHEMA = {
     awakeStatus: { type: "STRING" },
     breathingQualityScore: { type: "NUMBER" },
     breathingQualityStatus: { type: "STRING" },
-    previousDayStressScore: { type: "NUMBER" },
-    appInsights: { type: "ARRAY", items: { type: "STRING" } },
-    appRecommendation: { type: "STRING" },
   },
   required: ["date", "sourceApp", "totalSleepMinutes"],
 };
@@ -649,11 +871,11 @@ function formatGoogleTasksContext(tasksContext, localDate) {
 }
 
 function formatSleepLogsContext(sleepLogs) {
-  const logs = Array.isArray(sleepLogs) ? sleepLogs.slice(0, 7) : [];
+  const logs = Array.isArray(sleepLogs) ? sleepLogs : [];
   if (logs.length === 0) {
     return [
       "ข้อมูลบันทึกการนอนประจำวัน (จากภารกิจในห้องนอน): ยังไม่มีข้อมูลการนอนที่บันทึกไว้",
-      "- หากผู้ใช้ถามถึงคุณภาพการนอน ให้แนะนำว่าสามารถเดินไปที่โต๊ะข้างเตียงฝั่งขวาในห้องนอนใหญ่เพื่ออัปโหลดภาพสถิติการนอนแปลงเป็นไฟล์ .json ให้ AI วิเคราะห์ได้เลย",
+      "- หากผู้ใช้ถามถึงข้อมูลการนอน ให้แนะนำว่าให้เดินไปที่โต๊ะข้างเตียงฝั่งขวาในห้องนอนใหญ่เพื่ออัปโหลดภาพสถิติการนอน (จากเครื่องหรือ Google Drive) เก็บสะสมเป็นไฟล์ .json รายวัน แล้วส่งให้มีน่าสรุปภาพรวมทางแชทนี้ได้เลย",
     ].join("\n");
   }
   const lines = logs.map((log) => {
@@ -664,9 +886,26 @@ function formatSleepLogsContext(sleepLogs) {
         : "ไม่ระบุ");
     const score = typeof log.sleepScore === "number" ? `${log.sleepScore} คะแนน` : "ไม่ระบุคะแนน";
     const windowStr = log.bedtime && log.wakeTime ? `เวลานอน ${log.bedtime}–${log.wakeTime}` : "ไม่ระบุช่วงเวลา";
-    return `- วันที่ ${log.date} (${log.dateLabel || log.date}, ${log.sourceApp || "Health App"}): ${score} | ${dur} | ${windowStr}`;
+    const deep = log.stages?.deep;
+    const light = log.stages?.light;
+    const rem = log.stages?.rem;
+    const stageParts = [];
+    if (deep) stageParts.push(`หลับลึก ${deep.durationText || `${deep.minutes ?? 0}น.`}${deep.percent != null ? ` (${deep.percent}%)` : ""}`);
+    if (light) stageParts.push(`หลับตื้น ${light.durationText || `${light.minutes ?? 0}น.`}${light.percent != null ? ` (${light.percent}%)` : ""}`);
+    if (rem) stageParts.push(`REM ${rem.durationText || `${rem.minutes ?? 0}น.`}${rem.percent != null ? ` (${rem.percent}%)` : ""}`);
+    const extraParts = [];
+    if (typeof log.deepSleepContinuityScore === "number") extraParts.push(`ต่อเนื่องหลับลึก ${log.deepSleepContinuityScore}`);
+    if (typeof log.breathingQualityScore === "number") extraParts.push(`หายใจ ${log.breathingQualityScore}`);
+    if (typeof log.awakeCount === "number") extraParts.push(`ตื่น ${log.awakeCount} ครั้ง`);
+    const stagesText = stageParts.length > 0 ? ` | ${stageParts.join(", ")}` : "";
+    const extraText = extraParts.length > 0 ? ` | ${extraParts.join(", ")}` : "";
+    return `- วันที่ ${log.date} (${log.dateLabel || log.date}, ${log.sourceApp || "Health App"}): ${score} | ${dur} | ${windowStr}${stagesText}${extraText}`;
   });
-  return [`ข้อมูลบันทึกการนอนประจำวันจริง (.json ล่าสุด ${logs.length} วัน):`, ...lines].join("\n");
+  return [
+    `ข้อมูลบันทึกการนอนประจำวันจริง (.json ที่เก็บสะสมทั้งหมด ${logs.length} วัน):`,
+    "- เมื่อผู้ใช้ขอให้สรุปภาพรวมการนอน ให้สรุปข้อมูลจริงทั้งหมดที่เก็บได้แบบชัดเจน อ่านง่าย ครบทุกวัน (เช่น จำนวนวันทั้งหมด, ช่วงวันที่, ค่าเฉลี่ย/ต่ำสุด/สูงสุดของคะแนนและระยะเวลานอน, ช่วงเวลาเข้านอน-ตื่นนอน, ค่าเฉลี่ยหลับลึก/หลับตื้น/REM, ค่าการหายใจ/ความต่อเนื่อง/จำนวนครั้งที่ตื่น, และรายการสรุปรายวัน) โดยยึดตามตัวเลขจริงที่บันทึกไว้",
+    ...lines,
+  ].join("\n");
 }
 
 function buildMinaSystemInstruction(mode, timeOfDay, localDate, tasksContext, sleepLogsContext) {
@@ -763,11 +1002,12 @@ function createCozyDeskRouter({
     }
 
     const extractPrompt = [
-      "คุณคือระบบสกัดข้อมูลสุขภาพการนอน (Sleep Data OCR & Structured JSON Parser) ที่แม่นยำสูง",
-      `วันที่อ้างอิงปัจจุบันคือ ${defaultDate} (ใช้ปี ค.ศ. จากวันที่อ้างอิงนี้หากในรูปแสดงเฉพาะวัน/เดือน)`,
-      "จงอ่านข้อมูลทุกตัวเลขและข้อความจากภาพหน้าจอแอพสุขภาพการนอนนี้ แล้วแปลงเป็น JSON ตาม Schema ที่กำหนดอย่างครบถ้วน:",
+      "คุณคือระบบสกัดข้อมูลดิบการนอน (Sleep Data OCR & Raw Structured JSON Parser) ที่แม่นยำสูง",
+      `วันที่อ้างอิงปัจจุบันคือ ${defaultDate} (ใช้ปี ค.ศ. จากวันที่อ้างอิงนี้หากในรูปแสดงเฉพาะวัน/เดือน และใช้ dateLabel เป็นข้อความหัวข้อวันที่สั้นตามรูป เช่น "ศ. 20 พ.ย.")`,
+      "กฎเหล็ก — ต้องใช้เฉพาะข้อมูลสถิติการนอนเท่านั้น ตัดส่วนที่ไม่เกี่ยวข้องออกทั้งหมด:",
+      "- ห้ามดึงชื่อบัญชีผู้ใช้ (เช่น K96380T), โลโก้/ชื่อแอปด้านล่าง, กราฟแท่ง 7 วัน, และห้ามดึงข้อความจากส่วน \"การวิเคราะห์และคำแนะนำ\" ด้านล่าง (เช่น ระดับความเครียด, อินซูลิน/น้ำตาลในเลือด, คอร์สสมาธิ)",
+      "- ดึงเฉพาะตัวเลขและข้อความสถิติการนอนจริง: คะแนนการนอน, เปอร์เซ็นต์ดีกว่าผู้ใช้, จำนวนดาว (starRating เช่น 4.5), เวลานอน (bedtime HH:mm), เวลาตื่น (wakeTime HH:mm), เวลานอนรวม, ระยะหลับลึก/หลับตื้น/REM (นาที, ข้อความ, %, สถานะ, เกณฑ์อ้างอิง), ความต่อเนื่องของการนอนหลับลึก, คุณภาพการหายใจ และจำนวนครั้งที่ตื่นนอน",
       "- แปลงระยะเวลาแต่ละช่วงให้เป็นจำนวนนาทีที่ถูกต้อง",
-      "- ดึงเวลานอน (bedtime) และเวลาตื่น (wakeTime) ในรูปแบบ 24 ชั่วโมง HH:mm",
       "- สำหรับฟิลด์ตัวเลขที่ไม่มีในรูปให้ใส่ -1 และข้อความที่ไม่มีให้ใส่ \"\"",
     ].join("\n");
 
@@ -804,56 +1044,57 @@ function createCozyDeskRouter({
           ? parsed.date.trim()
           : defaultDate;
 
-      const record = sanitizeSleepRecord(
-        {
-          id: `sleep_${extractedDate}`,
-          date: extractedDate,
-          dateLabel: toCleanStringOrNull(parsed.dateLabel, 60) ?? extractedDate,
-          sourceApp: toCleanStringOrNull(parsed.sourceApp, 80) ?? "Health App",
-          userLabel: toCleanStringOrNull(parsed.userLabel, 80),
-          sleepScore: numOrNull(parsed.sleepScore),
-          percentileBeat: numOrNull(parsed.percentileBeat),
-          bedtime: toCleanStringOrNull(parsed.bedtime, 20),
-          wakeTime: toCleanStringOrNull(parsed.wakeTime, 20),
-          totalSleepMinutes: numOrNull(parsed.totalSleepMinutes),
-          totalSleepText: toCleanStringOrNull(parsed.totalSleepText, 80),
-          totalSleepStatus: toCleanStringOrNull(parsed.totalSleepStatus, 40),
-          totalSleepReference: toCleanStringOrNull(parsed.totalSleepReference, 60),
-          stages: {
-            deep: {
-              minutes: numOrNull(parsed.deepMinutes) ?? 0,
-              durationText: toCleanStringOrNull(parsed.deepText, 80) ?? "",
-              percent: numOrNull(parsed.deepPercent),
-              status: toCleanStringOrNull(parsed.deepStatus, 40),
-              referenceRange: toCleanStringOrNull(parsed.deepReference, 60),
-            },
-            light: {
-              minutes: numOrNull(parsed.lightMinutes) ?? 0,
-              durationText: toCleanStringOrNull(parsed.lightText, 80) ?? "",
-              percent: numOrNull(parsed.lightPercent),
-              status: toCleanStringOrNull(parsed.lightStatus, 40),
-              referenceRange: toCleanStringOrNull(parsed.lightReference, 60),
-            },
-            rem: {
-              minutes: numOrNull(parsed.remMinutes) ?? 0,
-              durationText: toCleanStringOrNull(parsed.remText, 80) ?? "",
-              percent: numOrNull(parsed.remPercent),
-              status: toCleanStringOrNull(parsed.remStatus, 40),
-              referenceRange: toCleanStringOrNull(parsed.remReference, 60),
-            },
+      const baseExtracted = {
+        id: `sleep_${extractedDate}`,
+        date: extractedDate,
+        dateLabel: toCleanStringOrNull(parsed.dateLabel, 60) ?? extractedDate,
+        sourceApp: toCleanStringOrNull(parsed.sourceApp, 80) ?? "Huawei Health",
+        userLabel: null,
+        sleepScore: numOrNull(parsed.sleepScore),
+        percentileBeat: numOrNull(parsed.percentileBeat),
+        bedtime: toCleanStringOrNull(parsed.bedtime, 20),
+        wakeTime: toCleanStringOrNull(parsed.wakeTime, 20),
+        totalSleepMinutes: numOrNull(parsed.totalSleepMinutes),
+        totalSleepText: toCleanStringOrNull(parsed.totalSleepText, 80),
+        totalSleepStatus: toCleanStringOrNull(parsed.totalSleepStatus, 40),
+        totalSleepReference: toCleanStringOrNull(parsed.totalSleepReference, 60),
+        stages: {
+          deep: {
+            minutes: numOrNull(parsed.deepMinutes) ?? 0,
+            durationText: toCleanStringOrNull(parsed.deepText, 80) ?? "",
+            percent: numOrNull(parsed.deepPercent),
+            status: toCleanStringOrNull(parsed.deepStatus, 40),
+            referenceRange: toCleanStringOrNull(parsed.deepReference, 60),
           },
-          deepSleepContinuityScore: numOrNull(parsed.deepSleepContinuityScore),
-          deepSleepContinuityStatus: toCleanStringOrNull(parsed.deepSleepContinuityStatus, 40),
-          awakeCount: numOrNull(parsed.awakeCount),
-          awakeStatus: toCleanStringOrNull(parsed.awakeStatus, 40),
-          breathingQualityScore: numOrNull(parsed.breathingQualityScore),
-          breathingQualityStatus: toCleanStringOrNull(parsed.breathingQualityStatus, 40),
-          previousDayStressScore: numOrNull(parsed.previousDayStressScore),
-          appInsights: Array.isArray(parsed.appInsights) ? parsed.appInsights : [],
-          appRecommendation: toCleanStringOrNull(parsed.appRecommendation, 450),
+          light: {
+            minutes: numOrNull(parsed.lightMinutes) ?? 0,
+            durationText: toCleanStringOrNull(parsed.lightText, 80) ?? "",
+            percent: numOrNull(parsed.lightPercent),
+            status: toCleanStringOrNull(parsed.lightStatus, 40),
+            referenceRange: toCleanStringOrNull(parsed.lightReference, 60),
+          },
+          rem: {
+            minutes: numOrNull(parsed.remMinutes) ?? 0,
+            durationText: toCleanStringOrNull(parsed.remText, 80) ?? "",
+            percent: numOrNull(parsed.remPercent),
+            status: toCleanStringOrNull(parsed.remStatus, 40),
+            referenceRange: toCleanStringOrNull(parsed.remReference, 60),
+          },
         },
-        defaultDate
-      );
+        deepSleepContinuityScore: numOrNull(parsed.deepSleepContinuityScore),
+        deepSleepContinuityStatus: toCleanStringOrNull(parsed.deepSleepContinuityStatus, 40),
+        awakeCount: numOrNull(parsed.awakeCount),
+        awakeStatus: toCleanStringOrNull(parsed.awakeStatus, 40),
+        breathingQualityScore: numOrNull(parsed.breathingQualityScore),
+        breathingQualityStatus: toCleanStringOrNull(parsed.breathingQualityStatus, 40),
+        previousDayStressScore: null,
+        appInsights: [],
+        appRecommendation: null,
+      };
+      const starHint = numOrNull(parsed.starRating);
+      baseExtracted.rawInfographic = buildRawSleepInfographic(baseExtracted, starHint);
+
+      const record = sanitizeSleepRecord(baseExtracted, defaultDate);
 
       const usedTokens =
         payload?.usageMetadata?.totalTokenCount ??
@@ -1296,13 +1537,26 @@ function createCozyDeskRouter({
           ? 'คุณคือ "AI Studio" ผู้ช่วยออกแบบ Prompt, System Instruction และสถาปัตยกรรม AI ในบ้าน Cozy Desk'
           : 'คุณคือ "มีน่า (Mina)" ผู้ช่วย AI ประจำห้องทำงานในบ้าน Cozy Desk';
 
+    const isSleepSummaryTask = body.taskType === "sleep_summary" || body.taskType === "sleep_analysis";
+    const sleepContextBlock =
+      Array.isArray(body.sleepLogsContext) && body.sleepLogsContext.length > 0
+        ? formatSleepLogsContext(body.sleepLogsContext)
+        : "";
+
     const systemInstruction = [
       personaHeader,
       `วันที่ปัจจุบัน: ${localDate}`,
-      'ผู้ใช้ได้มอบหมายงานนี้ผ่านกระดาน Google Tasks เพื่อให้คุณลงมือทำและเขียน "สรุปผลงาน" ลงในช่องโน้ตของ Task',
+      isSleepSummaryTask
+        ? "ผู้ใช้ส่งข้อมูลบันทึกการนอนประจำวัน (.json) ทั้งหมดที่เก็บสะสมไว้มาให้คุณสรุปภาพรวมและส่งงานทางแชท (ไม่ต้องวิเคราะห์เชิงลึกหรือวินิจฉัย ให้สรุปข้อมูลจริงที่เก็บได้ทั้งหมดอย่างเป็นระเบียบ)"
+        : 'ผู้ใช้ได้มอบหมายงานนี้ผ่านกระดาน Google Tasks เพื่อให้คุณลงมือทำและเขียน "สรุปผลงาน" ลงในช่องโน้ตของ Task',
       "- ตอบเป็นภาษาไทยที่สุภาพ กระชับ ชัดเจน อ่านง่าย และนำไปใช้ต่อได้จริงทันที",
-      "- ความยาวกระชับพอดีอ่านในโน้ต (ประมาณ 4–14 บรรทัด หรือไม่เกิน 1,800 ตัวอักษร)",
-    ].join("\n");
+      isSleepSummaryTask
+        ? "- จัดโครงสร้างให้อ่านง่ายในแชท: ภาพรวมสถิติ (จำนวนวัน, ช่วงวันที่, ค่าเฉลี่ย/ต่ำสุด/สูงสุดของคะแนนและเวลานอน, ช่วงเวลาเข้านอน–ตื่นนอน, ค่าเฉลี่ยหลับลึก/หลับตื้น/REM) ตามด้วยสรุปรายวันของทุกวันที่เก็บข้อมูลได้ (ความยาวไม่เกิน 3,200 ตัวอักษร)"
+        : "- ความยาวกระชับพอดีอ่านในโน้ต (ประมาณ 4–14 บรรทัด หรือไม่เกิน 1,800 ตัวอักษร)",
+      sleepContextBlock,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     const userPrompt = [
       `ชื่องาน (Task): ${rawTitle}`,
@@ -1330,7 +1584,10 @@ function createCozyDeskRouter({
       const text = (
         payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
       ).trim();
-      const summary = (text || "ดำเนินการตามรายการนี้เรียบร้อยแล้ว กรุณาตรวจสอบรายละเอียดได้เลยครับ").slice(0, 2400);
+      const summary = (text || "ดำเนินการตามรายการนี้เรียบร้อยแล้ว กรุณาตรวจสอบรายละเอียดได้เลยครับ").slice(
+        0,
+        isSleepSummaryTask ? 3600 : 2400
+      );
       const usedTokens =
         payload?.usageMetadata?.totalTokenCount ??
         estimateFallbackTokens(systemInstruction.length + userPrompt.length, summary.length);

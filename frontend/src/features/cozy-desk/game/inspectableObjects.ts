@@ -592,9 +592,9 @@ export const BEDROOM_INSPECTABLES: InspectableObject[] = [
     id: 'bedroom_sleep_quest_station',
     zone: 'bedroom',
     areaLabel: 'ห้องนอนใหญ่ · ภารกิจประจำวัน',
-    name: 'โต๊ะข้างเตียง · บันทึกการนอน (.json & AI)',
+    name: 'โต๊ะข้างเตียง · สมุดบันทึกการนอน (.json)',
     detail:
-      'อัปโหลดภาพสถิติการนอนจากแอพสุขภาพ (เช่น Huawei Health) เพื่อแปลงเป็นไฟล์ .json ประจำวัน และให้ AI วิเคราะห์คุณภาพการนอนแบบเจาะลึก',
+      'อัปโหลดภาพสถิติการนอนจากเครื่องหรือเลือกจาก Google Drive (เช่น Huawei Health) เพื่อเก็บสะสมเป็นไฟล์ .json รายวัน แล้วส่งให้มีน่าสรุปภาพรวมทั้งหมดทางแชทผู้ช่วย AI',
     x: SLEEP_STATION_RECT.x - 2,
     y: SLEEP_STATION_RECT.y - 4,
     w: SLEEP_STATION_RECT.w + 4,

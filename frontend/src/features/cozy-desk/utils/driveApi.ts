@@ -8,7 +8,14 @@ export const DRIVE_DOC_MIME = 'application/vnd.google-apps.document';
 export const DRIVE_SHEET_MIME = 'application/vnd.google-apps.spreadsheet';
 export const DRIVE_SLIDE_MIME = 'application/vnd.google-apps.presentation';
 
-export type DriveCategoryFilter = 'all' | 'folders' | 'docs' | 'sheets' | 'pdfs' | 'starred';
+export type DriveCategoryFilter =
+  | 'all'
+  | 'folders'
+  | 'docs'
+  | 'sheets'
+  | 'pdfs'
+  | 'images'
+  | 'starred';
 
 export class GoogleDriveApiError extends Error {
   public readonly status: number;
@@ -69,6 +76,7 @@ interface RawDriveFile {
   size?: string;
   webViewLink?: string;
   iconLink?: string;
+  thumbnailLink?: string;
   starred?: boolean;
   owners?: Array<{ displayName?: string }>;
   parents?: string[];
@@ -84,6 +92,7 @@ function mapRawFile(raw: RawDriveFile): GoogleDriveFile | null {
     size: raw.size,
     webViewLink: raw.webViewLink,
     iconLink: raw.iconLink,
+    thumbnailLink: raw.thumbnailLink,
     starred: Boolean(raw.starred),
     ownerName: raw.owners?.[0]?.displayName,
     parents: raw.parents,
@@ -122,6 +131,8 @@ export async function fetchDriveFiles(
     );
   } else if (category === 'pdfs') {
     clauses.push("mimeType = 'application/pdf'");
+  } else if (category === 'images') {
+    clauses.push("mimeType contains 'image/'");
   } else if (category === 'starred') {
     clauses.push('starred = true');
   }
@@ -129,7 +140,7 @@ export async function fetchDriveFiles(
   const params = new URLSearchParams({
     q: clauses.join(' and '),
     fields:
-      'files(id,name,mimeType,modifiedTime,size,webViewLink,iconLink,starred,owners(displayName),parents)',
+      'files(id,name,mimeType,modifiedTime,size,webViewLink,iconLink,thumbnailLink,starred,owners(displayName),parents)',
     orderBy: 'folder,modifiedTime desc',
     pageSize: '60',
     includeItemsFromAllDrives: 'true',
@@ -203,6 +214,101 @@ export async function fetchDriveFolders(
   accessToken: string
 ): Promise<GoogleDriveFile[]> {
   return fetchDriveFiles(accessToken, { category: 'folders' });
+}
+
+export type DriveImagePickerViewMode = 'recent_images' | 'folders' | 'starred_images';
+
+export async function fetchDriveImagePickerItems(
+  accessToken: string,
+  options: {
+    viewMode?: DriveImagePickerViewMode;
+    folderId?: string | null;
+    searchQuery?: string;
+  } = {}
+): Promise<GoogleDriveFile[]> {
+  const { viewMode = 'recent_images', folderId = null, searchQuery = '' } = options;
+  const clauses: string[] = ['trashed = false'];
+  const trimmedSearch = searchQuery.trim();
+
+  if (trimmedSearch) {
+    clauses.push(`name contains '${escapeDriveQuery(trimmedSearch)}'`);
+  }
+
+  if (viewMode === 'folders') {
+    if (!trimmedSearch) {
+      clauses.push(`'${escapeDriveQuery(folderId || 'root')}' in parents`);
+    }
+    clauses.push(
+      `(mimeType = '${DRIVE_FOLDER_MIME}' or mimeType contains 'image/')`
+    );
+  } else if (viewMode === 'starred_images') {
+    clauses.push('starred = true');
+    clauses.push("mimeType contains 'image/'");
+  } else {
+    clauses.push("mimeType contains 'image/'");
+  }
+
+  const params = new URLSearchParams({
+    q: clauses.join(' and '),
+    fields:
+      'files(id,name,mimeType,modifiedTime,size,webViewLink,iconLink,thumbnailLink,starred,owners(displayName),parents)',
+    orderBy: viewMode === 'folders' ? 'folder,modifiedTime desc' : 'modifiedTime desc',
+    pageSize: '48',
+    includeItemsFromAllDrives: 'true',
+    supportsAllDrives: 'true',
+  });
+
+  const data = await driveFetch<{ files?: RawDriveFile[] }>(
+    `${DRIVE_API_BASE}/files?${params.toString()}`,
+    accessToken
+  );
+
+  return (data.files ?? [])
+    .map(mapRawFile)
+    .filter((item): item is GoogleDriveFile => item !== null);
+}
+
+export async function downloadDriveImageAsFile(
+  accessToken: string,
+  file: GoogleDriveFile
+): Promise<File> {
+  const url = `${DRIVE_API_BASE}/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new GoogleDriveApiError(
+        401,
+        'เซสชัน Google หมดอายุ กรุณากด Sign in with Google ใหม่อีกครั้ง'
+      );
+    }
+    if (res.status === 403) {
+      throw new GoogleDriveApiError(
+        403,
+        'ไม่มีสิทธิ์ดาวน์โหลดรูปภาพนี้จาก Google Drive กรุณาเข้าสู่ระบบใหม่อีกครั้ง'
+      );
+    }
+    throw new GoogleDriveApiError(
+      res.status,
+      `ไม่สามารถดาวน์โหลดรูปภาพจาก Google Drive ได้ (${res.status})`
+    );
+  }
+
+  const blob = await res.blob();
+  const effectiveType =
+    blob.type && blob.type.startsWith('image/')
+      ? blob.type
+      : file.mimeType.startsWith('image/')
+        ? file.mimeType
+        : 'image/jpeg';
+
+  return new File([blob], file.name || `drive-sleep-${file.id}.jpg`, {
+    type: effectiveType,
+  });
 }
 
 export async function ensureCozyDeskDriveFolder(

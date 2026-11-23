@@ -474,29 +474,38 @@ export function markTaskDeliveredInChat(
 export function formatTaskDeliveryChatMessage(
   delivery: AssistantTaskDelivery
 ): string {
+  const isSleepAnalysis = delivery.taskListId === 'sleep-analysis';
   const scheduleMeta = delivery.scheduledTime
     ? `⏰ รอบเวลา ${delivery.scheduledTime} น. · `
     : '';
 
   if (!delivery.success) {
     return [
-      `⚠️ **แจ้งข้อผิดพลาดระหว่างทำงาน Google Tasks: ${delivery.cleanTitle}**`,
+      isSleepAnalysis
+        ? `⚠️ **แจ้งข้อผิดพลาดระหว่างสรุปภาพรวมการนอน: ${delivery.cleanTitle}**`
+        : `⚠️ **แจ้งข้อผิดพลาดระหว่างทำงาน Google Tasks: ${delivery.cleanTitle}**`,
       `${scheduleMeta}🕒 เวลาที่ตรวจพบ: ${delivery.completedAtLabel}`,
       '',
       `**สาเหตุ:** ${delivery.errorMessage || 'ไม่สามารถดำเนินงานได้ในขณะนี้'}`,
       '',
-      'สามารถพิมพ์สอบถามหรือแก้ปัญหาต่อในแชทนี้ หรือกด **ลองใหม่** ในกระดาน Google Tasks ได้เลยครับ',
+      isSleepAnalysis
+        ? 'สามารถพิมพ์ถามมีน่าในแชทนี้ หรือกดส่งสรุปภาพรวมใหม่อีกครั้งจากสมุดบันทึกการนอนได้เลยครับ'
+        : 'สามารถพิมพ์สอบถามหรือแก้ปัญหาต่อในแชทนี้ หรือกด **ลองใหม่** ในกระดาน Google Tasks ได้เลยครับ',
     ].join('\n');
   }
 
   return [
-    `📋 **ส่งงานจาก Google Tasks: ${delivery.cleanTitle}**`,
+    isSleepAnalysis
+      ? `🌙 **ส่งสรุปภาพรวมการนอน: ${delivery.cleanTitle}**`
+      : `📋 **ส่งงานจาก Google Tasks: ${delivery.cleanTitle}**`,
     `${scheduleMeta}✅ เสร็จเมื่อ ${delivery.completedAtLabel}`,
     '',
     (delivery.summary ?? '').trim(),
     '',
     '---',
-    'หากต้องการให้ปรับแก้หรือลงรายละเอียดเพิ่ม พิมพ์บอกต่อในแชทนี้ได้เลยครับ (และเมื่อพอใจแล้วสามารถกดติ๊กเสร็จในกระดาน Google Tasks ได้เลย)',
+    isSleepAnalysis
+      ? 'หากต้องการดูรายละเอียดวันไหนเพิ่มเติม หรือให้มีน่าช่วยจัดรูปแบบสรุปใหม่ พิมพ์บอกต่อในแชทนี้ได้เลยครับ'
+      : 'หากต้องการให้ปรับแก้หรือลงรายละเอียดเพิ่ม พิมพ์บอกต่อในแชทนี้ได้เลยครับ (และเมื่อพอใจแล้วสามารถกดติ๊กเสร็จในกระดาน Google Tasks ได้เลย)',
   ].join('\n');
 }
 

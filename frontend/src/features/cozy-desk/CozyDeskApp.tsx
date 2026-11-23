@@ -1508,7 +1508,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
             scheduledTime: meta.scheduledTime ?? undefined,
             localDate: todayIsoDate,
             timeOfDay,
-            sleepLogsContext: sleepLogs.slice(0, 5),
+            sleepLogsContext: sleepLogs.slice(0, 14),
             gmailContext,
             pendingTasksContext,
             ...(refineInstruction ? { refineInstruction } : {}),
@@ -1637,6 +1637,107 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
       youtubeToken,
     ]
   );
+
+  const runningSleepAnalysisRef = useRef(false);
+
+  const handleAskMinaAnalyzeSleep = useCallback(async () => {
+    if (runningSleepAnalysisRef.current || sleepLogs.length === 0) return;
+    runningSleepAnalysisRef.current = true;
+
+    const totalDays = sleepLogs.length;
+    const taskTitle = `สรุปภาพรวมการนอนทั้งหมด (${totalDays} วัน)`;
+    soundEngine.playInteract();
+    setIsSleepLogOpen(false);
+    setGameState('PLAYING');
+    setAssistantMood('thinking');
+    handleUpdateCharacterActivity('mina', {
+      busy: true,
+      taskLabel: `สรุปภาพรวมการนอน ${totalDays} วัน`,
+    });
+    showMinaBubble(`รับทราบครับ! กำลังรวบรวมสรุปภาพรวมการนอน ${totalDays} วันให้สักครู่นะครับ`, 5000);
+    showToast(`มีน่ากำลังสรุปภาพรวมข้อมูลการนอน ${totalDays} วัน — เสร็จแล้วจะเดินมาส่งในแชท`, 'mina');
+
+    try {
+      const notesPrompt = `ช่วยสรุปภาพรวมข้อมูลการนอนทั้งหมดที่เก็บสะสมไว้ในระบบจำนวน ${totalDays} วัน (จากไฟล์ .json) แบบชัดเจนและอ่านง่าย โดยไม่ต้องวิเคราะห์เชิงลึกหรือวินิจฉัย แต่ให้สรุปข้อมูลจริงที่เก็บได้ทั้งหมด ได้แก่: ช่วงวันที่ที่บันทึก, ค่าเฉลี่ย/ต่ำสุด/สูงสุดของคะแนนการนอนและระยะเวลานอน, ช่วงเวลาเข้านอน–ตื่นนอนโดยรวม, สัดส่วนและเวลาเฉลี่ยของหลับลึก/หลับตื้น/REM, ค่าความต่อเนื่อง/การหายใจ/ความเครียด (ถ้ามี), และตารางหรือรายการสรุปสั้นๆ รายวันครบทุกวัน`;
+
+      const res = await cozyApiFetch('/api/assistant/execute-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assistantId: 'mina',
+          taskType: 'sleep_summary',
+          title: taskTitle,
+          notes: notesPrompt,
+          localDate: todayIsoDate,
+          timeOfDay,
+          sleepLogsContext: sleepLogs,
+        }),
+      });
+
+      if (!res.ok) {
+        let errMsg = 'มีน่าไม่สามารถสรุปภาพรวมข้อมูลการนอนได้ในขณะนี้';
+        try {
+          const payload = (await res.json()) as { error?: string };
+          if (payload.error) errMsg = payload.error;
+        } catch {
+          // Keep default error message
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = (await res.json()) as { summary?: string };
+      const summaryText = (data.summary ?? '').trim();
+      if (!summaryText) {
+        throw new Error('ไม่ได้รับสรุปภาพรวมการนอนจากมีน่า');
+      }
+
+      enqueueTaskDelivery({
+        id: Date.now(),
+        assistantId: 'mina',
+        assistantName: 'มีน่า (Mina)',
+        taskListId: 'sleep-analysis',
+        taskId: `sleep-summary-${Date.now()}`,
+        taskTitle,
+        cleanTitle: taskTitle,
+        scheduledTime: null,
+        completedAtLabel: formatThaiShortDateTime(new Date()),
+        success: true,
+        summary: summaryText,
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'เกิดข้อผิดพลาดระหว่างให้มีน่าสรุปภาพรวมข้อมูลการนอน';
+      enqueueTaskDelivery({
+        id: Date.now(),
+        assistantId: 'mina',
+        assistantName: 'มีน่า (Mina)',
+        taskListId: 'sleep-analysis',
+        taskId: `sleep-summary-${Date.now()}`,
+        taskTitle,
+        cleanTitle: taskTitle,
+        scheduledTime: null,
+        completedAtLabel: formatThaiShortDateTime(new Date()),
+        success: false,
+        errorMessage: msg,
+      });
+    } finally {
+      runningSleepAnalysisRef.current = false;
+      handleUpdateCharacterActivity('mina', { busy: false, taskLabel: null });
+      setAssistantMood('idle');
+      void fetchCharacterStatuses();
+    }
+  }, [
+    enqueueTaskDelivery,
+    fetchCharacterStatuses,
+    handleUpdateCharacterActivity,
+    showMinaBubble,
+    showToast,
+    sleepLogs,
+    timeOfDay,
+    todayIsoDate,
+  ]);
 
   const scanAndRunDueMinaTasks = useCallback(async () => {
     if (
@@ -2006,7 +2107,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
             timeOfDay,
             localDate,
             tasksContext,
-            sleepLogsContext: sleepLogs.slice(0, 7),
+            sleepLogsContext: sleepLogs.slice(0, 30),
           }),
           signal: controller.signal,
         });
@@ -3132,6 +3233,13 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
           logs={sleepLogs}
           hasLoggedToday={hasLoggedTodaySleep}
           todaySleepLabel={todaySleepSummary?.hudLabel ?? null}
+          googleUser={googleUser}
+          accessToken={youtubeToken}
+          isSigningIn={isSigningInGoogle}
+          authError={googleAuthError}
+          onGoogleSignIn={() => void handleGoogleSignIn()}
+          onTokenExpired={handleYouTubeTokenExpired}
+          onAskMinaAnalyzeSleep={() => void handleAskMinaAnalyzeSleep()}
           onSaveLog={handleSaveSleepLog}
           onDeleteLog={handleDeleteSleepLog}
           onClose={() => {

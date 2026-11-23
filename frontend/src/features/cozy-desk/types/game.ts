@@ -241,6 +241,7 @@ export interface GoogleDriveFile {
   size?: string;
   webViewLink?: string;
   iconLink?: string;
+  thumbnailLink?: string;
   starred?: boolean;
   ownerName?: string;
   parents?: string[];
@@ -306,6 +307,96 @@ export interface SleepAiAnalysis {
   model: string;
 }
 
+export interface RawSleepReferenceRange {
+  raw_text: string;
+  unit?: string;
+  unit_th?: string;
+  min_value: number | null;
+  max_value: number | null;
+  operator: string;
+}
+
+export interface RawSleepStageEntry {
+  stage_key: 'deep' | 'light' | 'rem';
+  label_th: string;
+  duration_hours: number;
+  duration_minutes: number;
+  duration_total_minutes: number;
+  duration_total_seconds: number;
+  duration_raw_text: string;
+  percentage_value: number | null;
+  percentage_unit: string;
+  percentage_raw_text: string | null;
+  status_label_th: string | null;
+  reference_range: RawSleepReferenceRange | null;
+}
+
+export interface RawSleepSubMetricEntry {
+  metric_key: string;
+  label_th: string;
+  numeric_value: number | null;
+  unit_th: string;
+  raw_text: string | null;
+  status_label_th: string | null;
+  reference_range: RawSleepReferenceRange | null;
+}
+
+export interface RawSleepInfographic {
+  record_header: {
+    date_iso: string;
+    date_short_th: string;
+    weekday_short_th: string;
+    raw_header_text: string;
+  };
+  sleep_window: {
+    sleep_start_date: string;
+    sleep_start_time_24h: string | null;
+    sleep_start_hour: number | null;
+    sleep_start_minute: number | null;
+    sleep_start_raw_label: string | null;
+    wake_up_date: string;
+    wake_up_time_24h: string | null;
+    wake_up_hour: number | null;
+    wake_up_minute: number | null;
+    wake_up_raw_label: string | null;
+  };
+  total_sleep_duration: {
+    hours: number;
+    minutes: number;
+    total_minutes: number | null;
+    total_seconds: number | null;
+    decimal_hours: number | null;
+    raw_text: string | null;
+    status_label_th: string | null;
+    reference_range: RawSleepReferenceRange | null;
+  };
+  sleep_score_raw: {
+    score_value: number | null;
+    score_unit_th: string;
+    better_than_users: {
+      percent_value: number | null;
+      unit: string;
+      raw_text: string | null;
+    };
+    star_rating_raw: {
+      full_stars: number | null;
+      half_stars: number | null;
+      total_displayed_stars: number;
+      derived_numeric_rating: number | null;
+    };
+  };
+  sleep_stages_raw: {
+    deep_sleep: RawSleepStageEntry;
+    light_sleep: RawSleepStageEntry;
+    rem_sleep: RawSleepStageEntry;
+  };
+  sub_metrics_raw: {
+    deep_sleep_continuity: RawSleepSubMetricEntry;
+    breathing_quality: RawSleepSubMetricEntry;
+    awakenings_count: RawSleepSubMetricEntry;
+  };
+}
+
 export interface DailySleepRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -334,6 +425,7 @@ export interface DailySleepRecord {
   previousDayStressScore: number | null;
   appInsights: string[];
   appRecommendation: string | null;
+  rawInfographic?: RawSleepInfographic | null;
   aiAnalysis?: SleepAiAnalysis | null;
   createdAt: string;
   updatedAt: string;

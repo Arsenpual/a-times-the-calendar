@@ -1,43 +1,89 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { User } from 'firebase/auth';
 import {
-  Brain,
   Check,
   CheckCircle2,
-  Clock,
+  ChevronRight,
   Copy,
   Download,
   FileJson,
+  Folder,
+  HardDrive,
   ImagePlus,
   Loader2,
+  MessageCircle,
   Moon,
   RefreshCw,
+  Search,
   Sparkles,
+  Star,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
-import type { DailySleepRecord } from '../types/game';
+import type { DailySleepRecord, GoogleDriveFile } from '../types/game';
 import {
-  analyzeSleepRecordWithAi,
+  DRIVE_FOLDER_MIME,
+  type DriveImagePickerViewMode,
+  downloadDriveImageAsFile,
+  fetchDriveImagePickerItems,
+  GoogleDriveApiError,
+} from '../utils/driveApi';
+import {
+  buildRawSleepInfographic,
   downloadSleepJsonFile,
   extractSleepRecordFromImage,
   formatMinutesToThaiDuration,
   getLocalIsoDate,
+  isRawSleepInfographicShape,
   isValidSleepRecordShape,
+  parseRawSleepInfographicToRecord,
   prepareImageForSleepExtraction,
   SAMPLE_SLEEP_IMAGE_URL,
 } from '../utils/sleepLogsApi';
 import { soundEngine } from '../utils/sound';
 
-type SleepModalTab = 'upload' | 'analysis' | 'history';
+type SleepModalTab = 'upload' | 'history';
 
 interface SleepQuestModalProps {
   logs: DailySleepRecord[];
   hasLoggedToday: boolean;
   todaySleepLabel?: string | null;
+  googleUser?: User | null;
+  accessToken?: string | null;
+  isSigningIn?: boolean;
+  authError?: string | null;
+  onGoogleSignIn?: () => void;
+  onTokenExpired?: () => void;
+  onAskMinaAnalyzeSleep?: () => void;
   onSaveLog: (record: DailySleepRecord) => Promise<void>;
   onDeleteLog: (id: string) => Promise<void>;
   onClose: () => void;
+}
+
+interface DriveBreadcrumbItem {
+  id: string | null;
+  name: string;
+}
+
+function formatThaiShortDate(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: '2-digit',
+  });
+}
+
+function formatDriveFileSize(sizeStr?: string): string | null {
+  if (!sizeStr) return null;
+  const bytes = Number(sizeStr);
+  if (!Number.isFinite(bytes) || bytes <= 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function parseOptionalNum(raw: string): number | null {
@@ -51,17 +97,27 @@ export function SleepQuestModal({
   logs,
   hasLoggedToday,
   todaySleepLabel = null,
+  googleUser = null,
+  accessToken = null,
+  isSigningIn = false,
+  authError = null,
+  onGoogleSignIn,
+  onTokenExpired,
+  onAskMinaAnalyzeSleep,
   onSaveLog,
   onDeleteLog,
   onClose,
 }: SleepQuestModalProps) {
+  const isAuthenticated = Boolean(googleUser && accessToken);
+
   const [activeTab, setActiveTab] = useState<SleepModalTab>(
-    logs.length > 0 && hasLoggedToday ? 'analysis' : 'upload'
+    logs.length > 0 && hasLoggedToday ? 'history' : 'upload'
   );
   const [selectedId, setSelectedId] = useState<string | null>(logs[0]?.id ?? null);
 
   // Upload & extraction state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [draftRecord, setDraftRecord] = useState<DailySleepRecord | null>(null);
@@ -69,9 +125,18 @@ export function SleepQuestModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
-  // AI analysis state
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // Google Drive image picker state
+  const [showDrivePicker, setShowDrivePicker] = useState(false);
+  const [driveViewMode, setDriveViewMode] = useState<DriveImagePickerViewMode>('recent_images');
+  const [driveBreadcrumbs, setDriveBreadcrumbs] = useState<DriveBreadcrumbItem[]>([
+    { id: null, name: 'My Drive' },
+  ]);
+  const [driveSearchInput, setDriveSearchInput] = useState('');
+  const [driveActiveSearch, setDriveActiveSearch] = useState('');
+  const [driveItems, setDriveItems] = useState<GoogleDriveFile[]>([]);
+  const [isLoadingDrive, setIsLoadingDrive] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [downloadingDriveFileId, setDownloadingDriveFileId] = useState<string | null>(null);
 
   // Archive / JSON tools state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -144,20 +209,109 @@ export function SleepQuestModal({
 
   const handleFileSelected = (file: File | null | undefined) => {
     if (!file) return;
+    setSelectedSourceLabel(file.name || 'รูปภาพจากเครื่อง');
     void runExtraction(file);
   };
 
-  const handleSaveDraft = async (andAnalyze: boolean) => {
+  const currentDriveFolder = driveBreadcrumbs[driveBreadcrumbs.length - 1];
+
+  const loadDrivePickerItems = useCallback(async () => {
+    if (!accessToken) return;
+    setIsLoadingDrive(true);
+    setDriveError(null);
+    try {
+      const items = await fetchDriveImagePickerItems(accessToken, {
+        viewMode: driveViewMode,
+        folderId: driveViewMode === 'folders' ? currentDriveFolder.id : null,
+        searchQuery: driveActiveSearch,
+      });
+      setDriveItems(items);
+    } catch (err) {
+      if (err instanceof GoogleDriveApiError) {
+        if (err.status === 401 || err.status === 403) {
+          onTokenExpired?.();
+        }
+        setDriveError(err.message);
+      } else {
+        setDriveError('ไม่สามารถโหลดรายการรูปภาพจาก Google Drive ได้ กรุณาลองใหม่อีกครั้ง');
+      }
+    } finally {
+      setIsLoadingDrive(false);
+    }
+  }, [accessToken, currentDriveFolder.id, driveActiveSearch, driveViewMode, onTokenExpired]);
+
+  useEffect(() => {
+    if (showDrivePicker && isAuthenticated) {
+      void loadDrivePickerItems();
+    } else if (!isAuthenticated) {
+      setDriveItems([]);
+      setDriveError(null);
+    }
+  }, [isAuthenticated, loadDrivePickerItems, showDrivePicker]);
+
+  const handleSelectDriveItem = async (item: GoogleDriveFile) => {
+    if (item.mimeType === DRIVE_FOLDER_MIME) {
+      setDriveActiveSearch('');
+      setDriveSearchInput('');
+      setDriveViewMode('folders');
+      setDriveBreadcrumbs((prev) => [...prev, { id: item.id, name: item.name }]);
+      return;
+    }
+
+    if (!accessToken || downloadingDriveFileId || isExtracting) return;
+    setDownloadingDriveFileId(item.id);
+    setDriveError(null);
+    setExtractError(null);
+    try {
+      const imageFile = await downloadDriveImageAsFile(accessToken, item);
+      setSelectedSourceLabel(`Google Drive: ${item.name}`);
+      setShowDrivePicker(false);
+      await runExtraction(imageFile);
+    } catch (err) {
+      if (err instanceof GoogleDriveApiError) {
+        if (err.status === 401 || err.status === 403) {
+          onTokenExpired?.();
+        }
+        setDriveError(err.message);
+      } else {
+        setDriveError(
+          err instanceof Error
+            ? err.message
+            : 'ไม่สามารถดึงรูปภาพจาก Google Drive ได้ กรุณาลองใหม่อีกครั้ง'
+        );
+      }
+    } finally {
+      setDownloadingDriveFileId(null);
+    }
+  };
+
+  const handleDriveBreadcrumbClick = (index: number) => {
+    setDriveBreadcrumbs((prev) => prev.slice(0, index + 1));
+    setDriveViewMode('folders');
+    setDriveActiveSearch('');
+    setDriveSearchInput('');
+  };
+
+  const handleDriveSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDriveActiveSearch(driveSearchInput.trim());
+  };
+
+  const handleSaveDraft = async () => {
     if (!draftRecord || isSaving) return;
     setIsSaving(true);
     setExtractError(null);
-    setAnalysisError(null);
     try {
       const nowIso = new Date().toISOString();
       const normalizedId = `sleep_${draftRecord.date}`;
       const recordToSave: DailySleepRecord = {
         ...draftRecord,
         id: normalizedId,
+        userLabel: null,
+        previousDayStressScore: null,
+        appInsights: [],
+        appRecommendation: null,
+        rawInfographic: buildRawSleepInfographic(draftRecord),
         createdAt: nowIso,
         updatedAt: nowIso,
       };
@@ -165,42 +319,14 @@ export function SleepQuestModal({
       setSelectedId(recordToSave.id);
       soundEngine.playMessageReceived();
 
-      if (andAnalyze) {
-        setActiveTab('analysis');
-        setIsSaving(false);
-        await handleRunAiAnalysis(recordToSave);
-        return;
-      }
-
-      setStatusMessage(`บันทึกไฟล์ข้อมูลประจำวัน ${recordToSave.date}.json เรียบร้อยแล้ว`);
+      setStatusMessage(
+        `บันทึกไฟล์ข้อมูลประจำวัน ${recordToSave.date}.json เรียบร้อยแล้ว สะสมข้อมูลแล้วกดส่งให้มีน่าสรุปภาพรวมทางแชท AI ได้เลย`
+      );
       setActiveTab('history');
     } catch (err) {
       setExtractError(err instanceof Error ? err.message : 'ไม่สามารถบันทึกข้อมูลได้');
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleRunAiAnalysis = async (target: DailySleepRecord | null) => {
-    if (!target || isAnalyzing) return;
-    setIsAnalyzing(true);
-    setAnalysisError(null);
-    try {
-      const analysis = await analyzeSleepRecordWithAi(target, logs);
-      const updated: DailySleepRecord = {
-        ...target,
-        aiAnalysis: analysis,
-        updatedAt: new Date().toISOString(),
-      };
-      await onSaveLog(updated);
-      setSelectedId(updated.id);
-      soundEngine.playMessageReceived();
-    } catch (err) {
-      setAnalysisError(
-        err instanceof Error ? err.message : 'ไม่สามารถวิเคราะห์ด้วย AI ได้ในขณะนี้'
-      );
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
@@ -221,7 +347,17 @@ export function SleepQuestModal({
       const text = await file.text();
       const parsed = JSON.parse(text);
       const list = Array.isArray(parsed) ? parsed : [parsed];
-      const valid = list.filter(isValidSleepRecordShape);
+      const valid: DailySleepRecord[] = [];
+      for (const item of list) {
+        if (isValidSleepRecordShape(item)) {
+          valid.push({
+            ...item,
+            rawInfographic: item.rawInfographic ?? buildRawSleepInfographic(item),
+          });
+        } else if (isRawSleepInfographicShape(item)) {
+          valid.push(parseRawSleepInfographicToRecord(item));
+        }
+      }
       if (valid.length === 0) {
         throw new Error('ไฟล์ .json นี้ไม่ตรงกับโครงสร้างข้อมูลการนอน');
       }
@@ -284,7 +420,7 @@ export function SleepQuestModal({
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold tracking-tight text-[#FAF6F0]">
-                ภารกิจห้องนอน · บันทึกและวิเคราะห์การนอนประจำวัน
+                ภารกิจห้องนอน · สมุดบันทึกการนอนประจำวัน (.json)
               </h2>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#A89C90]">
                 <span
@@ -332,20 +468,6 @@ export function SleepQuestModal({
               >
                 <Upload className="h-3.5 w-3.5 shrink-0" />
                 <span>อัปโหลดภาพ → JSON</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'analysis'}
-                onClick={() => setActiveTab('analysis')}
-                className={`inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeTab === 'analysis'
-                    ? 'bg-[#4F46E5] text-white'
-                    : 'text-[#B5A89C] hover:text-[#FAF6F0]'
-                }`}
-              >
-                <Brain className="h-3.5 w-3.5 shrink-0" />
-                <span>วิเคราะห์ด้วย AI</span>
               </button>
               <button
                 type="button"
@@ -459,7 +581,27 @@ export function SleepQuestModal({
                     <button
                       type="button"
                       disabled={isExtracting}
-                      onClick={() => void runExtraction(SAMPLE_SLEEP_IMAGE_URL)}
+                      onClick={() => {
+                        setDriveError(null);
+                        setShowDrivePicker((prev) => !prev);
+                      }}
+                      className={`inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        showDrivePicker
+                          ? 'border-[#818CF8] bg-[#312B4A] text-white'
+                          : 'border-[#54463C] bg-[#2D2621] text-[#FAF6F0] hover:border-[#818CF8] hover:bg-[#352E42]'
+                      }`}
+                    >
+                      <HardDrive className="h-3.5 w-3.5 shrink-0 text-[#A5B4FC]" />
+                      <span>เลือกจาก Google Drive</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isExtracting}
+                      onClick={() => {
+                        setSelectedSourceLabel('ตัวอย่าง Huawei Health');
+                        void runExtraction(SAMPLE_SLEEP_IMAGE_URL);
+                      }}
                       className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#473E59] bg-[#272336] px-3.5 py-2 text-xs font-medium text-[#C7D2FE] transition-colors hover:border-[#6366F1] hover:bg-[#312B4A] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Sparkles className="h-3.5 w-3.5 shrink-0" />
@@ -467,6 +609,301 @@ export function SleepQuestModal({
                     </button>
                   </div>
                 </div>
+
+                {/* Inline Google Drive Image Picker Panel */}
+                {showDrivePicker && (
+                  <div className="flex flex-col overflow-hidden rounded-xl border border-[#4D446A] bg-[#1C1824] shadow-lg">
+                    {/* Picker Header */}
+                    <div className="flex items-center justify-between gap-2 border-b border-[#322C45] bg-[#242031] px-3.5 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <HardDrive className="h-4 w-4 shrink-0 text-[#A5B4FC]" />
+                        <span className="truncate text-xs font-semibold text-[#FAF6F0]">
+                          เลือกรูปภาพการนอนจาก Google Drive
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {isAuthenticated && (
+                          <button
+                            type="button"
+                            onClick={() => void loadDrivePickerItems()}
+                            disabled={isLoadingDrive || Boolean(downloadingDriveFileId)}
+                            title="รีเฟรชรายการรูปภาพจาก Google Drive"
+                            className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[#3E3756] bg-[#1B1726] text-[#C7D2FE] transition-colors hover:border-[#6366F1] hover:text-white disabled:opacity-50"
+                          >
+                            <RefreshCw
+                              className={`h-3.5 w-3.5 ${isLoadingDrive ? 'animate-spin' : ''}`}
+                            />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowDrivePicker(false)}
+                          aria-label="ปิดหน้าต่างเลือกภาพจาก Google Drive"
+                          className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[#3E3756] bg-[#1B1726] text-[#A89C90] transition-colors hover:border-[#6366F1] hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Error Alert inside Drive Picker */}
+                    {(authError || driveError) && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#7F1D1D] bg-[#2B1717] px-3.5 py-2 text-xs text-[#FCA5A5]">
+                        <span>{driveError || authError}</span>
+                        {isAuthenticated ? (
+                          <button
+                            type="button"
+                            onClick={() => void loadDrivePickerItems()}
+                            className="cursor-pointer rounded bg-[#7F1D1D] px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-[#991B1B]"
+                          >
+                            ลองใหม่
+                          </button>
+                        ) : (
+                          onGoogleSignIn && (
+                            <button
+                              type="button"
+                              onClick={onGoogleSignIn}
+                              disabled={isSigningIn}
+                              className="cursor-pointer rounded bg-[#7F1D1D] px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-[#991B1B]"
+                            >
+                              Sign in with Google
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {!isAuthenticated ? (
+                      <div className="flex flex-col items-center justify-center gap-3 p-5 text-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2A243B] text-[#A5B4FC]">
+                          <HardDrive className="h-5 w-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-[#FAF6F0]">
+                            เชื่อมต่อบัญชี Google เพื่อเลือกรูปภาพจาก Drive
+                          </p>
+                          <p className="text-[11px] leading-relaxed text-[#A89C90]">
+                            เปิดดูรูปภาพหน้าจอสถิติการนอนที่ซิงก์ไว้ใน Google Drive ของคุณ แล้วนำมาสกัดเป็นไฟล์ .json ได้ทันที
+                          </p>
+                        </div>
+                        {onGoogleSignIn ? (
+                          <button
+                            type="button"
+                            onClick={onGoogleSignIn}
+                            disabled={isSigningIn}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-[#1F1F1F] shadow-xs transition-colors hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <HardDrive className="h-3.5 w-3.5 text-[#4F46E5]" />
+                            <span>
+                              {isSigningIn ? 'กำลังเข้าสู่ระบบ Google...' : 'Sign in with Google'}
+                            </span>
+                          </button>
+                        ) : (
+                          <p className="text-[11px] text-[#FBBF24]">
+                            กรุณาเข้าสู่ระบบ Google จากมุมขวาบนหรือโต๊ะเอกสารกลางห้องก่อนใช้งาน
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        {/* View Mode Tabs & Search */}
+                        <div className="flex flex-col gap-2 border-b border-[#2D273D] bg-[#201C2C] p-3">
+                          <div className="flex flex-wrap items-center gap-1">
+                            {(
+                              [
+                                { id: 'recent_images', label: 'รูปภาพล่าสุด' },
+                                { id: 'folders', label: 'เปิดตามโฟลเดอร์' },
+                                { id: 'starred_images', label: 'ติดดาว' },
+                              ] as const
+                            ).map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => {
+                                  setDriveViewMode(tab.id);
+                                  setDriveError(null);
+                                }}
+                                className={`cursor-pointer rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                  driveViewMode === tab.id
+                                    ? 'bg-[#4F46E5] text-white'
+                                    : 'bg-[#171320] text-[#B5A89C] hover:text-[#FAF6F0]'
+                                }`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          <form
+                            onSubmit={handleDriveSearchSubmit}
+                            className="flex items-center gap-1.5"
+                          >
+                            <div className="relative flex-1">
+                              <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[#8E8277]" />
+                              <input
+                                type="text"
+                                value={driveSearchInput}
+                                onChange={(e) => setDriveSearchInput(e.target.value)}
+                                placeholder="ค้นหาชื่อรูปภาพหรือโฟลเดอร์ใน Drive..."
+                                className="h-8 w-full rounded-lg border border-[#3B3452] bg-[#15121D] pr-7 pl-8 text-xs text-[#FAF6F0] placeholder:text-[#7D7268] focus:border-[#818CF8] focus:outline-none"
+                              />
+                              {driveSearchInput && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDriveSearchInput('');
+                                    setDriveActiveSearch('');
+                                  }}
+                                  aria-label="ล้างคำค้นหาใน Google Drive"
+                                  className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-[#8E8277] hover:text-white"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="submit"
+                              className="h-8 cursor-pointer rounded-lg border border-[#453D5E] bg-[#282338] px-2.5 text-xs font-medium text-[#E0E7FF] transition-colors hover:border-[#6366F1] hover:text-white"
+                            >
+                              ค้นหา
+                            </button>
+                          </form>
+
+                          {/* Folder Breadcrumbs when browsing folders */}
+                          {(driveViewMode === 'folders' || driveActiveSearch) && (
+                            <div className="flex flex-wrap items-center gap-1 text-[11px] text-[#A89C90]">
+                              {driveViewMode === 'folders' &&
+                                driveBreadcrumbs.map((crumb, idx) => {
+                                  const isLast = idx === driveBreadcrumbs.length - 1;
+                                  return (
+                                    <span
+                                      key={`${crumb.id ?? 'root'}-${idx}`}
+                                      className="inline-flex items-center gap-1"
+                                    >
+                                      {idx > 0 && (
+                                        <ChevronRight className="h-3 w-3 text-[#6F655E]" />
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDriveBreadcrumbClick(idx)}
+                                        className={`cursor-pointer rounded px-1 py-0.5 transition-colors ${
+                                          isLast && !driveActiveSearch
+                                            ? 'font-semibold text-[#C7D2FE]'
+                                            : 'hover:bg-[#2C263D] hover:text-white'
+                                        }`}
+                                      >
+                                        {crumb.name}
+                                      </button>
+                                    </span>
+                                  );
+                                })}
+                              {driveActiveSearch && (
+                                <span className="text-[#A5B4FC]">
+                                  · ผลการค้นหา “{driveActiveSearch}”
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* File / Image List */}
+                        <div className="max-h-72 overflow-y-auto p-2.5">
+                          {isLoadingDrive ? (
+                            <div className="flex items-center justify-center gap-2 py-10 text-xs text-[#A89C90]">
+                              <Loader2 className="h-4 w-4 animate-spin text-[#818CF8]" />
+                              <span>กำลังโหลดรายการรูปภาพจาก Google Drive...</span>
+                            </div>
+                          ) : driveItems.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-[#9C9084]">
+                              ไม่พบรูปภาพหรือโฟลเดอร์ในมุมมองนี้ ลองเปลี่ยนแท็บหรือค้นหาด้วยชื่อไฟล์
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1.5">
+                              {driveItems.map((item) => {
+                                const isFolder = item.mimeType === DRIVE_FOLDER_MIME;
+                                const isDownloadingThis = downloadingDriveFileId === item.id;
+                                const sizeText = formatDriveFileSize(item.size);
+
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    disabled={Boolean(downloadingDriveFileId) || isExtracting}
+                                    onClick={() => void handleSelectDriveItem(item)}
+                                    className={`group flex w-full cursor-pointer items-center justify-between gap-2.5 rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                      isDownloadingThis
+                                        ? 'border-[#818CF8] bg-[#2B2640]'
+                                        : 'border-[#2E283E] bg-[#16131F] hover:border-[#6366F1] hover:bg-[#221D30]'
+                                    }`}
+                                  >
+                                    <div className="flex min-w-0 items-center gap-2.5">
+                                      {isFolder ? (
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#2E251A] text-[#FBBF24]">
+                                          <Folder className="h-4 w-4" />
+                                        </span>
+                                      ) : item.thumbnailLink ? (
+                                        <img
+                                          src={item.thumbnailLink}
+                                          alt={item.name}
+                                          referrerPolicy="no-referrer"
+                                          className="h-10 w-10 shrink-0 rounded-lg border border-[#38314B] bg-[#0F0D15] object-cover"
+                                        />
+                                      ) : (
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#262138] text-[#A5B4FC]">
+                                          <ImagePlus className="h-4 w-4" />
+                                        </span>
+                                      )}
+
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="truncate text-xs font-medium text-[#FAF6F0]">
+                                            {item.name}
+                                          </span>
+                                          {item.starred && (
+                                            <Star className="h-3 w-3 shrink-0 fill-[#FBBF24] text-[#FBBF24]" />
+                                          )}
+                                        </div>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] tabular-nums text-[#9C9084]">
+                                          <span>{isFolder ? 'โฟลเดอร์' : 'รูปภาพ'}</span>
+                                          <span>·</span>
+                                          <span>{formatThaiShortDate(item.modifiedTime)}</span>
+                                          {sizeText && (
+                                            <>
+                                              <span>·</span>
+                                              <span>{sizeText}</span>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="shrink-0">
+                                      {isDownloadingThis ? (
+                                        <span className="inline-flex items-center gap-1 rounded-md bg-[#4F46E5] px-2 py-1 text-[11px] font-semibold text-white">
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          <span>กำลังดึงภาพ...</span>
+                                        </span>
+                                      ) : isFolder ? (
+                                        <span className="inline-flex items-center gap-0.5 text-[11px] text-[#A89C90] group-hover:text-[#FAF6F0]">
+                                          <span>เปิด</span>
+                                          <ChevronRight className="h-3.5 w-3.5" />
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center rounded-md border border-[#433B5C] bg-[#252036] px-2 py-1 text-[11px] font-medium text-[#C7D2FE] group-hover:border-[#818CF8] group-hover:bg-[#4F46E5] group-hover:text-white">
+                                          เลือกภาพนี้
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {extractError && (
                   <div className="rounded-xl border border-[#7F1D1D] bg-[#2B1717] px-4 py-3 text-xs text-[#FCA5A5]">
@@ -476,15 +913,27 @@ export function SleepQuestModal({
 
                 {previewUrl && (
                   <div className="overflow-hidden rounded-xl border border-[#382F29] bg-[#161210]">
-                    <div className="flex items-center justify-between border-b border-[#2D2520] px-3.5 py-2 text-xs text-[#A89C90]">
-                      <span>ภาพต้นฉบับที่อัปโหลด</span>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="cursor-pointer text-[#C7D2FE] hover:underline"
-                      >
-                        เปลี่ยนภาพ
-                      </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2D2520] px-3.5 py-2 text-xs text-[#A89C90]">
+                      <span className="truncate">
+                        {selectedSourceLabel ? `ภาพจาก ${selectedSourceLabel}` : 'ภาพต้นฉบับที่อัปโหลด'}
+                      </span>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowDrivePicker(true)}
+                          className="cursor-pointer text-[#A5B4FC] hover:underline"
+                        >
+                          เลือกจาก Drive
+                        </button>
+                        <span className="text-[#4A3E36]">·</span>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="cursor-pointer text-[#C7D2FE] hover:underline"
+                        >
+                          เปลี่ยนภาพ
+                        </button>
+                      </div>
                     </div>
                     <div className="max-h-80 overflow-y-auto p-2">
                       <img
@@ -535,7 +984,10 @@ export function SleepQuestModal({
                         <button
                           type="button"
                           onClick={() =>
-                            downloadSleepJsonFile(draftRecord, `sleep-${draftRecord.date}.json`)
+                            downloadSleepJsonFile(
+                              buildRawSleepInfographic(draftRecord),
+                              `sleep-${draftRecord.date}.json`
+                            )
                           }
                           className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#453A33] bg-[#2D2621] px-3 py-1.5 text-xs font-medium text-[#D6CBC0] transition-colors hover:border-[#66564B] hover:text-white"
                         >
@@ -549,7 +1001,9 @@ export function SleepQuestModal({
                       <div className="relative">
                         <button
                           type="button"
-                          onClick={() => void handleCopyJson(draftRecord, 'draft')}
+                          onClick={() =>
+                            void handleCopyJson(buildRawSleepInfographic(draftRecord), 'draft')
+                          }
                           className="absolute top-3 right-3 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#453A33] bg-[#26201C] px-2.5 py-1 text-[11px] font-medium text-[#E5DDD3] hover:border-[#66564B]"
                         >
                           {copiedId === 'draft' ? (
@@ -565,7 +1019,7 @@ export function SleepQuestModal({
                           )}
                         </button>
                         <pre className="max-h-[340px] overflow-auto rounded-lg border border-[#342B26] bg-[#161210] p-4 font-mono text-[11px] leading-relaxed text-[#C7D2FE]">
-                          {JSON.stringify(draftRecord, null, 2)}
+                          {JSON.stringify(buildRawSleepInfographic(draftRecord), null, 2)}
                         </pre>
                       </div>
                     ) : (
@@ -722,62 +1176,38 @@ export function SleepQuestModal({
                             />
                           </label>
                           <label className="flex flex-col gap-1 text-xs">
-                            <span className="text-[#A89C90]">ความเครียดวันก่อน</span>
+                            <span className="text-[#A89C90]">จำนวนครั้งที่ตื่นนอน</span>
                             <input
                               type="number"
-                              value={draftRecord.previousDayStressScore ?? ''}
+                              min={0}
+                              value={draftRecord.awakeCount ?? ''}
                               onChange={(e) =>
-                                updateDraftField(
-                                  'previousDayStressScore',
-                                  parseOptionalNum(e.target.value)
-                                )
+                                updateDraftField('awakeCount', parseOptionalNum(e.target.value))
                               }
                               className="rounded-lg border border-[#423730] bg-[#1A1512] px-2.5 py-1.5 font-mono text-xs tabular-nums text-[#FAF6F0]"
                             />
                           </label>
                         </div>
-
-                        {draftRecord.appInsights.length > 0 && (
-                          <div className="rounded-lg border border-[#342B26] bg-[#1A1512] p-3 text-xs text-[#C6B9AC]">
-                            <div className="font-medium text-[#E8DFD4]">
-                              บันทึกเพิ่มเติมจากแอพ ({draftRecord.sourceApp})
-                            </div>
-                            <ul className="mt-1.5 space-y-1">
-                              {draftRecord.appInsights.map((note, idx) => (
-                                <li key={idx} className="leading-relaxed">
-                                  · {note}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
                       </div>
                     )}
 
                     {/* Action Bar */}
-                    <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-[#342B26] pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[#342B26] pt-4">
+                      <span className="text-[11px] text-[#9C9084]">
+                        บันทึกสะสมข้อมูลรายวันแล้วกดส่งให้มีน่าสรุปภาพรวมทั้งหมดทางแชทผู้ช่วย AI ได้เลย
+                      </span>
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => void handleSaveDraft(false)}
-                        className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border border-[#4B3F37] bg-[#2D2621] px-4 py-2 text-xs font-medium text-[#FAF6F0] transition-colors hover:border-[#6E5C50] hover:bg-[#382F29] disabled:opacity-60"
-                      >
-                        <FileJson className="h-3.5 w-3.5 shrink-0" />
-                        <span>บันทึกเป็น .json ประจำวัน</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isSaving}
-                        onClick={() => void handleSaveDraft(true)}
+                        onClick={() => void handleSaveDraft()}
                         className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-[#4F46E5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4338CA] disabled:opacity-60"
                       >
                         {isSaving ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                         ) : (
-                          <Brain className="h-3.5 w-3.5 shrink-0" />
+                          <FileJson className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span>บันทึก & ให้ AI วิเคราะห์ทันที</span>
+                        <span>บันทึกเป็น .json ประจำวัน</span>
                       </button>
                     </div>
                   </div>
@@ -787,321 +1217,7 @@ export function SleepQuestModal({
           )}
 
           {/* ============================================================== */}
-          {/* TAB 2: AI SLEEP ANALYSIS & VISUAL METRICS                      */}
-          {/* ============================================================== */}
-          {activeTab === 'analysis' && (
-            <div>
-              {!selectedRecord ? (
-                <div className="flex min-h-[340px] flex-col items-center justify-center rounded-xl border border-[#342B26] bg-[#231D1A] p-8 text-center">
-                  <Brain className="h-9 w-9 text-[#6F655E]" />
-                  <h3 className="mt-3 text-sm font-semibold text-[#FAF6F0]">
-                    ยังไม่มีข้อมูลการนอนสำหรับวิเคราะห์
-                  </h3>
-                  <p className="mt-1.5 max-w-md text-xs text-[#A89C90]">
-                    อัปโหลดรูปภาพการนอนจากแอพสุขภาพก่อน เพื่อแปลงเป็นไฟล์ .json ประจำวันแล้วให้ AI วิเคราะห์เชิงลึก
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('upload')}
-                    className="mt-4 inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-[#D97736] px-4 py-2 text-xs font-semibold text-[#FAF6F0] hover:bg-[#C6682A]"
-                  >
-                    <Upload className="h-3.5 w-3.5 shrink-0" />
-                    <span>ไปหน้าอัปโหลดภาพการนอน</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  {/* Date Selector & Primary Action */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#342B26] pb-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className="text-xs text-[#A89C90]" htmlFor="sleep-day-select">
-                        เลือกวันที่:
-                      </label>
-                      <select
-                        id="sleep-day-select"
-                        value={selectedRecord.id}
-                        onChange={(e) => setSelectedId(e.target.value)}
-                        className="rounded-lg border border-[#453A33] bg-[#27201C] px-3 py-1.5 text-xs font-medium text-[#FAF6F0] focus:border-[#818CF8] focus:outline-none"
-                      >
-                        {logs.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.date} ({item.dateLabel}) —{' '}
-                            {item.sleepScore != null ? `${item.sleepScore} คะแนน` : 'ไม่ระบุคะแนน'}
-                          </option>
-                        ))}
-                      </select>
-
-                      <span className="text-xs text-[#9C9084]">
-                        {selectedRecord.sourceApp}
-                        {selectedRecord.bedtime && selectedRecord.wakeTime
-                          ? ` · เข้านอน ${selectedRecord.bedtime} – ตื่น ${selectedRecord.wakeTime}`
-                          : ''}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          downloadSleepJsonFile(selectedRecord, `sleep-${selectedRecord.date}.json`)
-                        }
-                        className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#453A33] bg-[#2B2420] px-3 py-2 text-xs font-medium text-[#D6CBC0] hover:border-[#66564B] hover:text-white"
-                      >
-                        <Download className="h-3.5 w-3.5 shrink-0" />
-                        <span>ดาวน์โหลด .json</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isAnalyzing}
-                        onClick={() => void handleRunAiAnalysis(selectedRecord)}
-                        className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-[#4F46E5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4338CA] disabled:opacity-60"
-                      >
-                        {isAnalyzing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span>
-                          {selectedRecord.aiAnalysis ? 'วิเคราะห์ใหม่ด้วย AI' : 'เริ่มวิเคราะห์ด้วย AI'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 4-Column Quantitative KPI Strip (Zero-pill, Tabular Numerals) */}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <div className="rounded-xl border border-[#342B26] bg-[#241E1A] p-4">
-                      <div className="text-xs text-[#A89C90]">คะแนนการนอน</div>
-                      <div className="mt-1.5 flex items-baseline gap-1.5">
-                        <span className="font-mono text-2xl font-bold tabular-nums text-[#FAF6F0]">
-                          {selectedRecord.sleepScore ?? '—'}
-                        </span>
-                        <span className="text-xs text-[#8E8277]">/ 100</span>
-                      </div>
-                      <div className="mt-1 text-xs text-[#A5B4FC]">
-                        {selectedRecord.percentileBeat != null
-                          ? `ดีกว่า ${selectedRecord.percentileBeat}% ของผู้ใช้`
-                          : selectedRecord.sourceApp}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-[#342B26] bg-[#241E1A] p-4">
-                      <div className="text-xs text-[#A89C90]">ระยะเวลานอนรวม</div>
-                      <div className="mt-1.5 font-mono text-xl font-bold tabular-nums text-[#FAF6F0]">
-                        {formatMinutesToThaiDuration(selectedRecord.totalSleepMinutes)}
-                      </div>
-                      <div className="mt-1 text-xs text-[#8E8277]">
-                        {selectedRecord.totalSleepStatus || 'บันทึกแล้ว'}
-                        {selectedRecord.totalSleepReference
-                          ? ` · เกณฑ์ ${selectedRecord.totalSleepReference}`
-                          : ''}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-[#342B26] bg-[#241E1A] p-4">
-                      <div className="text-xs text-[#A89C90]">ความต่อเนื่อง / การหายใจ</div>
-                      <div className="mt-1.5 flex items-baseline gap-2 font-mono text-xl font-bold tabular-nums text-[#FAF6F0]">
-                        <span>{selectedRecord.deepSleepContinuityScore ?? '—'}</span>
-                        <span className="text-sm font-normal text-[#6F655E]">/</span>
-                        <span>{selectedRecord.breathingQualityScore ?? '—'}</span>
-                      </div>
-                      <div className="mt-1 text-xs text-[#8E8277]">
-                        ตื่นกลางดึก {selectedRecord.awakeCount ?? '—'} ครั้ง
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-[#342B26] bg-[#241E1A] p-4">
-                      <div className="text-xs text-[#A89C90]">ช่วงเวลานอน · ความเครียด</div>
-                      <div className="mt-1.5 flex items-center gap-1.5 font-mono text-lg font-bold tabular-nums text-[#FAF6F0]">
-                        <Clock className="h-4 w-4 shrink-0 text-[#A5B4FC]" />
-                        <span>
-                          {selectedRecord.bedtime && selectedRecord.wakeTime
-                            ? `${selectedRecord.bedtime}–${selectedRecord.wakeTime}`
-                            : '—'}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-[#FBBF24]">
-                        {selectedRecord.previousDayStressScore != null
-                          ? `ความเครียดวันก่อนหน้า ${selectedRecord.previousDayStressScore}`
-                          : 'ไม่มีค่าความเครียดระบุในภาพ'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Proportional Sleep Stages Distribution Bar */}
-                  <div className="rounded-xl border border-[#342B26] bg-[#241E1A] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold text-[#FAF6F0]">สัดส่วนระยะการนอน</span>
-                      <span className="tabular-nums text-[#A89C90]">
-                        หลับลึก {selectedRecord.stages.deep.percent ?? '—'}% · หลับตื้น{' '}
-                        {selectedRecord.stages.light.percent ?? '—'}% · REM{' '}
-                        {selectedRecord.stages.rem.percent ?? '—'}%
-                      </span>
-                    </div>
-
-                    {(() => {
-                      const d = selectedRecord.stages.deep.percent ?? selectedRecord.stages.deep.minutes;
-                      const l = selectedRecord.stages.light.percent ?? selectedRecord.stages.light.minutes;
-                      const r = selectedRecord.stages.rem.percent ?? selectedRecord.stages.rem.minutes;
-                      const sum = Math.max(1, d + l + r);
-                      return (
-                        <div className="mt-3 flex h-3.5 w-full overflow-hidden rounded-md bg-[#161210]">
-                          <div
-                            style={{ width: `${(d / sum) * 100}%` }}
-                            className="bg-[#7C3AED]"
-                            title={`หลับลึก ${selectedRecord.stages.deep.durationText}`}
-                          />
-                          <div
-                            style={{ width: `${(l / sum) * 100}%` }}
-                            className="bg-[#C084FC]"
-                            title={`หลับตื้น ${selectedRecord.stages.light.durationText}`}
-                          />
-                          <div
-                            style={{ width: `${(r / sum) * 100}%` }}
-                            className="bg-[#FB7185]"
-                            title={`REM ${selectedRecord.stages.rem.durationText}`}
-                          />
-                        </div>
-                      );
-                    })()}
-
-                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-[#C6B9AC] sm:grid-cols-3">
-                      <div className="flex items-center justify-between border-t border-[#312924] pt-2">
-                        <span className="text-[#C4B5FD]">หลับลึก (Deep)</span>
-                        <span className="font-mono tabular-nums">
-                          {selectedRecord.stages.deep.durationText ||
-                            formatMinutesToThaiDuration(selectedRecord.stages.deep.minutes)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-[#312924] pt-2">
-                        <span className="text-[#E9D5FF]">หลับตื้น (Light)</span>
-                        <span className="font-mono tabular-nums">
-                          {selectedRecord.stages.light.durationText ||
-                            formatMinutesToThaiDuration(selectedRecord.stages.light.minutes)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-[#312924] pt-2">
-                        <span className="text-[#FDA4AF]">หลับฝัน (REM)</span>
-                        <span className="font-mono tabular-nums">
-                          {selectedRecord.stages.rem.durationText ||
-                            formatMinutesToThaiDuration(selectedRecord.stages.rem.minutes)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Analysis Report */}
-                  {analysisError && (
-                    <div className="rounded-xl border border-[#7F1D1D] bg-[#2B1717] px-4 py-3 text-xs text-[#FCA5A5]">
-                      {analysisError}
-                    </div>
-                  )}
-
-                  {selectedRecord.aiAnalysis ? (
-                    <div className="flex flex-col gap-5 rounded-xl border border-[#3E3959] bg-[#211E2D] p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#34304B] pb-3">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-[#E0E7FF]">
-                          <Brain className="h-4 w-4 text-[#818CF8]" />
-                          <span>ผลวิเคราะห์การนอนโดย AI</span>
-                        </div>
-                        <span className="text-xs text-[#9E99B8]">
-                          วิเคราะห์เมื่อ{' '}
-                          {new Date(selectedRecord.aiAnalysis.analyzedAt).toLocaleString('th-TH', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}{' '}
-                          · ผู้ช่วยมีน่าในห้องทำงานก็อ่านข้อมูลนี้ได้แล้ว
-                        </span>
-                      </div>
-
-                      <p className="text-sm leading-relaxed text-[#F5F3FF]">
-                        {selectedRecord.aiAnalysis.summary}
-                      </p>
-
-                      {selectedRecord.aiAnalysis.circadianNote && (
-                        <div className="rounded-lg border border-[#3B3654] bg-[#1A1725] p-3.5">
-                          <div className="text-xs font-semibold text-[#C7D2FE]">
-                            จังหวะนาฬิกาชีวภาพ (Circadian Rhythm)
-                          </div>
-                          <p className="mt-1 text-xs leading-relaxed text-[#D8D4EB]">
-                            {selectedRecord.aiAnalysis.circadianNote}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="rounded-lg border border-[#2B4237] bg-[#17241E] p-4">
-                          <h4 className="text-xs font-semibold text-[#6EE7B7]">
-                            จุดแข็งของการนอนรอบนี้
-                          </h4>
-                          <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#D1FAE5]">
-                            {selectedRecord.aiAnalysis.strengths.map((item, idx) => (
-                              <li key={idx}>· {item}</li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <div className="rounded-lg border border-[#4D3B24] bg-[#251E15] p-4">
-                          <h4 className="text-xs font-semibold text-[#FCD34D]">
-                            จุดที่ควรสังเกตและดูแล
-                          </h4>
-                          <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#FEF3C7]">
-                            {selectedRecord.aiAnalysis.concerns.map((item, idx) => (
-                              <li key={idx}>· {item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#34304B] pt-4">
-                        <h4 className="text-xs font-semibold text-[#C7D2FE]">
-                          คำแนะนำที่ทำได้จริงสำหรับการนอนรอบถัดไป
-                        </h4>
-                        <ol className="mt-2 space-y-2 text-xs leading-relaxed text-[#E5E2F5]">
-                          {selectedRecord.aiAnalysis.actionableTips.map((tip, idx) => (
-                            <li key={idx}>
-                              <span className="font-mono font-semibold text-[#A5B4FC]">
-                                0{idx + 1}.
-                              </span>{' '}
-                              {tip}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center rounded-xl border border-[#3B3654] bg-[#211E2D] p-6 text-center">
-                      <p className="text-sm font-medium text-[#E0E7FF]">
-                        ข้อมูล .json วันที่ {selectedRecord.date} พร้อมให้ AI วิเคราะห์แล้ว
-                      </p>
-                      <p className="mt-1 text-xs text-[#A5A0BD]">
-                        กดปุ่มด้านล่างเพื่อให้ AI ประเมินสัดส่วนการนอน นาฬิกาชีวภาพ ความเครียด และเปรียบเทียบแนวโน้มย้อนหลัง
-                      </p>
-                      <button
-                        type="button"
-                        disabled={isAnalyzing}
-                        onClick={() => void handleRunAiAnalysis(selectedRecord)}
-                        className="mt-4 inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-[#4F46E5] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4338CA] disabled:opacity-60"
-                      >
-                        {isAnalyzing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                        ) : (
-                          <Brain className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span>เริ่มวิเคราะห์ข้อมูลการนอนด้วย AI</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ============================================================== */}
-          {/* TAB 3: DAILY .JSON ARCHIVE & EXPORT                            */}
+          {/* TAB 2: DAILY .JSON ARCHIVE & EXPORT                            */}
           {/* ============================================================== */}
           {activeTab === 'history' && (
             <div className="flex flex-col gap-4">
@@ -1111,7 +1227,7 @@ export function SleepQuestModal({
                     คลังไฟล์ .json ข้อมูลการนอนประจำวัน
                   </h3>
                   <p className="mt-0.5 text-xs text-[#A89C90]">
-                    เก็บสะสมอัตโนมัติทั้งบนเซิร์ฟเวอร์และเบราว์เซอร์ ส่งออกเป็นไฟล์ .json หรือให้มีน่าช่วยวิเคราะห์ต่อในห้องทำงานได้ตลอดเวลา
+                    เก็บสะสมข้อมูลการนอนรายวัน แล้วกดส่งให้มีน่าสรุปภาพรวมทั้งหมดที่เก็บไว้ทางแชทผู้ช่วย AI ได้เลย
                   </p>
                 </div>
 
@@ -1138,15 +1254,35 @@ export function SleepQuestModal({
                     type="button"
                     disabled={logs.length === 0}
                     onClick={() =>
-                      downloadSleepJsonFile(logs, `sleep-daily-dataset-${getLocalIsoDate()}.json`)
+                      downloadSleepJsonFile(
+                        logs.map((l) => l.rawInfographic ?? buildRawSleepInfographic(l)),
+                        `sleep-daily-dataset-${getLocalIsoDate()}.json`
+                      )
                     }
-                    className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#D97736] px-3.5 py-1.5 text-xs font-semibold text-[#FAF6F0] hover:bg-[#C6682A] disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#453A33] bg-[#2B2420] px-3 py-1.5 text-xs font-medium text-[#D6CBC0] hover:border-[#66564B] hover:text-white disabled:opacity-50"
                   >
                     <Download className="h-3.5 w-3.5 shrink-0" />
                     <span>ส่งออกทั้งหมด (.json)</span>
                   </button>
+                  {onAskMinaAnalyzeSleep && (
+                    <button
+                      type="button"
+                      disabled={logs.length === 0}
+                      onClick={onAskMinaAnalyzeSleep}
+                      className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#4F46E5] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#4338CA] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>ให้มีน่าสรุปภาพรวมการนอนทางแชท AI ({logs.length} วัน)</span>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {logs.length > 0 && logs.length < 3 && (
+                <div className="rounded-lg border border-[#473E59] bg-[#231F31] px-3.5 py-2.5 text-xs text-[#C7D2FE]">
+                  ตอนนี้มีข้อมูลสะสม {logs.length} วัน — ยิ่งสะสมหลายวัน มีน่าจะยิ่งสรุปภาพรวมการนอนได้ครบถ้วนขึ้น หรือกด “ให้มีน่าสรุปภาพรวมการนอนทางแชท AI” ได้ทันที
+                </div>
+              )}
 
               {importError && (
                 <div className="rounded-lg border border-[#7F1D1D] bg-[#2B1717] px-3.5 py-2.5 text-xs text-[#FCA5A5]">
@@ -1200,28 +1336,10 @@ export function SleepQuestModal({
                               </span>
                               <span>·</span>
                               <span>{formatMinutesToThaiDuration(item.totalSleepMinutes)}</span>
-                              {item.aiAnalysis && (
-                                <>
-                                  <span>·</span>
-                                  <span className="text-[#6EE7B7]">AI วิเคราะห์แล้ว</span>
-                                </>
-                              )}
                             </div>
                           </div>
 
                           <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              title="เปิดดูผลวิเคราะห์ AI"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedId(item.id);
-                                setActiveTab('analysis');
-                              }}
-                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[#3E352F] bg-[#2B2420] text-[#C7D2FE] hover:border-[#6366F1]"
-                            >
-                              <Brain className="h-3.5 w-3.5" />
-                            </button>
                             <button
                               type="button"
                               title="ลบบันทึกวันนี้"
@@ -1250,7 +1368,13 @@ export function SleepQuestModal({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => void handleCopyJson(selectedRecord, selectedRecord.id)}
+                              onClick={() =>
+                                void handleCopyJson(
+                                  selectedRecord.rawInfographic ??
+                                    buildRawSleepInfographic(selectedRecord),
+                                  selectedRecord.id
+                                )
+                              }
                               className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-[#3F352E] bg-[#241E1A] px-2.5 py-1 text-xs text-[#D6CBC0] hover:text-white"
                             >
                               {copiedId === selectedRecord.id ? (
@@ -1269,7 +1393,8 @@ export function SleepQuestModal({
                               type="button"
                               onClick={() =>
                                 downloadSleepJsonFile(
-                                  selectedRecord,
+                                  selectedRecord.rawInfographic ??
+                                    buildRawSleepInfographic(selectedRecord),
                                   `sleep-${selectedRecord.date}.json`
                                 )
                               }
@@ -1281,7 +1406,12 @@ export function SleepQuestModal({
                           </div>
                         </div>
                         <pre className="max-h-[380px] overflow-auto font-mono text-[11px] leading-relaxed text-[#E2E8F0]">
-                          {JSON.stringify(selectedRecord, null, 2)}
+                          {JSON.stringify(
+                            selectedRecord.rawInfographic ??
+                              buildRawSleepInfographic(selectedRecord),
+                            null,
+                            2
+                          )}
                         </pre>
                       </>
                     )}
