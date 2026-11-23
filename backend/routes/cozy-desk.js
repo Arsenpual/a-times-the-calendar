@@ -9,8 +9,8 @@ function getNextMidnightMs(fromMs = Date.now()) {
 }
 
 const DEFAULT_DAILY_TOKEN_LIMIT = 250_000;
-const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const FALLBACK_MODEL = "gemini-2.5-flash-lite";
+const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
 const userQuotaStates = new Map();
 const userCharacterRuntimes = new Map();
@@ -1035,9 +1035,9 @@ function createCozyDeskRouter({
       } catch (primaryErr) {
         console.warn("[cozy-desk] /sleep/extract primary attempt failed, retrying without strict schema:", primaryErr?.message || primaryErr);
         const fallbackModel =
-          env.GEMINI_MODEL && env.GEMINI_MODEL !== "gemini-2.5-flash"
-            ? "gemini-2.5-flash"
-            : env.GEMINI_MODEL;
+          env.GEMINI_MODEL && env.GEMINI_MODEL !== "gemini-3.8-flash"
+            ? "gemini-3.8-flash"
+            : "gemini-3.5-flash-lite";
         const fallbackPrompt = [
           extractPrompt,
           "",

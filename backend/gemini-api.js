@@ -8,7 +8,8 @@ async function generateContent(body, { fetchImpl = fetch, env = process.env } = 
     error.status = 503;
     throw error;
   }
-  const model = env.GEMINI_MODEL || DEFAULT_MODEL;
+  const rawModel = env.GEMINI_MODEL || DEFAULT_MODEL;
+  const model = rawModel === "gemini-2.5-flash" ? "gemini-3.8-flash" : rawModel;
   const response = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
