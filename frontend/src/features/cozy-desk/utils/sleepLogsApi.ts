@@ -279,8 +279,8 @@ export async function prepareImageForSleepExtraction(
       el.src = objectUrl;
     });
 
-    const maxW = 1280;
-    const maxH = 3400;
+    const maxW = 1080;
+    const maxH = 2800;
     const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
     const targetW = Math.max(1, Math.round(img.naturalWidth * scale));
     const targetH = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -295,7 +295,7 @@ export async function prepareImageForSleepExtraction(
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
     const outMime = 'image/jpeg';
-    const previewDataUrl = canvas.toDataURL(outMime, 0.88);
+    const previewDataUrl = canvas.toDataURL(outMime, 0.82);
     const commaIdx = previewDataUrl.indexOf(',');
     const imageBase64 = commaIdx >= 0 ? previewDataUrl.slice(commaIdx + 1) : previewDataUrl;
 
@@ -324,10 +324,13 @@ export async function extractSleepRecordFromImage(
     record?: DailySleepRecord;
     model?: string;
     error?: string;
+    detail?: string;
   };
 
   if (!res.ok || !data.record) {
-    throw new Error(data.error || 'ไม่สามารถแปลงข้อมูลการนอนจากรูปภาพได้ กรุณาลองใหม่อีกครั้ง');
+    const baseMsg =
+      data.error || `ไม่สามารถแปลงข้อมูลการนอนจากรูปภาพได้ (HTTP ${res.status})`;
+    throw new Error(data.detail ? `${baseMsg} [${data.detail}]` : baseMsg);
   }
 
   return {

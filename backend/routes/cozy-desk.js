@@ -1012,28 +1012,65 @@ function createCozyDeskRouter({
     ].join("\n");
 
     try {
-      const payload = await generateContent(
-        {
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inlineData: { mimeType, data: imageBase64 } },
-                { text: extractPrompt },
-              ],
+      let payload;
+      try {
+        payload = await generateContent(
+          {
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType, data: imageBase64 } },
+                  { text: extractPrompt },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: SLEEP_EXTRACT_RESPONSE_SCHEMA,
             },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: SLEEP_EXTRACT_RESPONSE_SCHEMA,
           },
-        },
-        { env }
-      );
+          { env }
+        );
+      } catch (primaryErr) {
+        console.warn("[cozy-desk] /sleep/extract primary attempt failed, retrying without strict schema:", primaryErr?.message || primaryErr);
+        const fallbackModel =
+          env.GEMINI_MODEL && env.GEMINI_MODEL !== "gemini-2.5-flash"
+            ? "gemini-2.5-flash"
+            : env.GEMINI_MODEL;
+        const fallbackPrompt = [
+          extractPrompt,
+          "",
+          "ตอบกลับเป็น JSON object เท่านั้น (ห้ามใส่ markdown ```json) โดยมีคีย์:",
+          "date (YYYY-MM-DD), dateLabel, sourceApp, sleepScore, percentileBeat, starRating, bedtime (HH:mm), wakeTime (HH:mm), totalSleepMinutes, totalSleepText, totalSleepStatus, totalSleepReference, deepMinutes, deepText, deepPercent, deepStatus, deepReference, lightMinutes, lightText, lightPercent, lightStatus, lightReference, remMinutes, remText, remPercent, remStatus, remReference, deepSleepContinuityScore, deepSleepContinuityStatus, awakeCount, awakeStatus, breathingQualityScore, breathingQualityStatus",
+        ].join("\n");
+        payload = await generateContent(
+          {
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType, data: imageBase64 } },
+                  { text: fallbackPrompt },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+            },
+          },
+          { env: fallbackModel ? { ...env, GEMINI_MODEL: fallbackModel } : env }
+        );
+      }
 
       const rawText = (
         payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
-      ).trim();
+      )
+        .trim()
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
       const parsed = JSON.parse(rawText);
       const numOrNull = (v) => {
         const n = toFiniteNumberOrNull(v);
@@ -1105,7 +1142,8 @@ function createCozyDeskRouter({
     } catch (err) {
       console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
-      res.status(classified.status).json({ error: classified.message });
+      const detail = err instanceof Error ? err.message.slice(0, 220) : undefined;
+      res.status(classified.status).json({ error: classified.message, code: classified.code, detail });
     }
   });
 
@@ -1169,7 +1207,8 @@ function createCozyDeskRouter({
     } catch (err) {
       console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
-      res.status(classified.status).json({ error: classified.message });
+      const detail = err instanceof Error ? err.message.slice(0, 220) : undefined;
+      res.status(classified.status).json({ error: classified.message, code: classified.code, detail });
     }
   });
 
