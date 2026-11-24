@@ -45,7 +45,8 @@ export function useActivityArchiveSync({ archiveState, archiveStorageKey, userId
       } catch (error) {
         if (cancelled) return;
         console.error("โหลดคลังกิจกรรมจาก Firebase ไม่สำเร็จ:", error.message);
-        retryTimer = window.setTimeout(hydrate, 15000);
+        const delayMs = error?.retryAfterSeconds ? Math.max(15_000, error.retryAfterSeconds * 1000) : 15_000;
+        retryTimer = window.setTimeout(hydrate, delayMs);
       }
     };
     if (userId) hydrate();
@@ -65,6 +66,7 @@ export function useActivityArchiveSync({ archiveState, archiveStorageKey, userId
       if (cancelled) return;
       const desired = new Map(activityArchive.map(item => [item.archiveId, JSON.stringify(item)]));
       let failed = false;
+      let retryDelayMs = 15_000;
       for (const [id, json] of desired) {
         if (cancelled) return;
         if (archiveSnapshotRef.current.get(id) === json) continue;
@@ -74,6 +76,7 @@ export function useActivityArchiveSync({ archiveState, archiveStorageKey, userId
           if (!cancelled) pendingArchiveWritesRef.current.delete(id);
         } catch (error) {
           failed = true;
+          if (error?.retryAfterSeconds) retryDelayMs = Math.max(retryDelayMs, error.retryAfterSeconds * 1000);
           console.error("บันทึกคลังกิจกรรมลง Firebase ไม่สำเร็จ:", error.message);
         }
       }
@@ -86,10 +89,11 @@ export function useActivityArchiveSync({ archiveState, archiveStorageKey, userId
           pendingArchiveDeletesRef.current.delete(id);
         } catch (error) {
           failed = true;
+          if (error?.retryAfterSeconds) retryDelayMs = Math.max(retryDelayMs, error.retryAfterSeconds * 1000);
           console.error("ลบคลังกิจกรรมจาก Firebase ไม่สำเร็จ:", error.message);
         }
       }
-      if (failed && !cancelled) timer = window.setTimeout(() => setRetry(value => value + 1), 15000);
+      if (failed && !cancelled) timer = window.setTimeout(() => setRetry(value => value + 1), retryDelayMs);
     });
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [activityArchive, archiveStorageKey, readyKey, remoteKey, userId, retry]);

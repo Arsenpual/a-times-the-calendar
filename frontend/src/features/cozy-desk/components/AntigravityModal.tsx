@@ -281,7 +281,7 @@ export function AntigravityModal({
             }
 
             if (parsed.type === 'usage') {
-              callbacksRef.current.onRefreshStatus?.();
+              continue;
             }
 
             if (parsed.type === 'inspected_files' && Array.isArray(parsed.files)) {

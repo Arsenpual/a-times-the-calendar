@@ -101,7 +101,9 @@ function createCozyDeskRouter({
   });
 
   async function readSleepLogs(userId) {
-    const snap = await sleepLogsCol(userId).get();
+    const col = sleepLogsCol(userId);
+    const query = typeof col.limit === "function" ? col.limit(180) : col;
+    const snap = await query.get();
     return snap.docs
       .map((doc) => sanitizeSleepRecord({ ...doc.data(), id: doc.id }))
       .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
@@ -130,6 +132,33 @@ function createCozyDeskRouter({
     } catch (err) {
       console.error("[cozy-desk] Failed to save sleep log:", err);
       res.status(500).json({ error: "ไม่สามารถบันทึกไฟล์ข้อมูลการนอนได้" });
+    }
+  });
+
+  router.post("/sleep/logs/batch", cozyMutationLimiter, async (req, res) => {
+    try {
+      const body = req.body ?? {};
+      if (!Array.isArray(body.records) || body.records.length === 0) {
+        return res.status(400).json({ error: "ไม่พบรายการข้อมูลการนอนที่ต้องการนำเข้า" });
+      }
+      const validRecords = body.records
+        .filter((r) => r && typeof r === "object")
+        .slice(0, 31)
+        .map((r) => sanitizeSleepRecord(r));
+
+      if (validRecords.length === 0) {
+        return res.status(400).json({ error: "ข้อมูลการนอนไม่ถูกต้อง" });
+      }
+
+      const col = sleepLogsCol(req.userId);
+      await Promise.all(
+        validRecords.map((rec) => col.doc(rec.id).set(rec, { merge: true }))
+      );
+      const logs = await readSleepLogs(req.userId);
+      res.json({ ok: true, importedCount: validRecords.length, logs });
+    } catch (err) {
+      console.error("[cozy-desk] Failed to batch save sleep logs:", err);
+      res.status(500).json({ error: "ไม่สามารถนำเข้าชุดข้อมูลการนอนได้" });
     }
   });
 

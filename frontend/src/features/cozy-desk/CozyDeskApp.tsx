@@ -176,6 +176,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
     todayPlantWaterLabel,
     handleWaterPorchPlants,
     handleSaveSleepLog,
+    handleSaveSleepLogsBatch,
     handleDeleteSleepLog,
   } = useCozyQuestsAndStatuses({
     messages,
@@ -711,6 +712,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
         todaySleepHudLabel={todaySleepSummary?.hudLabel ?? null}
         handleAskMinaAnalyzeSleep={handleAskMinaAnalyzeSleep}
         handleSaveSleepLog={handleSaveSleepLog}
+        handleSaveSleepLogsBatch={handleSaveSleepLogsBatch}
         handleDeleteSleepLog={handleDeleteSleepLog}
         handleRequestDriveWriteAccess={handleRequestDriveWriteAccess}
       />

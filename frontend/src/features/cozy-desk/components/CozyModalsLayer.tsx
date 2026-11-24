@@ -89,6 +89,7 @@ export interface CozyModalsLayerProps {
   todaySleepHudLabel: string | null;
   handleAskMinaAnalyzeSleep: () => Promise<void>;
   handleSaveSleepLog: (record: DailySleepRecord) => Promise<void>;
+  handleSaveSleepLogsBatch?: (records: DailySleepRecord[]) => Promise<void>;
   handleDeleteSleepLog: (id: string) => Promise<void>;
   handleRequestDriveWriteAccess: () => Promise<boolean>;
 }
@@ -144,6 +145,7 @@ export function CozyModalsLayer({
   todaySleepHudLabel,
   handleAskMinaAnalyzeSleep,
   handleSaveSleepLog,
+  handleSaveSleepLogsBatch,
   handleDeleteSleepLog,
   handleRequestDriveWriteAccess,
 }: CozyModalsLayerProps) {
@@ -292,6 +294,7 @@ export function CozyModalsLayer({
           onTokenExpired={handleYouTubeTokenExpired}
           onAskMinaAnalyzeSleep={() => void handleAskMinaAnalyzeSleep()}
           onSaveLog={handleSaveSleepLog}
+          onSaveLogsBatch={handleSaveSleepLogsBatch}
           onDeleteLog={handleDeleteSleepLog}
           onClose={() => {
             soundEngine.playInteract();

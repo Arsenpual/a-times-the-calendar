@@ -107,6 +107,35 @@ test("Cozy Desk sleep logs CRUD isolates data per userId", async () => {
     });
     const delData = await delRes.json();
     assert.equal(delData.logs.length, 0);
+
+    // Batch import multiple logs in a single request
+    const batchRes = await fetch(`${srv.baseUrl}/api/cozy-desk/sleep/logs/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-test-user": "alice" },
+      body: JSON.stringify({
+        records: [
+          {
+            id: "sleep_2026-11-21",
+            date: "2026-11-21",
+            sourceApp: "Huawei Health",
+            sleepScore: 81,
+            totalSleepMinutes: 420,
+          },
+          {
+            id: "sleep_2026-11-22",
+            date: "2026-11-22",
+            sourceApp: "Huawei Health",
+            sleepScore: 85,
+            totalSleepMinutes: 450,
+          },
+        ],
+      }),
+    });
+    assert.equal(batchRes.status, 200);
+    const batchData = await batchRes.json();
+    assert.equal(batchData.ok, true);
+    assert.equal(batchData.importedCount, 2);
+    assert.equal(batchData.logs.length, 2);
   } finally {
     await srv.close();
   }

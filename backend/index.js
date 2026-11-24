@@ -126,24 +126,94 @@ app.use((req, res, next) => {
 // route handler ทุกตัวใช้ scope query ของตัวเอง ถ้า token ไม่ถูกต้อง/ไม่มี
 // จะตอบ 401 ตั้งแต่ตรงนี้ ไม่ไปถึง route handler เลย — /api/health ไม่ผ่าน
 // middleware นี้ เพราะเป็น endpoint เช็คสถานะ server เฉยๆ ไม่แตะข้อมูล user
-app.use("/api/categories", requireAuth, categoriesRouter);
-app.use("/api/activities", requireAuth, activityCategoriesRouter);
-app.use("/api/summary", requireAuth, summaryRouter);
-app.use("/api/reminders", requireAuth, remindersRouter);
+const mutationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.userId || req.ip || "anonymous",
+  validate: false,
+  skip: (req) => req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS",
+  handler: (req, res, _next, options) => {
+    const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
+    res.status(options.statusCode).json({
+      code: "RATE_LIMIT_EXCEEDED",
+      error: "ส่งคำขอแก้ไขข้อมูลถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
+      retryAfterSeconds,
+      retryAfterAt: new Date(resetAt).toISOString()
+    });
+  }
+});
+
+const dataLabLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.userId || req.ip || "anonymous",
+  validate: false,
+  handler: (req, res, _next, options) => {
+    const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
+    res.status(options.statusCode).json({
+      code: "RATE_LIMIT_EXCEEDED",
+      error: "ส่งออกข้อมูล Data Lab ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
+      retryAfterSeconds,
+      retryAfterAt: new Date(resetAt).toISOString()
+    });
+  }
+});
+
+const telegramActionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 45,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.userId || req.ip || "anonymous",
+  validate: false,
+  skip: (req) => req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS" || req.path === "/messages/read",
+  handler: (req, res, _next, options) => {
+    const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
+    res.status(options.statusCode).json({
+      code: "RATE_LIMIT_EXCEEDED",
+      error: "ส่งคำสั่ง Telegram ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
+      retryAfterSeconds,
+      retryAfterAt: new Date(resetAt).toISOString()
+    });
+  }
+});
+
+const telegramWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Telegram webhook rate limit exceeded" }
+});
+
+app.use("/api/categories", requireAuth, mutationLimiter, categoriesRouter);
+app.use("/api/activities", requireAuth, mutationLimiter, activityCategoriesRouter);
+app.use("/api/summary", requireAuth, mutationLimiter, summaryRouter);
+app.use("/api/reminders", requireAuth, mutationLimiter, remindersRouter);
 // migration plan v2 เฟส 3 — Groups/Projects ของ reminder mode แยก route
 // ต่างหากจาก /api/reminders เอง (แม้จะเก็บ groupId เป็น field บน reminder
 // document ก็ตาม) เพราะ CRUD ของ "กลุ่ม" (สร้าง/แก้ไข/ลบกลุ่ม) เป็นคนละ
 // resource กับ CRUD ของ reminder เอง — ตรงกับที่ categories.js แยกจาก
 // activity-categories.js ฝั่งปฏิทินเช่นกัน
-app.use("/api/reminder-groups", requireAuth, reminderGroupsRouter);
-app.use("/api/activity-archive", requireAuth, activityArchiveRouter);
-app.use("/api/activity-notifications", requireAuth, activityNotificationsRouter);
-app.use("/api/fcm-tokens", requireAuth, fcmTokensRouter);
-app.use("/api/calendar-auth", requireAuth, calendarAuthRouter);
-app.use("/api/calendar", requireAuth, calendarRouter);
+app.use("/api/reminder-groups", requireAuth, mutationLimiter, reminderGroupsRouter);
+app.use("/api/activity-archive", requireAuth, mutationLimiter, activityArchiveRouter);
+app.use("/api/activity-notifications", requireAuth, mutationLimiter, activityNotificationsRouter);
+app.use("/api/fcm-tokens", requireAuth, mutationLimiter, fcmTokensRouter);
+app.use("/api/calendar-auth", requireAuth, mutationLimiter, calendarAuthRouter);
+app.use("/api/calendar", requireAuth, mutationLimiter, calendarRouter);
 app.use("/api/announcement", requireAuth, announcementRouter);
-app.use("/api/assistant-preferences", requireAuth, assistantPreferencesRouter);
-app.use("/api/data-lab", requireAuth, createDataLabExportRouter());
+app.use("/api/assistant-preferences", requireAuth, mutationLimiter, assistantPreferencesRouter);
+app.use("/api/data-lab", requireAuth, dataLabLimiter, createDataLabExportRouter());
 app.use("/api/cozy-desk", requireAuth, cozyDeskRouter);
 // Gemini is used only to propose a draft. The client still confirms before
 // saving anything to Google Calendar.
@@ -152,9 +222,13 @@ const aiLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.userId || req.ip || "anonymous",
+  validate: false,
+  skip: (req) => req.method === "GET" || req.path === "/product-knowledge" || req.path === "/activity-validate",
   handler: (req, res, next, options) => {
     const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
     const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
     res.status(options.statusCode).json({
       error: "เรียกผู้ช่วย AI ถี่เกินไป",
       retryAfterSeconds,
@@ -166,8 +240,8 @@ app.use("/api/ai", requireAuth, aiLimiter, aiActivityDraftRouter);
 app.use("/api/ai", requireAuth, aiLimiter, createAiWeatherPlanRouter());
 // Telegram ไม่มี Firebase token; ยืนยันด้วย secret header ที่ setWebhook
 // กำหนดไว้แทน จึงต้องประกาศก่อน 404 handler.
-app.post("/api/telegram/webhook", telegramRouter.webhook);
-app.use("/api/telegram", requireAuth, telegramRouter);
+app.post("/api/telegram/webhook", telegramWebhookLimiter, telegramRouter.webhook);
+app.use("/api/telegram", requireAuth, telegramActionLimiter, telegramRouter);
 // OAuth callback มาจาก Google จึงไม่มี Firebase Authorization header;
 // state ที่ลงลายเซ็นไว้ผูก callback กลับเข้ากับ uid อย่างปลอดภัยแทน.
 app.get("/oauth/google/calendar/callback", calendarAuthRouter.callback);

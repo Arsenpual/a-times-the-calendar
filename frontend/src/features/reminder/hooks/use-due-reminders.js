@@ -89,13 +89,17 @@ export function useDueReminders({
       due.forEach((reminder) => {
         const key = `${reminder.id}:${reminder.nextDueAt || reminder.atMs || reminder.startedAt || 0}`;
         if (!areTelegramNotificationsEnabled(firebaseUser?.uid) || sentTelegramReminderKeysRef.current.has(key)) return;
+        const existing = pendingTelegramRemindersRef.current.get(key);
         pendingTelegramRemindersRef.current.set(key, {
           title: `${eventAnchorNotificationLabel(reminder)} · ${eventAnchorNotificationTitle(reminder)}`,
-          notificationKind: "reminder"
+          notificationKind: "reminder",
+          nextRetryAt: existing?.nextRetryAt || 0,
+          attempts: existing?.attempts || 0
         });
       });
       for (const [key, delivery] of pendingTelegramRemindersRef.current) {
         if (sentTelegramReminderKeysRef.current.has(key) || sendingTelegramReminderKeysRef.current.has(key)) continue;
+        if (delivery.nextRetryAt && now < delivery.nextRetryAt) continue;
         sendingTelegramReminderKeysRef.current.add(key);
         sendTelegramReminder(delivery.title, delivery.notificationKind, key)
           .then(() => {
@@ -105,9 +109,19 @@ export function useDueReminders({
             sentTelegramReminderKeysRef.current.add(key);
             pendingTelegramRemindersRef.current.delete(key);
           })
-          .catch(() => {
-            // Keep the record queued: the next clock tick retries transient
-            // network/Render/Telegram failures even after the phase advanced.
+          .catch((error) => {
+            // Keep the record queued with exponential backoff (15s -> 30s -> 60s -> max 5m)
+            // so transient network/Render/Telegram failures do not spam /api/telegram/notify every 1s.
+            const current = pendingTelegramRemindersRef.current.get(key);
+            if (current) {
+              const attempts = (current.attempts || 0) + 1;
+              const retrySec = Number(error?.retryAfterSeconds) || Math.min(300, 15 * Math.pow(2, attempts - 1));
+              pendingTelegramRemindersRef.current.set(key, {
+                ...current,
+                attempts,
+                nextRetryAt: Date.now() + retrySec * 1000
+              });
+            }
           })
           .finally(() => sendingTelegramReminderKeysRef.current.delete(key));
       }

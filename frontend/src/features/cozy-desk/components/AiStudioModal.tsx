@@ -258,7 +258,7 @@ export function AiStudioModal({
             }
 
             if (parsed.type === 'usage') {
-              callbacksRef.current.onRefreshStatus?.();
+              continue;
             }
 
             if (parsed.type === 'chunk' && parsed.text) {

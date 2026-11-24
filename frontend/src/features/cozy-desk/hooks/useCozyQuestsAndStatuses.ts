@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import type { CharacterTaskActivityUpdate } from '../components/AiStudioModal';
 import type {
@@ -27,6 +27,7 @@ import {
   getLocalIsoDate,
   getMsUntilLocalMidnight,
   persistSleepLog,
+  persistSleepLogsBatch,
   removeSleepLog,
 } from '../api/sleepLogsApi';
 import { soundEngine } from '../lib/sound';
@@ -127,28 +128,50 @@ export function useCozyQuestsAndStatuses({
     return unsubscribe;
   }, [firebaseUser, setGoogleUser, setYoutubeToken]);
 
-  const fetchCharacterStatuses = useCallback(async () => {
-    try {
-      const res = await cozyApiFetch('/api/characters/status', { cache: 'no-store' });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        ok?: boolean;
-        characters?: CharacterStatusMap;
-      };
-      if (data.ok && data.characters) {
-        setServerCharacterStatuses(data.characters);
+  const lastStatusFetchAtRef = useRef(0);
+
+  const fetchCharacterStatuses = useCallback(
+    async (options?: { force?: boolean }) => {
+      const now = Date.now();
+      if (!options?.force && now - lastStatusFetchAtRef.current < 3_000) {
+        return;
       }
-    } catch {
-      // Keep last known snapshot silently
-    }
-  }, [setServerCharacterStatuses]);
+      lastStatusFetchAtRef.current = now;
+      try {
+        const res = await cozyApiFetch('/api/characters/status', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ok?: boolean;
+          characters?: CharacterStatusMap;
+        };
+        if (data.ok && data.characters) {
+          setServerCharacterStatuses(data.characters);
+        }
+      } catch {
+        // Keep last known snapshot silently
+      }
+    },
+    [setServerCharacterStatuses]
+  );
 
   useEffect(() => {
-    void fetchCharacterStatuses();
+    void fetchCharacterStatuses({ force: true });
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
       void fetchCharacterStatuses();
-    }, 15_000);
-    return () => window.clearInterval(timer);
+    }, 30_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchCharacterStatuses();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchCharacterStatuses]);
 
   const handleUpdateCharacterActivity = useCallback(
@@ -348,6 +371,14 @@ export function useCozyQuestsAndStatuses({
     [hasLoggedTodaySleep, setSleepLogs, showToast]
   );
 
+  const handleSaveSleepLogsBatch = useCallback(
+    async (records: DailySleepRecord[]) => {
+      const next = await persistSleepLogsBatch(records);
+      setSleepLogs(next);
+    },
+    [setSleepLogs]
+  );
+
   const handleDeleteSleepLog = useCallback(
     async (id: string) => {
       const next = await removeSleepLog(id);
@@ -371,6 +402,7 @@ export function useCozyQuestsAndStatuses({
     todayPlantWaterLabel,
     handleWaterPorchPlants,
     handleSaveSleepLog,
+    handleSaveSleepLogsBatch,
     handleDeleteSleepLog,
   };
 }

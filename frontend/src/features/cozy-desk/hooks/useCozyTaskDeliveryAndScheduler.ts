@@ -635,6 +635,9 @@ export function useCozyTaskDeliveryAndScheduler(ctx: any) {
 
     void scanAndRunDueMinaTasks();
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
       void scanAndRunDueMinaTasks();
     }, 20_000);
 

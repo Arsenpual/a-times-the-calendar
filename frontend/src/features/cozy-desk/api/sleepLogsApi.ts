@@ -226,6 +226,41 @@ export async function persistSleepLog(record: DailySleepRecord): Promise<DailySl
   return optimistic;
 }
 
+export async function persistSleepLogsBatch(
+  records: DailySleepRecord[]
+): Promise<DailySleepRecord[]> {
+  const capped = records.slice(0, 31);
+  if (capped.length === 0) {
+    return loadLocalSleepLogs();
+  }
+  const local = loadLocalSleepLogs();
+  const incomingIds = new Set(capped.map((r) => r.id));
+  const optimistic = sortSleepRecords([
+    ...capped,
+    ...local.filter((item) => !incomingIds.has(item.id)),
+  ]);
+  saveLocalSleepLogs(optimistic);
+
+  try {
+    const res = await cozyApiFetch('/api/sleep/logs/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: capped }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { logs?: DailySleepRecord[] };
+      if (Array.isArray(data.logs)) {
+        const synced = sortSleepRecords(data.logs.filter(isValidSleepRecordShape));
+        saveLocalSleepLogs(synced);
+        return synced;
+      }
+    }
+  } catch {
+    // Keep local persistence if server write is unavailable
+  }
+  return optimistic;
+}
+
 export async function removeSleepLog(id: string): Promise<DailySleepRecord[]> {
   const local = loadLocalSleepLogs().filter((item) => item.id !== id);
   saveLocalSleepLogs(local);

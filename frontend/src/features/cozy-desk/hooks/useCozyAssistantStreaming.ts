@@ -124,6 +124,9 @@ export function useCozyAssistantStreaming(ctx: any) {
 
     void syncGmailUnreadStatus(youtubeToken);
     const interval = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
       void syncGmailUnreadStatus(youtubeToken);
     }, 30_000);
     return () => window.clearInterval(interval);
@@ -411,7 +414,6 @@ export function useCozyAssistantStreaming(ctx: any) {
             }
 
             if (parsed.type === 'usage') {
-              void fetchCharacterStatuses();
               continue;
             }
 

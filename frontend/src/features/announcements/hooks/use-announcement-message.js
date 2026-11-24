@@ -15,11 +15,16 @@ export function useAnnouncementMessage(firebaseUser) {
 
   useEffect(() => {
     let cancelled = false;
-    const loadAnnouncement = async () => {
+    let lastFetchedAt = 0;
+    const MIN_REFETCH_INTERVAL_MS = 60_000;
+    const loadAnnouncement = async (force = false) => {
       if (!firebaseUser) {
         if (!cancelled) setAnnouncement({ message: FALLBACK_MESSAGE, config: DEFAULT_CONFIG });
         return;
       }
+      const now = Date.now();
+      if (!force && now - lastFetchedAt < MIN_REFETCH_INTERVAL_MS) return;
+      lastFetchedAt = now;
       try {
         const announcement = await getAnnouncement();
         if (!cancelled) setAnnouncement({
@@ -30,11 +35,12 @@ export function useAnnouncementMessage(firebaseUser) {
         if (!cancelled) setAnnouncement({ message: FALLBACK_MESSAGE, config: DEFAULT_CONFIG });
       }
     };
-    loadAnnouncement();
-    window.addEventListener("focus", loadAnnouncement);
+    loadAnnouncement(true);
+    const onFocus = () => loadAnnouncement(false);
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", loadAnnouncement);
+      window.removeEventListener("focus", onFocus);
     };
   }, [firebaseUser]);
 

@@ -63,6 +63,28 @@ function createTelegramWebhookHandlers(deps) {
     sendTelegramFreeAiReply,
   } = deps;
 
+  const chatRateWindows = new Map();
+  const CHAT_RATE_WINDOW_MS = 60_000;
+  const CHAT_RATE_MAX_ACTIONS = 24;
+
+  function isChatRateLimited(chatId) {
+    if (!chatId) return false;
+    const key = String(chatId);
+    const now = Date.now();
+    const entry = chatRateWindows.get(key);
+    if (!entry || now >= entry.resetAt) {
+      if (chatRateWindows.size > 1000) {
+        for (const [k, v] of chatRateWindows) {
+          if (now >= v.resetAt) chatRateWindows.delete(k);
+        }
+      }
+      chatRateWindows.set(key, { count: 1, resetAt: now + CHAT_RATE_WINDOW_MS });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > CHAT_RATE_MAX_ACTIONS;
+  }
+
 async function sendAnnouncementPanel(reply) {
   const data = (await announcementDoc().get()).data() || {};
   const config = normalizeAnnouncementConfig(data);
@@ -300,6 +322,13 @@ async function telegramWebhook(req, res, next) {
   if (req.get("X-Telegram-Bot-Api-Secret-Token") !== process.env.TELEGRAM_WEBHOOK_SECRET) return res.sendStatus(401);
   try {
     const callbackQuery = req.body?.callback_query;
+    const incomingChatId = callbackQuery?.message?.chat?.id || req.body?.message?.chat?.id;
+    if (isChatRateLimited(incomingChatId)) {
+      if (callbackQuery?.id) {
+        await answerTelegramCallback(callbackQuery.id, "ส่งคำสั่งถี่เกินไป กรุณารอสักครู่ครับ").catch(() => {});
+      }
+      return res.sendStatus(200);
+    }
     if (callbackQuery?.data?.startsWith("weather:")) {
       const chatId = callbackQuery.message?.chat?.id;
       await answerTelegramCallback(callbackQuery.id);

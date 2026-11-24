@@ -57,6 +57,7 @@ interface SleepQuestModalProps {
   onTokenExpired?: () => void;
   onAskMinaAnalyzeSleep?: () => void;
   onSaveLog: (record: DailySleepRecord) => Promise<void>;
+  onSaveLogsBatch?: (records: DailySleepRecord[]) => Promise<void>;
   onDeleteLog: (id: string) => Promise<void>;
   onClose: () => void;
 }
@@ -83,6 +84,7 @@ export function SleepQuestModal({
   onTokenExpired,
   onAskMinaAnalyzeSleep,
   onSaveLog,
+  onSaveLogsBatch,
   onDeleteLog,
   onClose,
 }: SleepQuestModalProps) {
@@ -340,8 +342,12 @@ export function SleepQuestModal({
         throw new Error('ไฟล์ .json นี้ไม่ตรงกับโครงสร้างข้อมูลการนอน');
       }
       const capped = valid.slice(0, 31);
-      for (const rec of capped) {
-        await onSaveLog(rec);
+      if (onSaveLogsBatch) {
+        await onSaveLogsBatch(capped);
+      } else {
+        for (const rec of capped) {
+          await onSaveLog(rec);
+        }
       }
       setSelectedId(capped[0].id);
       soundEngine.playMessageReceived();
