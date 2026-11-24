@@ -1,6 +1,8 @@
 const path = require("path");
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const {
+  MAX_DAILY_TOKEN_LIMIT,
   PRIMARY_MODEL,
   FALLBACK_MODEL,
   getNextMidnightMs,
@@ -13,6 +15,7 @@ const {
   recordCharacterError,
   recordTokenUsage,
   estimateFallbackTokens,
+  checkCharacterAllowance,
   buildCharacterStatusMap,
 } = require("../lib/cozy-desk-state.js");
 const {
@@ -36,12 +39,66 @@ const {
   buildMinaSystemInstruction,
 } = require("../lib/cozy-desk-prompts.js");
 
+const MAX_SLEEP_IMAGE_BASE64_LENGTH = 5_500_000; // ~4 MB decoded image max
+
+function shouldSkipFallbackRetry(err) {
+  const classified = classifyGeminiError(err);
+  return (
+    classified.code === "RESOURCE_EXHAUSTED" ||
+    classified.code === "API_KEY_INVALID" ||
+    classified.code === "PERMISSION_DENIED"
+  );
+}
+
 function createCozyDeskRouter({
   generateContent = (...args) => require("../lib/gemini-api.js").generateContent(...args),
   sleepLogsCol = (...args) => require("../lib/firestore-db.js").cozySleepLogsCol(...args),
   env = process.env,
+  aiRateLimitMax = 25,
+  aiRateLimitWindowMs = 15 * 60 * 1000,
+  mutationRateLimitMax = 60,
+  mutationRateLimitWindowMs = 15 * 60 * 1000,
 } = {}) {
   const router = express.Router();
+
+  const cozyAiLimiter = rateLimit({
+    windowMs: aiRateLimitWindowMs,
+    limit: aiRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.userId || req.ip || "anonymous",
+    validate: false,
+    handler: (req, res, _next, options) => {
+      const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+      const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+      res.set("Retry-After", String(retryAfterSeconds));
+      res.status(options.statusCode).json({
+        code: "RATE_LIMIT_EXCEEDED",
+        error: `ส่งคำสั่งถึงผู้ช่วย AI ถี่เกินไป กรุณารออีกประมาณ ${retryAfterSeconds} วินาทีแล้วลองใหม่ครับ`,
+        retryAfterSeconds,
+        retryAfterAt: new Date(resetAt).toISOString(),
+      });
+    },
+  });
+
+  const cozyMutationLimiter = rateLimit({
+    windowMs: mutationRateLimitWindowMs,
+    limit: mutationRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.userId || req.ip || "anonymous",
+    validate: false,
+    handler: (req, res, _next, options) => {
+      const resetAt = req.rateLimit?.resetTime?.getTime?.() || Date.now() + options.windowMs;
+      const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+      res.set("Retry-After", String(retryAfterSeconds));
+      res.status(options.statusCode).json({
+        code: "RATE_LIMIT_EXCEEDED",
+        error: "ส่งคำขอแก้ไขข้อมูลถี่เกินไป กรุณารอสักครู่แล้วลองใหม่ครับ",
+        retryAfterSeconds,
+      });
+    },
+  });
 
   async function readSleepLogs(userId) {
     const snap = await sleepLogsCol(userId).get();
@@ -60,7 +117,7 @@ function createCozyDeskRouter({
     }
   });
 
-  router.post("/sleep/logs", async (req, res) => {
+  router.post("/sleep/logs", cozyMutationLimiter, async (req, res) => {
     try {
       const body = req.body ?? {};
       if (!body.record || typeof body.record !== "object") {
@@ -76,10 +133,10 @@ function createCozyDeskRouter({
     }
   });
 
-  router.delete("/sleep/logs/:id", async (req, res) => {
+  router.delete("/sleep/logs/:id", cozyMutationLimiter, async (req, res) => {
     try {
       const targetId = String(req.params.id || "").trim();
-      if (!targetId) {
+      if (!targetId || targetId.length > 100) {
         return res.status(400).json({ error: "ไม่พบรหัสบันทึกการนอน" });
       }
       await sleepLogsCol(req.userId).doc(targetId).delete();
@@ -91,7 +148,7 @@ function createCozyDeskRouter({
     }
   });
 
-  router.post("/sleep/extract", async (req, res) => {
+  router.post("/sleep/extract", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64.trim() : "";
     const mimeType = typeof body.mimeType === "string" ? body.mimeType.trim() : "image/jpeg";
@@ -104,6 +161,24 @@ function createCozyDeskRouter({
     if (!imageBase64 || imageBase64.length < 100 || !allowedMimes.has(mimeType)) {
       return res.status(400).json({ error: "กรุณาอัปโหลดไฟล์รูปภาพ (.jpg, .png หรือ .webp) ที่ชัดเจนครับ" });
     }
+    if (imageBase64.length > MAX_SLEEP_IMAGE_BASE64_LENGTH) {
+      return res.status(413).json({
+        code: "PAYLOAD_TOO_LARGE",
+        error: "ไฟล์รูปภาพมีขนาดใหญ่เกินกำหนด (สูงสุด ~4 MB) กรุณาย่อขนาดภาพก่อนอัปโหลดครับ",
+      });
+    }
+
+    const allowance = checkCharacterAllowance(req.userId, "mina", env);
+    if (!allowance.allowed) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
+    }
 
     const extractPrompt = [
       "คุณคือระบบสกัดข้อมูลดิบการนอน (Sleep Data OCR & Raw Structured JSON Parser) ที่แม่นยำสูง",
@@ -114,6 +189,8 @@ function createCozyDeskRouter({
       "- แปลงระยะเวลาแต่ละช่วงให้เป็นจำนวนนาทีที่ถูกต้อง",
       "- สำหรับฟิลด์ตัวเลขที่ไม่มีในรูปให้ใส่ -1 และข้อความที่ไม่มีให้ใส่ \"\"",
     ].join("\n");
+
+    beginCharacterTask(req.userId, "mina", "สกัดข้อมูลการนอนจากภาพ");
 
     try {
       let payload;
@@ -137,6 +214,9 @@ function createCozyDeskRouter({
           { env }
         );
       } catch (primaryErr) {
+        if (shouldSkipFallbackRetry(primaryErr)) {
+          throw primaryErr;
+        }
         console.warn("[cozy-desk] /sleep/extract primary attempt failed, retrying without strict schema:", primaryErr?.message || primaryErr);
         const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
         const fallbackModel =
@@ -245,16 +325,32 @@ function createCozyDeskRouter({
     } catch (err) {
       console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
+      recordCharacterError(req.userId, "mina", classified.code, classified.message);
       const detail = err instanceof Error ? err.message.slice(0, 220) : undefined;
       res.status(classified.status).json({ error: classified.message, code: classified.code, detail });
+    } finally {
+      endCharacterTask(req.userId, "mina");
     }
   });
 
-  router.post("/sleep/analyze", async (req, res) => {
+  router.post("/sleep/analyze", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     if (!body.targetRecord || typeof body.targetRecord !== "object") {
       return res.status(400).json({ error: "กรุณาเลือกข้อมูลการนอนที่ต้องการวิเคราะห์" });
     }
+
+    const allowance = checkCharacterAllowance(req.userId, "mina", env);
+    if (!allowance.allowed) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
+    }
+
     const target = sanitizeSleepRecord(body.targetRecord);
     const history = Array.isArray(body.historyRecords)
       ? body.historyRecords
@@ -271,6 +367,8 @@ function createCozyDeskRouter({
         ? `\nประวัติการนอนวันอื่นๆ ย้อนหลัง (${history.length} วัน):\n${JSON.stringify(history, null, 2)}`
         : "",
     ].join("\n");
+
+    beginCharacterTask(req.userId, "mina", "วิเคราะห์ข้อมูลการนอน");
 
     try {
       const payload = await generateContent(
@@ -308,10 +406,13 @@ function createCozyDeskRouter({
       recordTokenUsage(req.userId, usedTokens);
       res.json({ ok: true, analysis });
     } catch (err) {
-      console.error("[cozy-desk] /sleep/extract failed:", err);
+      console.error("[cozy-desk] /sleep/analyze failed:", err);
       const classified = classifyGeminiError(err);
+      recordCharacterError(req.userId, "mina", classified.code, classified.message);
       const detail = err instanceof Error ? err.message.slice(0, 220) : undefined;
       res.status(classified.status).json({ error: classified.message, code: classified.code, detail });
+    } finally {
+      endCharacterTask(req.userId, "mina");
     }
   });
 
@@ -323,12 +424,12 @@ function createCozyDeskRouter({
     });
   });
 
-  router.post("/characters/quota-config", (req, res) => {
+  router.post("/characters/quota-config", cozyMutationLimiter, (req, res) => {
     ensureQuotaWindowFresh(req.userId);
     const { quotaState, characterRuntime } = getUserState(req.userId);
     const body = req.body ?? {};
     if (typeof body.dailyLimit === "number" && Number.isFinite(body.dailyLimit)) {
-      quotaState.tokensLimit = Math.max(10_000, Math.min(10_000_000, Math.round(body.dailyLimit)));
+      quotaState.tokensLimit = Math.max(10_000, Math.min(MAX_DAILY_TOKEN_LIMIT, Math.round(body.dailyLimit)));
     }
     if (body.resetUsage) {
       quotaState.tokensUsed = 0;
@@ -373,7 +474,7 @@ function createCozyDeskRouter({
     return sanitized;
   }
 
-  router.post("/aistudio/chat", async (req, res) => {
+  router.post("/aistudio/chat", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const mode = body.mode === "build" || body.mode === "schema" ? body.mode : "prompt";
     const customSysInst = typeof body.systemInstruction === "string" ? body.systemInstruction : "";
@@ -381,6 +482,18 @@ function createCozyDeskRouter({
 
     if (sanitizedMessages.length === 0 || sanitizedMessages[sanitizedMessages.length - 1].role !== "user") {
       return res.status(400).json({ error: "กรุณาพิมพ์ Prompt ก่อนส่งให้ Google AI Studio ครับ" });
+    }
+
+    const allowance = checkCharacterAllowance(req.userId, "ai_studio", env);
+    if (!allowance.allowed) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
     }
 
     const latestPrompt = sanitizedMessages[sanitizedMessages.length - 1].parts[0].text;
@@ -438,7 +551,7 @@ function createCozyDeskRouter({
     });
   });
 
-  router.post("/antigravity/chat", async (req, res) => {
+  router.post("/antigravity/chat", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const mode = body.mode === "workspace" || body.mode === "arch" ? body.mode : "code";
     const requestedFiles = Array.isArray(body.focusFiles)
@@ -448,6 +561,18 @@ function createCozyDeskRouter({
 
     if (sanitizedMessages.length === 0 || sanitizedMessages[sanitizedMessages.length - 1].role !== "user") {
       return res.status(400).json({ error: "กรุณาพิมพ์คำสั่งหรือคำถามก่อนส่งให้ Antigravity ครับ" });
+    }
+
+    const allowance = checkCharacterAllowance(req.userId, "antigravity", env);
+    if (!allowance.allowed) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
     }
 
     const latestPrompt = sanitizedMessages[sanitizedMessages.length - 1].parts[0].text;
@@ -548,7 +673,7 @@ function createCozyDeskRouter({
     }
   });
 
-  router.post("/assistant/chat", async (req, res) => {
+  router.post("/assistant/chat", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const mode = body.mode === "brainstorm" || body.mode === "draft" ? body.mode : "qa";
     const timeOfDay = body.timeOfDay === "morning" || body.timeOfDay === "evening" ? body.timeOfDay : "afternoon";
@@ -560,6 +685,18 @@ function createCozyDeskRouter({
 
     if (sanitizedMessages.length === 0 || sanitizedMessages[sanitizedMessages.length - 1].role !== "user") {
       return res.status(400).json({ error: "กรุณาพิมพ์ข้อความก่อนส่งให้ผู้ช่วย AI ครับ" });
+    }
+
+    const allowance = checkCharacterAllowance(req.userId, "mina", env);
+    if (!allowance.allowed) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
     }
 
     const latestPrompt = sanitizedMessages[sanitizedMessages.length - 1].parts[0].text;
@@ -655,13 +792,29 @@ function createCozyDeskRouter({
     }
   });
 
-  router.post("/assistant/execute-task", async (req, res) => {
+  router.post("/assistant/execute-task", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const assistantId =
       body.assistantId === "antigravity" || body.assistantId === "ai_studio" ? body.assistantId : "mina";
     const rawTitle = typeof body.title === "string" ? body.title.trim().slice(0, 200) : "";
     if (!rawTitle) {
       return res.status(400).json({ error: "กรุณาระบุชื่องานที่ต้องการให้ผู้ช่วย AI ทำครับ" });
+    }
+
+    const isSleepSummaryTask = body.taskType === "sleep_summary" || body.taskType === "sleep_analysis";
+    const hasDeterministicSleepFallback =
+      isSleepSummaryTask && Array.isArray(body.sleepLogsContext) && body.sleepLogsContext.length > 0;
+
+    const allowance = checkCharacterAllowance(req.userId, assistantId, env);
+    if (!allowance.allowed && !hasDeterministicSleepFallback) {
+      if (allowance.retryAfterSeconds) {
+        res.set("Retry-After", String(allowance.retryAfterSeconds));
+      }
+      return res.status(allowance.status).json({
+        error: allowance.message,
+        code: allowance.code,
+        retryAfterSeconds: allowance.retryAfterSeconds,
+      });
     }
 
     const rawNotes = typeof body.notes === "string" ? body.notes.trim().slice(0, 3000) : "";
@@ -681,7 +834,6 @@ function createCozyDeskRouter({
           ? 'คุณคือ "AI Studio" ผู้ช่วยออกแบบ Prompt, System Instruction และสถาปัตยกรรม AI ในบ้าน Cozy Desk'
           : 'คุณคือ "มีน่า (Mina)" ผู้ช่วย AI ประจำห้องทำงานในบ้าน Cozy Desk';
 
-    const isSleepSummaryTask = body.taskType === "sleep_summary" || body.taskType === "sleep_analysis";
     const sleepContextBlock =
       Array.isArray(body.sleepLogsContext) && body.sleepLogsContext.length > 0
         ? formatSleepLogsContext(body.sleepLogsContext)
@@ -738,43 +890,51 @@ function createCozyDeskRouter({
     try {
       let payload = null;
       let fallbackSummary = null;
-      try {
-        payload = await generateContent(
-          {
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          },
-          { env }
-        );
-      } catch (primaryErr) {
-        console.warn(
-          "[cozy-desk] /assistant/execute-task primary attempt failed, retrying with fallback model:",
-          primaryErr?.message || primaryErr
-        );
-        const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-        const fallbackModel =
-          currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+      if (!allowance.allowed && hasDeterministicSleepFallback) {
+        fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
+      } else {
         try {
           payload = await generateContent(
             {
               systemInstruction: { parts: [{ text: systemInstruction }] },
               contents: [{ role: "user", parts: [{ text: userPrompt }] }],
             },
-            { env: { ...env, GEMINI_MODEL: fallbackModel } }
+            { env }
           );
-        } catch (secondaryErr) {
-          if (
-            isSleepSummaryTask &&
-            Array.isArray(body.sleepLogsContext) &&
-            body.sleepLogsContext.length > 0
-          ) {
-            console.warn(
-              "[cozy-desk] /assistant/execute-task using deterministic sleep summary fallback:",
-              secondaryErr?.message || secondaryErr
-            );
-            fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
+        } catch (primaryErr) {
+          if (shouldSkipFallbackRetry(primaryErr)) {
+            if (hasDeterministicSleepFallback) {
+              fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
+            } else {
+              throw primaryErr;
+            }
           } else {
-            throw secondaryErr;
+            console.warn(
+              "[cozy-desk] /assistant/execute-task primary attempt failed, retrying with fallback model:",
+              primaryErr?.message || primaryErr
+            );
+            const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+            const fallbackModel =
+              currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+            try {
+              payload = await generateContent(
+                {
+                  systemInstruction: { parts: [{ text: systemInstruction }] },
+                  contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                },
+                { env: { ...env, GEMINI_MODEL: fallbackModel } }
+              );
+            } catch (secondaryErr) {
+              if (hasDeterministicSleepFallback) {
+                console.warn(
+                  "[cozy-desk] /assistant/execute-task using deterministic sleep summary fallback:",
+                  secondaryErr?.message || secondaryErr
+                );
+                fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
+              } else {
+                throw secondaryErr;
+              }
+            }
           }
         }
       }

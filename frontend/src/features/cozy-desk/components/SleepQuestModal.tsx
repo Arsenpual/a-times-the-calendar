@@ -339,12 +339,17 @@ export function SleepQuestModal({
       if (valid.length === 0) {
         throw new Error('ไฟล์ .json นี้ไม่ตรงกับโครงสร้างข้อมูลการนอน');
       }
-      for (const rec of valid) {
+      const capped = valid.slice(0, 31);
+      for (const rec of capped) {
         await onSaveLog(rec);
       }
-      setSelectedId(valid[0].id);
+      setSelectedId(capped[0].id);
       soundEngine.playMessageReceived();
-      setStatusMessage(`นำเข้าข้อมูลการนอนจำนวน ${valid.length} รายการเรียบร้อยแล้ว`);
+      setStatusMessage(
+        valid.length > 31
+          ? `นำเข้าข้อมูลการนอนจำนวน 31 รายการล่าสุด (จากทั้งหมด ${valid.length} รายการ) เรียบร้อยแล้ว`
+          : `นำเข้าข้อมูลการนอนจำนวน ${capped.length} รายการเรียบร้อยแล้ว`
+      );
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'ไม่สามารถอ่านไฟล์ .json ได้');
     }

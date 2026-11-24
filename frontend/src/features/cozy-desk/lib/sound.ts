@@ -2,6 +2,17 @@ class CozySoundEngine {
   private ctx: AudioContext | null = null;
   private muted = false;
   private lastStepTime = 0;
+  private lastPlayedAt = new Map<string, number>();
+
+  private canPlay(key: string, cooldownMs: number): boolean {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const prev = this.lastPlayedAt.get(key) ?? -Infinity;
+    if (now - prev < cooldownMs) {
+      return false;
+    }
+    this.lastPlayedAt.set(key, now);
+    return true;
+  }
 
   private getContext(): AudioContext | null {
     if (this.muted || typeof window === 'undefined') {
@@ -55,6 +66,7 @@ class CozySoundEngine {
   }
 
   public playInteract() {
+    if (!this.canPlay('interact', 90)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -75,6 +87,7 @@ class CozySoundEngine {
   }
 
   public playEnterOffice() {
+    if (!this.canPlay('enterOffice', 250)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -98,6 +111,7 @@ class CozySoundEngine {
   }
 
   public playCoffeeSip() {
+    if (!this.canPlay('coffeeSip', 300)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -120,6 +134,7 @@ class CozySoundEngine {
   }
 
   public playMessageSent() {
+    if (!this.canPlay('messageSent', 120)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -140,6 +155,7 @@ class CozySoundEngine {
   }
 
   public playMessageReceived() {
+    if (!this.canPlay('messageReceived', 180)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -162,6 +178,7 @@ class CozySoundEngine {
   }
 
   public playCarIgnition() {
+    if (!this.canPlay('carIgnition', 400)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -189,6 +206,7 @@ class CozySoundEngine {
   }
 
   public playCarHorn() {
+    if (!this.canPlay('carHorn', 320)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -219,6 +237,7 @@ class CozySoundEngine {
   }
 
   public playWaterPlants() {
+    if (!this.canPlay('waterPlants', 550)) return;
     const ctx = this.getContext();
     if (!ctx) return;
 

@@ -5,6 +5,8 @@ function getNextMidnightMs(fromMs = Date.now()) {
 }
 
 const DEFAULT_DAILY_TOKEN_LIMIT = 250_000;
+const MAX_DAILY_TOKEN_LIMIT = 1_000_000;
+const MAX_CONCURRENT_REQUESTS_PER_CHARACTER = 2;
 const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
@@ -142,6 +144,65 @@ function formatShortClock(ms) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} น.`;
 }
 
+function checkCharacterAllowance(userId, id, env = process.env) {
+  ensureQuotaWindowFresh(userId);
+  const { quotaState, characterRuntime } = getUserState(userId);
+  const now = Date.now();
+
+  if (!hasValidGeminiApiKey(env)) {
+    return {
+      allowed: false,
+      status: 401,
+      code: "API_KEY_INVALID",
+      message: "ยังไม่ได้ตั้งค่าหรือคีย์ Gemini API ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY บนเซิร์ฟเวอร์",
+    };
+  }
+
+  const remaining = Math.max(0, quotaState.tokensLimit - quotaState.tokensUsed);
+  if (remaining <= 0) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((quotaState.resetAt - now) / 1000));
+    return {
+      allowed: false,
+      status: 429,
+      code: "QUOTA_EXHAUSTED",
+      retryAfterSeconds,
+      message: `ใช้โควต้า Token รายวันครบกำหนดแล้ว (${quotaState.tokensLimit.toLocaleString()} Token) — ระบบจะรีเซ็ตเวลา ${formatShortClock(quotaState.resetAt)}`,
+    };
+  }
+
+  const c = id ? characterRuntime[id] : null;
+  if (c) {
+    if (c.lastErrorReason && now < c.lastErrorUntil) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((c.lastErrorUntil - now) / 1000));
+      const status =
+        c.lastErrorCode === "API_KEY_INVALID"
+          ? 401
+          : c.lastErrorCode === "PERMISSION_DENIED"
+            ? 403
+            : 429;
+      return {
+        allowed: false,
+        status,
+        code: c.lastErrorCode || "COOLDOWN_ACTIVE",
+        retryAfterSeconds,
+        message: `${c.lastErrorReason} (กรุณารออีกประมาณ ${retryAfterSeconds} วินาที)`,
+      };
+    }
+
+    if (c.activeRequests >= MAX_CONCURRENT_REQUESTS_PER_CHARACTER) {
+      return {
+        allowed: false,
+        status: 429,
+        code: "CHARACTER_BUSY",
+        retryAfterSeconds: 5,
+        message: `${c.name} กำลังประมวลผลคำสั่งก่อนหน้าอยู่ กรุณารอสักครู่ก่อนส่งคำสั่งถัดไปครับ`,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
 function buildCharacterStatusMap(userId, env = process.env) {
   ensureQuotaWindowFresh(userId);
   const { quotaState, characterRuntime } = getUserState(userId);
@@ -192,6 +253,8 @@ function buildCharacterStatusMap(userId, env = process.env) {
 
 module.exports = {
   DEFAULT_DAILY_TOKEN_LIMIT,
+  MAX_DAILY_TOKEN_LIMIT,
+  MAX_CONCURRENT_REQUESTS_PER_CHARACTER,
   PRIMARY_MODEL,
   FALLBACK_MODEL,
   getNextMidnightMs,
@@ -205,5 +268,6 @@ module.exports = {
   recordTokenUsage,
   estimateFallbackTokens,
   formatShortClock,
+  checkCharacterAllowance,
   buildCharacterStatusMap,
 };
