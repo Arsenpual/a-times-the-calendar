@@ -22,9 +22,35 @@ const { getAuth } = require("firebase-admin/auth");
  * อีกต่อไป — เพิ่ม "firebase-admin/auth" เข้ามาใน Phase 2 (Firebase
  * Authentication) สำหรับ verifyIdToken() ในทุก route ที่ต้องการ userId
  */
-const configuredProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+function parseServiceAccountCredentials(rawValue) {
+  if (!rawValue || typeof rawValue !== "string") return null;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    try {
+      const decoded = Buffer.from(trimmed, "base64").toString("utf8");
+      return JSON.parse(decoded);
+    } catch {
+      throw new Error(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON หรือ Base64 JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ " +
+          "service account ทั้งก้อนมาวางใน Secret แบบไม่มีการตัด/ครอบ quote ผิดพลาด"
+      );
+    }
+  }
+}
+
+const parsedServiceAccount = parseServiceAccountCredentials(
+  process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+);
+const configuredProjectId =
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.VITE_FIREBASE_PROJECT_ID ||
+  parsedServiceAccount?.project_id ||
+  "";
 const hasCredentialSource =
-  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) ||
+  Boolean(parsedServiceAccount) ||
   Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
 const hasFirebaseAdminCreds = Boolean(configuredProjectId && hasCredentialSource);
 
@@ -196,44 +222,19 @@ if (!hasFirebaseAdminCreds) {
 
 let app;
 if (hasFirebaseAdminCreds && getApps().length === 0) {
-  if (!process.env.FIREBASE_PROJECT_ID) {
-    throw new Error("ไม่พบ FIREBASE_PROJECT_ID ใน .env");
+  if (!configuredProjectId) {
+    throw new Error("ไม่พบ FIREBASE_PROJECT_ID ใน .env หรือใน GOOGLE_APPLICATION_CREDENTIALS_JSON");
   }
 
-  // สอง credential source รองรับ 2 สภาพแวดล้อมที่ต่างกัน:
-  //
-  //   1. Local dev: GOOGLE_APPLICATION_CREDENTIALS ชี้เป็น "path" ไปยัง
-  //      ไฟล์ service account JSON บนดิสก์ (เดิมที่ใช้อยู่แล้ว) —
-  //      applicationDefault() อ่านจาก path นี้ให้เอง
-  //
-  //   2. Deploy จริง (เช่น Render.com): ไม่มี persistent disk ให้เก็บไฟล์
-  //      secret แบบปลอดภัย (filesystem เป็น ephemeral รีเซ็ตทุกครั้งที่
-  //      redeploy) จึงรับ service account เป็น "เนื้อหา JSON ทั้งก้อน" ผ่าน
-  //      env var GOOGLE_APPLICATION_CREDENTIALS_JSON แทน (วาง JSON ทั้งไฟล์
-  //      เป็นค่าเดียวใน environment variable ของ hosting) แล้ว parse +
-  //      ส่งให้ cert() ตรงๆ ไม่ต้องเขียนลงดิสก์เลย
-  //
-  // เช็ค _JSON ก่อนเสมอ เพราะเป็น production path ที่ตั้งใจให้ priority สูงกว่า
-  // — ถ้ามีทั้งคู่ (ไม่ควรเกิด แต่เผื่อไว้) ใช้ตัวที่ปลอดภัยกว่าสำหรับ deploy
   let credential;
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-    let parsed;
-    try {
-      parsed = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-    } catch (err) {
-      throw new Error(
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ " +
-          "service account ทั้งก้อนมาวางแบบไม่มีการตัด/ครอบ quote ผิดพลาด"
-      );
-    }
-    credential = cert(parsed);
+  if (parsedServiceAccount) {
+    credential = cert(parsedServiceAccount);
   } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     credential = applicationDefault();
   } else if (hasFirebaseAdminCreds) {
     throw new Error(
       "ไม่พบทั้ง GOOGLE_APPLICATION_CREDENTIALS (path ไฟล์ — ใช้ตอน dev ในเครื่อง) และ " +
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON (เนื้อหา JSON ทั้งก้อน — ใช้ตอน deploy จริงบน " +
-        "hosting ที่ไม่มี persistent disk เช่น Render.com) ต้องตั้งค่าตัวใดตัวหนึ่ง"
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON (เนื้อหา JSON ทั้งก้อน — ใช้ตอน deploy จริงหรือใน AI Studio Secrets) ต้องตั้งค่าตัวใดตัวหนึ่ง"
     );
   }
 
