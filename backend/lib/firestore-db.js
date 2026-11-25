@@ -23,27 +23,47 @@ const { getAuth } = require("firebase-admin/auth");
  * Authentication) สำหรับ verifyIdToken() ในทุก route ที่ต้องการ userId
  */
 function parseServiceAccountCredentials(rawValue) {
-  if (!rawValue || typeof rawValue !== "string") return null;
-  const trimmed = rawValue.trim();
-  if (!trimmed) return null;
+  if (!rawValue || typeof rawValue !== "string") return { credentials: null, error: null };
+  let trimmed = rawValue.trim();
+  if (!trimmed) return { credentials: null, error: null };
+
+  if (
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+
   try {
-    return JSON.parse(trimmed);
+    return { credentials: JSON.parse(trimmed), error: null };
   } catch {
     try {
       const decoded = Buffer.from(trimmed, "base64").toString("utf8");
-      return JSON.parse(decoded);
+      return { credentials: JSON.parse(decoded), error: null };
     } catch {
-      throw new Error(
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON หรือ Base64 JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ " +
-          "service account ทั้งก้อนมาวางใน Secret แบบไม่มีการตัด/ครอบ quote ผิดพลาด"
-      );
+      const hint =
+        trimmed === "{"
+          ? "พบค่าแค่ '{' — มักเกิดจากการวาง JSON แบบหลายบรรทัดในไฟล์ .env (dotenv จะตัดเหลือแค่บรรทัดแรก) กรุณาย่อ JSON เป็นบรรทัดเดียว หรือใช้ GOOGLE_APPLICATION_CREDENTIALS แทนบน Localhost"
+          : "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON หรือ Base64 JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ service account ทั้งก้อนมาวางใน Secret แบบไม่มีการตัด/ครอบ quote ผิดพลาด";
+      return { credentials: null, error: new Error(hint) };
     }
   }
 }
 
-const parsedServiceAccount = parseServiceAccountCredentials(
-  process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-);
+const { credentials: parsedServiceAccount, error: serviceAccountJsonError } =
+  parseServiceAccountCredentials(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+const hasFileCredentialPath = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+if (serviceAccountJsonError) {
+  if (hasFileCredentialPath) {
+    console.warn(
+      `[firestore-db] ข้าม GOOGLE_APPLICATION_CREDENTIALS_JSON ที่ไม่สมบูรณ์ (${serviceAccountJsonError.message}) — ใช้ GOOGLE_APPLICATION_CREDENTIALS แทน`
+    );
+  } else {
+    throw serviceAccountJsonError;
+  }
+}
+
 const configuredProjectId =
   process.env.FIREBASE_PROJECT_ID ||
   process.env.VITE_FIREBASE_PROJECT_ID ||
@@ -51,7 +71,7 @@ const configuredProjectId =
   "";
 const hasCredentialSource =
   Boolean(parsedServiceAccount) ||
-  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  hasFileCredentialPath;
 const hasFirebaseAdminCreds = Boolean(configuredProjectId && hasCredentialSource);
 
 function createInMemoryFirestoreStub() {
