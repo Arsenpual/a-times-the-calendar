@@ -26,6 +26,18 @@ export const initYouTubeAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  const maybeStub = auth as unknown as {
+    _subscribe?: (cb: (u: User | null) => void) => () => void;
+  };
+  if (typeof maybeStub?._subscribe === 'function') {
+    return maybeStub._subscribe((user: User | null) => {
+      if (user && cachedAccessToken) {
+        onAuthSuccess?.(user, cachedAccessToken);
+      } else {
+        onAuthFailure?.();
+      }
+    });
+  }
   return onAuthStateChanged(auth, (user: User | null) => {
     if (user) {
       if (cachedAccessToken) {

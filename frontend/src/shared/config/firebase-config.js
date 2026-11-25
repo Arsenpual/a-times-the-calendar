@@ -10,40 +10,28 @@
 // Docs: https://firebase.google.com/docs/web/setup
 import { initializeApp, getApps } from "firebase/app";
 
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBI5_H_v0KqRYka-CmcpgIG0NWlyljqtOk",
-  authDomain: "times-the-calendar.firebaseapp.com",
-  projectId: "times-the-calendar",
-  storageBucket: "times-the-calendar.firebasestorage.app",
-  messagingSenderId: "145805114538",
-  appId: "1:145805114538:web:a44cfbfdaf7449bc6e64d3"
-};
-
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || DEFAULT_FIREBASE_CONFIG.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_CONFIG.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_CONFIG.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_FIREBASE_CONFIG.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 };
 
-function assertConfigured() {
-  const missing = Object.entries(firebaseConfig)
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-  if (missing.length > 0) {
-    throw new Error(
-      `ไม่พบค่า Firebase config ต่อไปนี้ใน .env: ${missing
-        .map((key) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase()}`)
-        .join(", ")} — ดูวิธีตั้งค่าใน README (คัดลอกจาก Firebase Console > Project settings > General > Your apps)`
-    );
-  }
-}
+export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 
-assertConfigured();
+if (!isFirebaseConfigured && typeof console !== "undefined") {
+  console.warn(
+    "[firebase-config] ไม่พบค่า VITE_FIREBASE_* ใน .env — กำลังทำงานในโหมด Sandbox / AI Studio Preview (ไม่ใช้คีย์จริงในซอร์สโค้ด)"
+  );
+}
 
 // getApps().length check กันเรียก initializeApp() ซ้ำ — สำคัญเป็นพิเศษกับ
 // Vite dev server ที่ hot-reload โมดูลได้โดยไม่ reload หน้าเว็บทั้งหมด ถ้า
 // ไม่เช็คจะได้ error "Firebase App named '[DEFAULT]' already exists"
-export const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const firebaseApp = isFirebaseConfigured
+  ? getApps().length === 0
+    ? initializeApp(firebaseConfig)
+    : getApps()[0]
+  : null;

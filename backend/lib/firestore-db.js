@@ -22,8 +22,180 @@ const { getAuth } = require("firebase-admin/auth");
  * อีกต่อไป — เพิ่ม "firebase-admin/auth" เข้ามาใน Phase 2 (Firebase
  * Authentication) สำหรับ verifyIdToken() ในทุก route ที่ต้องการ userId
  */
+const configuredProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+const hasCredentialSource =
+  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) ||
+  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+const hasFirebaseAdminCreds = Boolean(configuredProjectId && hasCredentialSource);
+
+function createInMemoryFirestoreStub() {
+  const store = new Map();
+
+  function makeDocRef(docPath) {
+    return {
+      id: docPath.split("/").pop(),
+      path: docPath,
+      get firestore() {
+        return stubDb;
+      },
+      collection(subName) {
+        return makeColRef(`${docPath}/${subName}`);
+      },
+      async get() {
+        const val = store.get(docPath);
+        return {
+          id: docPath.split("/").pop(),
+          ref: makeDocRef(docPath),
+          exists: val !== undefined,
+          data: () => (val !== undefined ? structuredClone(val) : undefined)
+        };
+      },
+      async set(data, options = {}) {
+        const prev = options?.merge && store.has(docPath) ? store.get(docPath) : {};
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(data || {})) {
+          if (v && typeof v === "object" && v.constructor?.name === "DeleteTransform") {
+            delete next[k];
+          } else {
+            next[k] = v;
+          }
+        }
+        store.set(docPath, next);
+      },
+      async update(data) {
+        const prev = store.get(docPath) || {};
+        store.set(docPath, { ...prev, ...(data || {}) });
+      },
+      async delete() {
+        store.delete(docPath);
+      }
+    };
+  }
+
+  function makeColRef(colPath, limitCount = null) {
+    return {
+      path: colPath,
+      doc(docId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`) {
+        return makeDocRef(`${colPath}/${docId}`);
+      },
+      where() {
+        return this;
+      },
+      orderBy() {
+        return this;
+      },
+      select() {
+        return this;
+      },
+      startAfter() {
+        return this;
+      },
+      limit(n) {
+        return makeColRef(colPath, n);
+      },
+      async get() {
+        const prefix = `${colPath}/`;
+        const docs = [];
+        for (const [k, v] of store.entries()) {
+          if (k.startsWith(prefix)) {
+            const rest = k.slice(prefix.length);
+            if (!rest.includes("/")) {
+              docs.push({
+                id: rest,
+                ref: makeDocRef(k),
+                exists: true,
+                data: () => structuredClone(v)
+              });
+            }
+          }
+        }
+        const sliced = typeof limitCount === "number" ? docs.slice(0, limitCount) : docs;
+        return {
+          empty: sliced.length === 0,
+          size: sliced.length,
+          docs: sliced
+        };
+      }
+    };
+  }
+
+  const stubDb = {
+    isInMemoryFallback: true,
+    collection(name) {
+      return makeColRef(name);
+    },
+    async getAll(...refs) {
+      return Promise.all(refs.map((r) => r.get()));
+    },
+    batch() {
+      const ops = [];
+      return {
+        set(ref, data, opts) {
+          ops.push(() => ref.set(data, opts));
+        },
+        update(ref, data) {
+          ops.push(() => ref.update(data));
+        },
+        delete(ref) {
+          ops.push(() => ref.delete());
+        },
+        async commit() {
+          for (const op of ops) await op();
+        }
+      };
+    },
+    async runTransaction(fn) {
+      const tx = {
+        get: (refOrQuery) => refOrQuery.get(),
+        set: (ref, data, opts) => {
+          ref.set(data, opts);
+        },
+        update: (ref, data) => {
+          ref.update(data);
+        },
+        delete: (ref) => {
+          ref.delete();
+        }
+      };
+      return fn(tx);
+    }
+  };
+
+  return stubDb;
+}
+
+function createInMemoryAuthStub() {
+  return {
+    isInMemoryFallback: true,
+    async verifyIdToken(idToken) {
+      if (idToken === "sandbox-preview-token") {
+        return { uid: "sandbox-preview-user" };
+      }
+      try {
+        const parts = String(idToken || "").split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+          const uid = payload.user_id || payload.sub || payload.uid;
+          if (typeof uid === "string" && uid.trim()) {
+            return { uid: uid.trim() };
+          }
+        }
+      } catch {
+        // Fall through
+      }
+      throw new Error("Invalid token in sandbox fallback mode");
+    }
+  };
+}
+
+if (!hasFirebaseAdminCreds) {
+  console.warn(
+    "[firestore-db] ไม่พบ GOOGLE_APPLICATION_CREDENTIALS_JSON หรือ FIREBASE_PROJECT_ID — เริ่มทำงานในโหมด In-Memory Sandbox (ข้อมูลจะเก็บในหน่วยความจำชั่วคราวจนกว่าจะป้อน Secret ใน AI Studio)"
+  );
+}
+
 let app;
-if (getApps().length === 0) {
+if (hasFirebaseAdminCreds && getApps().length === 0) {
   if (!process.env.FIREBASE_PROJECT_ID) {
     throw new Error("ไม่พบ FIREBASE_PROJECT_ID ใน .env");
   }
@@ -57,7 +229,7 @@ if (getApps().length === 0) {
     credential = cert(parsed);
   } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     credential = applicationDefault();
-  } else {
+  } else if (hasFirebaseAdminCreds) {
     throw new Error(
       "ไม่พบทั้ง GOOGLE_APPLICATION_CREDENTIALS (path ไฟล์ — ใช้ตอน dev ในเครื่อง) และ " +
         "GOOGLE_APPLICATION_CREDENTIALS_JSON (เนื้อหา JSON ทั้งก้อน — ใช้ตอน deploy จริงบน " +
@@ -67,14 +239,14 @@ if (getApps().length === 0) {
 
   app = initializeApp({
     credential,
-    projectId: process.env.FIREBASE_PROJECT_ID
+    projectId: configuredProjectId
   });
-} else {
+} else if (hasFirebaseAdminCreds) {
   app = getApps()[0];
 }
 
-const db = getFirestore(app);
-const auth = getAuth(app);
+const db = hasFirebaseAdminCreds ? getFirestore(app) : createInMemoryFirestoreStub();
+const auth = hasFirebaseAdminCreds ? getAuth(app) : createInMemoryAuthStub();
 
 // ---- Collection references (Phase 2: per-user, nested under users/{userId}) ----
 // เดิม (Phase 0-1) เป็น collection กลางระดับ root: categories/{categoryId},

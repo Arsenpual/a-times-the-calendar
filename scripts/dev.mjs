@@ -25,21 +25,11 @@ function runProcess(label, cwd, args, extraEnv = {}) {
 const backendDir = path.join(rootDir, "backend");
 const frontendDir = path.join(rootDir, "frontend");
 
-const hasBackendCreds =
-  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS) ||
-  Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) ||
-  existsSync(path.join(backendDir, ".env"));
-
-const children = [];
-
-if (hasBackendCreds) {
-  console.log("[T.i.M.E.S.] Starting Backend API (port 4000) + Frontend Vite Server (port 5173)...");
-  children.push(runProcess("backend", backendDir, ["run", "dev"]));
-} else {
-  console.log("[T.i.M.E.S.] Starting Frontend Vite Server (Standalone / Google AI Studio mode)...");
-}
-
-children.push(runProcess("frontend", frontendDir, ["run", "dev"]));
+const children = [
+  runProcess("backend", backendDir, ["run", "dev"]),
+  runProcess("frontend", frontendDir, ["run", "dev"]),
+];
+console.log("[T.i.M.E.S.] Starting Backend API (port 4000) + Frontend Vite Server (port 5173)...");
 
 function shutdown() {
   for (const child of children) {

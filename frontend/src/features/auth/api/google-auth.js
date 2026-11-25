@@ -27,6 +27,11 @@ function googleProviderForSignIn() {
  * accident.
  */
 export async function signInWithGoogle() {
+  if (typeof auth?._signIn === "function") {
+    const result = auth._signIn();
+    const idToken = await result.user.getIdToken();
+    return { idToken };
+  }
   try {
     const result = await signInWithPopup(auth, googleProviderForSignIn());
     const idToken = await result.user.getIdToken();
@@ -47,10 +52,17 @@ export async function signInWithGoogle() {
  * @param {(user: import("firebase/auth").User | null) => void} callback
  */
 export function subscribeToAuthState(callback) {
+  if (typeof auth?._subscribe === "function") {
+    return auth._subscribe(callback);
+  }
   return onAuthStateChanged(auth, callback);
 }
 
 /** Signs out of Firebase entirely. */
 export async function signOut() {
+  if (typeof auth?._signOut === "function") {
+    auth._signOut();
+    return;
+  }
   await firebaseSignOut(auth);
 }
