@@ -38,8 +38,24 @@ export default defineConfig(({ command }) => ({
       )),
     },
   },
+  define: {
+    "import.meta.env.VITE_GEMINI_API_KEY": JSON.stringify(
+      process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || ""
+    ),
+  },
   server: {
-    port: 5173,
+    host: "0.0.0.0",
+    port: Number(process.env.PORT) || 5173,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_BACKEND_PROXY_TARGET || "http://localhost:4000",
+        changeOrigin: true,
+      },
+      "/oauth": {
+        target: process.env.VITE_BACKEND_PROXY_TARGET || "http://localhost:4000",
+        changeOrigin: true,
+      },
+    },
     // Phase 2 (Firebase Auth): Chrome's default Cross-Origin-Opener-Policy
     // blocks Firebase's internal poll of the sign-in popup's window.closed
     // state during signInWithPopup()/reauthenticateWithPopup() — this is a

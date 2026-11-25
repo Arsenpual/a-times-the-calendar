@@ -1,4 +1,6 @@
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
@@ -65,7 +67,19 @@ const allowedOrigins = [...new Set([
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+        /\.googleusercontent\.com$/i.test(origin) ||
+        /\.webcontainer\.io$/i.test(origin) ||
+        /aistudio\.google\.com$/i.test(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: false
   })
 );
@@ -245,6 +259,22 @@ app.use("/api/telegram", requireAuth, telegramActionLimiter, telegramRouter);
 // OAuth callback มาจาก Google จึงไม่มี Firebase Authorization header;
 // state ที่ลงลายเซ็นไว้ผูก callback กลับเข้ากับ uid อย่างปลอดภัยแทน.
 app.get("/oauth/google/calendar/callback", calendarAuthRouter.callback);
+
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "ไม่พบ endpoint นี้" });
+});
+
+const frontendDistDir = path.resolve(__dirname, "../frontend/dist");
+const frontendIndexHtml = path.join(frontendDistDir, "index.html");
+if (fs.existsSync(frontendIndexHtml)) {
+  app.use(express.static(frontendDistDir));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/oauth/")) {
+      return next();
+    }
+    return res.sendFile(frontendIndexHtml);
+  });
+}
 
 app.use((req, res) => {
   res.status(404).json({ error: "ไม่พบ endpoint นี้" });

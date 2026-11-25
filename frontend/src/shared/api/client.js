@@ -14,7 +14,17 @@ import { auth } from "../config/firebase-auth.js";
 import { createInFlightReads } from "./in-flight-reads.js";
 import { setFirestoreQuotaStatus } from "./firestore-quota-status.js";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL;
+const API_BASE =
+  configuredApiBase ||
+  (typeof window !== "undefined" &&
+  window.location &&
+  (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ||
+    window.location.port === "5173" ||
+    window.location.port === "4000" ||
+    window.location.port === "3000")
+    ? ""
+    : "http://localhost:4000");
 const reads = createInFlightReads();
 let readOwner;
 
