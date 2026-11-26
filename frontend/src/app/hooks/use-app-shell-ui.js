@@ -13,8 +13,8 @@ export function useAppShellUi({ mode, userId }) {
   useEffect(() => {
     if (mode !== "activity") return undefined;
     const frameId = window.requestAnimationFrame(() => {
-      activityDashboardRef.current?.scrollTo({ top: 0, behavior: "auto" });
-      window.scrollTo({ top: 0, behavior: "auto" });
+      activityDashboardRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
       setIsActivityReading(false);
     });
     return () => window.cancelAnimationFrame(frameId);

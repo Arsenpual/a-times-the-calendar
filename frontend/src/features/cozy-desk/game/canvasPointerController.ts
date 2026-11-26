@@ -52,6 +52,7 @@ import {
   getGreenCarInteractable,
   getInteractableAtPoint,
   getRoomZone,
+  GYM_SQUAT_RACK_STAND_POS,
   INTERACTABLES,
   isDiningChairSeatId,
   isPointInsideCar,
@@ -396,6 +397,8 @@ export function createCanvasPointerHandlers(ctx: any) {
       player.seat = null;
       player.sofaActivity = null;
       player.sofaActivityElapsed = 0;
+      player.workoutElapsed = 0;
+      player.workoutReps = 0;
       if (prevSeat === 'workdesk') {
         player.x = WORK_STAND_POS.x;
         player.y = WORK_STAND_POS.y;
@@ -408,6 +411,11 @@ export function createCanvasPointerHandlers(ctx: any) {
         player.x = BEDROOM_BED_STAND_POS.x;
         player.y = BEDROOM_BED_STAND_POS.y;
         player.facing = 'right';
+      } else if (prevSeat === 'gym_barbell') {
+        player.x = GYM_SQUAT_RACK_STAND_POS.x;
+        player.y = GYM_SQUAT_RACK_STAND_POS.y;
+        player.facing = 'down';
+        soundEngine.playBarbellRack();
       } else if (isDiningChairSeatId(prevSeat)) {
         const spot = DINING_CHAIR_SPOTS[prevSeat];
         player.x = spot.standPos.x;
@@ -514,7 +522,9 @@ export function createCanvasPointerHandlers(ctx: any) {
               ? { x: BEDROOM_BED_STAND_POS.x, y: BEDROOM_BED_STAND_POS.y }
               : effectiveClickedObj.id === 'porch_plants'
                 ? { x: PORCH_PLANTER_STAND_POS.x, y: PORCH_PLANTER_STAND_POS.y }
-                : isDiningChairSeatId(effectiveClickedObj.id)
+                : effectiveClickedObj.id === 'gym_barbell'
+                  ? { x: GYM_SQUAT_RACK_STAND_POS.x, y: GYM_SQUAT_RACK_STAND_POS.y }
+                  : isDiningChairSeatId(effectiveClickedObj.id)
                   ? {
                       x: DINING_CHAIR_SPOTS[effectiveClickedObj.id].standPos.x,
                       y: DINING_CHAIR_SPOTS[effectiveClickedObj.id].standPos.y,

@@ -3,10 +3,70 @@ import { downloadDayTimelineImage } from "../lib/export-day-image.js";
 import { activityDate, isSameDay } from "../../../shared/lib/date-utils.js";
 import PlannerTimeActions from "./planner-time-actions.jsx";
 import { usePlannerDrag } from "../hooks/use-planner-drag.js";
-import React, { useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { buildWeekSpineData } from "../lib/week-spine-data.js";
-import { buildDailyPlannerLayout, minuteLabel } from "../lib/daily-planner-layout.js";
+import { buildDailyPlannerLayout, canFitCenteredDuration, durationLabel, minuteLabel } from "../lib/daily-planner-layout.js";
 import "../styles/activity-daily-planner.css";
+
+function PlannerEventBar({ item, isAligned, timeText, isDisabled, onContextMenu, onPointerDown, onClick }) {
+  const buttonRef = useRef(null);
+  const titleRef = useRef(null);
+  const durationRef = useRef(null);
+  const durationText = durationLabel(item.endMinute - item.startMinute);
+  const [showDuration, setShowDuration] = useState(false);
+
+  useLayoutEffect(() => {
+    const buttonEl = buttonRef.current;
+    const titleEl = titleRef.current;
+    const durationEl = durationRef.current;
+    if (!buttonEl || !titleEl || !durationEl) return undefined;
+
+    let cancelled = false;
+    const update = () => {
+      if (cancelled) return;
+      const style = getComputedStyle(buttonEl);
+      const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const innerWidth = buttonEl.clientWidth - padX;
+      const durationWidth = Math.ceil(durationEl.getBoundingClientRect().width);
+      const titleWidth = Math.ceil(titleEl.scrollWidth);
+      const next = canFitCenteredDuration({ innerWidth, titleWidth, durationWidth });
+      setShowDuration(prev => (prev === next ? prev : next));
+    };
+
+    update();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
+    observer?.observe(buttonEl);
+    document.fonts?.ready?.then(update);
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+    };
+  }, [item.title, durationText, item.startMinute, item.endMinute]);
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className={`daily-planner-event${isAligned ? " is-aligned" : ""}${showDuration ? "" : " is-duration-hidden"}`}
+      style={{
+        left: `${item.startMinute / 1440 * 100}%`,
+        width: `${(item.endMinute - item.startMinute) / 1440 * 100}%`,
+        "--event-color": item.color.border,
+      }}
+      onContextMenu={event => onContextMenu?.(event, item)}
+      onPointerDown={event => onPointerDown(event, item)}
+      onClick={() => onClick(item)}
+      title={`${item.title} · ${timeText} (${durationText})`}
+      aria-label={`${item.title} ${timeText} ${durationText}`}
+      aria-disabled={isDisabled}
+    >
+      {!item.continuesFromPreviousDay && <span className="planner-resize start" aria-label="ปรับเวลาเริ่ม" onPointerDown={event => onPointerDown(event, item, "start")} />}
+      <span ref={titleRef} className="daily-planner-event-title">{item.title}</span>
+      <span ref={durationRef} className="daily-planner-event-duration" aria-hidden="true">{durationText}</span>
+      {!item.continuesIntoNextDay && <span className="planner-resize end" aria-label="ปรับเวลาสิ้นสุด" onPointerDown={event => onPointerDown(event, item, "end")} />}
+    </button>
+  );
+}
 
 export default function ActivityDailyPlanner({ id, timeChanges, day, activities, categories, activityCategoryMap, lockedActivities, loading, onClose, onAddActivity, onEditActivity, onContextMenu }) {
   const { timedSegments, allDayActivities } = useMemo(() => buildWeekSpineData({ activities, weekStart: day, weekEnd: day, categories, activityCategoryMap, lockedActivities }), [activities, day, categories, activityCategoryMap, lockedActivities]);
@@ -34,11 +94,18 @@ export default function ActivityDailyPlanner({ id, timeChanges, day, activities,
         <button type="button" className="daily-planner-event is-all-day" style={{ left: "0%", width: "100%", "--event-color": item.color.border }} onContextMenu={event => onContextMenu?.(event, item)} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ทั้งวัน 00:00–24:00`} aria-label={`${item.title} ทั้งวัน 00:00 ถึง 24:00`} aria-disabled={item.isLocked || timeChanges.isSavingTimeChanges}><span className="daily-planner-all-day-badge">ทั้งวัน</span><span>{item.title}</span></button>
       </div>)}
       {(layout.lanes.length ? layout.lanes : allDayActivities.length ? [] : [[]]).map((lane, index) => <div className="daily-planner-lane" key={index}>
-        {lane.map(item => <button key={item.segmentId} type="button" className={`daily-planner-event${matches(item) ? " is-aligned" : ""}`} style={{ left: `${item.startMinute / 1440 * 100}%`, width: `${(item.endMinute - item.startMinute) / 1440 * 100}%`, "--event-color": item.color.border }} onContextMenu={event => onContextMenu?.(event, item)} onPointerDown={event => beginDrag(event, item)} onClick={() => editActivity(item)} title={`${item.title} · ${timeLabel(item)}`} aria-label={`${item.title} ${timeLabel(item)}`} aria-disabled={item.isLocked || timeChanges.isSavingTimeChanges}>
-          {!item.continuesFromPreviousDay && <span className="planner-resize start" aria-label="ปรับเวลาเริ่ม" onPointerDown={event => beginDrag(event, item, "start")} />}
-          <span>{item.title}</span>
-          {!item.continuesIntoNextDay && <span className="planner-resize end" aria-label="ปรับเวลาสิ้นสุด" onPointerDown={event => beginDrag(event, item, "end")} />}
-        </button>)}
+        {lane.map(item => (
+          <PlannerEventBar
+            key={item.segmentId}
+            item={item}
+            isAligned={matches(item)}
+            timeText={timeLabel(item)}
+            isDisabled={item.isLocked || timeChanges.isSavingTimeChanges}
+            onContextMenu={onContextMenu}
+            onPointerDown={beginDrag}
+            onClick={editActivity}
+          />
+        ))}
       </div>)}
     </div>
 

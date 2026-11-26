@@ -639,9 +639,140 @@ export function drawShoweringPlayerSilhouette(
   }
 }
 
+function drawWeightliftingPlayer(
+  ctx: CanvasRenderingContext2D,
+  player: PlayerState,
+  tick: number
+) {
+  const x = Math.round(player.x);
+  const y = Math.round(player.y);
+  const cycleSec = 2.2;
+  const phase = (player.workoutElapsed % cycleSec) / cycleSec;
+
+  // Smooth overhead press cycle: brace dip -> drive overhead -> lockout hold -> controlled lower
+  let liftRatio = 0; // 0 = front-rack at shoulders, 1 = full overhead lockout
+  let bodyDip = 0;
+  let isLockout = false;
+
+  if (phase < 0.18) {
+    const t = phase / 0.18;
+    bodyDip = Math.round(Math.sin(t * Math.PI) * 2);
+    liftRatio = 0;
+  } else if (phase < 0.46) {
+    const t = (phase - 0.18) / 0.28;
+    liftRatio = 1 - (1 - t) * (1 - t);
+    bodyDip = Math.round((1 - t) * 1);
+  } else if (phase < 0.68) {
+    liftRatio = 1;
+    bodyDip = -1;
+    isLockout = true;
+  } else {
+    const t = (phase - 0.68) / 0.32;
+    const smooth = t * t * (3 - 2 * t);
+    liftRatio = 1 - smooth;
+    bodyDip = Math.round(Math.sin(t * Math.PI) * 1);
+  }
+
+  const tremor = isLockout && Math.floor(tick / 4) % 2 === 0 ? -1 : 0;
+  const barY = Math.round(y - 10 + bodyDip - liftRatio * 20 + tremor);
+  const shoulderY = y - 8 + bodyDip;
+
+  // Wide athletic stance floor shadow on Olympic lifting platform
+  pxRect(ctx, x - 12, y + 7, 24, 6, 'rgba(20, 18, 16, 0.32)');
+
+  // Planted wide athletic legs & sneakers (slight knee bend during brace dip)
+  pxRect(ctx, x - 8, y + 1 + Math.max(0, bodyDip), 5, 7 - Math.max(0, bodyDip), '#3E4C59');
+  pxRect(ctx, x + 3, y + 1 + Math.max(0, bodyDip), 5, 7 - Math.max(0, bodyDip), '#3E4C59');
+  pxRect(ctx, x - 9, y + 7, 6, 2, '#2B231E');
+  pxRect(ctx, x + 3, y + 7, 6, 2, '#2B231E');
+
+  // Torso: olive sage knit sweater
+  pxRect(ctx, x - 8, y - 9 + bodyDip, 16, 12, '#6A7B53');
+  pxRect(ctx, x - 6, y - 9 + bodyDip, 12, 3, '#7C8F62');
+
+  // Arms dynamically extending from shoulders to barbell grip points
+  const armTopY = Math.min(shoulderY, barY + 1);
+  const armBotY = Math.max(shoulderY + 5, barY + 4);
+  const armHeight = Math.max(6, armBotY - armTopY);
+  const armOutShift = liftRatio > 0.35 ? 1 : 0;
+  pxRect(ctx, x - 11 - armOutShift, armTopY, 4, armHeight, '#5C6C47');
+  pxRect(ctx, x + 7 + armOutShift, armTopY, 4, armHeight, '#5C6C47');
+
+  // Head & focused lifting expression
+  pxRect(ctx, x - 8, y - 22 + bodyDip, 16, 14, '#5A3724');
+  pxRect(ctx, x - 6, y - 19 + bodyDip, 12, 11, '#F6CCB0');
+  pxRect(ctx, x - 7, y - 22 + bodyDip, 14, 5, '#6A422B');
+
+  // Determined eyes & warm rosy effort cheeks during drive/lockout
+  const straining = liftRatio > 0.5;
+  if (straining) {
+    pxRect(ctx, x - 4, y - 15 + bodyDip, 3, 2, '#2D1E16');
+    pxRect(ctx, x + 1, y - 15 + bodyDip, 3, 2, '#2D1E16');
+    pxRect(ctx, x - 5, y - 11 + bodyDip, 2, 1, '#E07A6B');
+    pxRect(ctx, x + 3, y - 11 + bodyDip, 2, 1, '#E07A6B');
+    // Tiny cyan sweat drop on temple
+    pxRect(ctx, x + 5, y - 17 + bodyDip + (Math.floor(tick / 8) % 2), 2, 3, '#7DD3FC');
+  } else {
+    pxRect(ctx, x - 4, y - 15 + bodyDip, 2, 3, '#2D1E16');
+    pxRect(ctx, x + 2, y - 15 + bodyDip, 2, 3, '#2D1E16');
+  }
+
+  // Loaded Olympic Barbell (matching squat rack palette: chrome shaft + 25kg red & 20kg blue bumper plates)
+  // Chrome barbell shaft + knurled center
+  pxRect(ctx, x - 25, barY, 50, 3, '#CBD5E1');
+  pxRect(ctx, x - 11, barY, 22, 3, '#94A3B8');
+  pxRect(ctx, x - 25, barY, 50, 1, '#F1F5F9');
+
+  // Outer 25kg Red Bumper Plates
+  pxRect(ctx, x - 24, barY - 6, 4, 15, '#B91C1C');
+  pxRect(ctx, x - 23, barY - 5, 2, 13, '#EF4444');
+  pxRect(ctx, x + 20, barY - 6, 4, 15, '#B91C1C');
+  pxRect(ctx, x + 21, barY - 5, 2, 13, '#EF4444');
+
+  // Inner 20kg Blue Bumper Plates
+  pxRect(ctx, x - 19, barY - 4, 3, 11, '#1D4ED8');
+  pxRect(ctx, x - 18, barY - 3, 1, 9, '#60A5FA');
+  pxRect(ctx, x + 16, barY - 4, 3, 11, '#1D4ED8');
+  pxRect(ctx, x + 17, barY - 3, 1, 9, '#60A5FA');
+
+  // Hands gripping the barbell shaft
+  pxRect(ctx, x - 12 - armOutShift, barY - 1, 4, 4, '#F6CCB0');
+  pxRect(ctx, x + 8 + armOutShift, barY - 1, 4, 4, '#F6CCB0');
+
+  // Subtle golden lockout sparkle pixels at top of press
+  if (isLockout) {
+    const sp = Math.floor(tick / 6) % 2;
+    pxRect(ctx, x - 28, barY - 9 - sp, 2, 2, '#FDE68A');
+    pxRect(ctx, x + 26, barY - 9 - (1 - sp), 2, 2, '#FDE68A');
+  }
+
+  // Compact floating rep badge above the barbell once at least 1 rep is completed
+  if (player.workoutReps > 0) {
+    ctx.save();
+    const label = `×${player.workoutReps}`;
+    ctx.font = '700 9px "IBM Plex Sans Thai", monospace';
+    const tw = Math.ceil(ctx.measureText(label).width);
+    const bw = Math.max(24, tw + 10);
+    const bh = 14;
+    const bx = Math.round(x - bw / 2);
+    const by = Math.round(Math.min(barY - 22, y - 42));
+    pxRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, '#D97736');
+    pxRect(ctx, bx, by, bw, bh, 'rgba(28, 22, 18, 0.9)');
+    ctx.fillStyle = '#FDE68A';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx + bw / 2, by + bh / 2 + 0.5);
+    ctx.restore();
+  }
+}
+
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, tick: number) {
   if (player.isShowering) {
     drawShoweringPlayerSilhouette(ctx, player, tick);
+    return;
+  }
+  if (player.isSitting && player.seat === 'gym_barbell') {
+    drawWeightliftingPlayer(ctx, player, tick);
     return;
   }
   // When sleeping on the Master Bedroom King Bed or driving the green car, the player is rendered inside it

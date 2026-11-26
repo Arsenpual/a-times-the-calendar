@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, ".env") });
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+require("./lib/load-env.js");
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
@@ -27,9 +26,12 @@ const { createDataLabExportRouter } = require("./routes/data-lab-export.js");
 const cozyDeskRouter = require("./routes/cozy-desk.js");
 const { firestoreQuotaExhaustedPayload } = require("./lib/firestore-quota.js");
 const { startStartupTask } = require("./lib/startup-task.js");
+const { isFirebaseAdminConfigured } = require("./lib/firestore-db.js");
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT =
+  Number(process.env.APP_PORT) ||
+  (process.env.PORT && process.env.PORT !== "8080" ? Number(process.env.PORT) : 3000);
 // Render วาง Express ไว้หลัง reverse proxy และส่ง X-Forwarded-For มาให้.
 // ระบุจำนวน proxy ที่เชื่อถือได้ก่อนสร้าง rate limiter เพื่อไม่ให้
 // express-rate-limit ปฏิเสธ request ปกติจาก public site.
@@ -62,6 +64,8 @@ function parseOrigins(value) {
 
 const allowedOrigins = [...new Set([
   "http://localhost:5173",
+  "http://localhost:3000",
+  ...parseOrigins(process.env.APP_URL),
   ...parseOrigins(process.env.FRONTEND_URL),
   ...parseOrigins(process.env.FRONTEND_CORS_ORIGINS)
 ].filter(Boolean))];
@@ -75,6 +79,7 @@ app.use(
         /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
         /\.googleusercontent\.com$/i.test(origin) ||
         /\.webcontainer\.io$/i.test(origin) ||
+        /\.run\.app$/i.test(origin) ||
         /aistudio\.google\.com$/i.test(origin)
       ) {
         return callback(null, true);
@@ -317,23 +322,25 @@ app.use((err, req, res, next) => {
 // ใต้ users/{userId}/... จึงไม่มี "collection กลาง" ให้ seed ล่วงหน้าได้อีก
 // ต่อไป — seed เกิดขึ้นต่อ user แบบ lazy เมื่อเรียก GET /api/categories
 // เท่านั้น เพื่อไม่เพิ่ม Firestore read ให้ทุก authenticated endpoint
-app.listen(PORT, () => {
-  console.log(`times-the-calendar backend รันที่ http://localhost:${PORT}`);
-  const webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com";
-  startStartupTask("ตั้ง webhook", async () => {
-    if (!await telegramRouter.registerWebhook(webhookBaseUrl)) return;
-    // These tasks own their retries; cleanup cannot restart webhook setup.
-    startStartupTask("ตั้ง Bot Command Menu", async () => {
-      await telegramRouter.registerBotCommands();
-      console.log("[telegram] ตั้ง Bot Command Menu สำเร็จ");
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`times-the-calendar backend รันที่ http://0.0.0.0:${PORT}`);
+  if (isFirebaseAdminConfigured && process.env.TELEGRAM_BOT_TOKEN) {
+    const webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://times-the-calendar-backend.onrender.com";
+    startStartupTask("ตั้ง webhook", async () => {
+      if (!await telegramRouter.registerWebhook(webhookBaseUrl)) return;
+      // These tasks own their retries; cleanup cannot restart webhook setup.
+      startStartupTask("ตั้ง Bot Command Menu", async () => {
+        await telegramRouter.registerBotCommands();
+        console.log("[telegram] ตั้ง Bot Command Menu สำเร็จ");
+      });
+      startStartupTask("ล้างเมนู Telegram เก่า", () => telegramRouter.cleanupLegacyBotCommands());
     });
-    startStartupTask("ล้างเมนู Telegram เก่า", () => telegramRouter.cleanupLegacyBotCommands());
-  });
-  telegramRouter.startPriorityNewsWatcher();
+    telegramRouter.startPriorityNewsWatcher();
+  }
   // The former standalone AI bot is retired. If its token remains configured
   // during migration, stop Telegram from delivering updates to the removed
   // endpoint. This does not delete its chat history or pending updates.
-  if (process.env.TELEGRAM_AI_BOT_TOKEN) {
+  if (isFirebaseAdminConfigured && process.env.TELEGRAM_AI_BOT_TOKEN) {
     telegramFetch(`https://api.telegram.org/bot${process.env.TELEGRAM_AI_BOT_TOKEN}/deleteWebhook`, { method: "POST" })
       .then(async (response) => {
         const result = await response.json().catch(() => ({}));

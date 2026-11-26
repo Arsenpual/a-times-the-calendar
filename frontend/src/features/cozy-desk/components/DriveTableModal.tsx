@@ -246,7 +246,7 @@ export function DriveTableModal({
       const text = await previewDriveFileText(accessToken, file);
       setPreviewText(text);
     } catch (err) {
-      if (err instanceof GoogleDriveApiError && (err.status === 401 || err.status === 403)) {
+      if (err instanceof GoogleDriveApiError && err.status === 401) {
         onTokenExpired();
       }
       setPreviewError(

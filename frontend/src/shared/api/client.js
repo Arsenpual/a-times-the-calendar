@@ -14,12 +14,19 @@ import { auth } from "../config/firebase-auth.js";
 import { createInFlightReads } from "./in-flight-reads.js";
 import { setFirestoreQuotaStatus } from "./firestore-quota-status.js";
 
-const configuredApiBase = import.meta.env.VITE_API_BASE_URL;
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const isLocalBrowserHost =
+  typeof window !== "undefined" &&
+  window.location &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+const pointsToLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(configuredApiBase);
+const effectiveConfiguredBase = !isLocalBrowserHost && pointsToLocalhost ? "" : configuredApiBase;
+
 const API_BASE =
-  configuredApiBase ||
+  effectiveConfiguredBase ||
   (typeof window !== "undefined" &&
   window.location &&
-  (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ||
+  (!isLocalBrowserHost ||
     window.location.port === "5173" ||
     window.location.port === "4000" ||
     window.location.port === "3000")

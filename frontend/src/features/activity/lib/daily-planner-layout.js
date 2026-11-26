@@ -1,6 +1,21 @@
 // Clock minutes keep every day on the same 00:00–24:00 visual scale.
 export const minuteLabel = value => `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
 
+export const durationLabel = minutes => {
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (!hours) return `${mins} นาที`;
+  return mins ? `${hours} ชม. ${mins} นาที` : `${hours} ชม.`;
+};
+
+export function canFitCenteredDuration({ innerWidth, titleWidth, durationWidth, gap = 6, minLeftWidth = 20, minTruncatedTitleWidth = 44 }) {
+  if (!(innerWidth > 0) || !(durationWidth > 0)) return false;
+  const leftColumnWidth = (innerWidth - durationWidth - gap * 2) / 2;
+  if (leftColumnWidth < minLeftWidth) return false;
+  return leftColumnWidth >= titleWidth || leftColumnWidth >= minTruncatedTitleWidth;
+}
+
 export function buildDailyPlannerLayout(segments, day) {
   const nextDay = new Date(day);
   nextDay.setHours(0, 0, 0, 0);

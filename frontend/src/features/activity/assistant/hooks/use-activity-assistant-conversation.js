@@ -185,7 +185,7 @@ export function useActivityAssistantConversation({
     }
   }, [onOpenDailySummary, pending, userId]);
   useEffect(() => {
-    if (open) bottomRef.current?.scrollIntoView({ block: "end" });
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [open, messages, pending, error]);
   useEffect(() => {
     if (!open || !closeOnEscape) return undefined;

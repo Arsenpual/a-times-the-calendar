@@ -262,6 +262,142 @@ class CozySoundEngine {
       osc.stop(start + 0.18);
     });
   }
+
+  public playBarbellRack() {
+    if (!this.canPlay('barbellRack', 180)) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    // Crisp metallic plate clink + solid rack thud
+    const oscLow = ctx.createOscillator();
+    const gainLow = ctx.createGain();
+    oscLow.type = 'triangle';
+    oscLow.frequency.setValueAtTime(160, now);
+    oscLow.frequency.exponentialRampToValueAtTime(72, now + 0.08);
+    gainLow.gain.setValueAtTime(0.055, now);
+    gainLow.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    oscLow.connect(gainLow);
+    gainLow.connect(ctx.destination);
+    oscLow.start(now);
+    oscLow.stop(now + 0.11);
+
+    const oscClink = ctx.createOscillator();
+    const gainClink = ctx.createGain();
+    oscClink.type = 'sine';
+    oscClink.frequency.setValueAtTime(1180, now + 0.02);
+    oscClink.frequency.exponentialRampToValueAtTime(860, now + 0.11);
+    gainClink.gain.setValueAtTime(0.022, now + 0.02);
+    gainClink.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    oscClink.connect(gainClink);
+    gainClink.connect(ctx.destination);
+    oscClink.start(now + 0.02);
+    oscClink.stop(now + 0.14);
+  }
+
+  public playLiftRep() {
+    if (!this.canPlay('liftRep', 350)) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [440, 587.33];
+    notes.forEach((freq, idx) => {
+      const start = now + idx * 0.06;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.032, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    });
+  }
+
+  /**
+   * Classic antique mahogany grandfather pendulum clock chime:
+   * 4-note Westminster phrase (E4 -> G#4 -> F#4 -> B3) followed by
+   * two deep resonant bronze-rod bell tolls ("BONG... BONG...").
+   */
+  public playGrandfatherClockChime() {
+    if (!this.canPlay('grandfatherClockChime', 1200)) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+
+    const scheduleClockStrike = (
+      freq: number,
+      startTime: number,
+      duration: number,
+      volume: number,
+      isDeepToll = false
+    ) => {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(isDeepToll ? 980 : 1950, startTime);
+      filter.Q.setValueAtTime(isDeepToll ? 1.4 : 0.9, startTime);
+      filter.connect(ctx.destination);
+
+      // Warm wooden-cabinet fundamental tone
+      const oscMain = ctx.createOscillator();
+      const gainMain = ctx.createGain();
+      oscMain.type = 'sine';
+      oscMain.frequency.setValueAtTime(freq, startTime);
+      gainMain.gain.setValueAtTime(0.0001, startTime);
+      gainMain.gain.linearRampToValueAtTime(volume, startTime + 0.012);
+      gainMain.gain.exponentialRampToValueAtTime(0.0008, startTime + duration);
+      oscMain.connect(gainMain);
+      gainMain.connect(filter);
+      oscMain.start(startTime);
+      oscMain.stop(startTime + duration + 0.05);
+
+      // Warm brass harmonic octave (decays slightly faster)
+      const oscOctave = ctx.createOscillator();
+      const gainOctave = ctx.createGain();
+      oscOctave.type = 'triangle';
+      oscOctave.frequency.setValueAtTime(freq * 2, startTime);
+      gainOctave.gain.setValueAtTime(0.0001, startTime);
+      gainOctave.gain.linearRampToValueAtTime(volume * (isDeepToll ? 0.42 : 0.28), startTime + 0.008);
+      gainOctave.gain.exponentialRampToValueAtTime(0.0005, startTime + duration * 0.62);
+      oscOctave.connect(gainOctave);
+      gainOctave.connect(filter);
+      oscOctave.start(startTime);
+      oscOctave.stop(startTime + duration * 0.68);
+
+      // Subtle tubular-bell metallic shimmer partial (2.756x)
+      const oscPartial = ctx.createOscillator();
+      const gainPartial = ctx.createGain();
+      oscPartial.type = 'sine';
+      oscPartial.frequency.setValueAtTime(freq * 2.756, startTime);
+      gainPartial.gain.setValueAtTime(0.0001, startTime);
+      gainPartial.gain.linearRampToValueAtTime(volume * (isDeepToll ? 0.22 : 0.14), startTime + 0.006);
+      gainPartial.gain.exponentialRampToValueAtTime(0.0004, startTime + Math.min(0.65, duration * 0.35));
+      oscPartial.connect(gainPartial);
+      gainPartial.connect(filter);
+      oscPartial.start(startTime);
+      oscPartial.stop(startTime + Math.min(0.7, duration * 0.4));
+    };
+
+    // Westminster 4-note antique chime melody
+    const westminsterNotes = [
+      { freq: 329.63, offset: 0.0, duration: 1.15, vol: 0.075 }, // E4
+      { freq: 415.3, offset: 0.42, duration: 1.15, vol: 0.078 }, // G#4
+      { freq: 369.99, offset: 0.84, duration: 1.15, vol: 0.075 }, // F#4
+      { freq: 246.94, offset: 1.26, duration: 1.55, vol: 0.082 }, // B3
+    ];
+
+    for (const note of westminsterNotes) {
+      scheduleClockStrike(note.freq, now + note.offset, note.duration, note.vol, false);
+    }
+
+    // Two deep resonant antique grandfather bell tolls
+    scheduleClockStrike(164.81, now + 2.05, 2.3, 0.095, true); // E3 toll 1
+    scheduleClockStrike(164.81, now + 3.15, 2.6, 0.09, true); // E3 toll 2
+  }
 }
 
 export const soundEngine = new CozySoundEngine();

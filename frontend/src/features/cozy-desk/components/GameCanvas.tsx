@@ -118,6 +118,7 @@ interface GameCanvasProps {
   todayPlantWaterLabel?: string | null;
   plantWateringTriggerId?: number;
   characterStatuses?: CharacterStatusMap;
+  clockAnnouncement?: { title: string; startTimeLabel: string; triggeredAt: number } | null;
   isModalOpen: boolean;
   isFullscreenMap?: boolean;
   onZoneChange: (zone: RoomZone) => void;
@@ -135,6 +136,7 @@ interface GameCanvasProps {
   onCameraChange?: (cameraState: CameraUiState) => void;
   onCarWrapHome?: (direction: 'left' | 'right') => void;
   onDrivingHudChange?: (hud: DrivingHudState | null) => void;
+  onWorkoutRepsChange?: (reps: number) => void;
 }
 
 import {
@@ -210,6 +212,7 @@ export function GameCanvas({
   onCameraChange,
   onCarWrapHome,
   onDrivingHudChange,
+  onWorkoutRepsChange,
 }: GameCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -241,6 +244,8 @@ export function GameCanvas({
     showerPhase: null,
     showerPhaseElapsed: 0,
     showerPrivacyProgress: 0,
+    workoutElapsed: 0,
+    workoutReps: 0,
   });
 
   const sofaBagRef = useRef<SofaActivity[]>([]);
@@ -320,6 +325,7 @@ export function GameCanvas({
   const greenCarRef = useRef<GreenCarState>(createInitialGreenCar());
   const wrapToastCooldownRef = useRef(0);
   const lastDrivingHudKeyRef = useRef('');
+  const lastWorkoutRepsRef = useRef(0);
   const plantWateringAnimRef = useRef<{ active: boolean; elapsed: number; duration: number }>({
     active: false,
     elapsed: 0,
@@ -415,6 +421,7 @@ export function GameCanvas({
     onCameraChange,
     onCarWrapHome,
     onDrivingHudChange,
+    onWorkoutRepsChange,
   });
   propsRef.current = {
     gameState,
@@ -454,6 +461,7 @@ export function GameCanvas({
     onCameraChange,
     onCarWrapHome,
     onDrivingHudChange,
+    onWorkoutRepsChange,
   };
 
   useCanvasCommandEffects({
@@ -535,6 +543,7 @@ export function GameCanvas({
         currentZoneRef,
         cameraRef,
         lastDrivingHudKeyRef,
+        lastWorkoutRepsRef,
         pickNextSofaActivity,
         sofaRemoteClickedRef,
         sofaActivityDurationRef,

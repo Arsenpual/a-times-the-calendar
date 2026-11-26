@@ -15,17 +15,22 @@ function toCleanStringOrNull(val, maxLen = 240) {
   return trimmed ? trimmed.slice(0, maxLen) : null;
 }
 
+const STANDARD_HUAWEI_FIELDS_TOTAL = 10;
+
 function sanitizeSleepStage(raw) {
   const obj = raw && typeof raw === "object" ? raw : {};
-  const minutes = Math.max(0, Math.round(toFiniteNumberOrNull(obj.minutes) ?? 0));
-  const hrs = Math.floor(minutes / 60);
-  const remMins = minutes % 60;
+  const rawMinutes = toFiniteNumberOrNull(obj.minutes);
+  const minutes = rawMinutes !== null && rawMinutes >= 0 ? Math.round(rawMinutes) : null;
+  const hrs = minutes !== null ? Math.floor(minutes / 60) : 0;
+  const remMins = minutes !== null ? minutes % 60 : 0;
   const fallbackText =
-    minutes > 0
+    minutes !== null && minutes > 0
       ? hrs > 0
         ? `${hrs} ชั่วโมง ${remMins} นาที`
         : `${remMins} นาที`
-      : "";
+      : minutes === 0
+        ? "0 นาที"
+        : null;
   return {
     minutes,
     durationText: toCleanStringOrNull(obj.durationText, 80) ?? fallbackText,
@@ -124,9 +129,119 @@ function formatThaiFullDuration(minutes) {
   return `${mins} นาที`;
 }
 
+function shiftIsoDateDays(dateIso, deltaDays) {
+  if (typeof dateIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) {
+    return dateIso;
+  }
+  const [y, m, d] = dateIso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays));
+  if (Number.isNaN(dt.getTime())) return dateIso;
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function resolveSleepStartDate(wakeDateIso, bedtime, wakeTime) {
+  const start = parseTime24hParts(bedtime);
+  const wake = parseTime24hParts(wakeTime);
+  if (
+    start.hour != null &&
+    start.minute != null &&
+    wake.hour != null &&
+    wake.minute != null
+  ) {
+    const startMins = start.hour * 60 + start.minute;
+    const wakeMins = wake.hour * 60 + wake.minute;
+    if (startMins > wakeMins) {
+      return shiftIsoDateDays(wakeDateIso, -1);
+    }
+  }
+  return wakeDateIso;
+}
+
+function sanitizeStringList(rawList, maxItems = 12, maxLen = 120) {
+  if (!Array.isArray(rawList)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of rawList) {
+    const clean = toCleanStringOrNull(item, maxLen);
+    if (!clean) continue;
+    const lower = clean.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(clean);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+function countStandardHuaweiFields(record) {
+  if (!record || typeof record !== "object") return 0;
+  let count = 0;
+  if (Boolean(record.bedtime || record.wakeTime)) count += 1;
+  if (typeof record.totalSleepMinutes === "number" && record.totalSleepMinutes > 0) count += 1;
+  if (typeof record.sleepScore === "number") count += 1;
+  if (typeof record.percentileBeat === "number") count += 1;
+  if (
+    typeof record.stages?.deep?.minutes === "number" ||
+    typeof record.stages?.deep?.percent === "number"
+  ) {
+    count += 1;
+  }
+  if (
+    typeof record.stages?.light?.minutes === "number" ||
+    typeof record.stages?.light?.percent === "number"
+  ) {
+    count += 1;
+  }
+  if (
+    typeof record.stages?.rem?.minutes === "number" ||
+    typeof record.stages?.rem?.percent === "number"
+  ) {
+    count += 1;
+  }
+  if (typeof record.deepSleepContinuityScore === "number") count += 1;
+  if (typeof record.breathingQualityScore === "number") count += 1;
+  if (typeof record.awakeCount === "number") count += 1;
+  return count;
+}
+
+function sanitizeScanSummary(rawSummary, record) {
+  const obj = rawSummary && typeof rawSummary === "object" ? rawSummary : {};
+  const found = countStandardHuaweiFields(record);
+  const rawConf = String(obj.confidence || "").trim().toLowerCase();
+  const confidence =
+    rawConf === "high" || rawConf === "medium" || rawConf === "low"
+      ? rawConf
+      : found >= 6
+        ? "high"
+        : found >= 2
+          ? "medium"
+          : "low";
+
+  return {
+    isSleepScreenshot: obj.isSleepScreenshot !== false,
+    detectedApp:
+      toCleanStringOrNull(obj.detectedApp, 80) ??
+      toCleanStringOrNull(record.sourceApp, 80) ??
+      "Health App",
+    detectedLanguage: toCleanStringOrNull(obj.detectedLanguage, 24) ?? "unknown",
+    scannableSections: sanitizeStringList(obj.scannableSections, 12, 100),
+    skippedSections: sanitizeStringList(obj.skippedSections, 14, 120),
+    confidence,
+    standardFieldsFound: found,
+    standardFieldsTotal: STANDARD_HUAWEI_FIELDS_TOTAL,
+  };
+}
+
 function buildRawSleepInfographic(record, starRatingHint = null) {
   const header = parseThaiHeaderParts(record.date, record.dateLabel);
-  const mmdd = /^\d{4}-\d{2}-\d{2}$/.test(record.date)
+  const startDate = resolveSleepStartDate(record.date, record.bedtime, record.wakeTime);
+  const startMmdd = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? `${startDate.slice(5, 7)}/${startDate.slice(8, 10)}`
+    : startDate;
+  const wakeMmdd = /^\d{4}-\d{2}-\d{2}$/.test(record.date)
     ? `${record.date.slice(5, 7)}/${record.date.slice(8, 10)}`
     : record.date;
   const start = parseTime24hParts(record.bedtime);
@@ -137,64 +252,81 @@ function buildRawSleepInfographic(record, starRatingHint = null) {
       : null;
 
   const scoreVal = typeof record.sleepScore === "number" ? record.sleepScore : null;
+  const existingStarRating = toFiniteNumberOrNull(
+    record.rawInfographic?.sleep_score_raw?.star_rating_raw?.derived_numeric_rating
+  );
+  const rawStar = starRatingHint !== null ? starRatingHint : existingStarRating;
   const derivedRating =
-    typeof starRatingHint === "number" && starRatingHint >= 0 && starRatingHint <= 5
-      ? Math.round(starRatingHint * 2) / 2
-      : scoreVal != null
-        ? Math.round((scoreVal / 20) * 2) / 2
-        : null;
+    typeof rawStar === "number" && rawStar >= 0 && rawStar <= 5
+      ? Math.round(rawStar * 2) / 2
+      : null;
   const fullStars = derivedRating != null ? Math.floor(derivedRating) : null;
   const halfStars = derivedRating != null ? (derivedRating % 1 >= 0.5 ? 1 : 0) : null;
 
-  const buildStage = (stageKey, defaultLabel, defaultRef) => {
+  const buildStage = (stageKey, defaultLabel) => {
     const st = record.stages?.[stageKey] || {};
-    const mins = Math.max(0, Math.round(st.minutes || 0));
+    const mins =
+      typeof st.minutes === "number" && Number.isFinite(st.minutes) && st.minutes >= 0
+        ? Math.round(st.minutes)
+        : null;
     const pct = typeof st.percent === "number" ? st.percent : null;
-    const rawRef = st.referenceRange || defaultRef;
+    const rawRef = st.referenceRange || null;
     return {
       stage_key: stageKey,
       label_th: defaultLabel,
-      duration_hours: Math.floor(mins / 60),
-      duration_minutes: mins % 60,
+      duration_hours: mins != null ? Math.floor(mins / 60) : null,
+      duration_minutes: mins != null ? mins % 60 : null,
       duration_total_minutes: mins,
-      duration_total_seconds: mins * 60,
-      duration_raw_text: st.durationText || formatThaiFullDuration(mins),
+      duration_total_seconds: mins != null ? mins * 60 : null,
+      duration_raw_text:
+        st.durationText || (mins != null ? formatThaiFullDuration(mins) : null),
       percentage_value: pct,
       percentage_unit: "%",
       percentage_raw_text: pct != null ? `${pct}%` : null,
       status_label_th: st.status ?? null,
-      reference_range: parseReferenceRangeObj(rawRef, "percent", "unit"),
+      reference_range: rawRef ? parseReferenceRangeObj(rawRef, "percent", "unit") : null,
     };
   };
 
+  const scanSummary = sanitizeScanSummary(record.scanSummary, record);
+
   return {
+    schema_version: "2.1-huawei-standard",
+    scan_metadata: {
+      standard: "huawei_health_v1",
+      source_app: record.sourceApp || "Health App",
+      detected_language: scanSummary.detectedLanguage,
+      confidence: scanSummary.confidence,
+      standard_fields_found: scanSummary.standardFieldsFound,
+      standard_fields_total: scanSummary.standardFieldsTotal,
+      scannable_sections: scanSummary.scannableSections,
+      skipped_sections: scanSummary.skippedSections,
+    },
     record_header: header,
     sleep_window: {
-      sleep_start_date: record.date,
+      sleep_start_date: start.time_24h ? startDate : null,
       sleep_start_time_24h: start.time_24h,
       sleep_start_hour: start.hour,
       sleep_start_minute: start.minute,
-      sleep_start_raw_label: start.time_24h ? `${mmdd} เวลานอน ${start.time_24h} น.` : null,
-      wake_up_date: record.date,
+      sleep_start_raw_label: start.time_24h ? `${startMmdd} เวลานอน ${start.time_24h} น.` : null,
+      wake_up_date: wake.time_24h ? record.date : null,
       wake_up_time_24h: wake.time_24h,
       wake_up_hour: wake.hour,
       wake_up_minute: wake.minute,
-      wake_up_raw_label: wake.time_24h ? `${mmdd} ตื่นนอน ${wake.time_24h} น.` : null,
+      wake_up_raw_label: wake.time_24h ? `${wakeMmdd} ตื่นนอน ${wake.time_24h} น.` : null,
     },
     total_sleep_duration: {
-      hours: totalMins != null ? Math.floor(totalMins / 60) : 0,
-      minutes: totalMins != null ? totalMins % 60 : 0,
+      hours: totalMins != null ? Math.floor(totalMins / 60) : null,
+      minutes: totalMins != null ? totalMins % 60 : null,
       total_minutes: totalMins,
       total_seconds: totalMins != null ? totalMins * 60 : null,
       decimal_hours: totalMins != null ? Number((totalMins / 60).toFixed(4)) : null,
       raw_text:
         record.totalSleepText || (totalMins != null ? formatThaiFullDuration(totalMins) : null),
       status_label_th: record.totalSleepStatus ?? null,
-      reference_range: parseReferenceRangeObj(
-        record.totalSleepReference || "6-10 ชม.",
-        "hour",
-        "unit"
-      ),
+      reference_range: record.totalSleepReference
+        ? parseReferenceRangeObj(record.totalSleepReference, "hour", "unit")
+        : null,
     },
     sleep_score_raw: {
       score_value: scoreVal,
@@ -208,14 +340,14 @@ function buildRawSleepInfographic(record, starRatingHint = null) {
       star_rating_raw: {
         full_stars: fullStars,
         half_stars: halfStars,
-        total_displayed_stars: 5,
+        total_displayed_stars: derivedRating != null ? 5 : null,
         derived_numeric_rating: derivedRating,
       },
     },
     sleep_stages_raw: {
-      deep_sleep: buildStage("deep", "นอนหลับสนิท", "20-60%"),
-      light_sleep: buildStage("light", "นอนน้อย", "<55%"),
-      rem_sleep: buildStage("rem", "นอนหลับ REM", "10-30%"),
+      deep_sleep: buildStage("deep", "นอนหลับสนิท"),
+      light_sleep: buildStage("light", "นอนหลับตื้น"),
+      rem_sleep: buildStage("rem", "นอนหลับ REM"),
     },
     sub_metrics_raw: {
       deep_sleep_continuity: {
@@ -228,7 +360,9 @@ function buildRawSleepInfographic(record, starRatingHint = null) {
             ? `${record.deepSleepContinuityScore} คะแนน`
             : null,
         status_label_th: record.deepSleepContinuityStatus ?? null,
-        reference_range: parseReferenceRangeObj("70-100 คะแนน", "คะแนน", "unit_th"),
+        reference_range: record.deepSleepContinuityReference
+          ? parseReferenceRangeObj(record.deepSleepContinuityReference, "คะแนน", "unit_th")
+          : null,
       },
       breathing_quality: {
         metric_key: "breathing_quality",
@@ -238,7 +372,9 @@ function buildRawSleepInfographic(record, starRatingHint = null) {
         raw_text:
           record.breathingQualityScore != null ? `${record.breathingQualityScore} คะแนน` : null,
         status_label_th: record.breathingQualityStatus ?? null,
-        reference_range: parseReferenceRangeObj("70-100 คะแนน", "คะแนน", "unit_th"),
+        reference_range: record.breathingQualityReference
+          ? parseReferenceRangeObj(record.breathingQualityReference, "คะแนน", "unit_th")
+          : null,
       },
       awakenings_count: {
         metric_key: "awakenings",
@@ -247,7 +383,9 @@ function buildRawSleepInfographic(record, starRatingHint = null) {
         unit_th: "ครั้ง",
         raw_text: record.awakeCount != null ? `${record.awakeCount} ครั้ง` : null,
         status_label_th: record.awakeStatus ?? null,
-        reference_range: parseReferenceRangeObj("0-1 ครั้ง", "ครั้ง", "unit_th"),
+        reference_range: record.awakeReference
+          ? parseReferenceRangeObj(record.awakeReference, "ครั้ง", "unit_th")
+          : null,
       },
     },
   };
@@ -265,16 +403,13 @@ function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(
   const light = sanitizeSleepStage(stagesObj.light);
   const rem = sanitizeSleepStage(stagesObj.rem);
 
-  const stageSum = deep.minutes + light.minutes + rem.minutes;
+  const stageValues = [deep.minutes, light.minutes, rem.minutes].filter(
+    (v) => typeof v === "number" && v >= 0
+  );
+  const stageSum = stageValues.reduce((sum, v) => sum + v, 0);
   const totalSleepMinutes =
-    toFiniteNumberOrNull(obj.totalSleepMinutes) ?? (stageSum > 0 ? stageSum : null);
-
-  const rawInsights = Array.isArray(obj.appInsights)
-    ? obj.appInsights
-        .map((s) => toCleanStringOrNull(s, 400))
-        .filter(Boolean)
-        .slice(0, 8)
-    : [];
+    toFiniteNumberOrNull(obj.totalSleepMinutes) ??
+    (stageValues.length > 0 && stageSum > 0 ? stageSum : null);
 
   let aiAnalysis = null;
   if (obj.aiAnalysis && typeof obj.aiAnalysis === "object") {
@@ -320,17 +455,29 @@ function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(
     stages: { deep, light, rem },
     deepSleepContinuityScore: toFiniteNumberOrNull(obj.deepSleepContinuityScore),
     deepSleepContinuityStatus: toCleanStringOrNull(obj.deepSleepContinuityStatus, 40),
+    deepSleepContinuityReference:
+      toCleanStringOrNull(obj.deepSleepContinuityReference, 60) ??
+      toCleanStringOrNull(obj.rawInfographic?.sub_metrics_raw?.deep_sleep_continuity?.reference_range?.raw_text, 60),
     awakeCount: toFiniteNumberOrNull(obj.awakeCount),
     awakeStatus: toCleanStringOrNull(obj.awakeStatus, 40),
+    awakeReference:
+      toCleanStringOrNull(obj.awakeReference, 60) ??
+      toCleanStringOrNull(obj.rawInfographic?.sub_metrics_raw?.awakenings_count?.reference_range?.raw_text, 60),
     breathingQualityScore: toFiniteNumberOrNull(obj.breathingQualityScore),
     breathingQualityStatus: toCleanStringOrNull(obj.breathingQualityStatus, 40),
+    breathingQualityReference:
+      toCleanStringOrNull(obj.breathingQualityReference, 60) ??
+      toCleanStringOrNull(obj.rawInfographic?.sub_metrics_raw?.breathing_quality?.reference_range?.raw_text, 60),
     previousDayStressScore: null,
     appInsights: [],
     appRecommendation: null,
+    scanSummary: null,
     aiAnalysis,
     createdAt: toCleanStringOrNull(obj.createdAt, 40) ?? nowIso,
     updatedAt: nowIso,
   };
+
+  baseRecord.scanSummary = sanitizeScanSummary(obj.scanSummary, baseRecord);
 
   const starHint = toFiniteNumberOrNull(
     obj.rawInfographic?.sleep_score_raw?.star_rating_raw?.derived_numeric_rating
@@ -340,9 +487,24 @@ function sanitizeSleepRecord(raw, fallbackDate = new Date().toISOString().slice(
   return baseRecord;
 }
 
+const SLEEP_DATE_DETECT_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    isSleepScreenshot: { type: "BOOLEAN" },
+    date: { type: "STRING" },
+    dateLabel: { type: "STRING" },
+  },
+  required: ["isSleepScreenshot", "date"],
+};
+
 const SLEEP_EXTRACT_RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
+    isSleepScreenshot: { type: "BOOLEAN" },
+    detectedLanguage: { type: "STRING" },
+    confidence: { type: "STRING" },
+    scannableSections: { type: "ARRAY", items: { type: "STRING" } },
+    skippedSections: { type: "ARRAY", items: { type: "STRING" } },
     date: { type: "STRING" },
     dateLabel: { type: "STRING" },
     sourceApp: { type: "STRING" },
@@ -372,12 +534,15 @@ const SLEEP_EXTRACT_RESPONSE_SCHEMA = {
     remReference: { type: "STRING" },
     deepSleepContinuityScore: { type: "NUMBER" },
     deepSleepContinuityStatus: { type: "STRING" },
+    deepSleepContinuityReference: { type: "STRING" },
     awakeCount: { type: "NUMBER" },
     awakeStatus: { type: "STRING" },
+    awakeReference: { type: "STRING" },
     breathingQualityScore: { type: "NUMBER" },
     breathingQualityStatus: { type: "STRING" },
+    breathingQualityReference: { type: "STRING" },
   },
-  required: ["date", "sourceApp", "totalSleepMinutes"],
+  required: ["isSleepScreenshot", "sourceApp", "scannableSections", "skippedSections"],
 };
 
 const SLEEP_ANALYZE_RESPONSE_SCHEMA = {
@@ -412,9 +577,21 @@ function formatSleepLogsContext(sleepLogs) {
     const light = log.stages?.light;
     const rem = log.stages?.rem;
     const stageParts = [];
-    if (deep) stageParts.push(`หลับลึก ${deep.durationText || `${deep.minutes ?? 0}น.`}${deep.percent != null ? ` (${deep.percent}%)` : ""}`);
-    if (light) stageParts.push(`หลับตื้น ${light.durationText || `${light.minutes ?? 0}น.`}${light.percent != null ? ` (${light.percent}%)` : ""}`);
-    if (rem) stageParts.push(`REM ${rem.durationText || `${rem.minutes ?? 0}น.`}${rem.percent != null ? ` (${rem.percent}%)` : ""}`);
+    if (deep && (deep.minutes != null || deep.percent != null)) {
+      stageParts.push(
+        `หลับลึก ${deep.durationText || (deep.minutes != null ? `${deep.minutes}น.` : "—")}${deep.percent != null ? ` (${deep.percent}%)` : ""}`
+      );
+    }
+    if (light && (light.minutes != null || light.percent != null)) {
+      stageParts.push(
+        `หลับตื้น ${light.durationText || (light.minutes != null ? `${light.minutes}น.` : "—")}${light.percent != null ? ` (${light.percent}%)` : ""}`
+      );
+    }
+    if (rem && (rem.minutes != null || rem.percent != null)) {
+      stageParts.push(
+        `REM ${rem.durationText || (rem.minutes != null ? `${rem.minutes}น.` : "—")}${rem.percent != null ? ` (${rem.percent}%)` : ""}`
+      );
+    }
     const extraParts = [];
     if (typeof log.deepSleepContinuityScore === "number") extraParts.push(`ต่อเนื่องหลับลึก ${log.deepSleepContinuityScore}`);
     if (typeof log.breathingQualityScore === "number") extraParts.push(`หายใจ ${log.breathingQualityScore}`);
@@ -424,8 +601,8 @@ function formatSleepLogsContext(sleepLogs) {
     return `- วันที่ ${log.date} (${log.dateLabel || log.date}): ${score} | ${dur} | ${windowStr}${stagesText}${extraText}`;
   });
   return [
-    `ข้อมูลบันทึกการนอนประจำวันจริง (.json ที่เก็บสะสมทั้งหมด ${logs.length} วัน):`,
-    "- ห้ามกล่าวถึงข้อมูลที่ไม่เกี่ยวข้องกับการนอนเด็ดขาด (เช่น ความเครียด แม้แต่คำว่า 'ไม่พบข้อมูลความเครียด' ก็ห้ามใส่, ห้ามใส่ชื่อแอป, ชื่อบัญชีผู้ใช้, น้ำตาลในเลือด/อินซูลิน, หรือคำแนะนำสุขภาพอื่นๆ)",
+    `ข้อมูลบันทึกการนอนประจำวันจริง (.json มาตรฐาน Huawei Health ทั้งหมด ${logs.length} วัน):`,
+    "- ห้ามกล่าวถึงข้อมูลที่ไม่เกี่ยวข้องกับการนอนเด็ดขาด (เช่น ข้อมูลส่วนตัว/ชื่อบัญชีผู้ใช้ หรือคำแนะนำสุขภาพที่ไม่ได้อยู่ในข้อมูลจริง)",
     ...lines,
   ].join("\n");
 }
@@ -488,11 +665,11 @@ function buildDeterministicSleepSummary(sleepLogs) {
   const durations = logs
     .map((l) => l.totalSleepMinutes)
     .filter((n) => typeof n === "number" && n > 0);
-  const deepMins = logs.map((l) => l.stages?.deep?.minutes).filter((n) => typeof n === "number");
+  const deepMins = logs.map((l) => l.stages?.deep?.minutes).filter((n) => typeof n === "number" && n > 0);
   const deepPcts = logs.map((l) => l.stages?.deep?.percent).filter((n) => typeof n === "number");
-  const lightMins = logs.map((l) => l.stages?.light?.minutes).filter((n) => typeof n === "number");
+  const lightMins = logs.map((l) => l.stages?.light?.minutes).filter((n) => typeof n === "number" && n > 0);
   const lightPcts = logs.map((l) => l.stages?.light?.percent).filter((n) => typeof n === "number");
-  const remMins = logs.map((l) => l.stages?.rem?.minutes).filter((n) => typeof n === "number");
+  const remMins = logs.map((l) => l.stages?.rem?.minutes).filter((n) => typeof n === "number" && n > 0);
   const remPcts = logs.map((l) => l.stages?.rem?.percent).filter((n) => typeof n === "number");
   const continuities = logs
     .map((l) => l.deepSleepContinuityScore)
@@ -594,11 +771,17 @@ function buildDeterministicSleepSummary(sleepLogs) {
 }
 
 module.exports = {
+  STANDARD_HUAWEI_FIELDS_TOTAL,
   toFiniteNumberOrNull,
   toCleanStringOrNull,
+  shiftIsoDateDays,
+  resolveSleepStartDate,
   sanitizeSleepStage,
+  sanitizeScanSummary,
+  countStandardHuaweiFields,
   buildRawSleepInfographic,
   sanitizeSleepRecord,
+  SLEEP_DATE_DETECT_RESPONSE_SCHEMA,
   SLEEP_EXTRACT_RESPONSE_SCHEMA,
   SLEEP_ANALYZE_RESPONSE_SCHEMA,
   formatSleepLogsContext,

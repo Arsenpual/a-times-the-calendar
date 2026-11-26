@@ -5,6 +5,7 @@ import {
   Expand,
   HelpCircle,
   LampDesk,
+  Menu,
   Moon,
   Sparkles,
   Sun,
@@ -20,6 +21,8 @@ interface TopHudProps {
   timeOfDay: TimeOfDay;
   muted: boolean;
   showHelp: boolean;
+  navigationExpanded?: boolean;
+  onToggleNavigation?: () => void;
   hasLoggedTodaySleep?: boolean;
   todaySleepLabel?: string | null;
   onOpenSleepQuest?: () => void;
@@ -47,6 +50,8 @@ export function TopHud({
   timeOfDay,
   muted,
   showHelp,
+  navigationExpanded = false,
+  onToggleNavigation,
   hasLoggedTodaySleep = false,
   todaySleepLabel = null,
   onOpenSleepQuest,
@@ -65,8 +70,20 @@ export function TopHud({
 
   return (
     <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[#2F2823] bg-[#181512] px-4 sm:px-6">
-      {/* Left: Brand & quiet unboxed zone indicator */}
+      {/* Left: App navigation toggle, brand & quiet unboxed zone indicator */}
       <div className="flex min-w-0 items-center gap-3">
+        {onToggleNavigation && (
+          <button
+            type="button"
+            onClick={onToggleNavigation}
+            aria-expanded={navigationExpanded}
+            aria-label={navigationExpanded ? 'ซ่อนแถบนำทางหลัก' : 'เปิดแถบนำทางหลัก'}
+            title={navigationExpanded ? 'ซ่อนแถบนำทางหลัก' : 'เปิดแถบนำทางหลัก'}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[#362E28] bg-[#221D19] text-[#D8CEC2] transition-colors hover:border-[#594B40] hover:text-[#FAF6F0]"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+        )}
         <span className="font-display shrink-0 whitespace-nowrap text-base font-bold tracking-tight text-[#FAF6F0]">
           Cozy Desk
         </span>

@@ -22,45 +22,64 @@ function rejectDevMockupsInProduction() {
   };
 }
 
+function parseBundledWebConfig(rawValue) {
+  if (!rawValue || typeof rawValue !== "string") return {};
+  let trimmed = rawValue.trim();
+  if (!trimmed) return {};
+  if (
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  for (const candidate of [trimmed, Buffer.from(trimmed, "base64").toString("utf8")]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Try next candidate
+    }
+  }
+  return {};
+}
+
 export default defineConfig(({ command, mode }) => {
-  // Load .env from both repository root and frontend/ directory, plus process.env (AI Studio Secrets).
-  // Prefix filter "" loads all keys into `mergedEnv` here in Node, and we selectively pick ONLY
-  // public Firebase Web Client identifiers below so server-only secrets (GEMINI_API_KEY,
-  // GOOGLE_APPLICATION_CREDENTIALS_JSON, TELEGRAM_BOT_TOKEN, etc.) are NEVER exposed to the browser bundle.
   const rootEnv = loadEnv(mode, rootDir, "");
   const localEnv = loadEnv(mode, frontendDir, "");
   const mergedEnv = { ...rootEnv, ...localEnv, ...process.env };
 
-  const resolvePublicFirebaseVar = (viteKey, plainKey) =>
-    mergedEnv[viteKey] || mergedEnv[plainKey] || "";
+  const bundledWebConfig = parseBundledWebConfig(
+    mergedEnv.FIREBASE_WEB_CONFIG_JSON || mergedEnv.VITE_FIREBASE_CONFIG_JSON
+  );
+
+  const resolvePublicFirebaseVar = (viteKey, plainKey, camelKey) =>
+    mergedEnv[viteKey] ||
+    mergedEnv[plainKey] ||
+    bundledWebConfig[viteKey] ||
+    bundledWebConfig[plainKey] ||
+    bundledWebConfig[camelKey] ||
+    "";
 
   const firebaseDefines = {};
   const publicPairs = [
-    ["VITE_FIREBASE_API_KEY", "FIREBASE_API_KEY"],
-    ["VITE_FIREBASE_AUTH_DOMAIN", "FIREBASE_AUTH_DOMAIN"],
-    ["VITE_FIREBASE_PROJECT_ID", "FIREBASE_PROJECT_ID"],
-    ["VITE_FIREBASE_STORAGE_BUCKET", "FIREBASE_STORAGE_BUCKET"],
-    ["VITE_FIREBASE_MESSAGING_SENDER_ID", "FIREBASE_MESSAGING_SENDER_ID"],
-    ["VITE_FIREBASE_APP_ID", "FIREBASE_APP_ID"],
-    ["VITE_FIREBASE_VAPID_KEY", "FIREBASE_VAPID_KEY"],
+    ["VITE_FIREBASE_API_KEY", "FIREBASE_API_KEY", "apiKey"],
+    ["VITE_FIREBASE_AUTH_DOMAIN", "FIREBASE_AUTH_DOMAIN", "authDomain"],
+    ["VITE_FIREBASE_PROJECT_ID", "FIREBASE_PROJECT_ID", "projectId"],
+    ["VITE_FIREBASE_STORAGE_BUCKET", "FIREBASE_STORAGE_BUCKET", "storageBucket"],
+    ["VITE_FIREBASE_MESSAGING_SENDER_ID", "FIREBASE_MESSAGING_SENDER_ID", "messagingSenderId"],
+    ["VITE_FIREBASE_APP_ID", "FIREBASE_APP_ID", "appId"],
+    ["VITE_FIREBASE_VAPID_KEY", "FIREBASE_VAPID_KEY", "vapidKey"],
   ];
-  for (const [viteKey, plainKey] of publicPairs) {
-    const val = resolvePublicFirebaseVar(viteKey, plainKey);
+  for (const [viteKey, plainKey, camelKey] of publicPairs) {
+    const val = resolvePublicFirebaseVar(viteKey, plainKey, camelKey);
     if (val) {
       firebaseDefines[`import.meta.env.${viteKey}`] = JSON.stringify(val);
     }
   }
 
   return {
-    // GitHub Pages เสิร์ฟ repo ที่ไม่ใช่ <username>.github.io จาก subpath
-    // /<repo-name>/ เสมอ (ไม่ใช่ root domain) — ถ้าไม่ตั้ง base ให้ตรง ไฟล์ JS/CSS
-    // ที่ build ออกมาจะอ้าง path แบบ "/assets/..." (root) ผิดที่ทำให้หน้าเว็บ
-    // ขึ้นขาว 404 ทุกไฟล์ทันทีที่เปิดจริงบน Pages (ถึงแม้ npm run dev ในเครื่อง
-    // จะทำงานปกติก็ตาม เพราะ dev server เสิร์ฟจาก root เสมอ)
-    //
-    // ตั้งผ่าน env var แทนที่จะ hardcode ชื่อ repo ตรงๆ เพื่อให้ build ในเครื่อง
-    // (npm run dev/build ปกติ) ไม่ต้องรู้จักชื่อ repo เลย — ตั้งค่าจริงแค่ตอน
-    // GitHub Actions build เท่านั้น (ดู .github/workflows/deploy-frontend.yml)
     base: mergedEnv.VITE_BASE_PATH || "/",
     plugins: [react(), ...(command === "build" ? [rejectDevMockupsInProduction()] : [])],
     resolve: {
@@ -74,7 +93,8 @@ export default defineConfig(({ command, mode }) => {
     define: firebaseDefines,
     server: {
       host: "0.0.0.0",
-      port: Number(process.env.PORT) || 5173,
+      port: 3000,
+      allowedHosts: "all",
       proxy: {
         "/api": {
           target: mergedEnv.VITE_BACKEND_PROXY_TARGET || "http://localhost:4000",
@@ -85,20 +105,6 @@ export default defineConfig(({ command, mode }) => {
           changeOrigin: true,
         },
       },
-      // Phase 2 (Firebase Auth): Chrome's default Cross-Origin-Opener-Policy
-      // blocks Firebase's internal poll of the sign-in popup's window.closed
-      // state during signInWithPopup()/reauthenticateWithPopup() — this is a
-      // known, harmless warning (sign-in still completes normally either
-      // way; see firebase/firebase-js-sdk#8295, #8541) but the header below
-      // silences it cleanly by explicitly allowing same-origin popups rather
-      // than leaving the browser's stricter default in place.
-      //
-      // Note: a signInWithRedirect-based flow was tried as an alternative
-      // (avoids this warning entirely) but broke sign-in outright on
-      // localhost — getRedirectResult() reliably returned null due to
-      // third-party storage partitioning between Firebase's auth domain and
-      // localhost. Popup + this cosmetic warning is the reliable option; see
-      // google-calendar.js's module comment for the full story.
       headers: {
         "Cross-Origin-Opener-Policy": "same-origin-allow-popups"
       }

@@ -134,6 +134,7 @@ export type PlayerSeatId =
   | 'sofa'
   | 'bedroom_bed'
   | 'green_car'
+  | 'gym_barbell'
   | DiningChairSeatId;
 
 export interface GreenCarState {
@@ -179,6 +180,7 @@ export type InteractableId =
   | 'bedroom_bed'
   | 'green_car'
   | 'porch_plants'
+  | 'gym_barbell'
   | DiningChairSeatId;
 
 export interface DailyPlantWateringRecord {
@@ -290,8 +292,8 @@ export interface GmailMessageDetail extends GmailMessageSummary {
 }
 
 export interface SleepStageMetric {
-  minutes: number;
-  durationText: string;
+  minutes: number | null;
+  durationText: string | null;
   percent: number | null;
   status: string | null;
   referenceRange: string | null;
@@ -319,11 +321,11 @@ export interface RawSleepReferenceRange {
 export interface RawSleepStageEntry {
   stage_key: 'deep' | 'light' | 'rem';
   label_th: string;
-  duration_hours: number;
-  duration_minutes: number;
-  duration_total_minutes: number;
-  duration_total_seconds: number;
-  duration_raw_text: string;
+  duration_hours: number | null;
+  duration_minutes: number | null;
+  duration_total_minutes: number | null;
+  duration_total_seconds: number | null;
+  duration_raw_text: string | null;
   percentage_value: number | null;
   percentage_unit: string;
   percentage_raw_text: string | null;
@@ -341,7 +343,29 @@ export interface RawSleepSubMetricEntry {
   reference_range: RawSleepReferenceRange | null;
 }
 
+export interface SleepScanSummary {
+  isSleepScreenshot: boolean;
+  detectedApp: string;
+  detectedLanguage: string;
+  scannableSections: string[];
+  skippedSections: string[];
+  confidence: 'high' | 'medium' | 'low';
+  standardFieldsFound: number;
+  standardFieldsTotal: number;
+}
+
 export interface RawSleepInfographic {
+  schema_version?: string;
+  scan_metadata?: {
+    standard: 'huawei_health_v1';
+    source_app: string;
+    detected_language: string;
+    confidence: 'high' | 'medium' | 'low';
+    standard_fields_found: number;
+    standard_fields_total: number;
+    scannable_sections: string[];
+    skipped_sections: string[];
+  };
   record_header: {
     date_iso: string;
     date_short_th: string;
@@ -349,20 +373,20 @@ export interface RawSleepInfographic {
     raw_header_text: string;
   };
   sleep_window: {
-    sleep_start_date: string;
+    sleep_start_date: string | null;
     sleep_start_time_24h: string | null;
     sleep_start_hour: number | null;
     sleep_start_minute: number | null;
     sleep_start_raw_label: string | null;
-    wake_up_date: string;
+    wake_up_date: string | null;
     wake_up_time_24h: string | null;
     wake_up_hour: number | null;
     wake_up_minute: number | null;
     wake_up_raw_label: string | null;
   };
   total_sleep_duration: {
-    hours: number;
-    minutes: number;
+    hours: number | null;
+    minutes: number | null;
     total_minutes: number | null;
     total_seconds: number | null;
     decimal_hours: number | null;
@@ -381,7 +405,7 @@ export interface RawSleepInfographic {
     star_rating_raw: {
       full_stars: number | null;
       half_stars: number | null;
-      total_displayed_stars: number;
+      total_displayed_stars: number | null;
       derived_numeric_rating: number | null;
     };
   };
@@ -418,13 +442,17 @@ export interface DailySleepRecord {
   };
   deepSleepContinuityScore: number | null;
   deepSleepContinuityStatus: string | null;
+  deepSleepContinuityReference?: string | null;
   awakeCount: number | null;
   awakeStatus: string | null;
+  awakeReference?: string | null;
   breathingQualityScore: number | null;
   breathingQualityStatus: string | null;
+  breathingQualityReference?: string | null;
   previousDayStressScore: number | null;
   appInsights: string[];
   appRecommendation: string | null;
+  scanSummary?: SleepScanSummary | null;
   rawInfographic?: RawSleepInfographic | null;
   aiAnalysis?: SleepAiAnalysis | null;
   createdAt: string;
@@ -506,6 +534,8 @@ export interface PlayerState {
   showerPhase: ShowerPhase | null;
   showerPhaseElapsed: number;
   showerPrivacyProgress: number;
+  workoutElapsed: number;
+  workoutReps: number;
 }
 
 export interface ChatMessage {

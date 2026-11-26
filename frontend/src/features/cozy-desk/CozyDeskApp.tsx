@@ -32,6 +32,7 @@ import type {
   WorldToast,
 } from './types/game';
 import { loadLocalSleepLogs } from './api/sleepLogsApi';
+import { getYouTubeAccessToken } from './api/youtubeAuth';
 import { soundEngine } from './lib/sound';
 import type { GoogleTaskListWithTasks } from './api/tasksApi';
 import {
@@ -48,17 +49,33 @@ import {
   CozyWorldToastAndHelp,
 } from './components/CozyViewportChrome';
 import { CozyModalsLayer } from './components/CozyModalsLayer';
+import { GrandfatherClockBanner } from './components/GrandfatherClockBanner';
 import { useCozyQuestsAndStatuses } from './hooks/useCozyQuestsAndStatuses';
 import { useCozyWorldInteractions } from './hooks/useCozyWorldInteractions';
 import { useCozyTaskDeliveryAndScheduler } from './hooks/useCozyTaskDeliveryAndScheduler';
 import { useCozyAssistantStreaming } from './hooks/useCozyAssistantStreaming';
+import {
+  useGrandfatherClockActivities,
+  type ActivityModeEvent,
+} from './hooks/useGrandfatherClockActivities';
 
 export interface CozyDeskAppProps {
   isVisible?: boolean;
   firebaseUser?: User | null;
+  activities?: ActivityModeEvent[];
+  archivedActivityIds?: Set<string>;
+  navigationExpanded?: boolean;
+  onToggleNavigation?: () => void;
 }
 
-export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: CozyDeskAppProps) {
+export default function CozyDeskApp({
+  isVisible = true,
+  firebaseUser = null,
+  activities = [],
+  archivedActivityIds,
+  navigationExpanded = false,
+  onToggleNavigation,
+}: CozyDeskAppProps) {
   const [gameState, setGameState] = useState<GameState>('TITLE_MENU');
   const [zone, setZone] = useState<RoomZone>('living');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('afternoon');
@@ -70,6 +87,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
     useState<InteractableObject | null>(null);
   const [playerSeat, setPlayerSeat] = useState<PlayerSeatId | null>(null);
   const [drivingHud, setDrivingHud] = useState<DrivingHudState | null>(null);
+  const [workoutReps, setWorkoutReps] = useState(0);
   const [assistantMood, setAssistantMood] = useState<AssistantMood>('idle');
   const [minaBubbleText, setMinaBubbleText] = useState<string | null>(null);
   const [minaMission, setMinaMission] = useState<MinaPinMission | null>(null);
@@ -122,9 +140,11 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
   const allTvFeed = [...customTvFeed, ...DEFAULT_TV_FEED];
   const [activeTvItem, setActiveTvItem] = useState<TvFeedItem | null>(null);
 
-  // Google Auth for personalized YouTube feed, Google Tasks, Google Drive & Gmail (access token kept in memory only)
+  // Google Auth for personalized YouTube feed, Google Tasks, Google Drive & Gmail (persisted per uid until expiry)
   const [googleUser, setGoogleUser] = useState<User | null>(firebaseUser);
-  const [youtubeToken, setYoutubeToken] = useState<string | null>(null);
+  const [youtubeToken, setYoutubeToken] = useState<string | null>(() =>
+    getYouTubeAccessToken(firebaseUser?.uid)
+  );
   const [isSigningInGoogle, setIsSigningInGoogle] = useState(false);
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const [syncedTaskLists, setSyncedTaskLists] = useState<GoogleTaskListWithTasks[] | null>(null);
@@ -201,6 +221,18 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
   });
 
   const {
+    activeClockAnnouncement,
+    completeClockAnnouncement,
+    handleInteractClock,
+  } = useGrandfatherClockActivities({
+    activities,
+    archivedActivityIds,
+    isVisible,
+    gameState,
+    showToast,
+  });
+
+  const {
     enterFullscreenMap,
     exitFullscreenMap,
     toggleFullscreenMap,
@@ -270,6 +302,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
     setTipIndex,
     setGmailFreshArrival,
     handleWaterPorchPlants,
+    handleInteractClock,
     setCustomTvFeed,
     setActiveTvItem,
     setIsSigningInGoogle,
@@ -409,7 +442,11 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
   if (gameState === 'TITLE_MENU') {
     return (
       <div className="cozy-desk-mode flex h-full w-full flex-col overflow-hidden bg-[#1C1917] text-[#F5EFE6]">
-        <TitleScreen onStart={handleStartGame} />
+        <TitleScreen
+          onStart={handleStartGame}
+          navigationExpanded={navigationExpanded}
+          onToggleNavigation={onToggleNavigation}
+        />
       </div>
     );
   }
@@ -428,6 +465,8 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
           timeOfDay={timeOfDay}
           muted={muted}
           showHelp={showHelp}
+          navigationExpanded={navigationExpanded}
+          onToggleNavigation={onToggleNavigation}
           hasLoggedTodaySleep={hasLoggedTodaySleep}
           todaySleepLabel={todaySleepSummary?.hudLabel ?? null}
           onOpenSleepQuest={() => {
@@ -507,6 +546,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
                   mailboxUnreadCount={effectiveMailboxUnreadCount}
                   mailboxFreshArrival={gmailFreshArrival}
                   characterStatuses={characterStatuses}
+                  clockAnnouncement={activeClockAnnouncement}
                   isModalOpen={
                     !isVisible ||
                     isTvOpen ||
@@ -534,6 +574,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
                   onCameraChange={setCameraUi}
                   onCarWrapHome={handleCarWrapHome}
                   onDrivingHudChange={setDrivingHud}
+                  onWorkoutRepsChange={setWorkoutReps}
                 />
 
                 {/* Minimal 2-button floating chooser when clicking Mina at her computer desk */}
@@ -584,6 +625,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
                 isWorking={isWorking}
                 playerSeat={playerSeat}
                 drivingHud={drivingHud}
+                workoutReps={workoutReps}
                 nearestInteractable={nearestInteractable}
                 effectiveMailboxUnreadCount={effectiveMailboxUnreadCount}
                 hasLoggedTodaySleep={hasLoggedTodaySleep}
@@ -602,6 +644,7 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
               isWorking={isWorking}
               playerSeat={playerSeat}
               drivingHud={drivingHud}
+              workoutReps={workoutReps}
               nearestInteractable={nearestInteractable}
               effectiveMailboxUnreadCount={effectiveMailboxUnreadCount}
               hasLoggedTodaySleep={hasLoggedTodaySleep}
@@ -613,6 +656,11 @@ export default function CozyDeskApp({ isVisible = true, firebaseUser = null }: C
               onInteract={handleInteract}
             />
           )}
+
+          <GrandfatherClockBanner
+            announcement={activeClockAnnouncement}
+            onComplete={completeClockAnnouncement}
+          />
 
           <CozyWorldToastAndHelp
             toast={toast}

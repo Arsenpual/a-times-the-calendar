@@ -71,6 +71,7 @@ import {
   drawAntigravityProximityZone,
   drawFireplace,
   drawMinaProximityZone,
+  drawPendulumClockAnnouncement,
   drawPinboard,
   drawRugs,
   drawWalls,
@@ -124,6 +125,7 @@ export interface RenderContextState {
   todayPlantWaterLabel?: string | null;
   plantWateringProgress?: number;
   characterStatuses?: CharacterStatusMap;
+  clockAnnouncement?: { title: string; startTimeLabel: string; triggeredAt: number } | null;
   camera: CameraTransform;
   inspectHover?: InspectHoverRenderState | null;
   viewW?: number;
@@ -498,7 +500,14 @@ export function renderHouseScene(
     state.player.isShowering || state.player.showerPrivacyProgress > 0.05;
   ctx.save();
   ctx.translate(CORE_OFFSET_X, 0);
-  drawWalls(ctx, windowSkyTime, state.tick, state.extraPinCount, isPinboardActive);
+  drawWalls(
+    ctx,
+    windowSkyTime,
+    state.tick,
+    state.extraPinCount,
+    isPinboardActive,
+    Boolean(state.clockAnnouncement)
+  );
   ctx.restore();
   drawWestBedroomWalls(ctx, windowSkyTime, state.tick, isSleepingInBed);
   drawLowerRoomWalls(ctx, state.timeOfDay, state.tick, isShowerRunning);
@@ -531,11 +540,13 @@ export function renderHouseScene(
   ctx.restore();
   drawKitchenFurniture(ctx, state.tick);
   drawBathroomFurniture(ctx, state.tick, state.player);
+  const isLiftingBarbell = state.player.isSitting && state.player.seat === 'gym_barbell';
   drawSouthRoomsFurniture(
     ctx,
     state.tick,
     Boolean(state.hasWateredPlantsToday),
-    state.plantWateringProgress ?? 0
+    state.plantWateringProgress ?? 0,
+    isLiftingBarbell
   );
 
   const minaBehindDesk = state.mina.x > DIVIDER_COL * TILE && state.mina.y < 3.4 * TILE;
@@ -735,6 +746,19 @@ export function renderHouseScene(
     state.todayPlantWaterLabel ?? null,
     isNearPorchPlants || (state.plantWateringProgress ?? 0) > 0
   );
+
+  // 7e. Living Room antique grandfather pendulum clock Activity Mode chime nameplate
+  if (state.clockAnnouncement) {
+    drawPendulumClockAnnouncement(
+      ctx,
+      CORE_OFFSET_X + 6.12 * TILE,
+      14,
+      state.clockAnnouncement.title,
+      state.clockAnnouncement.startTimeLabel,
+      state.tick,
+      Math.max(0, Date.now() - state.clockAnnouncement.triggeredAt)
+    );
+  }
 
   // 8. Proximity-only, single-character, bottom-to-top non-overlapping overhead status plate & bubble
   drawActiveCharacterOverlay(ctx, state);

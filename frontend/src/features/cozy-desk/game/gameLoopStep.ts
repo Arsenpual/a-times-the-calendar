@@ -122,6 +122,7 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
     currentZoneRef,
     cameraRef,
     lastDrivingHudKeyRef,
+    lastWorkoutRepsRef,
     pickNextSofaActivity,
     sofaRemoteClickedRef,
     sofaActivityDurationRef,
@@ -364,6 +365,24 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
         }
       }
 
+      // Advance Olympic barbell overhead press cycle & rep counter in the Home Gym
+      if (state === 'PLAYING' && !modalOpen && player.isSitting && player.seat === 'gym_barbell') {
+        const REP_CYCLE_SEC = 2.2;
+        player.workoutElapsed += dt;
+        const nextReps = Math.floor((player.workoutElapsed + (REP_CYCLE_SEC - 1.02)) / REP_CYCLE_SEC);
+        if (nextReps > player.workoutReps) {
+          player.workoutReps = nextReps;
+          soundEngine.playLiftRep();
+        }
+        if (player.workoutReps !== lastWorkoutRepsRef.current) {
+          lastWorkoutRepsRef.current = player.workoutReps;
+          propsRef.current.onWorkoutRepsChange?.(player.workoutReps);
+        }
+      } else if (lastWorkoutRepsRef.current !== 0) {
+        lastWorkoutRepsRef.current = 0;
+        propsRef.current.onWorkoutRepsChange?.(0);
+      }
+
       // Keep player standing and facing Mina continuously during active conversation
       if (state === 'WORKING' && !modalOpen) {
         player.isSitting = false;
@@ -522,7 +541,7 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
         });
       }
 
-      // 2-second hover object inspection (currently active for bathroom objects)
+      // 2-second hover object inspection (all interactable objects + bathroom/room details)
       let inspectHover: InspectHoverRenderState | null = null;
       const canInspect =
         (state === 'PLAYING' || state === 'WORKING') &&
@@ -533,7 +552,7 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
       if (canInspect) {
         const { vx: pVx, vy: pVy } = hoverPointerRef.current;
         const { wx, wy } = viewportToWorld(pVx, pVy, cam.x, cam.y, cam.zoom, vp);
-        const hitInspectable = getInspectableAtPoint(wx, wy);
+        const hitInspectable = getInspectableAtPoint(wx, wy, { greenCar, mina });
 
         if (hitInspectable) {
           if (inspectDwellRef.current.objectId === hitInspectable.id) {
@@ -657,6 +676,7 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
               )
             : 0,
           characterStatuses: propsRef.current.characterStatuses,
+          clockAnnouncement: propsRef.current.clockAnnouncement,
           camera: { x: cam.x, y: cam.y, zoom: cam.zoom },
           inspectHover,
           viewW: vp.viewW,

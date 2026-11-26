@@ -72,6 +72,18 @@ html[data-theme="dark"] {
 html[data-theme="dark"] .brand-wordmark .brand-wordmark-light { display: none; }
 html[data-theme="dark"] .brand-wordmark .brand-wordmark-dark { display: block; }
 
+html,
+* {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  * {
+    scroll-behavior: auto;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

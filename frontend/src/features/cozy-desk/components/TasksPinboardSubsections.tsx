@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { ASSETS, type GoogleTask, type TaskAssistantId } from '../types/game';
 import { type MinaTaskRecurrence, parseMinaTaskMeta } from '../lib/minaTaskScheduler';
-import { getLocalIsoDate } from '../api/sleepLogsApi';
 
 export const MINA_TASK_TEMPLATES: Array<{
   label: string;
@@ -135,7 +134,6 @@ export function TasksPinboardCardsArea({
   editNotes,
   setEditNotes,
   editAssignToMina,
-  setEditAssignToMina,
   editDueDate,
   setEditDueDate,
   editAssistantId,
@@ -170,7 +168,7 @@ export function TasksPinboardCardsArea({
                       : 'ยังไม่มีรายการงานค้างอยู่'}
                   </p>
                   <p className="mt-1.5 text-xs leading-relaxed text-[#6E6258]">
-                    พิมพ์ชื่องานด้านบนเพื่อปักโน้ตงานใหม่ หรือกดปุ่ม &ldquo;สั่งงานมีน่า&rdquo; เพื่อตั้งเวลาให้มีน่าทำงานแทนได้เลยครับ
+                    พิมพ์ชื่องานด้านบนเพื่อปักโน้ตงานใหม่ หรือกดปุ่ม &ldquo;สั่งงาน AI&rdquo; เพื่อตั้งเวลาให้ผู้ช่วย AI ทำงานแทนได้เลยครับ
                   </p>
                 </div>
               ) : (
@@ -220,26 +218,6 @@ export function TasksPinboardCardsArea({
                               className="w-full resize-none rounded-lg border border-[#D4C6B4] bg-white px-3 py-1.5 text-xs text-[#3D342D] focus:border-[#D97736] focus:outline-none"
                             />
                             <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditAssignToMina((prev) => {
-                                    const next = !prev;
-                                    if (next && !editDueDate) {
-                                      setEditDueDate(getLocalIsoDate());
-                                    }
-                                    return next;
-                                  });
-                                }}
-                                className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                                  editAssignToMina
-                                    ? 'border-[#3F6F62] bg-[#E5F2EE] text-[#285247]'
-                                    : 'border-[#D4C6B4] bg-white text-[#5C5046] hover:bg-[#F2EAE0]'
-                                }`}
-                              >
-                                <Sparkles className="h-3 w-3" />
-                                <span>{editAssignToMina ? 'มอบหมายมีน่า' : 'สั่งงานมีน่า'}</span>
-                              </button>
                               <input
                                 type="date"
                                 value={editDueDate}
@@ -540,7 +518,7 @@ export function TasksPinboardCardsArea({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => requestDeleteTask(task)}
+                                  onClick={() => void requestDeleteTask(task)}
                                   disabled={isMutating || isMinaRunning}
                                   aria-label={`ลบงาน ${task.title}`}
                                   className="cursor-pointer rounded-md p-1.5 text-[#7A6D62] transition-colors hover:bg-[#FDF2EF] hover:text-[#B5472A] disabled:opacity-40"
@@ -680,27 +658,29 @@ export function TasksPinboardNewTaskOptions({
         </div>
       )}
 
-      {/* Quick AI Task Templates */}
-      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-        <span className="text-[11px] font-medium text-[#7D7065]">คำสั่งด่วน:</span>
-        {MINA_TASK_TEMPLATES.map((tpl) => (
-          <button
-            key={tpl.label}
-            type="button"
-            onClick={() => {
-              setNewTitle(tpl.title);
-              setNewNotes(tpl.notes);
-              setNewAssistantId(tpl.assistantId);
-              setNewRecurrence(tpl.recurrence ?? 'none');
-              setNewAssignToMina(false);
-              setShowNewOptions(true);
-            }}
-            className="cursor-pointer rounded-md border border-[#DFD2C0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#4F443B] transition-colors hover:border-[#9DC3B8] hover:bg-[#EDF6F3] hover:text-[#234C42]"
-          >
-            + {tpl.label}
-          </button>
-        ))}
-      </div>
+      {/* Quick AI Task Templates — visible only while AI assignment mode is active */}
+      {newAssignToMina && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="text-[11px] font-medium text-[#7D7065]">คำสั่งด่วน:</span>
+          {MINA_TASK_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.label}
+              type="button"
+              onClick={() => {
+                setNewTitle(tpl.title);
+                setNewNotes(tpl.notes);
+                setNewAssistantId(tpl.assistantId);
+                setNewRecurrence(tpl.recurrence ?? 'none');
+                setNewAssignToMina(true);
+                setShowNewOptions(true);
+              }}
+              className="cursor-pointer rounded-md border border-[#DFD2C0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#4F443B] transition-colors hover:border-[#9DC3B8] hover:bg-[#EDF6F3] hover:text-[#234C42]"
+            >
+              + {tpl.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export function useCozyWorldInteractions(ctx: any) {
     setTipIndex,
     setGmailFreshArrival,
     handleWaterPorchPlants,
+    handleInteractClock,
     setCustomTvFeed,
     setActiveTvItem,
     setIsSigningInGoogle,
@@ -174,8 +175,12 @@ export function useCozyWorldInteractions(ctx: any) {
         return;
       }
       if (playerSeat) {
+        if (playerSeat === 'gym_barbell') {
+          soundEngine.playBarbellRack();
+        } else {
+          soundEngine.playInteract();
+        }
         setPlayerSeat(null);
-        soundEngine.playInteract();
         return;
       }
       if (isFullscreenMap) {
@@ -430,11 +435,15 @@ export function useCozyWorldInteractions(ctx: any) {
       }
 
       if (id === 'clock') {
-        soundEngine.playEnterOffice();
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, '0');
-        const mm = String(now.getMinutes()).padStart(2, '0');
-        showToast(`นาฬิกาลูกตุ้มคลาสสิกบอกเวลา ${hh}:${mm} น. — เสียงลูกตุ้มแกว่งนุ่มนวลสบายหู`, 'house');
+        if (typeof handleInteractClock === 'function') {
+          handleInteractClock();
+        } else {
+          soundEngine.playGrandfatherClockChime();
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          showToast(`นาฬิกาลูกตุ้มโบราณบอกเวลา ${hh}:${mm} น. — เสียงลูกตุ้มแกว่งนุ่มนวลสบายหู`, 'house');
+        }
         return;
       }
 
@@ -536,6 +545,21 @@ export function useCozyWorldInteractions(ctx: any) {
 
       if (id === 'porch_plants') {
         handleWaterPorchPlants();
+        return;
+      }
+
+      if (id === 'gym_barbell') {
+        soundEngine.playBarbellRack();
+        setPlayerSeat((curr) => {
+          const next = curr === 'gym_barbell' ? null : 'gym_barbell';
+          if (next === 'gym_barbell') {
+            showToast(
+              'ยกบาร์เบลออกจากแร็คเริ่มเวทเทรนนิงแล้วครับ! (กด WASD / E / Esc เพื่อวางบาร์เบลลง)',
+              'player'
+            );
+          }
+          return next;
+        });
         return;
       }
 

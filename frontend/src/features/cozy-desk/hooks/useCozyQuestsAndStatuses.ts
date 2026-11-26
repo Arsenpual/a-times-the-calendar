@@ -358,32 +358,53 @@ export function useCozyQuestsAndStatuses({
   const handleSaveSleepLog = useCallback(
     async (record: DailySleepRecord) => {
       const wasDoneToday = hasLoggedTodaySleep;
-      const next = await persistSleepLog(record);
-      setSleepLogs(next);
+      const result = await persistSleepLog(record);
+      setSleepLogs(result.logs);
       const summary = formatSleepTimeSummary(record);
-      if (!wasDoneToday || record.createdAt === record.updatedAt) {
+      if (!result.synced) {
+        showToast(
+          `บันทึกการนอนไว้ในเครื่องแล้ว แต่ยังซิงก์ขึ้นคลาวด์ไม่สำเร็จ (${result.syncError || 'ตรวจสอบการเชื่อมต่อ'})`,
+          'house'
+        );
+      } else if (!wasDoneToday || record.createdAt === record.updatedAt) {
         showToast(
           `ภารกิจการนอนวันนี้สำเร็จ! ${summary?.hudLabel ?? `วันที่ ${record.date}`} — บันทึก .json เรียบร้อยแล้ว`,
           'player'
         );
       }
+      return result;
     },
     [hasLoggedTodaySleep, setSleepLogs, showToast]
   );
 
   const handleSaveSleepLogsBatch = useCallback(
     async (records: DailySleepRecord[]) => {
-      const next = await persistSleepLogsBatch(records);
-      setSleepLogs(next);
+      const result = await persistSleepLogsBatch(records);
+      setSleepLogs(result.logs);
+      if (!result.synced) {
+        showToast(
+          `นำเข้าข้อมูลไว้ในเครื่องแล้ว แต่ซิงก์ขึ้นคลาวด์ไม่สำเร็จ (${result.syncError || 'ตรวจสอบการเชื่อมต่อ'})`,
+          'house'
+        );
+      }
+      return result;
     },
-    [setSleepLogs]
+    [setSleepLogs, showToast]
   );
 
   const handleDeleteSleepLog = useCallback(
     async (id: string) => {
-      const next = await removeSleepLog(id);
-      setSleepLogs(next);
-      showToast('ลบบันทึกการนอนออกจากคลัง .json แล้ว', 'house');
+      const result = await removeSleepLog(id);
+      setSleepLogs(result.logs);
+      if (!result.synced) {
+        showToast(
+          result.syncError || 'ลบในเครื่องแล้ว และจะซิงก์การลบบนคลาวด์อีกครั้งเมื่อเชื่อมต่อได้',
+          'house'
+        );
+      } else {
+        showToast('ลบบันทึกการนอนออกจากคลัง .json แล้ว', 'house');
+      }
+      return result;
     },
     [setSleepLogs, showToast]
   );

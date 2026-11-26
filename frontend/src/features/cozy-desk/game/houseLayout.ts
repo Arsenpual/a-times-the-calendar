@@ -173,6 +173,22 @@ export const PORCH_PLANTER_STAND_POS = {
   y: Math.round(30.15 * TILE),
 };
 
+// Home Gym NW Power Squat Rack & Loaded Olympic Barbell (interactive weightlifting station)
+export const GYM_SQUAT_RACK_RECT: Rect = {
+  x: Math.round(20.25 * TILE),
+  y: Math.round(14.05 * TILE),
+  w: Math.round(2.0 * TILE),
+  h: Math.round(1.45 * TILE),
+};
+export const GYM_SQUAT_RACK_LIFT_POS = {
+  x: Math.round(21.35 * TILE),
+  y: Math.round(16.15 * TILE),
+};
+export const GYM_SQUAT_RACK_STAND_POS = {
+  x: Math.round(21.35 * TILE),
+  y: Math.round(16.55 * TILE),
+};
+
 export const PLAYER_START = {
   x: (6.1 + CORE_OFFSET_COLS) * TILE,
   y: 9.2 * TILE,
@@ -641,7 +657,7 @@ export const COLLIDERS: Rect[] = [
   // =========================================================================
   // 10. HOME GYM / FITNESS STUDIO EQUIPMENT (cols 20..31, rows 14..19 — entered via Home Office)
   // =========================================================================
-  { x: 20.25 * TILE, y: 14.05 * TILE, w: 2.0 * TILE, h: 1.45 * TILE }, // Power Squat Rack & Olympic Barbell (NW)
+  { ...GYM_SQUAT_RACK_RECT }, // Power Squat Rack & Olympic Barbell (NW)
   { x: 23.25 * TILE, y: 14.55 * TILE, w: 1.55 * TILE, h: 0.9 * TILE }, // Adjustable Weight Bench (North-center)
   { x: 25.5 * TILE, y: 14.0 * TILE, w: 1.9 * TILE, h: 0.85 * TILE }, // Two-Tier Dumbbell & Kettlebell Rack
   { x: 30.35 * TILE, y: 14.05 * TILE, w: 1.4 * TILE, h: 1.7 * TILE }, // Hydration Water Cooler & Towel Station (NE)

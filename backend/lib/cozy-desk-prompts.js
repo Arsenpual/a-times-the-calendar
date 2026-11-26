@@ -33,24 +33,43 @@ function classifyGeminiError(err) {
     };
   }
   if (
+    err?.code === "MISSING_API_KEY" ||
     raw === "MISSING_API_KEY" ||
     lower.includes("ยังไม่ได้ตั้งค่า gemini_api_key") ||
     lower.includes("api_key_invalid") ||
-    lower.includes("api key") ||
-    statusNum === 401 ||
-    statusNum === 503
+    lower.includes("api key not valid") ||
+    statusNum === 401
   ) {
     return {
       status: 401,
       code: "API_KEY_INVALID",
-      message: "ยังไม่ได้ตั้งค่าหรือคีย์ Gemini API ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY บนเซิร์ฟเวอร์",
+      message: "ยังไม่ได้ตั้งค่าหรือคีย์ Gemini API ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY ใน Settings > Secrets",
+    };
+  }
+  if (
+    statusNum === 503 ||
+    lower.includes("unavailable") ||
+    lower.includes("high demand") ||
+    lower.includes("overloaded")
+  ) {
+    return {
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      message: "โมเดล Gemini กำลังมีผู้ใช้งานหนาแน่นชั่วคราว กรุณารอสักครู่แล้วกดลองใหม่อีกครั้งครับ",
     };
   }
   if (lower.includes("permission_denied") || lower.includes("403") || statusNum === 403) {
     return {
       status: 403,
       code: "PERMISSION_DENIED",
-      message: "สิทธิ์การเข้าถึง Gemini API ถูกปฏิเสธ กรุณาตรวจสอบการตั้งค่า API Key",
+      message: "สิทธิ์การเข้าถึง Gemini API ถูกปฏิเสธ กรุณาตรวจสอบ API Key ใน Settings > Secrets",
+    };
+  }
+  if (lower.includes("not_found") || lower.includes("is not found") || statusNum === 404) {
+    return {
+      status: 404,
+      code: "MODEL_NOT_FOUND",
+      message: "ไม่พบโมเดล Gemini ที่เลือก กรุณาลองเปลี่ยนโมเดลหรือส่งข้อความใหม่อีกครั้ง",
     };
   }
   if (

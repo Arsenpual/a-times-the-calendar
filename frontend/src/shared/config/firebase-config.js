@@ -10,20 +10,28 @@
 // Docs: https://firebase.google.com/docs/web/setup
 import { initializeApp, getApps } from "firebase/app";
 
+function normalizeFirebaseClientValue(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || /^(your[-_]|replace[-_]|example|<.+>|\.\.\.)/i.test(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  apiKey: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_API_KEY),
+  authDomain: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
+  projectId: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_PROJECT_ID),
+  storageBucket: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
+  messagingSenderId: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  appId: normalizeFirebaseClientValue(import.meta.env.VITE_FIREBASE_APP_ID)
 };
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 
 if (!isFirebaseConfigured && typeof console !== "undefined") {
-  console.warn(
-    "[firebase-config] ไม่พบค่า VITE_FIREBASE_* ใน .env — กำลังทำงานในโหมด Sandbox / AI Studio Preview (ไม่ใช้คีย์จริงในซอร์สโค้ด)"
+  console.log(
+    "[firebase-config] ยังไม่พบค่า VITE_FIREBASE_* ที่สมบูรณ์ — กำลังทำงานในโหมด Sandbox / AI Studio Preview"
   );
 }
 

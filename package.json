@@ -3,15 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "description": "T.i.M.E.S. — Activity Mode, Reminder Mode & Cozy Desk AI Workspace (Localhost + Google AI Studio ready)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "install:all": "npm --prefix backend install && npm --prefix frontend install",
     "dev": "node scripts/dev.mjs",
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev",
-    "build": "npm --prefix frontend run build",
-    "start": "npm --prefix backend run start",
-    "preview": "npm --prefix frontend run build && npm --prefix backend run start",
-    "test": "npm --prefix backend test && npm --prefix frontend test",
+    "dev:frontend": "npm run dev --workspace=times-the-calendar-frontend",
+    "dev:backend": "npm run dev --workspace=times-the-calendar-backend",
+    "build": "npm run build --workspace=times-the-calendar-frontend",
+    "lint": "npm run lint --workspace=times-the-calendar-frontend",
+    "start": "node backend/index.js",
+    "preview": "npm run build && npm run start",
+    "test": "npm test --workspace=times-the-calendar-backend && npm test --workspace=times-the-calendar-frontend",
     "verify": "npm test && npm run build"
+  },
+  "dependencies": {
+    "@google/genai": "^3.6.1"
   }
 }

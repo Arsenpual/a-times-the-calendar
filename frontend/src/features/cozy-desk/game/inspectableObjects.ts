@@ -11,7 +11,14 @@ import {
   SLEEP_STATION_RECT,
   TILE,
   WEST_DIVIDER_COL,
+  getInteractableAtPoint,
 } from './houseMap';
+import {
+  INTERACTABLE_INSPECTABLES,
+  buildInspectableFromInteractable,
+  getDynamicInspectablesAtPoint,
+  type InspectDynamicContext,
+} from './interactableInspectables';
 
 const WALL_FACE_Y = MID_WALL_ROW * TILE + 18;
 
@@ -564,9 +571,9 @@ export const OFFICE_INSPECTABLES: InspectableObject[] = [
     detail:
       'โต๊ะทดลอง Prompt Lab, App Builder และ JSON Schema พร้อมตัวละครผู้ช่วย Google AI Studio เดินเข้าใกล้แล้วกด E หรือคลิกเพื่อเปิดเวิร์กเบนช์',
     x: Math.round(AISTUDIO_DESK_RECT.x),
-    y: Math.round(AISTUDIO_DESK_RECT.y - 0.6 * TILE),
+    y: Math.round(AISTUDIO_DESK_RECT.y - 0.65 * TILE),
     w: Math.round(AISTUDIO_DESK_RECT.w),
-    h: Math.round(AISTUDIO_DESK_RECT.h + 0.6 * TILE),
+    h: Math.round(AISTUDIO_DESK_RECT.h + 0.65 * TILE),
     priority: 18,
   },
 ];
@@ -643,6 +650,7 @@ export const INSPECTABLE_OBJECTS: InspectableObject[] = [
   ...BEDROOM_INSPECTABLES,
   ...GARAGE_INSPECTABLES,
   ...ENTRYWAY_INSPECTABLES,
+  ...INTERACTABLE_INSPECTABLES,
 ];
 
 /**
@@ -650,22 +658,40 @@ export const INSPECTABLE_OBJECTS: InspectableObject[] = [
  * Higher priority wins; ties are broken by smallest bounding area so detailed
  * items sitting on furniture take precedence over the furniture underneath.
  */
-export function getInspectableAtPoint(wx: number, wy: number): InspectableObject | null {
+export function getInspectableAtPoint(
+  wx: number,
+  wy: number,
+  dynamicContext?: InspectDynamicContext
+): InspectableObject | null {
   let best: InspectableObject | null = null;
   let bestPriority = -Infinity;
   let bestArea = Infinity;
 
+  const consider = (obj: InspectableObject) => {
+    const priority = obj.priority ?? 0;
+    const area = obj.w * obj.h;
+    if (priority > bestPriority || (priority === bestPriority && area < bestArea)) {
+      best = obj;
+      bestPriority = priority;
+      bestArea = area;
+    }
+  };
+
+  for (const obj of getDynamicInspectablesAtPoint(wx, wy, dynamicContext)) {
+    consider(obj);
+  }
+
   for (const obj of INSPECTABLE_OBJECTS) {
     if (wx >= obj.x && wx <= obj.x + obj.w && wy >= obj.y && wy <= obj.y + obj.h) {
-      const priority = obj.priority ?? 0;
-      const area = obj.w * obj.h;
-      if (priority > bestPriority || (priority === bestPriority && area < bestArea)) {
-        best = obj;
-        bestPriority = priority;
-        bestArea = area;
-      }
+      consider(obj);
     }
   }
 
-  return best;
+  if (best) {
+    return best;
+  }
+
+  // Fallback with forgiving edge padding for any interactable object
+  const paddedInteractable = getInteractableAtPoint(wx, wy);
+  return paddedInteractable ? buildInspectableFromInteractable(paddedInteractable) : null;
 }

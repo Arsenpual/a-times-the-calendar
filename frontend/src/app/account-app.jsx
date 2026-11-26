@@ -310,7 +310,7 @@ export default function AccountApp({ auth }) {
 
   return (
     <div className={`app app--${mode}${isActivityReading ? " is-reading" : ""}`}>
-      {!headerInSummary && appHeader}
+      {!headerInSummary && mode !== "cozy" && appHeader}
 
       {firebaseUser && <AnnouncementTicker message={announcement.message} config={announcement.config} />}
 
@@ -370,6 +370,10 @@ export default function AccountApp({ auth }) {
           <CozyDeskMode
             isVisible={mode === "cozy"}
             firebaseUser={firebaseUser}
+            activities={activities}
+            archivedActivityIds={archivedActivityIds}
+            navigationExpanded={navigationExpanded}
+            onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
           />
         )}
 

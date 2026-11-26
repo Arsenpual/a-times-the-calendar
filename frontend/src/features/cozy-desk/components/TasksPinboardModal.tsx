@@ -214,6 +214,8 @@ export function TasksPinboardModal({
         setShowNewOptions(true);
         setNewDueDate((curr) => curr || getLocalIsoDate());
         setNewScheduledTime((curr) => curr || getDefaultScheduleTime(2));
+      } else {
+        setNewRecurrence('none');
       }
       return next;
     });
@@ -426,23 +428,22 @@ export function TasksPinboardModal({
     });
   };
 
-  const requestDeleteTask = (task: GoogleTask) => {
-    if (!accessToken || !selectedListId) return;
-
-    setPendingConfirm({
-      title: 'ยืนยันการลบงานออกจาก Google Tasks',
-      description: `ต้องการลบงาน "${task.title}" ออกจาก Google Tasks อย่างถาวรหรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`,
-      confirmLabel: 'ลบงานถาวร',
-      tone: 'danger',
-      execute: async () => {
-        await deleteTask(accessToken, selectedListId, task.id);
-        setTasks((prev) => prev.filter((t) => t.id !== task.id));
-        if (editingTaskId === task.id) {
-          setEditingTaskId(null);
-        }
-        onTasksChanged?.();
-      },
-    });
+  const requestDeleteTask = async (task: GoogleTask) => {
+    if (!accessToken || !selectedListId || isMutating) return;
+    setIsMutating(true);
+    setApiError(null);
+    try {
+      await deleteTask(accessToken, selectedListId, task.id);
+      setTasks((prev) => prev.filter((t) => t.id !== task.id));
+      if (editingTaskId === task.id) {
+        setEditingTaskId(null);
+      }
+      onTasksChanged?.();
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setIsMutating(false);
+    }
   };
 
   const counts = useMemo(() => {
@@ -731,7 +732,6 @@ export function TasksPinboardModal({
               editNotes={editNotes}
               setEditNotes={setEditNotes}
               editAssignToMina={editAssignToMina}
-              setEditAssignToMina={setEditAssignToMina}
               editDueDate={editDueDate}
               setEditDueDate={setEditDueDate}
               editAssistantId={editAssistantId}

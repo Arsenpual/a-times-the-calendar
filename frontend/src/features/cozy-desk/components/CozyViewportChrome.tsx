@@ -149,6 +149,7 @@ export function CozyBottomActionBar({
   isWorking,
   playerSeat,
   drivingHud,
+  workoutReps = 0,
   nearestInteractable,
   effectiveMailboxUnreadCount,
   hasLoggedTodaySleep,
@@ -162,6 +163,7 @@ export function CozyBottomActionBar({
   isWorking: boolean;
   playerSeat: PlayerSeatId | null;
   drivingHud: DrivingHudState | null;
+  workoutReps?: number;
   nearestInteractable: InteractableObject | null;
   effectiveMailboxUnreadCount: number;
   hasLoggedTodaySleep: boolean;
@@ -202,7 +204,11 @@ export function CozyBottomActionBar({
         <button
           type="button"
           onClick={() => {
-            soundEngine.playInteract();
+            if (playerSeat === 'gym_barbell') {
+              soundEngine.playBarbellRack();
+            } else {
+              soundEngine.playInteract();
+            }
             onClearSeat();
           }}
           className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#D97736] px-3.5 py-2 text-xs font-semibold text-[#FAF6F0] transition-colors hover:bg-[#C6682A]"
@@ -215,7 +221,9 @@ export function CozyBottomActionBar({
                 ? 'กำลังนั่งพักบนโซฟา — ลุกจากโซฟา'
                 : playerSeat === 'bedroom_bed'
                   ? 'กำลังนอนพักผ่อนบนเตียง (ปิดไฟห้องนอน) — ลุกจากเตียง'
-                  : 'กำลังนั่งที่โต๊ะอาหารคริสต์มาส — ลุกจากเก้าอี้'}
+                  : playerSeat === 'gym_barbell'
+                    ? `กำลังยกน้ำหนักบาร์เบล${workoutReps > 0 ? ` (${workoutReps} ครั้ง)` : ''} — วางบาร์เบลลง`
+                    : 'กำลังนั่งที่โต๊ะอาหารคริสต์มาส — ลุกจากเก้าอี้'}
           </span>
         </button>
       ) : !isWorking && nearestInteractable ? (
@@ -250,7 +258,7 @@ export function CozyBottomActionBar({
                 : zone === 'office'
                   ? 'ห้องทำงาน — เดินเข้าใกล้ มีน่า, Antigravity หรือ Google AI Studio เพื่อคุยงาน หรือเดินลงด้านล่างเข้าห้องออกกำลังกาย'
                   : zone === 'gym'
-                    ? 'ห้องออกกำลังกาย — เดินสำรวจแร็คสควอท ม้านั่งยกเวท ดัมเบล ลู่วิ่ง จักรยานปั่น เครื่องกรรเชียงบก และโซนเสื่อโยคะ'
+                    ? 'ห้องออกกำลังกาย — กด E หรือคลิกที่แร็คบาร์เบลฝั่งซ้ายบนเพื่อยกน้ำหนัก หรือเดินสำรวจอุปกรณ์ออกกำลังกายรอบห้อง'
                     : zone === 'kitchen'
                       ? 'ห้องครัวครอบครัว — นั่งเก้าอี้โต๊ะอาหารทั้ง 4 ตัว เดินไปฝั่งซ้ายเข้าห้องน้ำ หรือเดินลงด้านล่างไปโถงทางเข้า'
                       : zone === 'entryway'
@@ -275,6 +283,7 @@ export function CozyFullscreenOverlays({
   isWorking,
   playerSeat,
   drivingHud,
+  workoutReps = 0,
   nearestInteractable,
   effectiveMailboxUnreadCount,
   hasLoggedTodaySleep,
@@ -288,6 +297,7 @@ export function CozyFullscreenOverlays({
   isWorking: boolean;
   playerSeat: PlayerSeatId | null;
   drivingHud: DrivingHudState | null;
+  workoutReps?: number;
   nearestInteractable: InteractableObject | null;
   effectiveMailboxUnreadCount: number;
   hasLoggedTodaySleep: boolean;
@@ -348,7 +358,11 @@ export function CozyFullscreenOverlays({
             <button
               type="button"
               onClick={() => {
-                soundEngine.playInteract();
+                if (playerSeat === 'gym_barbell') {
+                  soundEngine.playBarbellRack();
+                } else {
+                  soundEngine.playInteract();
+                }
                 onClearSeat();
               }}
               className="pointer-events-auto inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#D97736] px-3.5 py-2 text-xs font-semibold text-[#FAF6F0] shadow-xl transition-colors hover:bg-[#C6682A]"
@@ -363,7 +377,9 @@ export function CozyFullscreenOverlays({
                     ? 'กำลังนั่งพักบนโซฟา — ลุกจากโซฟา'
                     : playerSeat === 'bedroom_bed'
                       ? 'กำลังนอนพักผ่อนบนเตียง (ปิดไฟห้องนอน) — ลุกจากเตียง'
-                      : 'กำลังนั่งที่โต๊ะอาหารคริสต์มาส — ลุกจากเก้าอี้'}
+                      : playerSeat === 'gym_barbell'
+                        ? `กำลังยกน้ำหนักบาร์เบล${workoutReps > 0 ? ` (${workoutReps} ครั้ง)` : ''} — วางบาร์เบลลง`
+                        : 'กำลังนั่งที่โต๊ะอาหารคริสต์มาส — ลุกจากเก้าอี้'}
               </span>
             </button>
           ) : (

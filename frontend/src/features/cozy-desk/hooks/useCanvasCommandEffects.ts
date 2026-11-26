@@ -9,6 +9,8 @@ import {
   collidesWithWorld,
   DINING_CHAIR_SPOTS,
   findSafeCarExitPos,
+  GYM_SQUAT_RACK_LIFT_POS,
+  GYM_SQUAT_RACK_STAND_POS,
   isDiningChairSeatId,
   MINA_GREET_STOP_DIST,
   MINA_PINBOARD_SPOT,
@@ -257,6 +259,8 @@ export function useCanvasCommandEffects(ctx: any) {
       player.seat = null;
       player.sofaActivity = null;
       player.sofaActivityElapsed = 0;
+      player.workoutElapsed = 0;
+      player.workoutReps = 0;
       if (prevSeat === 'workdesk') {
         player.x = WORK_STAND_POS.x;
         player.y = WORK_STAND_POS.y;
@@ -266,6 +270,10 @@ export function useCanvasCommandEffects(ctx: any) {
       } else if (prevSeat === 'bedroom_bed') {
         player.x = BEDROOM_BED_STAND_POS.x;
         player.y = BEDROOM_BED_STAND_POS.y;
+      } else if (prevSeat === 'gym_barbell') {
+        player.x = GYM_SQUAT_RACK_STAND_POS.x;
+        player.y = GYM_SQUAT_RACK_STAND_POS.y;
+        soundEngine.playBarbellRack();
       } else if (prevSeat === 'green_car') {
         const car = greenCarRef.current;
         car.isDriving = false;
@@ -461,6 +469,21 @@ export function useCanvasCommandEffects(ctx: any) {
       waypointsRef.current = [];
       pendingInteractRef.current = null;
       keysRef.current.clear();
+    } else if (playerSeat === 'gym_barbell') {
+      player.x = GYM_SQUAT_RACK_LIFT_POS.x;
+      player.y = GYM_SQUAT_RACK_LIFT_POS.y;
+      player.facing = 'down';
+      player.isMoving = false;
+      player.walkFrame = 0;
+      player.isSitting = true;
+      player.seat = 'gym_barbell';
+      player.sofaActivity = null;
+      player.sofaActivityElapsed = 0;
+      player.workoutElapsed = 0;
+      player.workoutReps = 0;
+      waypointsRef.current = [];
+      pendingInteractRef.current = null;
+      keysRef.current.clear();
     } else if (isDiningChairSeatId(playerSeat)) {
       const spot = DINING_CHAIR_SPOTS[playerSeat];
       player.x = spot.seatPos.x;
@@ -481,6 +504,8 @@ export function useCanvasCommandEffects(ctx: any) {
       player.seat = null;
       player.sofaActivity = null;
       player.sofaActivityElapsed = 0;
+      player.workoutElapsed = 0;
+      player.workoutReps = 0;
       if (prevSeat === 'workdesk') {
         player.x = WORK_STAND_POS.x;
         player.y = WORK_STAND_POS.y;
@@ -493,6 +518,10 @@ export function useCanvasCommandEffects(ctx: any) {
         player.x = BEDROOM_BED_STAND_POS.x;
         player.y = BEDROOM_BED_STAND_POS.y;
         player.facing = 'right';
+      } else if (prevSeat === 'gym_barbell') {
+        player.x = GYM_SQUAT_RACK_STAND_POS.x;
+        player.y = GYM_SQUAT_RACK_STAND_POS.y;
+        player.facing = 'down';
       } else if (prevSeat === 'green_car') {
         const car = greenCarRef.current;
         car.isDriving = false;
@@ -577,6 +606,8 @@ export function useCanvasCommandEffects(ctx: any) {
       player.seat = null;
       player.sofaActivity = null;
       player.sofaActivityElapsed = 0;
+      player.workoutElapsed = 0;
+      player.workoutReps = 0;
       if (prevSeat === 'workdesk') {
         player.x = WORK_STAND_POS.x;
         player.y = WORK_STAND_POS.y;
@@ -589,6 +620,11 @@ export function useCanvasCommandEffects(ctx: any) {
         player.x = BEDROOM_BED_STAND_POS.x;
         player.y = BEDROOM_BED_STAND_POS.y;
         player.facing = 'right';
+      } else if (prevSeat === 'gym_barbell') {
+        player.x = GYM_SQUAT_RACK_STAND_POS.x;
+        player.y = GYM_SQUAT_RACK_STAND_POS.y;
+        player.facing = 'down';
+        soundEngine.playBarbellRack();
       } else if (prevSeat === 'green_car') {
         const car = greenCarRef.current;
         car.isDriving = false;

@@ -10,6 +10,7 @@ import {
   GARAGE_BAY_OPENING_ROW,
   GARAGE_FLOOR_COL_START,
   GARAGE_FLOOR_ROW_START,
+  GYM_SQUAT_RACK_RECT,
   KITCHEN_DINING_RECT,
   LOWER_EAST_WALL_COL,
   LOWER_MID_WALL_ROW,
@@ -259,6 +260,17 @@ export const INTERACTABLES: InteractableObject[] = [
     w: PORCH_PLANTER_RECT.w + 4,
     h: PORCH_PLANTER_RECT.h + 6,
     interactRadius: 76,
+  },
+  {
+    id: 'gym_barbell',
+    zone: 'gym',
+    label: 'แร็คยกน้ำหนักบาร์เบล',
+    actionLabel: 'ยกน้ำหนักบาร์เบล',
+    x: GYM_SQUAT_RACK_RECT.x - 4,
+    y: GYM_SQUAT_RACK_RECT.y,
+    w: GYM_SQUAT_RACK_RECT.w + 8,
+    h: GYM_SQUAT_RACK_RECT.h,
+    interactRadius: 88,
   },
 ];
 

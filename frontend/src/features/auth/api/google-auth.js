@@ -60,6 +60,11 @@ export function subscribeToAuthState(callback) {
 
 /** Signs out of Firebase entirely. */
 export async function signOut() {
+  try {
+    window.localStorage.removeItem("cozy_desk_google_oauth_token_v1");
+  } catch {
+    // Ignore storage access errors
+  }
   if (typeof auth?._signOut === "function") {
     auth._signOut();
     return;

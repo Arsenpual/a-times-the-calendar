@@ -43,7 +43,19 @@ return (
             </button>
             <label className="nav-item reminder-date-picker">
               <span>📅 {selectedDateKey}</span>
-              <input type="date" aria-label="เลือกวันที่ / Select date" value={selectedDateKey} onChange={(event) => selectDate(event.target.value)} onClick={(event) => event.currentTarget.showPicker?.()} />
+              <input
+                type="date"
+                aria-label="เลือกวันที่ / Select date"
+                value={selectedDateKey}
+                onChange={(event) => selectDate(event.target.value)}
+                onClick={(event) => {
+                  try {
+                    event.currentTarget.showPicker?.();
+                  } catch {
+                    // Cross-origin iframes block programmatic showPicker(); native calendar indicator still opens on click.
+                  }
+                }}
+              />
             </label>
           </div>
 

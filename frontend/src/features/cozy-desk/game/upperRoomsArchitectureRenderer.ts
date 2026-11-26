@@ -99,7 +99,8 @@ export function drawWalls(
   timeOfDay: TimeOfDay,
   tick: number,
   extraPinCount: number,
-  isPinboardActive: boolean
+  isPinboardActive: boolean,
+  isClockChiming = false
 ) {
   const officeEastX = LOCAL_OFFICE_EAST_COL * TILE;
   const dividerX = LOCAL_DIVIDER_COL * TILE;
@@ -170,7 +171,7 @@ export function drawWalls(
   pxRect(ctx, 5.14 * TILE + 12, 12, 2, 2, '#DC2626');
 
   // Classic mahogany grandfather pendulum clock beside the fireplace
-  drawPendulumClock(ctx, 6.12 * TILE, 14, tick);
+  drawPendulumClock(ctx, 6.12 * TILE, 14, tick, isClockChiming);
 
   // Cozy fireplace in living room (cols 7..8.8)
   drawFireplace(ctx, 7.0 * TILE, 16, tick);
@@ -183,17 +184,49 @@ export function drawPendulumClock(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  tick: number
+  tick: number,
+  isChiming = false
 ) {
   const cx = Math.round(x + 11);
   // Floor drop shadow at base
   pxRect(ctx, x + 1, y + 64, 21, 5, 'rgba(28,20,15,0.28)');
 
+  // Warm golden chime halo & sound-wave arcs while announcing an Activity Mode event
+  if (isChiming) {
+    const pulse = 0.5 + Math.sin(tick * 0.22) * 0.35;
+    ctx.save();
+    const glow = ctx.createRadialGradient(cx + 0.5, y + 16, 4, cx + 0.5, y + 16, 26);
+    glow.addColorStop(0, `rgba(255, 224, 130, ${(0.34 * pulse).toFixed(3)})`);
+    glow.addColorStop(1, 'rgba(255, 210, 96, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx + 0.5, y + 16, 26, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Animated antique chime sound waves radiating left & right of clock hood
+    for (let ring = 0; ring < 2; ring += 1) {
+      const phase = ((tick * 0.045 + ring * 0.5) % 1);
+      const radius = 12 + phase * 11;
+      const alpha = (1 - phase) * 0.72;
+      ctx.strokeStyle = `rgba(248, 215, 118, ${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1.4;
+      // Left arc
+      ctx.beginPath();
+      ctx.arc(cx + 0.5, y + 16, radius, Math.PI * 0.78, Math.PI * 1.22);
+      ctx.stroke();
+      // Right arc
+      ctx.beginPath();
+      ctx.arc(cx + 0.5, y + 16, radius, -Math.PI * 0.22, Math.PI * 0.22);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // Ornate carved swan-neck crown & golden brass finial
   pxRect(ctx, x + 3, y + 2, 17, 5, '#4A2818');
   pxRect(ctx, x + 5, y + 1, 5, 3, '#6B3D24');
   pxRect(ctx, x + 13, y + 1, 5, 3, '#6B3D24');
-  pxRect(ctx, x + 10, y - 2, 3, 4, '#E9C46A'); // Brass top finial
+  pxRect(ctx, x + 10, y - 2, 3, 4, isChiming ? '#FFE082' : '#E9C46A'); // Brass top finial
   pxRect(ctx, x + 11, y - 3, 1, 2, '#FFF3BE');
 
   // Upper clock hood housing
@@ -201,8 +234,8 @@ export function drawPendulumClock(
   pxRect(ctx, x + 3, y + 8, 17, 16, '#6E4027');
 
   // Ornate gold bezel & ivory clock face
-  pxRect(ctx, x + 4, y + 9, 15, 14, '#C99A49');
-  pxRect(ctx, x + 5, y + 10, 13, 12, '#FAF6F0');
+  pxRect(ctx, x + 4, y + 9, 15, 14, isChiming ? '#F5CB69' : '#C99A49');
+  pxRect(ctx, x + 5, y + 10, 13, 12, isChiming ? '#FFFDF5' : '#FAF6F0');
   // Cardinal Roman-style hour ticks (12, 3, 6, 9)
   pxRect(ctx, cx, y + 11, 1, 2, '#4A3121');
   pxRect(ctx, cx, y + 19, 1, 2, '#4A3121');
@@ -239,7 +272,7 @@ export function drawPendulumClock(
   pxRect(ctx, x + 6, y + 29, 11, 24, '#2E1E16');
 
   // Smoothly swinging brass pendulum rod & gleaming gold bob
-  const swingAngle = Math.sin(tick * 0.065) * 0.28;
+  const swingAngle = Math.sin(tick * (isChiming ? 0.085 : 0.065)) * (isChiming ? 0.34 : 0.28);
   const pivotX = cx + 0.5;
   const pivotY = y + 30;
   const rodLen = 17;
@@ -247,7 +280,7 @@ export function drawPendulumClock(
   const bobY = pivotY + Math.cos(swingAngle) * rodLen;
 
   ctx.save();
-  ctx.strokeStyle = '#C99A49';
+  ctx.strokeStyle = isChiming ? '#F5CB69' : '#C99A49';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(pivotX, pivotY);
@@ -257,8 +290,8 @@ export function drawPendulumClock(
 
   const bx = Math.round(bobX) - 2;
   const by = Math.round(bobY) - 2;
-  pxRect(ctx, bx, by, 5, 5, '#D4A03E'); // Brass bob disc
-  pxRect(ctx, bx + 1, by + 1, 3, 3, '#F5CB69');
+  pxRect(ctx, bx, by, 5, 5, isChiming ? '#F5CB69' : '#D4A03E'); // Brass bob disc
+  pxRect(ctx, bx + 1, by + 1, 3, 3, isChiming ? '#FFF3BE' : '#F5CB69');
   pxRect(ctx, bx + 1, by + 1, 1, 1, '#FFF8DC'); // Specular glint
 
   // Subtle diagonal glass pane reflection
@@ -271,6 +304,91 @@ export function drawPendulumClock(
   pxRect(ctx, x + 3, y + 58, 17, 5, '#6B3D24');
   pxRect(ctx, x + 5, y + 59, 13, 3, '#57311D');
   pxRect(ctx, x, y + 63, 23, 3, '#3B1F12');
+}
+
+/**
+ * Draws the antique mahogany & gold-trimmed activity nameplate mounted at the Living Room
+ * grandfather clock during an Activity Mode chime. Long titles scroll right-to-left until
+ * the last character disappears, repeating 3 rounds.
+ */
+export function drawPendulumClockAnnouncement(
+  ctx: CanvasRenderingContext2D,
+  clockWorldX: number,
+  clockWorldY: number,
+  title: string,
+  startTimeLabel: string,
+  tick: number,
+  elapsedMs: number
+) {
+  const clockCenterX = Math.round(clockWorldX + 11.5);
+  const boxW = 148;
+  const boxH = 22;
+  const bx = Math.round(clockCenterX - boxW / 2);
+  const by = Math.max(3, Math.round(clockWorldY - 12));
+
+  ctx.save();
+  // Soft drop shadow behind antique nameplate
+  ctx.fillStyle = 'rgba(12, 7, 4, 0.45)';
+  ctx.fillRect(bx - 1, by + 2, boxW + 2, boxH + 1);
+
+  // Outer brass trim + dark mahogany body
+  pxRect(ctx, bx - 1, by - 1, boxW + 2, boxH + 2, '#C99A49');
+  pxRect(ctx, bx, by, boxW, boxH, '#2B170E');
+  pxRect(ctx, bx + 1, by + 1, boxW - 2, 1, '#5D3721');
+
+  // Subtle left chime-time pill
+  ctx.font = '700 8px "IBM Plex Sans Thai", monospace';
+  const timeText = startTimeLabel.replace(/\s*น\.$/, '');
+  const timeW = Math.ceil(ctx.measureText(timeText).width) + 8;
+  pxRect(ctx, bx + 3, by + 3, timeW, boxH - 6, '#432515');
+  pxRect(ctx, bx + 3 + timeW, by + 3, 1, boxH - 6, '#8F6830');
+  ctx.fillStyle = '#FFE082';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(timeText, bx + 3 + timeW / 2, by + boxH / 2 + 0.5);
+
+  // Clipped marquee window for the activity title
+  const innerX = bx + 6 + timeW;
+  const innerW = boxW - (innerX - bx) - 5;
+  const innerY = by + 2;
+  const innerH = boxH - 4;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(innerX, innerY, innerW, innerH);
+  ctx.clip();
+
+  ctx.font = '600 9.5px "IBM Plex Sans Thai", sans-serif';
+  ctx.fillStyle = '#FAF3E3';
+  ctx.textBaseline = 'middle';
+  const textW = ctx.measureText(title).width;
+  const textY = by + boxH / 2 + 0.5;
+
+  if (textW <= innerW) {
+    ctx.textAlign = 'center';
+    ctx.fillText(title, innerX + innerW / 2, textY);
+  } else {
+    // Scroll right-to-left until the last character completely exits, 3 rounds
+    const speedPxPerSec = 38;
+    const travel = innerW + textW;
+    const distance = Math.max(0, (elapsedMs / 1000) * speedPxPerSec);
+    const roundIdx = Math.floor(distance / travel);
+    if (roundIdx < 3) {
+      const progressInRound = distance - roundIdx * travel;
+      const drawX = innerX + innerW - progressInRound;
+      ctx.textAlign = 'left';
+      ctx.fillText(title, drawX, textY);
+    }
+  }
+  ctx.restore();
+
+  // Tiny brass pointer triangle connecting nameplate to grandfather clock crown
+  const pulseGlow = 0.7 + Math.sin(tick * 0.2) * 0.25;
+  ctx.fillStyle = `rgba(233, 196, 106, ${pulseGlow.toFixed(2)})`;
+  pxRect(ctx, clockCenterX - 2, by + boxH + 1, 5, 2, '#C99A49');
+  pxRect(ctx, clockCenterX - 1, by + boxH + 3, 3, 1, '#E9C46A');
+
+  ctx.restore();
 }
 
 export function drawChristmasWallGarland(

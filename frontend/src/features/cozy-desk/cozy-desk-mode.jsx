@@ -3,7 +3,14 @@ import "./styles/cozy-desk.css";
 
 const CozyDeskApp = React.lazy(() => import("./CozyDeskApp"));
 
-export default function CozyDeskMode({ isVisible, firebaseUser }) {
+export default function CozyDeskMode({
+  isVisible,
+  firebaseUser,
+  activities = [],
+  archivedActivityIds,
+  navigationExpanded = false,
+  onToggleNavigation,
+}) {
   // Mount lazily on first visit to Cozy Desk mode, then stay mounted while hidden
   // (like Reminder Mode) so scheduled Mina tasks, character positions, and TV state persist.
   const [hasActivated, setHasActivated] = useState(Boolean(isVisible));
@@ -30,7 +37,14 @@ export default function CozyDeskMode({ isVisible, firebaseUser }) {
           </div>
         }
       >
-        <CozyDeskApp isVisible={isVisible} firebaseUser={firebaseUser} />
+        <CozyDeskApp
+          isVisible={isVisible}
+          firebaseUser={firebaseUser}
+          activities={activities}
+          archivedActivityIds={archivedActivityIds}
+          navigationExpanded={navigationExpanded}
+          onToggleNavigation={onToggleNavigation}
+        />
       </Suspense>
     </div>
   );

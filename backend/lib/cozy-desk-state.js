@@ -4,11 +4,13 @@ function getNextMidnightMs(fromMs = Date.now()) {
   return next.getTime();
 }
 
+const { DEFAULT_MODEL, FALLBACK_MODEL: GEMINI_FALLBACK_MODEL, normalizeGeminiModel } = require("./gemini-api.js");
+
 const DEFAULT_DAILY_TOKEN_LIMIT = 250_000;
 const MAX_DAILY_TOKEN_LIMIT = 1_000_000;
 const MAX_CONCURRENT_REQUESTS_PER_CHARACTER = 2;
-const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+const PRIMARY_MODEL = normalizeGeminiModel(process.env.GEMINI_MODEL || DEFAULT_MODEL);
+const FALLBACK_MODEL = GEMINI_FALLBACK_MODEL;
 
 const userQuotaStates = new Map();
 const userCharacterRuntimes = new Map();
@@ -119,7 +121,9 @@ function recordCharacterError(userId, id, code, reason) {
       ? 30 * 60 * 1000
       : code === "RESOURCE_EXHAUSTED"
         ? 5 * 60 * 1000
-        : 90 * 1000;
+        : code === "SERVICE_UNAVAILABLE" || code === "TIMEOUT"
+          ? 3 * 1000
+          : 90 * 1000;
   c.lastErrorUntil = Date.now() + durationMs;
 }
 
@@ -154,7 +158,7 @@ function checkCharacterAllowance(userId, id, env = process.env) {
       allowed: false,
       status: 401,
       code: "API_KEY_INVALID",
-      message: "ยังไม่ได้ตั้งค่าหรือคีย์ Gemini API ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY บนเซิร์ฟเวอร์",
+      message: "ยังไม่ได้ตั้งค่าหรือคีย์ Gemini API ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY ใน Settings > Secrets",
     };
   }
 
@@ -222,7 +226,7 @@ function buildCharacterStatusMap(userId, env = process.env) {
     if (!apiKeyReady) {
       status = "unavailable";
       unavailableCode = "MISSING_API_KEY";
-      unavailableReason = "ยังไม่ได้ตั้งค่า GEMINI_API_KEY";
+      unavailableReason = "ยังไม่ได้ตั้งค่า GEMINI_API_KEY ใน Settings > Secrets";
     } else if (c.activeRequests > 0) {
       status = "busy";
     } else if (remaining <= 0) {

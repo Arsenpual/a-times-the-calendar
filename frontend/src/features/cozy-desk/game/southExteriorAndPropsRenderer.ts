@@ -237,7 +237,8 @@ export function drawSouthRoomsFurniture(
   ctx: CanvasRenderingContext2D,
   tick: number,
   hasWateredPlantsToday = false,
-  plantWateringProgress = 0
+  plantWateringProgress = 0,
+  isLiftingBarbell = false
 ) {
   // =========================================================================
   // ENTRYWAY / FOYER FURNITURE (cols 10..18, rows 24..27)
@@ -498,7 +499,7 @@ export function drawSouthRoomsFurniture(
   // - Bay 2 (Right Bay): Intentionally empty with yellow stall lines (the red car is currently out!)
 
   // =========================================================================
-  // 7. HOME GYM / FITNESS STUDIO EQUIPMENT (cols 20..31, rows 14..19 — non-interactable)
+  // 7. HOME GYM / FITNESS STUDIO EQUIPMENT (cols 20..31, rows 14..19)
   // =========================================================================
 
   // 7a. Heavy-Duty Power Squat Rack & Loaded Olympic Barbell (NW corner: cols 20.25..22.25, rows 14.05..15.5)
@@ -515,14 +516,19 @@ export function drawSouthRoomsFurniture(
   // Safety spotter arms extending forward
   pxRect(ctx, srX + 5, srY + 14, 4, srH - 18, '#3B4452');
   pxRect(ctx, srX + srW - 9, srY + 14, 4, srH - 18, '#3B4452');
-  // Chrome Olympic Barbell racked across J-hooks
-  pxRect(ctx, srX - 3, srY + 22, srW + 6, 3, '#CBD5E1');
-  pxRect(ctx, srX + 12, srY + 22, srW - 24, 3, '#94A3B8'); // Knurled center shaft
-  // Loaded colorful Olympic bumper weight plates (left & right sleeves)
-  pxRect(ctx, srX - 2, srY + 15, 4, 17, '#B91C1C'); // 25kg red bumper
-  pxRect(ctx, srX + 3, srY + 17, 3, 13, '#2563EB'); // 20kg blue bumper
-  pxRect(ctx, srX + srW - 2, srY + 15, 4, 17, '#B91C1C');
-  pxRect(ctx, srX + srW - 6, srY + 17, 3, 13, '#2563EB');
+  // Steel J-hook brackets on uprights
+  pxRect(ctx, srX + 3, srY + 21, 7, 5, '#64748B');
+  pxRect(ctx, srX + srW - 10, srY + 21, 7, 5, '#64748B');
+  // Chrome Olympic Barbell & bumper plates (hidden while player unracks and lifts them)
+  if (!isLiftingBarbell) {
+    pxRect(ctx, srX - 3, srY + 22, srW + 6, 3, '#CBD5E1');
+    pxRect(ctx, srX + 12, srY + 22, srW - 24, 3, '#94A3B8'); // Knurled center shaft
+    // Loaded colorful Olympic bumper weight plates (left & right sleeves)
+    pxRect(ctx, srX - 2, srY + 15, 4, 17, '#B91C1C'); // 25kg red bumper
+    pxRect(ctx, srX + 3, srY + 17, 3, 13, '#2563EB'); // 20kg blue bumper
+    pxRect(ctx, srX + srW - 2, srY + 15, 4, 17, '#B91C1C');
+    pxRect(ctx, srX + srW - 6, srY + 17, 3, 13, '#2563EB');
+  }
 
   // 7b. Adjustable Leather Weight Bench + Floor Hex Dumbbells (cols 23.25..24.8, rows 14.55..15.45)
   const wbGymX = Math.round(23.25 * TILE);

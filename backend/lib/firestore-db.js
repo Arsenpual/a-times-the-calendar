@@ -1,31 +1,20 @@
+const fs = require("fs");
 const { initializeApp, getApps, applicationDefault, cert } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 
-/**
- * Init Firebase Admin SDK ครั้งเดียวตอน backend เริ่มทำงาน (module นี้ถูก
- * require ครั้งแรกจากที่ไหนก็ได้ แต่ initializeApp() ต้องเรียกแค่ครั้งเดียว
- * ตลอดอายุ process — เช็ค getApps().length กันเรียกซ้ำเวลา require หลายจุด)
- *
- * ใช้ GOOGLE_APPLICATION_CREDENTIALS (env var มาตรฐานของ Google Cloud client
- * libraries ทุกตัว ไม่ใช่แค่ Firebase) ชี้ไปยังไฟล์ service account JSON —
- * applicationDefault() จะไปหาไฟล์จาก env var ตัวนี้ให้เอง โดยไม่ต้อง
- * require(...) ไฟล์ JSON ตรงๆ ในโค้ด (ปลอดภัยกว่า เพราะไม่มี path ไฟล์
- * secret ฝังอยู่ใน source code)
- *
- * หมายเหตุเวอร์ชัน: firebase-admin v12+ เปลี่ยนจาก monolithic `admin`
- * namespace (require("firebase-admin") แล้วเรียก admin.initializeApp(),
- * admin.firestore() ตรงๆ) เป็น "modular API" แบบเดียวกับ client SDK v9+ —
- * ต้อง import ฟังก์ชันแยกจาก submodule ("firebase-admin/app",
- * "firebase-admin/firestore", "firebase-admin/auth") แทน ไม่มี admin.apps /
- * admin.firestore / admin.auth / admin.credential ให้เรียกจาก object เดียว
- * อีกต่อไป — เพิ่ม "firebase-admin/auth" เข้ามาใน Phase 2 (Firebase
- * Authentication) สำหรับ verifyIdToken() ในทุก route ที่ต้องการ userId
- */
+function isPlaceholderSecretValue(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return true;
+  if (/^(your[-_]|replace[-_]|example|<.+>|\{\s*\.\.\.\s*\})$/i.test(trimmed)) return true;
+  if (/^\{\s*"\.\.\."\s*\}$/.test(trimmed)) return true;
+  return false;
+}
+
 function parseServiceAccountCredentials(rawValue) {
   if (!rawValue || typeof rawValue !== "string") return { credentials: null, error: null };
   let trimmed = rawValue.trim();
-  if (!trimmed) return { credentials: null, error: null };
+  if (!trimmed || isPlaceholderSecretValue(trimmed)) return { credentials: null, error: null };
 
   if (
     (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
@@ -34,45 +23,91 @@ function parseServiceAccountCredentials(rawValue) {
     trimmed = trimmed.slice(1, -1).trim();
   }
 
-  try {
-    return { credentials: JSON.parse(trimmed), error: null };
-  } catch {
-    try {
-      const decoded = Buffer.from(trimmed, "base64").toString("utf8");
-      return { credentials: JSON.parse(decoded), error: null };
-    } catch {
-      const hint =
-        trimmed === "{"
-          ? "พบค่าแค่ '{' — มักเกิดจากการวาง JSON แบบหลายบรรทัดในไฟล์ .env (dotenv จะตัดเหลือแค่บรรทัดแรก) กรุณาย่อ JSON เป็นบรรทัดเดียว หรือใช้ GOOGLE_APPLICATION_CREDENTIALS แทนบน Localhost"
-          : "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ JSON หรือ Base64 JSON ที่ถูกต้อง — ตรวจสอบว่าคัดลอกเนื้อหาไฟล์ service account ทั้งก้อนมาวางใน Secret แบบไม่มีการตัด/ครอบ quote ผิดพลาด";
-      return { credentials: null, error: new Error(hint) };
+  const tryParseJson = (text) => {
+    const parsed = JSON.parse(text);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.client_email === "string" &&
+      typeof parsed.private_key === "string" &&
+      parsed.private_key.includes("PRIVATE KEY")
+    ) {
+      return {
+        ...parsed,
+        private_key: parsed.private_key.replace(/\\n/g, "\n")
+      };
     }
+    return null;
+  };
+
+  try {
+    const parsed = tryParseJson(trimmed);
+    if (parsed) return { credentials: parsed, error: null };
+  } catch {
+    // Fall through to Base64 decode
   }
+
+  try {
+    const decoded = Buffer.from(trimmed, "base64").toString("utf8");
+    const parsed = tryParseJson(decoded);
+    if (parsed) return { credentials: parsed, error: null };
+  } catch {
+    // Fall through to hint
+  }
+
+  const hint =
+    trimmed === "{"
+      ? "พบค่าแค่ '{' — มักเกิดจากการวาง JSON แบบหลายบรรทัดในไฟล์ .env (dotenv จะตัดเหลือแค่บรรทัดแรก) กรุณาย่อ JSON เป็นบรรทัดเดียว หรือแปลงเป็น Base64 บรรทัดเดียว"
+      : "GOOGLE_APPLICATION_CREDENTIALS_JSON ไม่ใช่ Service Account JSON หรือ Base64 JSON ที่สมบูรณ์ — ตรวจสอบว่าคัดลอกไฟล์ JSON ทั้งก้อนโดยไม่ถูกตัดความยาว";
+  return { credentials: null, error: new Error(hint) };
 }
 
-const { credentials: parsedServiceAccount, error: serviceAccountJsonError } =
+function resolveSplitServiceAccount() {
+  const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || "").trim();
+  const rawPrivateKey = [
+    process.env.FIREBASE_PRIVATE_KEY || "",
+    process.env.FIREBASE_PRIVATE_KEY_1 || "",
+    process.env.FIREBASE_PRIVATE_KEY_2 || "",
+    process.env.FIREBASE_PRIVATE_KEY_3 || ""
+  ]
+    .filter(Boolean)
+    .join("");
+  if (!clientEmail || !rawPrivateKey || isPlaceholderSecretValue(clientEmail) || isPlaceholderSecretValue(rawPrivateKey)) {
+    return null;
+  }
+  const normalizedKey = rawPrivateKey.replace(/\\n/g, "\n").trim();
+  if (!normalizedKey.includes("PRIVATE KEY")) return null;
+  return {
+    project_id: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || undefined,
+    client_email: clientEmail,
+    private_key: normalizedKey
+  };
+}
+
+const { credentials: parsedJsonServiceAccount, error: serviceAccountJsonError } =
   parseServiceAccountCredentials(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-const hasFileCredentialPath = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+const splitServiceAccount = parsedJsonServiceAccount ? null : resolveSplitServiceAccount();
+const parsedServiceAccount = parsedJsonServiceAccount || splitServiceAccount;
 
-if (serviceAccountJsonError) {
-  if (hasFileCredentialPath) {
-    console.warn(
-      `[firestore-db] ข้าม GOOGLE_APPLICATION_CREDENTIALS_JSON ที่ไม่สมบูรณ์ (${serviceAccountJsonError.message}) — ใช้ GOOGLE_APPLICATION_CREDENTIALS แทน`
-    );
-  } else {
-    throw serviceAccountJsonError;
-  }
+const rawFileCredentialPath = (process.env.GOOGLE_APPLICATION_CREDENTIALS || "").trim();
+const hasFileCredentialPath = Boolean(
+  rawFileCredentialPath &&
+  !isPlaceholderSecretValue(rawFileCredentialPath) &&
+  fs.existsSync(rawFileCredentialPath)
+);
+
+if (serviceAccountJsonError && !parsedServiceAccount && !hasFileCredentialPath) {
+  console.log(`[firestore-db] ข้าม GOOGLE_APPLICATION_CREDENTIALS_JSON ชั่วคราว (${serviceAccountJsonError.message})`);
 }
 
-const configuredProjectId =
-  process.env.FIREBASE_PROJECT_ID ||
-  process.env.VITE_FIREBASE_PROJECT_ID ||
-  parsedServiceAccount?.project_id ||
-  "";
-const hasCredentialSource =
-  Boolean(parsedServiceAccount) ||
-  hasFileCredentialPath;
-const hasFirebaseAdminCreds = Boolean(configuredProjectId && hasCredentialSource);
+const configuredProjectId = [
+  process.env.FIREBASE_PROJECT_ID,
+  process.env.VITE_FIREBASE_PROJECT_ID,
+  parsedServiceAccount?.project_id
+].find((val) => val && !isPlaceholderSecretValue(val)) || "";
+
+const hasCredentialSource = Boolean(parsedServiceAccount) || hasFileCredentialPath;
+let hasFirebaseAdminCreds = Boolean(configuredProjectId && hasCredentialSource);
 
 function createInMemoryFirestoreStub() {
   const store = new Map();
@@ -234,40 +269,44 @@ function createInMemoryAuthStub() {
   };
 }
 
+let app;
+if (hasFirebaseAdminCreds) {
+  try {
+    if (getApps().length === 0) {
+      let credential;
+      if (parsedServiceAccount) {
+        credential = cert(parsedServiceAccount);
+      } else if (hasFileCredentialPath) {
+        credential = applicationDefault();
+      }
+      if (!credential) {
+        throw new Error("Missing Firebase Admin credential");
+      }
+      app = initializeApp({
+        credential,
+        projectId: configuredProjectId
+      });
+    } else {
+      app = getApps()[0];
+    }
+  } catch (error) {
+    console.log(
+      `[firestore-db] เริ่มต้น Firebase Admin ไม่สำเร็จ (${error.message}) — สลับไปใช้โหมด In-Memory Sandbox ชั่วคราว`
+    );
+    hasFirebaseAdminCreds = false;
+    app = undefined;
+  }
+}
+
 if (!hasFirebaseAdminCreds) {
-  console.warn(
-    "[firestore-db] ไม่พบ GOOGLE_APPLICATION_CREDENTIALS_JSON หรือ FIREBASE_PROJECT_ID — เริ่มทำงานในโหมด In-Memory Sandbox (ข้อมูลจะเก็บในหน่วยความจำชั่วคราวจนกว่าจะป้อน Secret ใน AI Studio)"
+  console.log(
+    "[firestore-db] ยังไม่ได้ตั้งค่า Firebase Admin credentials ที่ใช้งานได้ — เริ่มทำงานในโหมด In-Memory Sandbox ชั่วคราวจนกว่าจะตั้งค่า Secret ใน AI Studio"
   );
 }
 
-let app;
-if (hasFirebaseAdminCreds && getApps().length === 0) {
-  if (!configuredProjectId) {
-    throw new Error("ไม่พบ FIREBASE_PROJECT_ID ใน .env หรือใน GOOGLE_APPLICATION_CREDENTIALS_JSON");
-  }
-
-  let credential;
-  if (parsedServiceAccount) {
-    credential = cert(parsedServiceAccount);
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    credential = applicationDefault();
-  } else if (hasFirebaseAdminCreds) {
-    throw new Error(
-      "ไม่พบทั้ง GOOGLE_APPLICATION_CREDENTIALS (path ไฟล์ — ใช้ตอน dev ในเครื่อง) และ " +
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON (เนื้อหา JSON ทั้งก้อน — ใช้ตอน deploy จริงหรือใน AI Studio Secrets) ต้องตั้งค่าตัวใดตัวหนึ่ง"
-    );
-  }
-
-  app = initializeApp({
-    credential,
-    projectId: configuredProjectId
-  });
-} else if (hasFirebaseAdminCreds) {
-  app = getApps()[0];
-}
-
-const db = hasFirebaseAdminCreds ? getFirestore(app) : createInMemoryFirestoreStub();
-const auth = hasFirebaseAdminCreds ? getAuth(app) : createInMemoryAuthStub();
+const isFirebaseAdminConfigured = Boolean(hasFirebaseAdminCreds && app);
+const db = isFirebaseAdminConfigured ? getFirestore(app) : createInMemoryFirestoreStub();
+const auth = isFirebaseAdminConfigured ? getAuth(app) : createInMemoryAuthStub();
 
 // ---- Collection references (Phase 2: per-user, nested under users/{userId}) ----
 // เดิม (Phase 0-1) เป็น collection กลางระดับ root: categories/{categoryId},
@@ -668,6 +707,7 @@ async function ensureDefaultCategoriesForUser(userId) {
 module.exports = {
   db,
   auth,
+  isFirebaseAdminConfigured,
   reminderModeDoc,
   activityModeDoc,
   cozyDeskModeDoc,

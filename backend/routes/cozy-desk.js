@@ -19,10 +19,16 @@ const {
   buildCharacterStatusMap,
 } = require("../lib/cozy-desk-state.js");
 const {
+  DEFAULT_MODEL,
+  normalizeGeminiModel,
+} = require("../lib/gemini-api.js");
+const {
   toFiniteNumberOrNull,
   toCleanStringOrNull,
+  countStandardHuaweiFields,
   buildRawSleepInfographic,
   sanitizeSleepRecord,
+  SLEEP_DATE_DETECT_RESPONSE_SCHEMA,
   SLEEP_EXTRACT_RESPONSE_SCHEMA,
   SLEEP_ANALYZE_RESPONSE_SCHEMA,
   formatSleepLogsContext,
@@ -51,7 +57,8 @@ function shouldSkipFallbackRetry(err) {
 }
 
 function createCozyDeskRouter({
-  generateContent = (...args) => require("../lib/gemini-api.js").generateContent(...args),
+  generateContent,
+  generateContentStream,
   sleepLogsCol = (...args) => require("../lib/firestore-db.js").cozySleepLogsCol(...args),
   env = process.env,
   aiRateLimitMax = 25,
@@ -59,6 +66,14 @@ function createCozyDeskRouter({
   mutationRateLimitMax = 60,
   mutationRateLimitWindowMs = 15 * 60 * 1000,
 } = {}) {
+  const hasCustomGenerateContent = typeof generateContent === "function";
+  const resolvedGenerateContent = hasCustomGenerateContent
+    ? generateContent
+    : (...args) => require("../lib/gemini-api.js").generateContent(...args);
+  const resolvedGenerateContentStream =
+    typeof generateContentStream === "function"
+      ? generateContentStream
+      : (...args) => require("../lib/gemini-api.js").generateContentStream(...args);
   const router = express.Router();
 
   const cozyAiLimiter = rateLimit({
@@ -185,6 +200,13 @@ function createCozyDeskRouter({
       typeof body.defaultDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.defaultDate.trim())
         ? body.defaultDate.trim()
         : new Date().toISOString().slice(0, 10);
+    const forceRescan = body.forceRescan === true;
+    const existingDatesSet = new Set(
+      (Array.isArray(body.existingDates) ? body.existingDates : [])
+        .filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.trim()))
+        .slice(0, 400)
+        .map((d) => d.trim())
+    );
 
     const allowedMimes = new Set(["image/jpeg", "image/png", "image/webp"]);
     if (!imageBase64 || imageBase64.length < 100 || !allowedMimes.has(mimeType)) {
@@ -210,21 +232,149 @@ function createCozyDeskRouter({
     }
 
     const extractPrompt = [
-      "คุณคือระบบสกัดข้อมูลดิบการนอน (Sleep Data OCR & Raw Structured JSON Parser) ที่แม่นยำสูง",
-      `วันที่อ้างอิงปัจจุบันคือ ${defaultDate} (ใช้ปี ค.ศ. จากวันที่อ้างอิงนี้หากในรูปแสดงเฉพาะวัน/เดือน และใช้ dateLabel เป็นข้อความหัวข้อวันที่สั้นตามรูป เช่น "ศ. 20 พ.ย.")`,
-      "กฎเหล็ก — ต้องใช้เฉพาะข้อมูลสถิติการนอนเท่านั้น ตัดส่วนที่ไม่เกี่ยวข้องออกทั้งหมด:",
-      "- ห้ามดึงชื่อบัญชีผู้ใช้ (เช่น K96380T), โลโก้/ชื่อแอปด้านล่าง, กราฟแท่ง 7 วัน, และห้ามดึงข้อความจากส่วน \"การวิเคราะห์และคำแนะนำ\" ด้านล่าง (เช่น ระดับความเครียด, อินซูลิน/น้ำตาลในเลือด, คอร์สสมาธิ)",
-      "- ดึงเฉพาะตัวเลขและข้อความสถิติการนอนจริง: คะแนนการนอน, เปอร์เซ็นต์ดีกว่าผู้ใช้, จำนวนดาว (starRating เช่น 4.5), เวลานอน (bedtime HH:mm), เวลาตื่น (wakeTime HH:mm), เวลานอนรวม, ระยะหลับลึก/หลับตื้น/REM (นาที, ข้อความ, %, สถานะ, เกณฑ์อ้างอิง), ความต่อเนื่องของการนอนหลับลึก, คุณภาพการหายใจ และจำนวนครั้งที่ตื่นนอน",
-      "- แปลงระยะเวลาแต่ละช่วงให้เป็นจำนวนนาทีที่ถูกต้อง",
-      "- สำหรับฟิลด์ตัวเลขที่ไม่มีในรูปให้ใส่ -1 และข้อความที่ไม่มีให้ใส่ \"\"",
+      "You are a Sleep Screenshot Structured JSON Extractor using HUAWEI HEALTH as the strict CANONICAL STANDARD.",
+      "This screenshot may come from Huawei Health (Thai or English — primary reference layout) OR any other health app (Apple Health, Samsung Health, Garmin Connect, Fitbit, Oura, WHOOP, Zepp, Mi Fitness, Sleep Cycle, etc.).",
+      `Reference local date: ${defaultDate}. If the screenshot shows only day/month without a year (e.g. 'จ. 23 พ.ย.' or 'Nov 23'), infer the year from this reference date. Format date as YYYY-MM-DD (use the wake-up / report date shown). Put the original date header text in dateLabel.`,
+      "",
+      "HUAWEI HEALTH CANONICAL STANDARD — PERFECT EXTRACTION RULES:",
+      "1. First decide isSleepScreenshot (true if the image displays sleep data; false if it is an unrelated photo/document).",
+      "2. Identify sourceApp accurately (e.g. 'Huawei Health', 'Apple Health', 'Samsung Health', 'Garmin Connect', 'Fitbit', 'Oura', 'WHOOP', 'Zepp', or 'Health App' if unclear) and detectedLanguage ('th', 'en', 'zh', 'ja', etc.).",
+      "3. IMPORTANT LAYOUT RULES FOR HUAWEI HEALTH:",
+      "   - Card order is DYNAMIC: when any metric is abnormal (e.g. 'ความต่อเนื่องของการนอนหลับลึก 67 คะแนน ต่ำ'), Huawei Health moves that card to the TOP-LEFT position ahead of 'การนอนกลางคืน'. ALWAYS match each metric by its heading label, NEVER by card position.",
+      "   - ZERO (0) IS A REAL EXTRACTED VALUE: e.g. 'จำนวนครั้งที่ตื่นนอน 0 ครั้ง ปกติ' MUST be returned as awakeCount: 0 (NEVER -1). Use -1 ONLY when a field does not appear anywhere in the image.",
+      "   - Same-day / daytime sleep windows are valid: e.g. '11/23 เวลานอน 11:02 น.' to '11/23 ตื่นนอน 18:06 น.' -> bedtime: '11:02', wakeTime: '18:06'.",
+      "   - Preserve exact printed status words such as 'ปกติ', 'ต่ำ', 'สูง' (or 'Normal', 'Low', 'High').",
+      "   - Ignore historical bars in the mini trend bar chart next to the score; read today's values from the summary header, donut legend, and the 7 metric cards.",
+      "4. Extract ONLY the fields that exist in the Huawei Health canonical standard below. Use -1 for any ABSENT numeric field and \"\" for any ABSENT text field. NEVER guess, interpolate from unlabeled bars, or fill Huawei default reference ranges when not printed in the image:",
+      "   - Header: date (YYYY-MM-DD), dateLabel (original header text e.g. 'จ. 23 พ.ย.').",
+      "   - Sleep Window (24-hour HH:mm, convert AM/PM cleanly): bedtime (Huawei: 'เวลานอน 11:02 น.' -> '11:02'), wakeTime (Huawei: 'ตื่นนอน 18:06 น.' -> '18:06').",
+      "   - Score Card (ONLY if printed in the image): sleepScore (e.g. 84), percentileBeat (Huawei: 'ดีกว่า 91% ของผู้ใช้' -> 91), starRating (count exact stars out of 5 including half-stars, e.g. 4.5; return -1 if no stars are displayed).",
+      "   - Total Sleep Duration (Huawei card: 'การนอนกลางคืน'): totalSleepMinutes (integer minutes, e.g. 7 ชั่วโมง 4 นาที -> 424), totalSleepText, totalSleepStatus (e.g. 'ปกติ'), totalSleepReference (ONLY if printed, e.g. 'ข้อมูลอ้างอิง: 6–10 ชม.').",
+      "   - 3 Canonical Sleep Stages (combine duration from donut/list + percentage/status/reference from stage cards):",
+      "     * Deep sleep (Huawei: 'นอนหลับสนิท'): deepMinutes, deepText, deepPercent, deepStatus, deepReference (ONLY if printed, e.g. 'ข้อมูลอ้างอิง: 20–60%').",
+      "     * Light sleep (Huawei donut: 'นอนน้อย' AND Huawei card: 'นอนหลับตื้น'; Apple Health: 'Core'): lightMinutes, lightText, lightPercent, lightStatus, lightReference (ONLY if printed, e.g. 'ข้อมูลอ้างอิง: <55%').",
+      "     * REM sleep (Huawei: 'นอนหลับ REM' / 'ช่วงการหลับแบบ REM'): remMinutes, remText, remPercent, remStatus, remReference (ONLY if printed, e.g. 'ข้อมูลอ้างอิง: 10–30%').",
+      "   - 3 Canonical Huawei Health Sub-Metrics (ONLY if printed in the image):",
+      "     * Deep sleep continuity (Huawei: 'ความต่อเนื่องของการนอนหลับลึก'): deepSleepContinuityScore, deepSleepContinuityStatus (e.g. 'ต่ำ' or 'ปกติ'), deepSleepContinuityReference (e.g. 'ข้อมูลอ้างอิง: 70–100 คะแนน').",
+      "     * Awakenings count (Huawei: 'จำนวนครั้งที่ตื่นนอน'): awakeCount (integer count including 0), awakeStatus, awakeReference (e.g. 'ข้อมูลอ้างอิง: 0–1 ครั้ง').",
+      "     * Breathing quality score (Huawei: 'คุณภาพการหายใจ'): breathingQualityScore, breathingQualityStatus, breathingQualityReference (e.g. 'ข้อมูลอ้างอิง: 70–100 คะแนน').",
+      "5. STRICT NON-HUAWEI EXCLUSION RULE:",
+      "   - If another app shows metrics that do NOT exist in Huawei Health (such as HRV, SpO2 / Blood Oxygen, Heart Rate / BPM, Respiratory Rate brpm, Skin Temperature, Awake Duration in minutes, Sleep Efficiency %, Sleep Latency, Time in Bed, Body Battery, Recovery/Readiness Score, Snoring, etc.), DO NOT extract them into any field.",
+      "   - Instead, record their section/metric names in `skippedSections` (e.g. 'HRV (นอกมาตรฐาน Huawei Health)', 'SpO2 (นอกมาตรฐาน Huawei Health)', 'ระยะเวลาตื่น (นอกมาตรฐาน Huawei Health)').",
+      "   - Always exclude and list in `skippedSections`: account usernames/IDs (e.g. K96380T), prose advice/recommendations ('การวิเคราะห์และคำแนะนำ'), historical mini comparison bar chart, previous-day stress score, meditation/relaxation tips, ads, and unlabeled hypnogram timeline charts.",
+      "6. List the canonical Huawei Health sections successfully found with explicit numbers in `scannableSections`.",
     ].join("\n");
 
-    beginCharacterTask(req.userId, "mina", "สกัดข้อมูลการนอนจากภาพ");
+    const parseGeminiJsonPayload = (payload) => {
+      const rawText = (
+        payload?.text ||
+        payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") ||
+        ""
+      )
+        .trim()
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      if (!rawText) {
+        throw new Error("โมเดลส่งข้อมูลกลับมาว่างเปล่า");
+      }
+      const parsed = JSON.parse(rawText);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("โครงสร้าง JSON ที่สกัดได้ไม่ถูกต้อง");
+      }
+      return { parsed, rawText };
+    };
+
+    beginCharacterTask(
+      req.userId,
+      "mina",
+      existingDatesSet.size > 0 && !forceRescan
+        ? "ตรวจวันที่และสแกนข้อมูลการนอนมาตรฐาน Huawei Health"
+        : "สแกนและสกัดข้อมูลการนอนมาตรฐาน Huawei Health"
+    );
 
     try {
+      const primaryModel = normalizeGeminiModel(env.GEMINI_MODEL || PRIMARY_MODEL);
+
+      // Step 1: Fast lightweight date pre-scan when we already have known dates
+      // so screenshots for an already-scanned date skip full heavy extraction.
+      if (existingDatesSet.size > 0 && !forceRescan) {
+        const dateCheckModel = FALLBACK_MODEL;
+        const dateCheckPrompt = [
+          "You are a fast date detector for sleep tracking screenshots (Huawei Health or other health apps).",
+          `Reference local date: ${defaultDate}. If the screenshot shows only day/month without a year (e.g. 'จ. 23 พ.ย.', '11/23', 'Nov 23'), infer the year from this reference date.`,
+          "Read ONLY:",
+          "1. isSleepScreenshot: true if this image shows sleep data/statistics, false if it is an unrelated photo/document.",
+          "2. date: the report / wake-up date in strict YYYY-MM-DD format (or \"\" if no date is visible).",
+          "3. dateLabel: the exact date text printed in the header (e.g. 'จ. 23 พ.ย.').",
+        ].join("\n");
+
+        try {
+          const datePayload = await resolvedGenerateContent(
+            {
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    { inlineData: { mimeType, data: imageBase64 } },
+                    { text: dateCheckPrompt },
+                  ],
+                },
+              ],
+              generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: SLEEP_DATE_DETECT_RESPONSE_SCHEMA,
+              },
+            },
+            { env: { ...env, GEMINI_MODEL: dateCheckModel }, model: dateCheckModel }
+          );
+          const { parsed: dateParsed, rawText: dateRawText } = parseGeminiJsonPayload(datePayload);
+          const dateCheckTokens =
+            datePayload?.usageMetadata?.totalTokenCount ??
+            estimateFallbackTokens(dateCheckPrompt.length + 600, dateRawText.length);
+          recordTokenUsage(req.userId, dateCheckTokens);
+
+          if (dateParsed.isSleepScreenshot === false) {
+            return res.status(422).json({
+              code: "NOT_A_SLEEP_IMAGE",
+              error:
+                "ไม่พบข้อมูลสถิติการนอนที่ตรงตามมาตรฐาน Huawei Health ในภาพนี้ กรุณาอัปโหลดภาพหน้าจอสรุปการนอนที่มีตัวเลขชัดเจนครับ",
+            });
+          }
+
+          const detectedDate =
+            typeof dateParsed.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParsed.date.trim())
+              ? dateParsed.date.trim()
+              : null;
+
+          if (detectedDate && existingDatesSet.has(detectedDate)) {
+            return res.json({
+              ok: true,
+              skippedDuplicate: true,
+              duplicateDate: detectedDate,
+              dateLabel: toCleanStringOrNull(dateParsed.dateLabel, 60) ?? detectedDate,
+              model: dateCheckModel,
+            });
+          }
+        } catch (dateErr) {
+          if (shouldSkipFallbackRetry(dateErr)) {
+            throw dateErr;
+          }
+          console.warn(
+            "[cozy-desk] /sleep/extract date pre-scan failed, proceeding to full extraction:",
+            dateErr?.message || dateErr
+          );
+        }
+      }
+
       let payload;
+      let parsed;
+      let rawText;
+      let usedModel = primaryModel;
+
       try {
-        payload = await generateContent(
+        payload = await resolvedGenerateContent(
           {
             contents: [
               {
@@ -240,23 +390,27 @@ function createCozyDeskRouter({
               responseSchema: SLEEP_EXTRACT_RESPONSE_SCHEMA,
             },
           },
-          { env }
+          { env, model: primaryModel }
         );
+        ({ parsed, rawText } = parseGeminiJsonPayload(payload));
       } catch (primaryErr) {
         if (shouldSkipFallbackRetry(primaryErr)) {
           throw primaryErr;
         }
-        console.warn("[cozy-desk] /sleep/extract primary attempt failed, retrying without strict schema:", primaryErr?.message || primaryErr);
-        const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+        console.warn(
+          "[cozy-desk] /sleep/extract primary attempt failed, retrying with fallback model:",
+          primaryErr?.message || primaryErr
+        );
         const fallbackModel =
-          currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+          primaryModel === FALLBACK_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL;
+        usedModel = fallbackModel;
         const fallbackPrompt = [
           extractPrompt,
           "",
-          "ตอบกลับเป็น JSON object เท่านั้น (ห้ามใส่ markdown ```json) โดยมีคีย์:",
-          "date (YYYY-MM-DD), dateLabel, sourceApp, sleepScore, percentileBeat, starRating, bedtime (HH:mm), wakeTime (HH:mm), totalSleepMinutes, totalSleepText, totalSleepStatus, totalSleepReference, deepMinutes, deepText, deepPercent, deepStatus, deepReference, lightMinutes, lightText, lightPercent, lightStatus, lightReference, remMinutes, remText, remPercent, remStatus, remReference, deepSleepContinuityScore, deepSleepContinuityStatus, awakeCount, awakeStatus, breathingQualityScore, breathingQualityStatus",
+          "Return ONLY a valid JSON object (no markdown fences) with keys:",
+          "isSleepScreenshot (boolean), detectedLanguage, confidence ('high'|'medium'|'low'), scannableSections (string[]), skippedSections (string[]), date (YYYY-MM-DD), dateLabel, sourceApp, sleepScore, percentileBeat, starRating, bedtime (HH:mm), wakeTime (HH:mm), totalSleepMinutes, totalSleepText, totalSleepStatus, totalSleepReference, deepMinutes, deepText, deepPercent, deepStatus, deepReference, lightMinutes, lightText, lightPercent, lightStatus, lightReference, remMinutes, remText, remPercent, remStatus, remReference, deepSleepContinuityScore, deepSleepContinuityStatus, deepSleepContinuityReference, awakeCount, awakeStatus, awakeReference, breathingQualityScore, breathingQualityStatus, breathingQualityReference.",
         ].join("\n");
-        payload = await generateContent(
+        payload = await resolvedGenerateContent(
           {
             contents: [
               {
@@ -271,19 +425,11 @@ function createCozyDeskRouter({
               responseMimeType: "application/json",
             },
           },
-          { env: fallbackModel ? { ...env, GEMINI_MODEL: fallbackModel } : env }
+          { env: { ...env, GEMINI_MODEL: fallbackModel }, model: fallbackModel }
         );
+        ({ parsed, rawText } = parseGeminiJsonPayload(payload));
       }
 
-      const rawText = (
-        payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
-      )
-        .trim()
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-      const parsed = JSON.parse(rawText);
       const numOrNull = (v) => {
         const n = toFiniteNumberOrNull(v);
         return n !== null && n >= 0 ? n : null;
@@ -293,11 +439,13 @@ function createCozyDeskRouter({
           ? parsed.date.trim()
           : defaultDate;
 
+      const sourceApp = toCleanStringOrNull(parsed.sourceApp, 80) ?? "Health App";
+
       const baseExtracted = {
         id: `sleep_${extractedDate}`,
         date: extractedDate,
         dateLabel: toCleanStringOrNull(parsed.dateLabel, 60) ?? extractedDate,
-        sourceApp: toCleanStringOrNull(parsed.sourceApp, 80) ?? "Huawei Health",
+        sourceApp,
         userLabel: null,
         sleepScore: numOrNull(parsed.sleepScore),
         percentileBeat: numOrNull(parsed.percentileBeat),
@@ -309,22 +457,22 @@ function createCozyDeskRouter({
         totalSleepReference: toCleanStringOrNull(parsed.totalSleepReference, 60),
         stages: {
           deep: {
-            minutes: numOrNull(parsed.deepMinutes) ?? 0,
-            durationText: toCleanStringOrNull(parsed.deepText, 80) ?? "",
+            minutes: numOrNull(parsed.deepMinutes),
+            durationText: toCleanStringOrNull(parsed.deepText, 80),
             percent: numOrNull(parsed.deepPercent),
             status: toCleanStringOrNull(parsed.deepStatus, 40),
             referenceRange: toCleanStringOrNull(parsed.deepReference, 60),
           },
           light: {
-            minutes: numOrNull(parsed.lightMinutes) ?? 0,
-            durationText: toCleanStringOrNull(parsed.lightText, 80) ?? "",
+            minutes: numOrNull(parsed.lightMinutes),
+            durationText: toCleanStringOrNull(parsed.lightText, 80),
             percent: numOrNull(parsed.lightPercent),
             status: toCleanStringOrNull(parsed.lightStatus, 40),
             referenceRange: toCleanStringOrNull(parsed.lightReference, 60),
           },
           rem: {
-            minutes: numOrNull(parsed.remMinutes) ?? 0,
-            durationText: toCleanStringOrNull(parsed.remText, 80) ?? "",
+            minutes: numOrNull(parsed.remMinutes),
+            durationText: toCleanStringOrNull(parsed.remText, 80),
             percent: numOrNull(parsed.remPercent),
             status: toCleanStringOrNull(parsed.remStatus, 40),
             referenceRange: toCleanStringOrNull(parsed.remReference, 60),
@@ -332,25 +480,46 @@ function createCozyDeskRouter({
         },
         deepSleepContinuityScore: numOrNull(parsed.deepSleepContinuityScore),
         deepSleepContinuityStatus: toCleanStringOrNull(parsed.deepSleepContinuityStatus, 40),
+        deepSleepContinuityReference: toCleanStringOrNull(parsed.deepSleepContinuityReference, 60),
         awakeCount: numOrNull(parsed.awakeCount),
         awakeStatus: toCleanStringOrNull(parsed.awakeStatus, 40),
+        awakeReference: toCleanStringOrNull(parsed.awakeReference, 60),
         breathingQualityScore: numOrNull(parsed.breathingQualityScore),
         breathingQualityStatus: toCleanStringOrNull(parsed.breathingQualityStatus, 40),
+        breathingQualityReference: toCleanStringOrNull(parsed.breathingQualityReference, 60),
         previousDayStressScore: null,
         appInsights: [],
         appRecommendation: null,
+        scanSummary: {
+          isSleepScreenshot: parsed.isSleepScreenshot !== false,
+          detectedApp: sourceApp,
+          detectedLanguage: toCleanStringOrNull(parsed.detectedLanguage, 24) ?? "unknown",
+          scannableSections: Array.isArray(parsed.scannableSections) ? parsed.scannableSections : [],
+          skippedSections: Array.isArray(parsed.skippedSections) ? parsed.skippedSections : [],
+          confidence: toCleanStringOrNull(parsed.confidence, 20),
+        },
       };
-      const starHint = numOrNull(parsed.starRating);
-      baseExtracted.rawInfographic = buildRawSleepInfographic(baseExtracted, starHint);
-
-      const record = sanitizeSleepRecord(baseExtracted, defaultDate);
 
       const usedTokens =
         payload?.usageMetadata?.totalTokenCount ??
         estimateFallbackTokens(extractPrompt.length + 1200, rawText.length);
       recordTokenUsage(req.userId, usedTokens);
 
-      res.json({ ok: true, record, model: env.GEMINI_MODEL || PRIMARY_MODEL });
+      const standardFieldsFound = countStandardHuaweiFields(baseExtracted);
+      if (parsed.isSleepScreenshot === false && standardFieldsFound === 0) {
+        return res.status(422).json({
+          code: "NOT_A_SLEEP_IMAGE",
+          error:
+            "ไม่พบข้อมูลสถิติการนอนที่ตรงตามมาตรฐาน Huawei Health ในภาพนี้ กรุณาอัปโหลดภาพหน้าจอสรุปการนอนที่มีตัวเลขชัดเจนครับ",
+        });
+      }
+
+      const starHint = numOrNull(parsed.starRating);
+      baseExtracted.rawInfographic = buildRawSleepInfographic(baseExtracted, starHint);
+
+      const record = sanitizeSleepRecord(baseExtracted, defaultDate);
+
+      res.json({ ok: true, record, model: usedModel });
     } catch (err) {
       console.error("[cozy-desk] /sleep/extract failed:", err);
       const classified = classifyGeminiError(err);
@@ -390,7 +559,7 @@ function createCozyDeskRouter({
 
     const analyzePrompt = [
       "คุณคือผู้เชี่ยวชาญด้านเวชศาสตร์การนอนหลับและโค้ชสุขภาพประจำบ้าน Cozy Desk ที่อบอุ่นและวิเคราะห์เชิงลึกจากข้อมูลจริง",
-      "จงวิเคราะห์ข้อมูลการนอนในรูปแบบ JSON ด้านล่างเป็นภาษาไทยที่อ่านง่าย ตรงจุด และอ้างอิงตัวเลขจริง:",
+      "จงวิเคราะห์ข้อมูลการนอนมาตรฐาน Huawei Health ในรูปแบบ JSON ด้านล่างเป็นภาษาไทยที่อ่านง่าย ตรงจุด และอ้างอิงเฉพาะตัวเลขที่มีจริง (ค่าที่เป็น null คือไม่มีข้อมูลในภาพ ห้ามเดา):",
       JSON.stringify({ ...target, aiAnalysis: undefined }, null, 2),
       history.length > 0
         ? `\nประวัติการนอนวันอื่นๆ ย้อนหลัง (${history.length} วัน):\n${JSON.stringify(history, null, 2)}`
@@ -400,20 +569,57 @@ function createCozyDeskRouter({
     beginCharacterTask(req.userId, "mina", "วิเคราะห์ข้อมูลการนอน");
 
     try {
-      const payload = await generateContent(
-        {
-          contents: [{ role: "user", parts: [{ text: analyzePrompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: SLEEP_ANALYZE_RESPONSE_SCHEMA,
+      const parseAnalyzePayload = (resp) => {
+        const text = (
+          resp?.text ||
+          resp?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") ||
+          ""
+        )
+          .trim()
+          .replace(/^```json\s*/i, "")
+          .replace(/^```\s*/i, "")
+          .replace(/\s*```$/i, "")
+          .trim();
+        if (!text) throw new Error("โมเดลส่งผลวิเคราะห์กลับมาว่างเปล่า");
+        return { parsed: JSON.parse(text), rawText: text };
+      };
+
+      let payload;
+      let parsed;
+      let rawText;
+      const primaryModel = normalizeGeminiModel(env.GEMINI_MODEL || PRIMARY_MODEL);
+      let usedModel = primaryModel;
+      try {
+        payload = await resolvedGenerateContent(
+          {
+            contents: [{ role: "user", parts: [{ text: analyzePrompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: SLEEP_ANALYZE_RESPONSE_SCHEMA,
+            },
           },
-        },
-        { env }
-      );
-      const rawText = (
-        payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
-      ).trim();
-      const parsed = JSON.parse(rawText);
+          { env, model: primaryModel }
+        );
+        ({ parsed, rawText } = parseAnalyzePayload(payload));
+      } catch (primaryErr) {
+        if (shouldSkipFallbackRetry(primaryErr)) {
+          throw primaryErr;
+        }
+        const fallbackModel =
+          primaryModel === FALLBACK_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL;
+        usedModel = fallbackModel;
+        payload = await resolvedGenerateContent(
+          {
+            contents: [{ role: "user", parts: [{ text: analyzePrompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+            },
+          },
+          { env: { ...env, GEMINI_MODEL: fallbackModel }, model: fallbackModel }
+        );
+        ({ parsed, rawText } = parseAnalyzePayload(payload));
+      }
+
       const analysis = {
         summary: toCleanStringOrNull(parsed.summary, 1200) ?? "วิเคราะห์ข้อมูลการนอนเรียบร้อยแล้ว",
         strengths: Array.isArray(parsed.strengths)
@@ -427,7 +633,7 @@ function createCozyDeskRouter({
           ? parsed.actionableTips.map((s) => toCleanStringOrNull(s, 300)).filter(Boolean).slice(0, 6)
           : [],
         analyzedAt: new Date().toISOString(),
-        model: env.GEMINI_MODEL || PRIMARY_MODEL,
+        model: usedModel,
       };
       const usedTokens =
         payload?.usageMetadata?.totalTokenCount ??
@@ -506,6 +712,14 @@ function createCozyDeskRouter({
   router.post("/aistudio/chat", cozyAiLimiter, async (req, res) => {
     const body = req.body ?? {};
     const mode = body.mode === "build" || body.mode === "schema" ? body.mode : "prompt";
+    const selectedModel =
+      body.model === "gemini-3.1-flash-lite" || body.model === "gemini-4-hydrogen"
+        ? body.model
+        : PRIMARY_MODEL;
+    const selectedThinkingLevel =
+      body.thinkingLevel === "LOW" || body.thinkingLevel === "MEDIUM" || body.thinkingLevel === "HIGH"
+        ? body.thinkingLevel
+        : "MEDIUM";
     const customSysInst = typeof body.systemInstruction === "string" ? body.systemInstruction : "";
     const sanitizedMessages = sanitizeIncomingMessages(body.messages);
 
@@ -535,25 +749,72 @@ function createCozyDeskRouter({
 
     try {
       const systemInstruction = buildAiStudioSystemInstruction(mode, customSysInst);
-      const payload = await generateContent(
-        {
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: sanitizedMessages,
-        },
-        { env }
-      );
-      const text = (
-        payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
-      ).trim();
       const inputChars =
         systemInstruction.length + sanitizedMessages.reduce((acc, m) => acc + m.parts[0].text.length, 0);
-      const usedTokens =
-        payload?.usageMetadata?.totalTokenCount ?? estimateFallbackTokens(inputChars, text.length);
+
+      let totalOutputChars = 0;
+      let reportedTokens = null;
+
+      if (hasCustomGenerateContent && typeof generateContentStream !== "function") {
+        const payload = await resolvedGenerateContent(
+          {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: sanitizedMessages,
+            thinkingLevel: selectedModel === "gemini-4-hydrogen" ? selectedThinkingLevel : undefined,
+          },
+          { env, model: selectedModel }
+        );
+        const text = (
+          payload?.text ||
+          payload?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") ||
+          ""
+        ).trim();
+        totalOutputChars = text.length;
+        reportedTokens = payload?.usageMetadata?.totalTokenCount ?? null;
+        if (text) {
+          res.write(`data: ${JSON.stringify({ type: "chunk", text })}\n\n`);
+        }
+      } else {
+        const runStreamWithModel = async (targetModel) => {
+          const stream = await resolvedGenerateContentStream(
+            {
+              model: targetModel,
+              systemInstruction,
+              contents: sanitizedMessages,
+              thinkingLevel: targetModel === "gemini-4-hydrogen" ? selectedThinkingLevel : undefined,
+            },
+            { env }
+          );
+          for await (const chunk of stream) {
+            if (chunk?.usageMetadata?.totalTokenCount) {
+              reportedTokens = chunk.usageMetadata.totalTokenCount;
+            }
+            const chunkText = typeof chunk?.text === "string" ? chunk.text : "";
+            if (chunkText) {
+              totalOutputChars += chunkText.length;
+              res.write(`data: ${JSON.stringify({ type: "chunk", text: chunkText })}\n\n`);
+            }
+          }
+        };
+
+        try {
+          await runStreamWithModel(selectedModel);
+        } catch (primaryErr) {
+          const altModel = selectedModel === PRIMARY_MODEL ? FALLBACK_MODEL : PRIMARY_MODEL;
+          if (totalOutputChars > 0 || shouldSkipFallbackRetry(primaryErr) || altModel === selectedModel) {
+            throw primaryErr;
+          }
+          console.warn(
+            `[cozy-desk] /aistudio/chat primary model (${selectedModel}) failed, retrying with ${altModel}:`,
+            primaryErr?.message || primaryErr
+          );
+          await runStreamWithModel(altModel);
+        }
+      }
+
+      const usedTokens = reportedTokens ?? estimateFallbackTokens(inputChars, totalOutputChars);
       recordTokenUsage(req.userId, usedTokens);
 
-      if (text) {
-        res.write(`data: ${JSON.stringify({ type: "chunk", text })}\n\n`);
-      }
       res.write(`data: ${JSON.stringify({ type: "usage", tokensUsed: usedTokens })}\n\n`);
       res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
     } catch (err) {
@@ -574,7 +835,7 @@ function createCozyDeskRouter({
       host: "http://localhost:4000",
       endpoint: "/api/cozy-desk/antigravity/chat",
       workspace: path.basename(WORKSPACE_ROOT),
-      model: env.GEMINI_MODEL || PRIMARY_MODEL,
+      model: normalizeGeminiModel(env.GEMINI_MODEL || PRIMARY_MODEL),
       fileCount: files.length,
       files,
     });
@@ -648,7 +909,7 @@ function createCozyDeskRouter({
       }
 
       const systemInstruction = buildAntigravitySystemInstruction(mode, workspaceFiles, fileContexts);
-      const payload = await generateContent(
+      const payload = await resolvedGenerateContent(
         {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: sanitizedMessages,
@@ -745,7 +1006,7 @@ function createCozyDeskRouter({
         body.sleepLogsContext
       );
 
-      const payload = await generateContent(
+      const payload = await resolvedGenerateContent(
         {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: sanitizedMessages,
@@ -923,7 +1184,7 @@ function createCozyDeskRouter({
         fallbackSummary = buildDeterministicSleepSummary(body.sleepLogsContext);
       } else {
         try {
-          payload = await generateContent(
+          payload = await resolvedGenerateContent(
             {
               systemInstruction: { parts: [{ text: systemInstruction }] },
               contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -942,16 +1203,16 @@ function createCozyDeskRouter({
               "[cozy-desk] /assistant/execute-task primary attempt failed, retrying with fallback model:",
               primaryErr?.message || primaryErr
             );
-            const currentModel = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+            const currentModel = normalizeGeminiModel(env.GEMINI_MODEL || PRIMARY_MODEL);
             const fallbackModel =
-              currentModel === "gemini-3.5-flash-lite" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+              currentModel === FALLBACK_MODEL ? DEFAULT_MODEL : FALLBACK_MODEL;
             try {
-              payload = await generateContent(
+              payload = await resolvedGenerateContent(
                 {
                   systemInstruction: { parts: [{ text: systemInstruction }] },
                   contents: [{ role: "user", parts: [{ text: userPrompt }] }],
                 },
-                { env: { ...env, GEMINI_MODEL: fallbackModel } }
+                { env: { ...env, GEMINI_MODEL: fallbackModel }, model: fallbackModel }
               );
             } catch (secondaryErr) {
               if (hasDeterministicSleepFallback) {

@@ -280,11 +280,10 @@ export function useReminderTimeline({
           tapeScrollRef.current.scrollTop += deltaMs * pxPerMs;
           lastFrameTime = frameTime;
 
-          // Drift Correction: ทำงานเฉพาะตอนคลาดเคลื่อนเกิน 5px (กัน floating-point drift สะสมระยะยาว)
-          // ดึงกลับแบบนุ่มนวลทีละ 10% ของระยะที่คลาดเคลื่อน ไม่กระโดดพรวดพราดทุกเฟรม จึงไม่รู้สึกสะดุด
+          // Drift Correction: ดึงกลับแบบนุ่มนวลทีละ 10% ของระยะที่คลาดเคลื่อน ไม่กระโดดพรวดพราด
           const trueTarget = calculateTargetScrollTop();
           const drift = trueTarget - tapeScrollRef.current.scrollTop;
-          if (Math.abs(drift) > 5) {
+          if (Math.abs(drift) > 0.5) {
             tapeScrollRef.current.scrollTop += drift * 0.1;
           }
         } else {
@@ -309,9 +308,6 @@ export function useReminderTimeline({
     // ตั้งเวลาถอยหลัง (Idle Timeout) ตามค่าที่ตั้งไว้ นับจากขยับครั้งสุดท้าย
     idleTimeoutRef.current = setTimeout(() => {
       isUserInteractingRef.current = false;
-      // รีเซ็ตให้ rAF loop sync ตำแหน่งกับเวลาจริงอีกครั้งหนึ่งครั้งก่อน (กันคลาดเคลื่อนจากตอนลาก)
-      // แล้วค่อยกลับไปไหลต่อเนื่องด้วยความเร็วคงที่ตามปกติ ไม่ใช่กระโดดดีดทุกครั้งที่ปล่อยมือ
-      hasSnappedInitiallyRef.current = false;
     }, resetDelayMsRef.current);
   };
 

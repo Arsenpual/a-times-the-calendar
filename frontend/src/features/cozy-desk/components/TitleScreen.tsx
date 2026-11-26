@@ -1,17 +1,35 @@
 import { useState } from 'react';
-import { ArrowRight, Keyboard, MousePointerClick, MessageSquare } from 'lucide-react';
+import { ArrowRight, Keyboard, Menu, MousePointerClick, MessageSquare } from 'lucide-react';
 import { ASSETS } from '../types/game';
 
 interface TitleScreenProps {
   onStart: () => void;
+  navigationExpanded?: boolean;
+  onToggleNavigation?: () => void;
 }
 
-export function TitleScreen({ onStart }: TitleScreenProps) {
+export function TitleScreen({
+  onStart,
+  navigationExpanded = false,
+  onToggleNavigation,
+}: TitleScreenProps) {
   const [bannerFailed, setBannerFailed] = useState(false);
   const [portraitFailed, setPortraitFailed] = useState(false);
 
   return (
     <div className="relative flex min-h-0 flex-1 w-full items-center justify-center overflow-y-auto bg-[#1C1917] p-6">
+      {onToggleNavigation && (
+        <button
+          type="button"
+          onClick={onToggleNavigation}
+          aria-expanded={navigationExpanded}
+          aria-label={navigationExpanded ? 'ซ่อนแถบนำทางหลัก' : 'เปิดแถบนำทางหลัก'}
+          title={navigationExpanded ? 'ซ่อนแถบนำทางหลัก' : 'เปิดแถบนำทางหลัก'}
+          className="absolute top-4 left-4 z-20 flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-[#473B32] bg-[#211C18]/90 text-[#E5DDD3] shadow-lg backdrop-blur-xs transition-colors hover:border-[#6B5A4D] hover:text-white"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+      )}
       {/* Full-bleed cozy pixel house diorama background */}
       {!bannerFailed ? (
         <img
