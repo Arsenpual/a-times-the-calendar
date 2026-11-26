@@ -307,51 +307,69 @@ export function drawPendulumClock(
 }
 
 /**
- * Draws the antique mahogany & gold-trimmed activity nameplate mounted at the Living Room
- * grandfather clock during an Activity Mode chime. Long titles scroll right-to-left until
- * the last character disappears, repeating 3 rounds.
+ * Draws a single unified antique mahogany & gold-trimmed nameplate mounted above the
+ * Living Room grandfather clock, expanding upward so it never overlaps the clock face
+ * or the [E] interaction prompt.
  */
 export function drawPendulumClockAnnouncement(
   ctx: CanvasRenderingContext2D,
   clockWorldX: number,
   clockWorldY: number,
   title: string,
-  startTimeLabel: string,
+  badgeLabel: string,
   tick: number,
-  elapsedMs: number
+  elapsedMs: number,
+  isCountdown = false,
+  isNearClock = false
 ) {
   const clockCenterX = Math.round(clockWorldX + 11.5);
-  const boxW = 148;
-  const boxH = 22;
+  const boxW = isNearClock ? 168 : isCountdown ? 156 : 148;
+  const headerH = isNearClock ? 15 : 0;
+  const mainH = 22;
+  const boxH = headerH + mainH;
   const bx = Math.round(clockCenterX - boxW / 2);
-  const by = Math.max(3, Math.round(clockWorldY - 12));
+  // Always expand upward above the grandfather clock finial (clockWorldY - 3)
+  const by = Math.round(clockWorldY - 6 - boxH);
 
   ctx.save();
   // Soft drop shadow behind antique nameplate
-  ctx.fillStyle = 'rgba(12, 7, 4, 0.45)';
+  ctx.fillStyle = 'rgba(12, 7, 4, 0.48)';
   ctx.fillRect(bx - 1, by + 2, boxW + 2, boxH + 1);
 
   // Outer brass trim + dark mahogany body
-  pxRect(ctx, bx - 1, by - 1, boxW + 2, boxH + 2, '#C99A49');
+  pxRect(ctx, bx - 1, by - 1, boxW + 2, boxH + 2, isCountdown ? '#9E7432' : '#C99A49');
   pxRect(ctx, bx, by, boxW, boxH, '#2B170E');
   pxRect(ctx, bx + 1, by + 1, boxW - 2, 1, '#5D3721');
 
-  // Subtle left chime-time pill
+  // Integrated top [E] prompt strip when player is near the clock (expands upward, no 2-layer overlap)
+  if (isNearClock) {
+    pxRect(ctx, bx + 2, by + 2, boxW - 4, headerH - 2, '#3D2214');
+    pxRect(ctx, bx + 2, by + headerH, boxW - 4, 1, '#6E492A');
+    ctx.font = '600 8.5px "IBM Plex Sans Thai", sans-serif';
+    ctx.fillStyle = '#F5CB69';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('[E] ดูกิจกรรมทั้งวัน (Activity Mode)', bx + boxW / 2, by + 8.5);
+  }
+
+  const rowY = by + headerH;
+
+  // Left chime-time or live countdown pill
   ctx.font = '700 8px "IBM Plex Sans Thai", monospace';
-  const timeText = startTimeLabel.replace(/\s*น\.$/, '');
+  const timeText = badgeLabel.replace(/\s*น\.$/, '');
   const timeW = Math.ceil(ctx.measureText(timeText).width) + 8;
-  pxRect(ctx, bx + 3, by + 3, timeW, boxH - 6, '#432515');
-  pxRect(ctx, bx + 3 + timeW, by + 3, 1, boxH - 6, '#8F6830');
+  pxRect(ctx, bx + 3, rowY + 3, timeW, mainH - 6, '#432515');
+  pxRect(ctx, bx + 3 + timeW, rowY + 3, 1, mainH - 6, '#8F6830');
   ctx.fillStyle = '#FFE082';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(timeText, bx + 3 + timeW / 2, by + boxH / 2 + 0.5);
+  ctx.fillText(timeText, bx + 3 + timeW / 2, rowY + mainH / 2 + 0.5);
 
   // Clipped marquee window for the activity title
   const innerX = bx + 6 + timeW;
   const innerW = boxW - (innerX - bx) - 5;
-  const innerY = by + 2;
-  const innerH = boxH - 4;
+  const innerY = rowY + 2;
+  const innerH = mainH - 4;
 
   ctx.save();
   ctx.beginPath();
@@ -362,18 +380,18 @@ export function drawPendulumClockAnnouncement(
   ctx.fillStyle = '#FAF3E3';
   ctx.textBaseline = 'middle';
   const textW = ctx.measureText(title).width;
-  const textY = by + boxH / 2 + 0.5;
+  const textY = rowY + mainH / 2 + 0.5;
 
   if (textW <= innerW) {
     ctx.textAlign = 'center';
     ctx.fillText(title, innerX + innerW / 2, textY);
   } else {
-    // Scroll right-to-left until the last character completely exits, 3 rounds
+    // Scroll right-to-left until the last character completely exits (3 rounds on chime)
     const speedPxPerSec = 38;
     const travel = innerW + textW;
     const distance = Math.max(0, (elapsedMs / 1000) * speedPxPerSec);
     const roundIdx = Math.floor(distance / travel);
-    if (roundIdx < 3) {
+    if (isCountdown || roundIdx < 3) {
       const progressInRound = distance - roundIdx * travel;
       const drawX = innerX + innerW - progressInRound;
       ctx.textAlign = 'left';

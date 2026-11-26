@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import {
+  CheckCheck,
   ExternalLink,
   Inbox,
   Loader2,
@@ -30,6 +31,7 @@ interface MailboxModalProps {
   unreadCount: number;
   locallyReadIds: ReadonlySet<string>;
   onMarkMessageRead: (messageId: string, wasUnread: boolean) => void;
+  onMarkAllRead: (messageIds: string[]) => void;
   onSyncUnreadStatus: () => void;
   onGoogleSignIn: () => void;
   onGoogleSignOut: () => void;
@@ -140,6 +142,7 @@ export function MailboxModal({
   unreadCount,
   locallyReadIds,
   onMarkMessageRead,
+  onMarkAllRead,
   onSyncUnreadStatus,
   onGoogleSignIn,
   onGoogleSignOut,
@@ -163,21 +166,33 @@ export function MailboxModal({
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const handleApiError = useCallback(
-    (err: unknown) => {
-      if (err instanceof GmailApiError) {
-        if (err.status === 401) {
-          onTokenExpired();
-        } else if (err.status === 403 && err.isScopeError) {
-          onGmailScopeError();
-        }
-        setApiError(err.message);
-      } else {
-        setApiError('ไม่สามารถเชื่อมต่อ Gmail ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
+  const callbacksRef = useRef({
+    onTokenExpired,
+    onGmailScopeError,
+    onSyncUnreadStatus,
+    onMarkMessageRead,
+    onMarkAllRead,
+  });
+  callbacksRef.current = {
+    onTokenExpired,
+    onGmailScopeError,
+    onSyncUnreadStatus,
+    onMarkMessageRead,
+    onMarkAllRead,
+  };
+
+  const handleApiError = useCallback((err: unknown) => {
+    if (err instanceof GmailApiError) {
+      if (err.status === 401) {
+        callbacksRef.current.onTokenExpired();
+      } else if (err.status === 403 && err.isScopeError) {
+        callbacksRef.current.onGmailScopeError();
       }
-    },
-    [onGmailScopeError, onTokenExpired]
-  );
+      setApiError(err.message);
+    } else {
+      setApiError('ไม่สามารถเชื่อมต่อ Gmail ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
+    }
+  }, []);
 
   const loadMessages = useCallback(async () => {
     if (!accessToken || gmailScopeMissing) return;
@@ -200,21 +215,21 @@ export function MailboxModal({
   useEffect(() => {
     if (!needsSignInOrConsent) {
       void loadMessages();
-      onSyncUnreadStatus();
+      callbacksRef.current.onSyncUnreadStatus();
     } else {
       setMessages([]);
       setSelectedId(null);
       setSelectedDetail(null);
       setApiError(null);
     }
-  }, [needsSignInOrConsent, loadMessages, onSyncUnreadStatus]);
+  }, [needsSignInOrConsent, loadMessages]);
 
   const handleSelectMessage = useCallback(
     async (msg: GmailMessageSummary) => {
       if (!accessToken) return;
       setSelectedId(msg.id);
       setDetailError(null);
-      onMarkMessageRead(msg.id, msg.isUnread);
+      callbacksRef.current.onMarkMessageRead(msg.id, msg.isUnread);
 
       if (selectedDetail?.id === msg.id) {
         return;
@@ -227,8 +242,8 @@ export function MailboxModal({
         setSelectedDetail(detail);
       } catch (err) {
         if (err instanceof GmailApiError) {
-          if (err.status === 401) onTokenExpired();
-          else if (err.status === 403 && err.isScopeError) onGmailScopeError();
+          if (err.status === 401) callbacksRef.current.onTokenExpired();
+          else if (err.status === 403 && err.isScopeError) callbacksRef.current.onGmailScopeError();
           setDetailError(err.message);
         } else {
           setDetailError('ไม่สามารถโหลดเนื้อหาอีเมลฉบับนี้ได้ กรุณาลองใหม่');
@@ -237,8 +252,20 @@ export function MailboxModal({
         setIsLoadingDetail(false);
       }
     },
-    [accessToken, onGmailScopeError, onMarkMessageRead, onTokenExpired, selectedDetail?.id]
+    [accessToken, selectedDetail?.id]
   );
+
+  const hasAnyUnread =
+    unreadCount > 0 || messages.some((msg) => msg.isUnread && !locallyReadIds.has(msg.id));
+
+  const handleMarkAllAsRead = useCallback(() => {
+    callbacksRef.current.onMarkAllRead(messages.map((m) => m.id));
+    if (filter === 'unread') {
+      setMessages([]);
+      setSelectedId(null);
+      setSelectedDetail(null);
+    }
+  }, [filter, messages]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,6 +317,19 @@ export function MailboxModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {isAuthenticated && !gmailScopeMissing && (
+              <button
+                type="button"
+                onClick={handleMarkAllAsRead}
+                disabled={!hasAnyUnread}
+                title="ทำเครื่องหมายว่าอ่านอีเมลทั้งหมดแล้ว"
+                className="inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#D4C5B3] bg-[#FAF6F0] px-2.5 text-xs font-semibold text-[#2D4F63] transition-colors hover:bg-[#E7DCCE] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <CheckCheck className="h-3.5 w-3.5 shrink-0" />
+                <span>อ่านทั้งหมด</span>
+              </button>
+            )}
+
             {isAuthenticated && !gmailScopeMissing && (
               <button
                 type="button"

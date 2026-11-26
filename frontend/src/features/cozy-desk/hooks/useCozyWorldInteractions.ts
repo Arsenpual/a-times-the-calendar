@@ -27,6 +27,8 @@ export function useCozyWorldInteractions(ctx: any) {
     showHelp,
     setShowHelp,
     isVisible,
+    isClockScheduleOpen,
+    setIsClockScheduleOpen,
     isSleepLogOpen,
     setIsSleepLogOpen,
     isMailboxOpen,
@@ -71,6 +73,7 @@ export function useCozyWorldInteractions(ctx: any) {
     setGmailUnreadTotal,
     setLocallyReadMailIds,
     setLocallyReadUnreadIds,
+    setSuppressedUnreadBaseline,
     knownGmailUnreadIdsRef,
     hasPolledGmailOnceRef,
   } = ctx;
@@ -124,6 +127,11 @@ export function useCozyWorldInteractions(ctx: any) {
     if (!isVisible) return;
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (isClockScheduleOpen) {
+        setIsClockScheduleOpen?.(false);
+        soundEngine.playInteract();
+        return;
+      }
       if (isSleepLogOpen) {
         setIsSleepLogOpen(false);
         soundEngine.playInteract();
@@ -194,6 +202,7 @@ export function useCozyWorldInteractions(ctx: any) {
     gameState,
     isAiStudioOpen,
     isAntigravityOpen,
+    isClockScheduleOpen,
     isDriveOpen,
     isFullscreenMap,
     isMailboxOpen,
@@ -228,7 +237,8 @@ export function useCozyWorldInteractions(ctx: any) {
         isAntigravityOpen ||
         isAiStudioOpen ||
         isMailboxOpen ||
-        isSleepLogOpen
+        isSleepLogOpen ||
+        isClockScheduleOpen
       ) {
         return;
       }
@@ -241,6 +251,7 @@ export function useCozyWorldInteractions(ctx: any) {
     gameState,
     isAiStudioOpen,
     isAntigravityOpen,
+    isClockScheduleOpen,
     isDriveOpen,
     isMailboxOpen,
     isPinboardOpen,
@@ -652,6 +663,7 @@ export function useCozyWorldInteractions(ctx: any) {
       setGmailFreshArrival(false);
       setLocallyReadMailIds(new Set());
       setLocallyReadUnreadIds(new Set());
+      setSuppressedUnreadBaseline?.(null);
       knownGmailUnreadIdsRef.current = new Set();
       hasPolledGmailOnceRef.current = false;
       soundEngine.playInteract();
@@ -687,6 +699,7 @@ export function useCozyWorldInteractions(ctx: any) {
     setTasksSyncError(null);
     setGmailUnreadTotal(0);
     setGmailFreshArrival(false);
+    setSuppressedUnreadBaseline?.(null);
     setMinaReadyReviewCount(0);
     knownGmailUnreadIdsRef.current = new Set();
     hasPolledGmailOnceRef.current = false;

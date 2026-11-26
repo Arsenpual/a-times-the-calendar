@@ -1,25 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { CalendarDays, X } from 'lucide-react';
 import type { ClockActivityAnnouncement } from '../hooks/useGrandfatherClockActivities';
 
 const MARQUEE_ROUNDS = 3;
-const MARQUEE_SPEED_PX_PER_SEC = 62;
+const MARQUEE_SPEED_PX_PER_SEC = 64;
 const SHORT_TITLE_DURATION_MS = 10_000;
 
 interface GrandfatherClockBannerProps {
   announcement: ClockActivityAnnouncement | null;
   onComplete: () => void;
+  onOpenSchedule: () => void;
 }
 
 /**
- * Antique mahogany & brass nameplate shown when the Living Room grandfather clock chimes
- * for an Activity Mode event.
- * - Short titles fit cleanly centered for 10 seconds.
- * - Long titles scroll smoothly right-to-left until the very last character disappears, repeating 3 rounds.
+ * Temporary antique mahogany & brass nameplate shown ONLY when the Living Room
+ * grandfather clock chimes for an Activity Mode event's start time.
+ * - Short titles sit centered for 10 seconds, then close automatically.
+ * - Long titles scroll right-to-left until the very last character disappears, repeating 3 rounds, then close automatically.
+ * - Never persists on screen outside of an active chime announcement.
  */
 export function GrandfatherClockBanner({
   announcement,
   onComplete,
+  onOpenSchedule,
 }: GrandfatherClockBannerProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLSpanElement | null>(null);
@@ -27,10 +30,15 @@ export function GrandfatherClockBanner({
   onCompleteRef.current = onComplete;
 
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [currentRound, setCurrentRound] = useState(1);
+
+  const activeTitle = announcement?.title ?? '';
+  const activeKey = announcement ? `${announcement.id}:${announcement.title}` : '';
 
   useEffect(() => {
-    if (!announcement) {
+    if (!announcement || !activeTitle) {
       setIsOverflowing(false);
+      setCurrentRound(1);
       return;
     }
 
@@ -44,13 +52,18 @@ export function GrandfatherClockBanner({
       const textEl = textRef.current;
       if (!viewport || !textEl) return;
 
+      // Reset transform before measuring so width calculations are exact
+      textEl.style.transform = 'translate3d(0px, 0px, 0px)';
+
       const viewportW = viewport.clientWidth;
-      const textW = textEl.scrollWidth;
+      const textW = Math.ceil(textEl.getBoundingClientRect().width || textEl.scrollWidth);
       const needsScroll = textW > viewportW + 2;
       setIsOverflowing(needsScroll);
+      setCurrentRound(1);
 
       if (!needsScroll) {
-        textEl.style.transform = 'translate3d(0px, 0px, 0px)';
+        const centerOffset = Math.max(0, Math.round((viewportW - textW) / 2));
+        textEl.style.transform = `translate3d(${centerOffset}px, 0px, 0px)`;
         shortTimerId = window.setTimeout(() => {
           if (!cancelled) onCompleteRef.current();
         }, SHORT_TITLE_DURATION_MS);
@@ -81,8 +94,9 @@ export function GrandfatherClockBanner({
             onCompleteRef.current();
             return;
           }
-          // Re-enter smoothly from right edge for the next round
+          // Re-enter smoothly from the right edge for the next round
           offset += travelDistance;
+          setCurrentRound(Math.min(MARQUEE_ROUNDS, completedRounds + 1));
         }
 
         if (textRef.current) {
@@ -110,7 +124,7 @@ export function GrandfatherClockBanner({
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (shortTimerId !== null) window.clearTimeout(shortTimerId);
     };
-  }, [announcement]);
+  }, [activeKey, activeTitle, announcement]);
 
   if (!announcement) return null;
 
@@ -122,7 +136,7 @@ export function GrandfatherClockBanner({
     >
       <div className="cozy-clock-banner-card">
         {/* Antique brass pendulum clock emblem */}
-        <div className="cozy-clock-emblem">
+        <div className="cozy-clock-emblem" title="นาฬิกาลูกตุ้มโบราณ ห้องนั่งเล่น">
           <svg viewBox="0 0 28 34" className="h-8 w-7" aria-hidden="true">
             <circle cx="14" cy="10" r="7" fill="#FAF6F0" stroke="#D4A03E" strokeWidth="1.8" />
             <line x1="14" y1="10" x2="14" y2="6.2" stroke="#2B1A11" strokeWidth="1.5" strokeLinecap="round" />
@@ -138,16 +152,27 @@ export function GrandfatherClockBanner({
         {/* Time header + fixed-size clipped activity marquee */}
         <div className="min-w-0 flex-1">
           <div className="cozy-clock-meta">
-            <span>{announcement.statusLabel}</span>
+            <span className="font-semibold text-[#F5CB69]">{announcement.statusLabel}</span>
             <span>·</span>
             <span className="cozy-clock-time">{announcement.startTimeLabel}</span>
+            {announcement.categoryName && (
+              <>
+                <span>·</span>
+                <span className="truncate text-[#D7B98A]">{announcement.categoryName}</span>
+              </>
+            )}
+            {isOverflowing && (
+              <span className="ml-auto rounded bg-[#3B2113] px-1.5 py-0.5 text-[10px] font-semibold text-[#F5CB69]">
+                รอบ {currentRound}/{MARQUEE_ROUNDS}
+              </span>
+            )}
           </div>
 
           <div className="cozy-clock-window">
             <div
               ref={viewportRef}
               className={`cozy-clock-viewport ${
-                isOverflowing ? 'cozy-clock-viewport--scroll' : 'cozy-clock-viewport--center'
+                isOverflowing ? 'cozy-clock-viewport--scroll' : ''
               }`}
             >
               <span ref={textRef} className="cozy-clock-title">
@@ -157,7 +182,18 @@ export function GrandfatherClockBanner({
           </div>
         </div>
 
-        {/* Dismiss button */}
+        {/* Open full-day Activity Mode schedule button */}
+        <button
+          type="button"
+          onClick={onOpenSchedule}
+          title="ดูกิจกรรมทั้งวันจาก Activity Mode"
+          className="cozy-clock-schedule-btn"
+        >
+          <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+          <span>ทั้งวัน</span>
+        </button>
+
+        {/* Dismiss chime button */}
         <button
           type="button"
           onClick={onComplete}

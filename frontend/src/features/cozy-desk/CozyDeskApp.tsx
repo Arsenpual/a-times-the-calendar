@@ -49,13 +49,13 @@ import {
   CozyWorldToastAndHelp,
 } from './components/CozyViewportChrome';
 import { CozyModalsLayer } from './components/CozyModalsLayer';
-import { GrandfatherClockBanner } from './components/GrandfatherClockBanner';
 import { useCozyQuestsAndStatuses } from './hooks/useCozyQuestsAndStatuses';
 import { useCozyWorldInteractions } from './hooks/useCozyWorldInteractions';
 import { useCozyTaskDeliveryAndScheduler } from './hooks/useCozyTaskDeliveryAndScheduler';
 import { useCozyAssistantStreaming } from './hooks/useCozyAssistantStreaming';
 import {
   useGrandfatherClockActivities,
+  type ActivityModeCategory,
   type ActivityModeEvent,
 } from './hooks/useGrandfatherClockActivities';
 
@@ -64,6 +64,10 @@ export interface CozyDeskAppProps {
   firebaseUser?: User | null;
   activities?: ActivityModeEvent[];
   archivedActivityIds?: Set<string>;
+  categories?: ActivityModeCategory[];
+  activityCategoryMap?: Record<string, string>;
+  calendarAccessToken?: string | null;
+  onSwitchToActivityMode?: () => void;
   navigationExpanded?: boolean;
   onToggleNavigation?: () => void;
 }
@@ -73,6 +77,10 @@ export default function CozyDeskApp({
   firebaseUser = null,
   activities = [],
   archivedActivityIds,
+  categories,
+  activityCategoryMap,
+  calendarAccessToken = null,
+  onSwitchToActivityMode,
   navigationExpanded = false,
   onToggleNavigation,
 }: CozyDeskAppProps) {
@@ -156,6 +164,7 @@ export default function CozyDeskApp({
   const [gmailScopeMissing, setGmailScopeMissing] = useState(false);
   const [locallyReadMailIds, setLocallyReadMailIds] = useState<Set<string>>(() => new Set());
   const [locallyReadUnreadIds, setLocallyReadUnreadIds] = useState<Set<string>>(() => new Set());
+  const [suppressedUnreadBaseline, setSuppressedUnreadBaseline] = useState<number | null>(null);
   const [gmailFreshArrival, setGmailFreshArrival] = useState(false);
   const knownGmailUnreadIdsRef = useRef<Set<string>>(new Set());
   const hasPolledGmailOnceRef = useRef(false);
@@ -183,141 +192,42 @@ export default function CozyDeskApp({
   const enteredNativeFullscreenRef = useRef(false);
 
   const {
-    fetchCharacterStatuses,
-    handleUpdateCharacterActivity,
-    characterStatuses,
-    showToast,
-    showMinaBubble,
-    todayIsoDate,
-    plantWateringTriggerId,
-    hasLoggedTodaySleep,
-    todaySleepSummary,
-    hasWateredPlantsToday,
-    todayPlantWaterLabel,
-    handleWaterPorchPlants,
-    handleSaveSleepLog,
-    handleSaveSleepLogsBatch,
-    handleDeleteSleepLog,
+    fetchCharacterStatuses, handleUpdateCharacterActivity, characterStatuses, showToast, showMinaBubble,
+    todayIsoDate, plantWateringTriggerId, hasLoggedTodaySleep, todaySleepSummary, hasWateredPlantsToday,
+    todayPlantWaterLabel, handleWaterPorchPlants, handleSaveSleepLog, handleSaveSleepLogsBatch, handleDeleteSleepLog,
   } = useCozyQuestsAndStatuses({
-    messages,
-    drafts,
-    customTvFeed,
-    firebaseUser,
-    setGoogleUser,
-    setYoutubeToken,
-    serverCharacterStatuses,
-    setServerCharacterStatuses,
-    clientCharacterActivities,
-    setClientCharacterActivities,
-    assistantMood,
-    minaMission,
-    toastTimerRef,
-    setToast,
-    bubbleTimerRef,
-    setMinaBubbleText,
-    sleepLogs,
-    setSleepLogs,
-    gameState,
+    messages, drafts, customTvFeed, firebaseUser, setGoogleUser, setYoutubeToken, serverCharacterStatuses,
+    setServerCharacterStatuses, clientCharacterActivities, setClientCharacterActivities, assistantMood,
+    minaMission, toastTimerRef, setToast, bubbleTimerRef, setMinaBubbleText, sleepLogs, setSleepLogs, gameState,
   });
 
   const {
-    activeClockAnnouncement,
-    completeClockAnnouncement,
-    handleInteractClock,
+    nowMs: clockNowMs, activeClockAnnouncement, completeClockAnnouncement, todayActivities, upcomingWeekActivities,
+    ongoingActivity, lastStartedTodayActivity, nextActivityCountdown, isClockScheduleOpen, setIsClockScheduleOpen,
+    openClockSchedule, closeClockSchedule, handleInteractClock, triggerActivityPreviewChime,
+    refreshTodayActivities, isSyncingTodayActivities,
   } = useGrandfatherClockActivities({
-    activities,
-    archivedActivityIds,
-    isVisible,
-    gameState,
-    showToast,
+    activities, archivedActivityIds, categories, activityCategoryMap, calendarAccessToken, isVisible, gameState, showToast,
   });
 
   const {
-    enterFullscreenMap,
-    exitFullscreenMap,
-    toggleFullscreenMap,
-    handleStartGame,
-    handleZoneChange,
-    handleMinaProximityEvent,
-    handleAntigravityProximityEvent,
-    handleAiStudioProximityEvent,
-    handleRequestMinaMenu,
-    handleDismissMinaMenu,
-    handleSelectMinaSummonMode,
-    handleMinaSummonArrived,
-    handleInteract,
-    handleCarWrapHome,
-    handleAddCustomTvItem,
-    handleDeleteCustomTvItem,
-    handleGoogleSignIn,
-    handleGoogleSignOut,
-    handleRequestDriveWriteAccess,
-    handleYouTubeTokenExpired,
-    runningMinaTaskIds,
-    setRunningMinaTaskIds,
-    tasksBoardRefreshNonce,
-    setTasksBoardRefreshNonce,
-    minaReadyReviewCount,
-    setMinaReadyReviewCount,
-    runningMinaTaskIdsRef,
-    isScanningMinaTasksRef,
-    pendingDeliveriesRef,
-    inFlightDeliveryRef,
-    uiBlockersRef,
+    enterFullscreenMap, exitFullscreenMap, toggleFullscreenMap, handleStartGame, handleZoneChange,
+    handleMinaProximityEvent, handleAntigravityProximityEvent, handleAiStudioProximityEvent, handleRequestMinaMenu,
+    handleDismissMinaMenu, handleSelectMinaSummonMode, handleMinaSummonArrived, handleInteract, handleCarWrapHome,
+    handleAddCustomTvItem, handleDeleteCustomTvItem, handleGoogleSignIn, handleGoogleSignOut,
+    handleRequestDriveWriteAccess, handleYouTubeTokenExpired, runningMinaTaskIds, setRunningMinaTaskIds,
+    tasksBoardRefreshNonce, setTasksBoardRefreshNonce, minaReadyReviewCount, setMinaReadyReviewCount,
+    runningMinaTaskIdsRef, isScanningMinaTasksRef, pendingDeliveriesRef, inFlightDeliveryRef, uiBlockersRef,
   } = useCozyWorldInteractions({
-    appRootRef,
-    enteredNativeFullscreenRef,
-    isFullscreenMap,
-    setIsFullscreenMap,
-    showHelp,
-    setShowHelp,
-    isVisible,
-    isSleepLogOpen,
-    setIsSleepLogOpen,
-    isMailboxOpen,
-    setIsMailboxOpen,
-    isAiStudioOpen,
-    setIsAiStudioOpen,
-    isAntigravityOpen,
-    setIsAntigravityOpen,
-    isDriveOpen,
-    setIsDriveOpen,
-    isPinboardOpen,
-    setIsPinboardOpen,
-    isTvOpen,
-    setIsTvOpen,
-    minaActionMenu,
-    setMinaActionMenu,
-    gameState,
-    setGameState,
-    playerSeat,
-    setPlayerSeat,
-    showMinaBubble,
-    showToast,
-    setZone,
-    setAssistantMood,
-    setMinaSummonCommand,
-    setTimeOfDay,
-    tipIndex,
-    setTipIndex,
-    setGmailFreshArrival,
-    handleWaterPorchPlants,
-    handleInteractClock,
-    setCustomTvFeed,
-    setActiveTvItem,
-    setIsSigningInGoogle,
-    setGoogleAuthError,
-    setGoogleUser,
-    setYoutubeToken,
-    setGmailScopeMissing,
-    firebaseUser,
-    setSyncedTaskLists,
-    setTasksSyncError,
-    setGmailUnreadTotal,
-    setLocallyReadMailIds,
-    setLocallyReadUnreadIds,
-    knownGmailUnreadIdsRef,
-    hasPolledGmailOnceRef,
+    appRootRef, enteredNativeFullscreenRef, isFullscreenMap, setIsFullscreenMap, showHelp, setShowHelp, isVisible,
+    isClockScheduleOpen, setIsClockScheduleOpen, isSleepLogOpen, setIsSleepLogOpen, isMailboxOpen, setIsMailboxOpen,
+    isAiStudioOpen, setIsAiStudioOpen, isAntigravityOpen, setIsAntigravityOpen, isDriveOpen, setIsDriveOpen,
+    isPinboardOpen, setIsPinboardOpen, isTvOpen, setIsTvOpen, minaActionMenu, setMinaActionMenu, gameState,
+    setGameState, playerSeat, setPlayerSeat, showMinaBubble, showToast, setZone, setAssistantMood,
+    setMinaSummonCommand, setTimeOfDay, tipIndex, setTipIndex, setGmailFreshArrival, handleWaterPorchPlants,
+    handleInteractClock, setCustomTvFeed, setActiveTvItem, setIsSigningInGoogle, setGoogleAuthError, setGoogleUser,
+    setYoutubeToken, setGmailScopeMissing, firebaseUser, setSyncedTaskLists, setTasksSyncError, setGmailUnreadTotal,
+    setLocallyReadMailIds, setLocallyReadUnreadIds, setSuppressedUnreadBaseline, knownGmailUnreadIdsRef, hasPolledGmailOnceRef,
   });
 
   const {
@@ -374,6 +284,7 @@ export default function CozyDeskApp({
   const {
     syncGmailUnreadStatus,
     handleMarkMailRead,
+    handleMarkAllMailRead,
     effectiveMailboxUnreadCount,
     syncGoogleTasksForMina,
     minaTasksSummary,
@@ -402,6 +313,8 @@ export default function CozyDeskApp({
     setLocallyReadUnreadIds,
     gmailUnreadTotal,
     locallyReadUnreadIds,
+    suppressedUnreadBaseline,
+    setSuppressedUnreadBaseline,
     setSyncedTaskLists,
     setTasksSyncError,
     setIsSyncingTasks,
@@ -547,6 +460,15 @@ export default function CozyDeskApp({
                   mailboxFreshArrival={gmailFreshArrival}
                   characterStatuses={characterStatuses}
                   clockAnnouncement={activeClockAnnouncement}
+                  clockCountdown={
+                    nextActivityCountdown
+                      ? {
+                          title: nextActivityCountdown.activity.title,
+                          startTimeLabel: nextActivityCountdown.activity.startTimeLabel,
+                          hmsLabel: nextActivityCountdown.hmsLabel,
+                        }
+                      : null
+                  }
                   isModalOpen={
                     !isVisible ||
                     isTvOpen ||
@@ -556,6 +478,7 @@ export default function CozyDeskApp({
                     isAiStudioOpen ||
                     isMailboxOpen ||
                     isSleepLogOpen ||
+                    isClockScheduleOpen ||
                     Boolean(saveToDriveRequest)
                   }
                   isFullscreenMap={isFullscreenMap}
@@ -657,11 +580,6 @@ export default function CozyDeskApp({
             />
           )}
 
-          <GrandfatherClockBanner
-            announcement={activeClockAnnouncement}
-            onComplete={completeClockAnnouncement}
-          />
-
           <CozyWorldToastAndHelp
             toast={toast}
             showHelp={showHelp}
@@ -752,6 +670,7 @@ export default function CozyDeskApp({
         effectiveMailboxUnreadCount={effectiveMailboxUnreadCount}
         locallyReadMailIds={locallyReadMailIds}
         handleMarkMailRead={handleMarkMailRead}
+        handleMarkAllMailRead={handleMarkAllMailRead}
         syncGmailUnreadStatus={syncGmailUnreadStatus}
         isSleepLogOpen={isSleepLogOpen}
         setIsSleepLogOpen={setIsSleepLogOpen}
@@ -763,6 +682,19 @@ export default function CozyDeskApp({
         handleSaveSleepLogsBatch={handleSaveSleepLogsBatch}
         handleDeleteSleepLog={handleDeleteSleepLog}
         handleRequestDriveWriteAccess={handleRequestDriveWriteAccess}
+        isClockScheduleOpen={isClockScheduleOpen}
+        onCloseClockSchedule={closeClockSchedule}
+        clockNowMs={clockNowMs}
+        todayActivities={todayActivities}
+        upcomingWeekActivities={upcomingWeekActivities}
+        ongoingActivity={ongoingActivity}
+        lastStartedTodayActivity={lastStartedTodayActivity}
+        nextActivityCountdown={nextActivityCountdown}
+        isSyncingTodayActivities={isSyncingTodayActivities}
+        canSyncTodayActivities={Boolean(calendarAccessToken)}
+        onRefreshTodayActivities={() => void refreshTodayActivities()}
+        onPreviewActivityChime={triggerActivityPreviewChime}
+        onSwitchToActivityMode={onSwitchToActivityMode}
       />
     </div>
   );

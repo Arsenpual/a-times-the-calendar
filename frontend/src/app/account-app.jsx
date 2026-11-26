@@ -370,8 +370,12 @@ export default function AccountApp({ auth }) {
           <CozyDeskMode
             isVisible={mode === "cozy"}
             firebaseUser={firebaseUser}
-            activities={activities}
+            activities={calendarActivities.length > 0 ? calendarActivities : visibleActivities}
             archivedActivityIds={archivedActivityIds}
+            categories={categories}
+            activityCategoryMap={displayedActivityCategoryMap}
+            calendarAccessToken={calendarAccessToken}
+            onSwitchToActivityMode={() => setMode("activity")}
             navigationExpanded={navigationExpanded}
             onToggleNavigation={() => setNavigationExpanded((expanded) => !expanded)}
           />

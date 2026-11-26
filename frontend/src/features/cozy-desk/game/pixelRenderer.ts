@@ -126,6 +126,7 @@ export interface RenderContextState {
   plantWateringProgress?: number;
   characterStatuses?: CharacterStatusMap;
   clockAnnouncement?: { title: string; startTimeLabel: string; triggeredAt: number } | null;
+  clockCountdown?: { title: string; startTimeLabel: string; hmsLabel: string } | null;
   camera: CameraTransform;
   inspectHover?: InspectHoverRenderState | null;
   viewW?: number;
@@ -157,7 +158,7 @@ function drawInteractableHighlight(
 
   // Floating [E] prompt tag above non-character furniture objects
   const cx = item.x + item.w / 2;
-  const cy = Math.max(26, item.y - 8);
+  const cy = item.id === 'clock' ? item.y - 6 : Math.max(26, item.y - 8);
   const label = `[E] ${item.actionLabel}`;
   ctx.font = '600 11px "IBM Plex Sans Thai", sans-serif';
   const w = Math.ceil(ctx.measureText(label).width) + 14;
@@ -688,12 +689,19 @@ export function renderHouseScene(
     state.nearestInteractable?.id === 'porch_plants' &&
     !state.isWorking &&
     !state.isTvOn;
+  const isNearClock =
+    Boolean(state.nearestInteractable) &&
+    state.nearestInteractable?.id === 'clock' &&
+    !state.isWorking &&
+    !state.isTvOn;
+  const hasClockPlate = Boolean(state.clockAnnouncement || state.clockCountdown);
 
   if (state.nearestInteractable && !state.isWorking && !state.isTvOn) {
     const isCharacterStation =
       state.nearestInteractable.id === 'mina_desk' ||
       state.nearestInteractable.id === 'antigravity_desk' ||
       state.nearestInteractable.id === 'ai_studio_desk';
+    const suppressLabel = isCharacterStation || (isNearClock && hasClockPlate);
     const displayItem =
       state.nearestInteractable.id === 'mailbox' && mailboxUnread > 0
         ? {
@@ -717,7 +725,7 @@ export function renderHouseScene(
                   : 'รดน้ำต้นไม้ทั้ง 5 ต้น (ภารกิจประจำวัน)',
               }
             : state.nearestInteractable;
-    drawInteractableHighlight(ctx, displayItem, state.tick, isCharacterStation);
+    drawInteractableHighlight(ctx, displayItem, state.tick, suppressLabel);
   }
 
   // 7b. Roadside Mailbox incoming Gmail notification badge (merges cleanly when player is adjacent)
@@ -747,7 +755,7 @@ export function renderHouseScene(
     isNearPorchPlants || (state.plantWateringProgress ?? 0) > 0
   );
 
-  // 7e. Living Room antique grandfather pendulum clock Activity Mode chime nameplate
+  // 7e. Living Room antique grandfather pendulum clock Activity Mode chime / next-activity countdown nameplate
   if (state.clockAnnouncement) {
     drawPendulumClockAnnouncement(
       ctx,
@@ -756,7 +764,21 @@ export function renderHouseScene(
       state.clockAnnouncement.title,
       state.clockAnnouncement.startTimeLabel,
       state.tick,
-      Math.max(0, Date.now() - state.clockAnnouncement.triggeredAt)
+      Math.max(0, Date.now() - state.clockAnnouncement.triggeredAt),
+      false,
+      isNearClock
+    );
+  } else if (state.clockCountdown) {
+    drawPendulumClockAnnouncement(
+      ctx,
+      CORE_OFFSET_X + 6.12 * TILE,
+      14,
+      state.clockCountdown.title,
+      `อีก ${state.clockCountdown.hmsLabel}`,
+      state.tick,
+      state.tick * 16.67,
+      true,
+      isNearClock
     );
   }
 

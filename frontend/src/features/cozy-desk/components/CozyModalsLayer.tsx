@@ -2,12 +2,17 @@ import type { User } from 'firebase/auth';
 import { AiStudioModal, type CharacterTaskActivityUpdate } from './AiStudioModal';
 import { AntigravityModal } from './AntigravityModal';
 import { DriveTableModal } from './DriveTableModal';
+import { GrandfatherClockScheduleModal } from './GrandfatherClockScheduleModal';
 import { MailboxModal } from './MailboxModal';
 import { SaveToDriveModal } from './SaveToDriveModal';
 import { SleepQuestModal } from './SleepQuestModal';
 import { TasksPinboardModal } from './TasksPinboardModal';
 import { TvModal } from './TvModal';
 import { soundEngine } from '../lib/sound';
+import type {
+  ClockDayActivityItem,
+  ClockNextActivityCountdown,
+} from '../hooks/useGrandfatherClockActivities';
 import type {
   AssistantTaskDelivery,
   CharacterId,
@@ -81,6 +86,7 @@ export interface CozyModalsLayerProps {
   effectiveMailboxUnreadCount: number;
   locallyReadMailIds: Set<string>;
   handleMarkMailRead: (messageId: string, wasUnread: boolean) => void;
+  handleMarkAllMailRead?: (messageIds: string[]) => void;
   syncGmailUnreadStatus: () => Promise<void>;
   isSleepLogOpen: boolean;
   setIsSleepLogOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -92,6 +98,19 @@ export interface CozyModalsLayerProps {
   handleSaveSleepLogsBatch?: (records: DailySleepRecord[]) => Promise<void>;
   handleDeleteSleepLog: (id: string) => Promise<void>;
   handleRequestDriveWriteAccess: () => Promise<boolean>;
+  isClockScheduleOpen?: boolean;
+  onCloseClockSchedule?: () => void;
+  clockNowMs?: number;
+  todayActivities?: ClockDayActivityItem[];
+  upcomingWeekActivities?: ClockDayActivityItem[];
+  ongoingActivity?: ClockDayActivityItem | null;
+  lastStartedTodayActivity?: ClockDayActivityItem | null;
+  nextActivityCountdown?: ClockNextActivityCountdown | null;
+  isSyncingTodayActivities?: boolean;
+  canSyncTodayActivities?: boolean;
+  onRefreshTodayActivities?: () => void;
+  onPreviewActivityChime?: (activity: ClockDayActivityItem) => void;
+  onSwitchToActivityMode?: () => void;
 }
 
 export function CozyModalsLayer({
@@ -137,6 +156,7 @@ export function CozyModalsLayer({
   effectiveMailboxUnreadCount,
   locallyReadMailIds,
   handleMarkMailRead,
+  handleMarkAllMailRead,
   syncGmailUnreadStatus,
   isSleepLogOpen,
   setIsSleepLogOpen,
@@ -148,6 +168,19 @@ export function CozyModalsLayer({
   handleSaveSleepLogsBatch,
   handleDeleteSleepLog,
   handleRequestDriveWriteAccess,
+  isClockScheduleOpen = false,
+  onCloseClockSchedule,
+  clockNowMs = Date.now(),
+  todayActivities = [],
+  upcomingWeekActivities = [],
+  ongoingActivity = null,
+  lastStartedTodayActivity = null,
+  nextActivityCountdown = null,
+  isSyncingTodayActivities = false,
+  canSyncTodayActivities = false,
+  onRefreshTodayActivities,
+  onPreviewActivityChime,
+  onSwitchToActivityMode,
 }: CozyModalsLayerProps) {
   return (
     <>
@@ -270,6 +303,7 @@ export function CozyModalsLayer({
           unreadCount={effectiveMailboxUnreadCount}
           locallyReadIds={locallyReadMailIds}
           onMarkMessageRead={handleMarkMailRead}
+          onMarkAllRead={(ids) => handleMarkAllMailRead?.(ids)}
           onSyncUnreadStatus={() => void syncGmailUnreadStatus()}
           onGoogleSignIn={() => void handleGoogleSignIn()}
           onGoogleSignOut={() => void handleGoogleSignOut()}
@@ -329,6 +363,21 @@ export function CozyModalsLayer({
           soundEngine.playInteract();
           setSaveToDriveRequest(null);
         }}
+      />
+      <GrandfatherClockScheduleModal
+        isOpen={isClockScheduleOpen}
+        nowMs={clockNowMs}
+        todayActivities={todayActivities}
+        upcomingWeekActivities={upcomingWeekActivities}
+        ongoingActivity={ongoingActivity}
+        lastStartedTodayActivity={lastStartedTodayActivity}
+        nextActivityCountdown={nextActivityCountdown}
+        isSyncingToday={isSyncingTodayActivities}
+        canSyncToday={canSyncTodayActivities}
+        onRefreshToday={onRefreshTodayActivities}
+        onPreviewActivityChime={(act) => onPreviewActivityChime?.(act)}
+        onSwitchToActivityMode={onSwitchToActivityMode}
+        onClose={() => onCloseClockSchedule?.()}
       />
     </>
   );

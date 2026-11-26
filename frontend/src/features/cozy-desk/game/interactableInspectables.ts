@@ -68,7 +68,7 @@ export const INTERACTABLE_INSPECT_METADATA: Record<InteractableId, InteractableI
   clock: {
     areaLabel: 'ห้องนั่งเล่น · Activity Mode',
     name: 'นาฬิกาลูกตุ้มโบราณ',
-    detail: 'นาฬิกาลูกตุ้มโบราณเชื่อมต่อกับ Activity Mode — ตีระฆังเตือนพร้อมโชว์ชื่อกิจกรรมเมื่อถึงเวลาเริ่ม และกด E หรือคลิกเพื่อเช็กกิจกรรมถัดไป',
+    detail: 'นาฬิกาลูกตุ้มโบราณเชื่อมต่อกับ Activity Mode — ตีระฆังเตือนพร้อมโชว์ชื่อกิจกรรมเมื่อถึงเวลาเริ่ม นับถอยหลังสู่กิจกรรมถัดไป และกด E หรือคลิกเพื่อดูกิจกรรมทั้งวัน',
     priority: 18,
   },
   tv: {

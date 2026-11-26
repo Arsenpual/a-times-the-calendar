@@ -8,6 +8,10 @@ export default function CozyDeskMode({
   firebaseUser,
   activities = [],
   archivedActivityIds,
+  categories = [],
+  activityCategoryMap = {},
+  calendarAccessToken = null,
+  onSwitchToActivityMode,
   navigationExpanded = false,
   onToggleNavigation,
 }) {
@@ -42,6 +46,10 @@ export default function CozyDeskMode({
           firebaseUser={firebaseUser}
           activities={activities}
           archivedActivityIds={archivedActivityIds}
+          categories={categories}
+          activityCategoryMap={activityCategoryMap}
+          calendarAccessToken={calendarAccessToken}
+          onSwitchToActivityMode={onSwitchToActivityMode}
           navigationExpanded={navigationExpanded}
           onToggleNavigation={onToggleNavigation}
         />

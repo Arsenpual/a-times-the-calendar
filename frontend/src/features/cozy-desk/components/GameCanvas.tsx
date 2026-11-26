@@ -119,6 +119,7 @@ interface GameCanvasProps {
   plantWateringTriggerId?: number;
   characterStatuses?: CharacterStatusMap;
   clockAnnouncement?: { title: string; startTimeLabel: string; triggeredAt: number } | null;
+  clockCountdown?: { title: string; startTimeLabel: string; hmsLabel: string } | null;
   isModalOpen: boolean;
   isFullscreenMap?: boolean;
   onZoneChange: (zone: RoomZone) => void;
@@ -195,6 +196,8 @@ export function GameCanvas({
   todayPlantWaterLabel = null,
   plantWateringTriggerId = 0,
   characterStatuses,
+  clockAnnouncement = null,
+  clockCountdown = null,
   isModalOpen,
   isFullscreenMap = false,
   onZoneChange,
@@ -404,6 +407,8 @@ export function GameCanvas({
     hasWateredPlantsToday,
     todayPlantWaterLabel,
     characterStatuses,
+    clockAnnouncement,
+    clockCountdown,
     isModalOpen,
     isFullscreenMap,
     onZoneChange,
@@ -444,6 +449,8 @@ export function GameCanvas({
     hasWateredPlantsToday,
     todayPlantWaterLabel,
     characterStatuses,
+    clockAnnouncement,
+    clockCountdown,
     isModalOpen,
     isFullscreenMap,
     onZoneChange,

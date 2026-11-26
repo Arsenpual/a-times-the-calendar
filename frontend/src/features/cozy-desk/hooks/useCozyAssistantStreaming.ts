@@ -36,6 +36,8 @@ export function useCozyAssistantStreaming(ctx: any) {
     setLocallyReadUnreadIds,
     gmailUnreadTotal,
     locallyReadUnreadIds,
+    suppressedUnreadBaseline,
+    setSuppressedUnreadBaseline,
     setSyncedTaskLists,
     setTasksSyncError,
     setIsSyncingTasks,
@@ -76,6 +78,9 @@ export function useCozyAssistantStreaming(ctx: any) {
         const status = await fetchGmailUnreadStatus(token);
         setGmailScopeMissing(false);
         setGmailUnreadTotal(status.unreadCount);
+        setSuppressedUnreadBaseline?.((prev: number | null) =>
+          prev !== null && status.unreadCount < prev ? status.unreadCount : prev
+        );
 
         const prevKnown = knownGmailUnreadIdsRef.current;
         const incomingNewIds = status.latestUnreadIds.filter((id) => !prevKnown.has(id));
@@ -149,7 +154,27 @@ export function useCozyAssistantStreaming(ctx: any) {
     }
   }, []);
 
-  const effectiveMailboxUnreadCount = Math.max(0, gmailUnreadTotal - locallyReadUnreadIds.size);
+  const handleMarkAllMailRead = useCallback(
+    (messageIds: string[]) => {
+      if (messageIds.length > 0) {
+        setLocallyReadMailIds((prev: Set<string>) => {
+          const next = new Set(prev);
+          for (const id of messageIds) next.add(id);
+          return next;
+        });
+      }
+      setLocallyReadUnreadIds(new Set());
+      setSuppressedUnreadBaseline?.(gmailUnreadTotal);
+      setGmailFreshArrival(false);
+    },
+    [gmailUnreadTotal]
+  );
+
+  const baseUnread =
+    suppressedUnreadBaseline !== null
+      ? Math.max(0, gmailUnreadTotal - suppressedUnreadBaseline)
+      : gmailUnreadTotal;
+  const effectiveMailboxUnreadCount = Math.max(0, baseUnread - locallyReadUnreadIds.size);
 
   const syncGoogleTasksForMina = useCallback(
     async (tokenOverride?: string | null): Promise<GoogleTaskListWithTasks[] | null> => {
@@ -745,6 +770,7 @@ export function useCozyAssistantStreaming(ctx: any) {
   return {
     syncGmailUnreadStatus,
     handleMarkMailRead,
+    handleMarkAllMailRead,
     effectiveMailboxUnreadCount,
     syncGoogleTasksForMina,
     minaTasksSummary,

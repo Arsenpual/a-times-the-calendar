@@ -677,6 +677,7 @@ export function stepGameCanvasFrame(stateCtx: any, dt: number, tick: number) {
             : 0,
           characterStatuses: propsRef.current.characterStatuses,
           clockAnnouncement: propsRef.current.clockAnnouncement,
+          clockCountdown: propsRef.current.clockCountdown,
           camera: { x: cam.x, y: cam.y, zoom: cam.zoom },
           inspectHover,
           viewW: vp.viewW,

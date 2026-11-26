@@ -77,8 +77,8 @@ export const INTERACTABLES: InteractableObject[] = [
   {
     id: 'clock',
     zone: 'living',
-    label: 'นาฬิกาลูกตุ้มคลาสสิก',
-    actionLabel: 'ดูเวลาปัจจุบัน',
+    label: 'นาฬิกาลูกตุ้มโบราณ',
+    actionLabel: 'ดูกิจกรรมทั้งวัน (Activity Mode)',
     x: 6.12 * TILE + CORE_OFFSET_X,
     y: 0.45 * TILE,
     w: 0.72 * TILE,
